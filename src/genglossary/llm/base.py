@@ -1,7 +1,10 @@
 """Base LLM client interface."""
 from abc import ABC, abstractmethod
-from typing import Type
+from typing import Type, TypeVar
+
 from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class BaseLLMClient(ABC):
@@ -23,7 +26,7 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
-    def generate_structured(self, prompt: str, response_model: Type[BaseModel]) -> BaseModel:
+    def generate_structured(self, prompt: str, response_model: Type[T]) -> T:
         """Generate structured output from the LLM.
 
         Args:

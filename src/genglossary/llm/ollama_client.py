@@ -2,12 +2,14 @@
 import json
 import re
 import time
-from typing import Type
+from typing import Type, TypeVar
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
 from genglossary.llm.base import BaseLLMClient
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class OllamaClient(BaseLLMClient):
@@ -60,7 +62,7 @@ class OllamaClient(BaseLLMClient):
         response = self._request_with_retry(url, payload)
         return response.json()["response"]
 
-    def generate_structured(self, prompt: str, response_model: Type[BaseModel]) -> BaseModel:
+    def generate_structured(self, prompt: str, response_model: Type[T]) -> T:
         """Generate structured output from Ollama.
 
         Args:
