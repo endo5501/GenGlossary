@@ -3,8 +3,8 @@ priority: 2
 tags: []
 description: ""
 created_at: "2025-12-31T11:54:41Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-12-31T11:58:11Z # Do not modify manually
+closed_at: 2025-12-31T12:03:58Z # Do not modify manually
 ---
 
 # Ticket Overview
