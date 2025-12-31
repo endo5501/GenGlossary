@@ -9,7 +9,7 @@ default_branch: "main"
 branch_prefix: "feature/"
 repository: "origin"
 
-# Automatically push changes to remote repository during close command (default: false)
+# Automatically push changes to remote repository during close command
 # Set to false if you want to manually control when to push
 auto_push: false
 
@@ -44,7 +44,8 @@ default_content: |
   - [ ] {{Task 1}}
   - [ ] {{Task 2}}
   ...
-  - [ ] Run tests before closing and pass all tests (No exceptions)
+  - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+  - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
   - [ ] Get developer approval before closing
   
   
