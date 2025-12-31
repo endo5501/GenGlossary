@@ -66,7 +66,10 @@ OllamaとHTTP通信するLLMクライアントを実装します。抽象基底�
 - [x] コミット（実装）
 
 ### 統合確認
-- [x] 実際のOllamaサーバーで動作確認（オプション）- モックテストで完全にカバー
+- [x] 実際のOllamaサーバーで動作確認（オプション）- **llama2モデルで完全動作確認済み**
+  - サーバー可用性チェック ✓
+  - テキスト生成 ✓
+  - 構造化出力（JSON + Pydantic） ✓
 - [x] エラーメッセージの日本語化確認 - エラーハンドリング実装済み
 
 ### 最終確認
@@ -106,6 +109,14 @@ OllamaとHTTP通信するLLMクライアントを実装します。抽象基底�
 2. `e4f65da` - Implement BaseLLMClient abstract base class
 3. `7c24576` - Add OllamaClient implementation tests
 4. `d5d11f3` - Implement OllamaClient with retry logic
+5. `8bf04b5` - Update Phase 2 ticket with completion status
+6. `773c414` - Add Ollama integration test with real server
+
+### 統合テスト結果（実機確認）
+- **モデル**: llama2:latest (3.8 GB)
+- **is_available()**: Ollamaサーバー疎通確認 ✓
+- **generate()**: "What is the capital of Japan?" → "The capital of Japan is Tokyo." ✓
+- **generate_structured()**: APIの定義をJSON形式で取得、Pydanticバリデーション成功 ✓
 
 ## Notes
 
