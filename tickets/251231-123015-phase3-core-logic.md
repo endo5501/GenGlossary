@@ -96,8 +96,8 @@ closed_at: null   # Do not modify manually
 
 ### プロンプト最適化
 - [x] 各ステップのプロンプトを検証
-- [ ] Few-shot examples の追加検討（将来の改善事項）
-- [ ] トークン数の最適化（将来の改善事項）
+- [x] Few-shot examples の追加検討（将来の改善事項） → チケット作成: `260101-000000-prompt-optimization.md`
+- [x] トークン数の最適化（将来の改善事項） → チケット作成: `260101-000000-prompt-optimization.md`
 
 ### 最終確認
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
