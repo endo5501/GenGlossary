@@ -4,7 +4,7 @@ tags: [phase1, data-models, foundation, tdd]
 description: "Implement data models (Document, Term, Glossary) and DocumentLoader following TDD workflow"
 created_at: "2025-12-31T12:30:14Z"
 started_at: 2025-12-31T12:40:44Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-12-31T13:01:06Z # Do not modify manually
 ---
 
 # Phase 1: データモデルと基盤の実装
