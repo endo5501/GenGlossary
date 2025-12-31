@@ -3,8 +3,8 @@ priority: 1
 tags: [phase1, data-models, foundation, tdd]
 description: "Implement data models (Document, Term, Glossary) and DocumentLoader following TDD workflow"
 created_at: "2025-12-31T12:30:14Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-12-31T12:40:44Z # Do not modify manually
+closed_at: 2025-12-31T13:01:06Z # Do not modify manually
 ---
 
 # Phase 1: データモデルと基盤の実装
@@ -26,68 +26,68 @@ GenGlossaryの基礎となるデータモデルとドキュメント読み込み
 ## Tasks
 
 ### 準備
-- [ ] プロジェクト構造作成: `src/genglossary/`, `tests/`, `target_docs/`, `output/`
-- [ ] `pyproject.toml` 更新（依存関係追加）
-- [ ] `uv sync` で依存関係インストール
+- [x] プロジェクト構造作成: `src/genglossary/`, `tests/`, `target_docs/`, `output/`
+- [x] `pyproject.toml` 更新（依存関係追加）
+- [x] `uv sync` で依存関係インストール
 
 ### Document モデル（TDDサイクル1）
-- [ ] `tests/models/test_document.py` 作成
+- [x] `tests/models/test_document.py` 作成
   - ファイル読み込みテスト
   - 行取得テスト
   - コンテキスト取得テスト
-- [ ] テスト実行 → 失敗確認
-- [ ] コミット（テストのみ）
-- [ ] `src/genglossary/models/document.py` 実装
+- [x] テスト実行 → 失敗確認
+- [x] コミット（テストのみ）
+- [x] `src/genglossary/models/document.py` 実装
   - `Document` dataclass
   - `get_line()` メソッド
   - `get_context()` メソッド
-- [ ] テストパス確認
-- [ ] コミット（実装）
+- [x] テストパス確認
+- [x] コミット（実装）
 
 ### Term モデル（TDDサイクル2）
-- [ ] `tests/models/test_term.py` 作成
+- [x] `tests/models/test_term.py` 作成
   - TermOccurrence 作成テスト
   - Term 作成テスト
   - 関連用語リンクテスト
-- [ ] テスト実行 → 失敗確認
-- [ ] コミット（テストのみ）
-- [ ] `src/genglossary/models/term.py` 実装
+- [x] テスト実行 → 失敗確認
+- [x] コミット（テストのみ）
+- [x] `src/genglossary/models/term.py` 実装
   - `TermOccurrence` dataclass
   - `Term` dataclass
-- [ ] テストパス確認
-- [ ] コミット（実装）
+- [x] テストパス確認
+- [x] コミット（実装）
 
 ### Glossary モデル（TDDサイクル3）
-- [ ] `tests/models/test_glossary.py` 作成
+- [x] `tests/models/test_glossary.py` 作成
   - GlossaryIssue 作成テスト
   - Glossary 作成テスト
   - 用語の追加・検索テスト
-- [ ] テスト実行 → 失敗確認
-- [ ] コミット（テストのみ）
-- [ ] `src/genglossary/models/glossary.py` 実装
+- [x] テスト実行 → 失敗確認
+- [x] コミット（テストのみ）
+- [x] `src/genglossary/models/glossary.py` 実装
   - `GlossaryIssue` dataclass
   - `Glossary` dataclass
-- [ ] テストパス確認
-- [ ] コミット（実装）
+- [x] テストパス確認
+- [x] コミット（実装）
 
 ### DocumentLoader（TDDサイクル4）
-- [ ] `tests/test_document_loader.py` 作成
+- [x] `tests/test_document_loader.py` 作成
   - ファイル検索テスト（.txt, .md）
   - ディレクトリ読み込みテスト
   - エラーハンドリングテスト
-- [ ] テスト実行 → 失敗確認
-- [ ] コミット（テストのみ）
-- [ ] `src/genglossary/document_loader.py` 実装
+- [x] テスト実行 → 失敗確認
+- [x] コミット（テストのみ）
+- [x] `src/genglossary/document_loader.py` 実装
   - `DocumentLoader` クラス
   - `load_documents()` メソッド
-- [ ] テストパス確認
-- [ ] コミット（実装）
+- [x] テストパス確認
+- [x] コミット（実装）
 
 ### 最終確認
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] カバレッジ確認（目標: 80%以上）
-- [ ] Get developer approval before closing
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] カバレッジ確認（目標: 80%以上） → 99%達成
+- [x] Get developer approval before closing
 
 
 ## Notes
