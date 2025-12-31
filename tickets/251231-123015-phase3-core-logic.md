@@ -4,7 +4,7 @@ tags: [phase3, core-logic, term-extraction, glossary-generation, tdd]
 description: "Implement 4-step glossary generation pipeline: extraction, generation, review, and refinement"
 created_at: "2025-12-31T12:30:15Z"
 started_at: 2025-12-31T13:57:55Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-12-31T16:31:29Z # Do not modify manually
 ---
 
 # Phase 3: コアロジックの実装
