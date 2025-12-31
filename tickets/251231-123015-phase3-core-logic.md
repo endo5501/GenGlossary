@@ -3,8 +3,8 @@ priority: 3
 tags: [phase3, core-logic, term-extraction, glossary-generation, tdd]
 description: "Implement 4-step glossary generation pipeline: extraction, generation, review, and refinement"
 created_at: "2025-12-31T12:30:15Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-12-31T13:57:55Z # Do not modify manually
+closed_at: 2025-12-31T16:31:29Z # Do not modify manually
 ---
 
 # Phase 3: コアロジックの実装
@@ -24,86 +24,86 @@ closed_at: null   # Do not modify manually
 ## Tasks
 
 ### TermExtractor - ステップ1（TDDサイクル1）
-- [ ] `tests/test_term_extractor.py` 作成
+- [x] `tests/test_term_extractor.py` 作成
   - LLMクライアントをモック化
   - 期待されるプロンプト形式の検証
   - LLMレスポンスのパーステスト
   - 重複用語の除去テスト
   - 空ドキュメントのハンドリングテスト
-- [ ] テスト実行 → 失敗確認
-- [ ] コミット（テストのみ）
-- [ ] `src/genglossary/term_extractor.py` 実装
+- [x] テスト実行 → 失敗確認
+- [x] コミット（テストのみ）
+- [x] `src/genglossary/term_extractor.py` 実装
   - `TermExtractor` クラス
   - `extract_terms()` メソッド
   - `_create_extraction_prompt()` - プロンプト生成
   - JSON形式でLLMから用語リストを取得
   - 重複除去ロジック
-- [ ] テストパス確認
-- [ ] コミット（実装）
+- [x] テストパス確認
+- [x] コミット（実装）
 
 ### GlossaryGenerator - ステップ2（TDDサイクル2）
-- [ ] `tests/test_glossary_generator.py` 作成
+- [x] `tests/test_glossary_generator.py` 作成
   - 用語の出現箇所検索テスト（正規表現）
   - コンテキスト抽出テスト
   - 定義生成テスト（LLMモック）
   - 関連用語抽出テスト
   - Glossaryオブジェクト構築テスト
-- [ ] テスト実行 → 失敗確認
-- [ ] コミット（テストのみ）
-- [ ] `src/genglossary/glossary_generator.py` 実装
+- [x] テスト実行 → 失敗確認
+- [x] コミット（テストのみ）
+- [x] `src/genglossary/glossary_generator.py` 実装
   - `GlossaryGenerator` クラス
   - `generate()` メソッド
   - `_find_term_occurrences()` - 用語の出現箇所を検索
   - `_generate_definition()` - LLMで定義を生成
   - `_extract_related_terms()` - LLMで関連用語を抽出
   - コンテキスト付きプロンプト設計
-- [ ] テストパス確認
-- [ ] コミット（実装）
+- [x] テストパス確認
+- [x] コミット（実装）
 
 ### GlossaryReviewer - ステップ3（TDDサイクル3）
-- [ ] `tests/test_glossary_reviewer.py` 作成
+- [x] `tests/test_glossary_reviewer.py` 作成
   - 用語集全体のレビュープロンプト生成テスト
   - 問題点の抽出テスト
   - GlossaryIssue パーステスト
   - 問題タイプ分類テスト（unclear, contradiction, missing_context）
-- [ ] テスト実行 → 失敗確認
-- [ ] コミット（テストのみ）
-- [ ] `src/genglossary/glossary_reviewer.py` 実装
+- [x] テスト実行 → 失敗確認
+- [x] コミット（テストのみ）
+- [x] `src/genglossary/glossary_reviewer.py` 実装
   - `GlossaryReviewer` クラス
   - `review()` メソッド
   - `_create_review_prompt()` - レビュープロンプト生成
   - `_parse_issues()` - LLMレスポンスから問題リストを抽出
   - 不明点・矛盾の検出ロジック
-- [ ] テストパス確認
-- [ ] コミット（実装）
+- [x] テストパス確認
+- [x] コミット（実装）
 
 ### GlossaryRefiner - ステップ4（TDDサイクル4）
-- [ ] `tests/test_glossary_refiner.py` 作成
+- [x] `tests/test_glossary_refiner.py` 作成
   - 問題解決ロジックテスト
   - 用語定義の更新テスト
   - 関連用語の追加テスト
   - 精錬プロンプト生成テスト
-- [ ] テスト実行 → 失敗確認
-- [ ] コミット（テストのみ）
-- [ ] `src/genglossary/glossary_refiner.py` 実装
+- [x] テスト実行 → 失敗確認
+- [x] コミット（テストのみ）
+- [x] `src/genglossary/glossary_refiner.py` 実装
   - `GlossaryRefiner` クラス
   - `refine()` メソッド
   - `_resolve_issue()` - 個別問題の解決
   - `_create_refinement_prompt()` - 改善プロンプト生成
   - 追加コンテキストの活用
-- [ ] テストパス確認
-- [ ] コミット（実装）
+- [x] テストパス確認
+- [x] コミット（実装）
 
 ### プロンプト最適化
-- [ ] 各ステップのプロンプトを検証
-- [ ] Few-shot examples の追加検討
-- [ ] トークン数の最適化
+- [x] 各ステップのプロンプトを検証
+- [x] Few-shot examples の追加検討（将来の改善事項） → チケット作成: `260101-000000-prompt-optimization.md`
+- [x] トークン数の最適化（将来の改善事項） → チケット作成: `260101-000000-prompt-optimization.md`
 
 ### 最終確認
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] カバレッジ確認（目標: 80%以上）
-- [ ] Get developer approval before closing
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] カバレッジ確認（目標: 80%以上） → 達成: 97%
+- [x] Get developer approval before closing
 
 
 ## Notes
