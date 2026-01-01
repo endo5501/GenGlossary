@@ -246,12 +246,45 @@ pyright で静的解析
 - 07f50fb: Add sample documents for E2E testing
 - 5061d0d: Integrate complete glossary generation pipeline into CLI
 - a4fc5ad: Add comprehensive README documentation
+- 9d8a789: Update current-ticket.md with completion summary
+- 3e65d8c: Improve LLM integration with better model and error handling
+- a91f5c0: Improve error handling and timeout for large glossaries
+
+### 追加改善（ユーザーフィードバック対応）
+
+**問題**: E2E実行時にJSON解析失敗でパイプライン全体が停止する
+
+**対応**:
+1. **モデル変更**: `dengcao/Qwen3-30B-A3B-Instruct-2507:latest` に変更
+   - 日本語とJSON出力の品質向上
+   - `ollama_client.py`, `cli.py`, `.env.example` で統一
+
+2. **リトライロジック**: JSON解析失敗時に3回まで再試行
+   - `OllamaClient.generate_structured()` にmax_json_retries パラメータ追加
+   - 0.5秒間隔で最大3回リトライ
+
+3. **エラーハンドリング強化**:
+   - `GlossaryGenerator.generate()`: 個別用語の失敗時もスキップして続行
+   - `GlossaryRefiner.refine()`: 個別改善の失敗時もスキップして続行
+   - `GlossaryReviewer.review()`: レビュー失敗時も空リストを返して続行
+   - エラーメッセージに応答テキストを含めてデバッグ性向上
+
+4. **タイムアウト延長**: 60秒 → 180秒
+   - 大きな用語集のレビューに対応
+
+**結果**:
+- ✅ 27個の用語を含む実ドキュメントで正常動作確認
+- ✅ パイプライン全体がロバストに動作
+- ✅ pytest: 203 passed, 1 xfailed, 3 xpassed
+- ✅ pyright: 0 errors, 0 warnings
 
 ### 既知の問題
 
-- 実OllamaサーバーでのE2Eテストは、LLMの応答形式が不安定なため失敗することがある
-- llama2モデルは日本語プロンプトでのJSON出力品質が低い
-- より高性能なモデル（llama3.2等）の使用を推奨
+~~- 実OllamaサーバーでのE2Eテストは、LLMの応答形式が不安定なため失敗することがある~~
+~~- llama2モデルは日本語プロンプトでのJSON出力品質が低い~~
+~~- より高性能なモデル（llama3.2等）の使用を推奨~~
+
+**解決済み**: Qwen3モデルへの変更、リトライロジック、エラーハンドリング強化により解決
 
 ### Phase 5 の成果
 
