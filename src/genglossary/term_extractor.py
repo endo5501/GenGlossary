@@ -101,7 +101,83 @@ JSON形式で回答してください: {{"terms": ["用語1", "用語2", ...]}}"
             if stripped in seen:
                 continue
 
+            # Apply filtering rules
+            if self._should_filter_term(stripped):
+                continue
+
             seen.add(stripped)
             result.append(stripped)
 
         return result
+
+    def _should_filter_term(self, term: str) -> bool:
+        """Check if a term should be filtered out.
+
+        Args:
+            term: The term to check.
+
+        Returns:
+            True if the term should be filtered out.
+        """
+        # Rule 1: Filter terms that are too short (1 character)
+        if len(term) <= 1:
+            return True
+
+        # Rule 2: Filter verb phrases (ending with common verb patterns)
+        verb_endings = (
+            "する",
+            "した",
+            "している",
+            "された",
+            "される",
+            "を発見",
+            "の発見",
+            "を潜り抜ける",
+            "を行う",
+            "を実施",
+            "になる",
+            "となる",
+            "ている",
+            "てある",
+            "の崩壊",
+        )
+        if term.endswith(verb_endings):
+            return True
+
+        # Rule 3: Filter adjective phrases (common patterns)
+        adjective_patterns = (
+            "が良い",
+            "が悪い",
+            "が高い",
+            "が低い",
+            "の髪",
+            "の目",
+            "の顔",
+            "の体",
+            "色の",
+            "的な",
+        )
+        for pattern in adjective_patterns:
+            if pattern in term:
+                return True
+
+        # Rule 4: Filter if term is only hiragana and very common
+        # (This helps filter common words like "とても", "しかし")
+        if self._is_only_hiragana(term) and len(term) <= 4:
+            return True
+
+        return False
+
+    def _is_only_hiragana(self, text: str) -> bool:
+        """Check if text consists only of hiragana characters.
+
+        Args:
+            text: The text to check.
+
+        Returns:
+            True if text is only hiragana.
+        """
+        for char in text:
+            if not ("\u3040" <= char <= "\u309f"):
+                return False
+        return True
