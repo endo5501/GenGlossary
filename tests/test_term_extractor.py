@@ -202,3 +202,181 @@ GenGlossaryはPythonで実装されています。
 
         assert "" not in result
         assert len(result) == 3
+
+
+class TestTermFiltering:
+    """Test suite for term filtering functionality."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = """小説の登場人物について。
+主人公のシルシルは魔法使いです。
+彼は法則の発見に成功しました。
+"""
+        return Document(file_path="/path/to/novel.md", content=content)
+
+    def test_filter_verb_phrases(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that verb phrases are filtered out."""
+        mock_response = MockExtractedTerms(
+            terms=["法則の発見", "理性の崩壊", "死戦を潜り抜ける", "魔法使い"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.extract_terms([sample_document])
+
+        # Verb phrases should be filtered
+        assert "法則の発見" not in result
+        assert "死戦を潜り抜ける" not in result
+        # Valid terms should remain
+        assert "魔法使い" in result
+
+    def test_filter_adjective_phrases(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that adjective phrases are filtered out."""
+        mock_response = MockExtractedTerms(
+            terms=["顔が良い", "銀色の髪", "アルケミスト"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.extract_terms([sample_document])
+
+        assert "顔が良い" not in result
+        assert "銀色の髪" not in result
+        assert "アルケミスト" in result
+
+    def test_preserve_proper_nouns(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that proper nouns are preserved."""
+        mock_response = MockExtractedTerms(
+            terms=["東京", "田中太郎", "エルディア", "進撃の巨人"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.extract_terms([sample_document])
+
+        assert "東京" in result
+        assert "田中太郎" in result
+        assert "エルディア" in result
+        assert "進撃の巨人" in result
+
+    def test_filter_short_hiragana_terms(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that short hiragana-only terms are filtered."""
+        mock_response = MockExtractedTerms(
+            terms=["しかし", "ただ", "マイクロサービス"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.extract_terms([sample_document])
+
+        assert "しかし" not in result
+        assert "ただ" not in result
+        assert "マイクロサービス" in result
+
+    def test_filter_single_character_terms(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that single character terms are filtered."""
+        mock_response = MockExtractedTerms(
+            terms=["A", "魔", "API"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.extract_terms([sample_document])
+
+        assert "A" not in result
+        assert "魔" not in result
+        assert "API" in result
+
+    def test_filter_verb_ending_patterns(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test various verb ending patterns are filtered."""
+        mock_response = MockExtractedTerms(
+            terms=[
+                "実行する",
+                "実施された",
+                "運用している",
+                "変換される",
+                "発見となる",
+                "システム",
+            ]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.extract_terms([sample_document])
+
+        # Verb patterns should be filtered
+        assert "実行する" not in result
+        assert "実施された" not in result
+        assert "運用している" not in result
+        assert "変換される" not in result
+        assert "発見となる" not in result
+        # Valid term should remain
+        assert "システム" in result
+
+
+class TestPromptGeneration:
+    """Test suite for prompt generation."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = "Sample content for prompt testing."
+        return Document(file_path="/path/to/doc.md", content=content)
+
+    def test_prompt_includes_proper_noun_guidance(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that prompt includes guidance for proper nouns."""
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        prompt = extractor._create_extraction_prompt([sample_document])
+
+        # Check for proper noun guidance
+        assert "固有名詞" in prompt
+
+    def test_prompt_specifies_exclusion_criteria(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that prompt specifies what should be excluded."""
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        prompt = extractor._create_extraction_prompt([sample_document])
+
+        # Check exclusion criteria are mentioned
+        assert "除外" in prompt or "抽出しない" in prompt
+        assert "動詞" in prompt
+        assert "形容詞" in prompt or "描写" in prompt
+
+    def test_prompt_includes_judgment_criteria(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that prompt includes judgment criteria."""
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        prompt = extractor._create_extraction_prompt([sample_document])
+
+        # Check for judgment criteria
+        assert "判断基準" in prompt or "基準" in prompt
