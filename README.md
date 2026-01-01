@@ -33,7 +33,7 @@ cd GenGlossary
 uv sync
 
 # Ollamaのモデルをダウンロード（未取得の場合）
-ollama pull llama2
+ollama pull dengcao/Qwen3-30B-A3B-Instruct-2507:latest
 ```
 
 ## 使用方法
@@ -53,7 +53,7 @@ uv run genglossary generate [OPTIONS]
 Options:
   -i, --input DIRECTORY  入力ドキュメントのディレクトリ (デフォルト: ./target_docs)
   -o, --output PATH      出力する用語集ファイルのパス (デフォルト: ./output/glossary.md)
-  -m, --model TEXT       使用するOllamaモデル名 (デフォルト: llama2)
+  -m, --model TEXT       使用するOllamaモデル名 (デフォルト: dengcao/Qwen3-30B-A3B-Instruct-2507:latest)
   -v, --verbose          詳細ログを表示
   --help                 ヘルプを表示
 ```
@@ -82,7 +82,7 @@ cp .env.example .env
 ```env
 # Ollama設定
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama2
+OLLAMA_MODEL=dengcao/Qwen3-30B-A3B-Instruct-2507:latest
 OLLAMA_TIMEOUT=60
 
 # 出力設定
@@ -175,7 +175,7 @@ GenGlossary/
 
 使用するモデルをダウンロード:
 ```bash
-ollama pull llama2
+ollama pull dengcao/Qwen3-30B-A3B-Instruct-2507:latest
 ```
 
 ### JSONパースエラー

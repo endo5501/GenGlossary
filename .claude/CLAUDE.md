@@ -19,7 +19,7 @@
 
 ### LLM
 - **Ollama（ローカル実行）**: http://localhost:11434
-- モデル: llama2, llama3.2 など
+- モデル: llama2, llama3.2, dengcao/Qwen3-30B-A3B-Instruct-2507 など
 
 ### 言語とツール
 - **Python 3.11+**
@@ -268,4 +268,4 @@ MarkdownWriter → output/glossary.md
 ### Ollamaの準備
 - Phase 2以降では実際のOllamaサーバーが必要
 - `ollama serve` でサーバー起動
-- モデルのダウンロード: `ollama pull llama2`
+- モデルのダウンロード: `ollama pull dengcao/Qwen3-30B-A3B-Instruct-2507:latest`
