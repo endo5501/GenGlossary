@@ -63,17 +63,35 @@ class TermExtractor:
         # Combine all document contents
         combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
 
-        prompt = f"""あなたは技術文書の専門家です。以下のドキュメントから重要な専門用語を抽出してください。
+        prompt = f"""あなたは用語集作成の専門家です。以下のドキュメントから、用語集に掲載すべき重要な用語を抽出してください。
 
-抽出基準:
-- ドキュメント内で繰り返し使用される用語
-- 特定の文脈で特別な意味を持つ用語
-- 読者が理解すべき重要な概念
+## 抽出すべき用語（含める）
+- 固有名詞: 人名、地名、組織名、作品固有の名称
+- 専門用語: その文脈で特別な意味を持つ語
+- 造語・特殊用語: 作品やドキュメント固有の造語
+- 概念名: 重要なコンセプトや仕組みの名称
+- 略語・頭字語: API、LLM など
 
-ドキュメント:
+## 抽出しない用語（除外）
+- 一般名詞: 辞書で意味が自明な日常語（借金、ビール、再会、張り紙など）
+- 動詞・動詞句: 「〜する」「〜を発見」「死戦を潜り抜ける」など動作を表すフレーズ
+- 形容詞句・描写表現: 「顔が良い」「銀色の髪」など外見や状態の描写
+- 接続詞・副詞: しかし、ただし、非常に、など
+- 数量表現: 3つ、2回目、など
+
+## 判断基準
+1. 読者がこの用語の「この文脈での意味」を知りたいと思うか？
+2. 辞書を引いても、この文脈での意味は分からないか？
+3. 固有名詞であれば、説明があると文章理解が深まるか？
+
+上記に該当する場合は用語として抽出してください。
+
+## ドキュメント:
 {combined_content}
 
-JSON形式で回答してください: {{"terms": ["用語1", "用語2", ...]}}"""
+JSON形式で回答してください: {{"terms": ["用語1", "用語2", ...]}}
+
+注意: 用語は名詞または名詞句のみを抽出し、動詞句や形容詞句は含めないでください。"""
 
         return prompt
 
@@ -101,7 +119,83 @@ JSON形式で回答してください: {{"terms": ["用語1", "用語2", ...]}}"
             if stripped in seen:
                 continue
 
+            # Apply filtering rules
+            if self._should_filter_term(stripped):
+                continue
+
             seen.add(stripped)
             result.append(stripped)
 
         return result
+
+    def _should_filter_term(self, term: str) -> bool:
+        """Check if a term should be filtered out.
+
+        Args:
+            term: The term to check.
+
+        Returns:
+            True if the term should be filtered out.
+        """
+        # Rule 1: Filter terms that are too short (1 character)
+        if len(term) <= 1:
+            return True
+
+        # Rule 2: Filter verb phrases (ending with common verb patterns)
+        verb_endings = (
+            "する",
+            "した",
+            "している",
+            "された",
+            "される",
+            "を発見",
+            "の発見",
+            "を潜り抜ける",
+            "を行う",
+            "を実施",
+            "になる",
+            "となる",
+            "ている",
+            "てある",
+            "の崩壊",
+        )
+        if term.endswith(verb_endings):
+            return True
+
+        # Rule 3: Filter adjective phrases (common patterns)
+        adjective_patterns = (
+            "が良い",
+            "が悪い",
+            "が高い",
+            "が低い",
+            "の髪",
+            "の目",
+            "の顔",
+            "の体",
+            "色の",
+            "的な",
+        )
+        for pattern in adjective_patterns:
+            if pattern in term:
+                return True
+
+        # Rule 4: Filter if term is only hiragana and very common
+        # (This helps filter common words like "とても", "しかし")
+        if self._is_only_hiragana(term) and len(term) <= 4:
+            return True
+
+        return False
+
+    def _is_only_hiragana(self, text: str) -> bool:
+        """Check if text consists only of hiragana characters.
+
+        Args:
+            text: The text to check.
+
+        Returns:
+            True if text is only hiragana.
+        """
+        for char in text:
+            if not ("\u3040" <= char <= "\u309f"):
+                return False
+        return True
