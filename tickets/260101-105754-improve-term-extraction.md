@@ -3,7 +3,7 @@ priority: 1
 tags: [enhancement, term-extraction, llm]
 description: "用語抽出処理の精度向上 - プロンプト改善とフィルタリング機構の追加"
 created_at: "2026-01-01T10:57:54Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-01T11:00:52Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
