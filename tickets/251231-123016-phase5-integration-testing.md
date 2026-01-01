@@ -77,8 +77,8 @@ closed_at: null   # Do not modify manually
 - [x] Run static analysis (`pyright`) → **0 errors, 0 warnings**
 - [x] Run tests (`uv run pytest`) → **203 passed, 3 xfailed, 1 xpassed**
 - [x] カバレッジ確認 → **89%** (目標: 80%以上)
-- [ ] 全Phase（1-5）の動作確認
-- [ ] Get developer approval before closing
+- [x] 全Phase（1-5）の動作確認
+- [x] Get developer approval before closing
 
 
 ## Notes
