@@ -28,39 +28,39 @@ TermExtractorの用語抽出精度を向上させる。一般的な単語や動�
 ## Tasks
 
 ### Step 1: フィルタリングテスト作成
-- [ ] `tests/test_term_extractor.py` に `TestTermFiltering` クラスを追加
-- [ ] 動詞句フィルタのテストを作成
-- [ ] 形容詞句フィルタのテストを作成
-- [ ] 短いひらがなフィルタのテストを作成
-- [ ] `uv run pytest tests/test_term_extractor.py` → 失敗確認
-- [ ] コミット: "Add tests for term filtering functionality"
+- [x] `tests/test_term_extractor.py` に `TestTermFiltering` クラスを追加
+- [x] 動詞句フィルタのテストを作成
+- [x] 形容詞句フィルタのテストを作成
+- [x] 短いひらがなフィルタのテストを作成
+- [x] `uv run pytest tests/test_term_extractor.py` → 失敗確認
+- [x] コミット: "Add tests for term filtering functionality"
 
 ### Step 2: フィルタリング実装
-- [ ] `_should_filter_term` メソッドを追加
-- [ ] `_is_only_hiragana` ヘルパーメソッドを追加
-- [ ] `_process_terms` でフィルタを呼び出すよう修正
-- [ ] `uv run pytest tests/test_term_extractor.py` → パス確認
-- [ ] コミット: "Implement term filtering in TermExtractor"
+- [x] `_should_filter_term` メソッドを追加
+- [x] `_is_only_hiragana` ヘルパーメソッドを追加
+- [x] `_process_terms` でフィルタを呼び出すよう修正
+- [x] `uv run pytest tests/test_term_extractor.py` → パス確認
+- [x] コミット: "Implement term filtering in TermExtractor"
 
 ### Step 3: プロンプト改善テスト作成
-- [ ] `TestPromptGeneration` クラスを追加
-- [ ] 新しいプロンプト要素のテストを作成
-- [ ] `uv run pytest tests/test_term_extractor.py` → 失敗確認
-- [ ] コミット: "Add tests for improved extraction prompt"
+- [x] `TestPromptGeneration` クラスを追加
+- [x] 新しいプロンプト要素のテストを作成
+- [x] `uv run pytest tests/test_term_extractor.py` → 失敗確認
+- [x] コミット: "Add tests for improved extraction prompt"
 
 ### Step 4: プロンプト改善実装
-- [ ] `_create_extraction_prompt` メソッドを更新
-- [ ] `uv run pytest tests/test_term_extractor.py` → パス確認
-- [ ] コミット: "Improve extraction prompt for better term precision"
+- [x] `_create_extraction_prompt` メソッドを更新
+- [x] `uv run pytest tests/test_term_extractor.py` → パス確認
+- [x] コミット: "Improve extraction prompt for better term precision"
 
 ### Step 5: 動作確認
-- [ ] `uv run genglossary generate --input tmp/example2 --output tmp/test_output.md`
-- [ ] 抽出結果を確認し、精度向上を検証
+- [x] `uv run genglossary generate --input tmp/example2 --output tmp/test_output.md`
+- [x] 抽出結果を確認し、精度向上を検証
 
 ### 完了条件
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## 修正対象ファイル
 
