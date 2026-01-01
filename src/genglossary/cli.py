@@ -133,7 +133,7 @@ def main() -> None:
 @click.option(
     "--model",
     "-m",
-    default="llama2",
+    default="dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
     help="使用するOllamaモデル名",
 )
 @click.option(
