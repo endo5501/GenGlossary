@@ -44,10 +44,14 @@ class GlossaryReviewer:
         if glossary.term_count == 0:
             return []
 
-        prompt = self._create_review_prompt(glossary)
-        response = self.llm_client.generate_structured(prompt, ReviewResponse)
-
-        return self._parse_issues(response.issues)
+        try:
+            prompt = self._create_review_prompt(glossary)
+            response = self.llm_client.generate_structured(prompt, ReviewResponse)
+            return self._parse_issues(response.issues)
+        except Exception as e:
+            # If review fails, log warning and continue without issues
+            print(f"Warning: Failed to review glossary: {e}")
+            return []
 
     def _create_review_prompt(self, glossary: Glossary) -> str:
         """Create the prompt for glossary review.

@@ -31,7 +31,8 @@ def generate_glossary(
         verbose: Whether to show verbose output.
     """
     # Initialize LLM client
-    llm_client = OllamaClient(model=model, timeout=60.0)
+    # Use longer timeout for large glossaries (reviews can take time)
+    llm_client = OllamaClient(model=model, timeout=180.0)
 
     # Check Ollama availability
     if not llm_client.is_available():

@@ -116,7 +116,9 @@ class OllamaClient(BaseLLMClient):
 
         # All retries exhausted
         raise ValueError(
-            f"Failed to parse structured output after {max_json_retries} attempts: {last_error}"
+            f"Failed to parse structured output after {max_json_retries} attempts.\n"
+            f"Last error: {last_error}\n"
+            f"Response text: {response_text[:500]}"  # Show first 500 chars
         )
 
     def is_available(self) -> bool:
