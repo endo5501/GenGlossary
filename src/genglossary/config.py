@@ -29,7 +29,7 @@ class Config(BaseSettings):
     )
 
     ollama_model: str = Field(
-        default="llama2",
+        default="dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
         validation_alias="OLLAMA_MODEL",
         description="Model name to use with Ollama",
     )

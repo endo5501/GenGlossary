@@ -22,7 +22,7 @@ class OllamaClient(BaseLLMClient):
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model: str = "llama2",
+        model: str = "dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
         timeout: float = 30.0,
         max_retries: int = 3
     ):
@@ -62,18 +62,19 @@ class OllamaClient(BaseLLMClient):
         response = self._request_with_retry(url, payload)
         return response.json()["response"]
 
-    def generate_structured(self, prompt: str, response_model: Type[T]) -> T:
-        """Generate structured output from Ollama.
+    def generate_structured(self, prompt: str, response_model: Type[T], max_json_retries: int = 3) -> T:
+        """Generate structured output from Ollama with JSON parsing retry.
 
         Args:
             prompt: The input prompt.
             response_model: Pydantic model for response validation.
+            max_json_retries: Maximum number of retries for JSON parsing failures.
 
         Returns:
             Validated response model instance.
 
         Raises:
-            ValueError: If JSON parsing or validation fails.
+            ValueError: If JSON parsing or validation fails after all retries.
             httpx.HTTPError: If the request fails after all retries.
         """
         # Add JSON instruction to prompt
@@ -86,24 +87,39 @@ class OllamaClient(BaseLLMClient):
             "stream": False
         }
 
-        response = self._request_with_retry(url, payload)
-        response_text = response.json()["response"]
+        last_error = None
 
-        # Try to parse JSON directly
-        try:
-            data = json.loads(response_text)
-            return response_model(**data)
-        except (json.JSONDecodeError, ValidationError):
-            # Fallback: extract JSON using regex
-            json_match = re.search(r'\{[^{}]*\}', response_text)
-            if json_match:
-                try:
-                    data = json.loads(json_match.group())
-                    return response_model(**data)
-                except (json.JSONDecodeError, ValidationError) as e:
-                    raise ValueError(f"Failed to parse structured output: {e}") from e
-            else:
-                raise ValueError(f"No valid JSON found in response: {response_text}")
+        # Retry JSON parsing up to max_json_retries times
+        for attempt in range(max_json_retries):
+            response = self._request_with_retry(url, payload)
+            response_text = response.json()["response"]
+
+            # Try to parse JSON directly
+            try:
+                data = json.loads(response_text)
+                return response_model(**data)
+            except (json.JSONDecodeError, ValidationError) as e:
+                # Fallback: extract JSON using regex
+                json_match = re.search(r'\{[^{}]*\}', response_text)
+                if json_match:
+                    try:
+                        data = json.loads(json_match.group())
+                        return response_model(**data)
+                    except (json.JSONDecodeError, ValidationError):
+                        pass
+
+                last_error = e
+                if attempt < max_json_retries - 1:
+                    # Wait a bit before retrying
+                    time.sleep(0.5)
+                    continue
+
+        # All retries exhausted
+        raise ValueError(
+            f"Failed to parse structured output after {max_json_retries} attempts.\n"
+            f"Last error: {last_error}\n"
+            f"Response text: {response_text[:500]}"  # Show first 500 chars
+        )
 
     def is_available(self) -> bool:
         """Check if Ollama service is available.

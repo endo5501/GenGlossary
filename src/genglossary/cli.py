@@ -1,11 +1,20 @@
 """Command-line interface for GenGlossary."""
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
+
+from genglossary.document_loader import DocumentLoader
+from genglossary.glossary_generator import GlossaryGenerator
+from genglossary.glossary_refiner import GlossaryRefiner
+from genglossary.glossary_reviewer import GlossaryReviewer
+from genglossary.llm.ollama_client import OllamaClient
+from genglossary.output.markdown_writer import MarkdownWriter
+from genglossary.term_extractor import TermExtractor
 
 console = Console()
 
@@ -15,22 +24,84 @@ def generate_glossary(
 ) -> None:
     """Generate glossary from documents.
 
-    This is a placeholder function that will integrate all components.
-
     Args:
         input_dir: Input directory containing documents.
         output_file: Output file path for the glossary.
         model: Ollama model to use.
         verbose: Whether to show verbose output.
     """
-    # TODO: Integrate with actual glossary generation pipeline
-    # For now, this is a placeholder implementation
+    # Initialize LLM client
+    # Use longer timeout for large glossaries (reviews can take time)
+    llm_client = OllamaClient(model=model, timeout=180.0)
+
+    # Check Ollama availability
+    if not llm_client.is_available():
+        raise RuntimeError(
+            "Ollamaサーバーに接続できません。\n"
+            "ollama serve でサーバーを起動してください。"
+        )
+
     if verbose:
         console.print(f"[dim]入力ディレクトリ: {input_dir}[/dim]")
         console.print(f"[dim]出力ファイル: {output_file}[/dim]")
         console.print(f"[dim]モデル: {model}[/dim]")
 
-    console.print("[yellow]用語集生成機能は Phase 5 で統合予定です[/yellow]")
+    # 1. Load documents
+    if verbose:
+        console.print("[dim]ドキュメントを読み込み中...[/dim]")
+    loader = DocumentLoader()
+    documents = loader.load_directory(input_dir)
+
+    if not documents:
+        raise ValueError(f"ドキュメントが見つかりません: {input_dir}")
+
+    if verbose:
+        console.print(f"[dim]  → {len(documents)} ファイルを読み込みました[/dim]")
+
+    # 2. Extract terms
+    if verbose:
+        console.print("[dim]用語を抽出中...[/dim]")
+    extractor = TermExtractor(llm_client=llm_client)
+    terms = extractor.extract_terms(documents)
+
+    if verbose:
+        console.print(f"[dim]  → {len(terms)} 個の用語を抽出しました[/dim]")
+
+    # 3. Generate glossary
+    if verbose:
+        console.print("[dim]用語集を生成中...[/dim]")
+    generator = GlossaryGenerator(llm_client=llm_client)
+    glossary = generator.generate(terms, documents)
+
+    # 4. Review glossary
+    if verbose:
+        console.print("[dim]用語集を精査中...[/dim]")
+    reviewer = GlossaryReviewer(llm_client=llm_client)
+    issues = reviewer.review(glossary)
+
+    if verbose:
+        console.print(f"[dim]  → {len(issues)} 個の問題を検出しました[/dim]")
+
+    # 5. Refine glossary
+    if issues:
+        if verbose:
+            console.print("[dim]用語集を改善中...[/dim]")
+        refiner = GlossaryRefiner(llm_client=llm_client)
+        glossary = refiner.refine(glossary, issues, documents)
+
+    # Add metadata
+    glossary.metadata["generated_at"] = datetime.now().isoformat()
+    glossary.metadata["document_count"] = len(documents)
+    glossary.metadata["model"] = model
+
+    # 6. Write output
+    if verbose:
+        console.print("[dim]用語集を出力中...[/dim]")
+    writer = MarkdownWriter()
+    writer.write(glossary, output_file)
+
+    if verbose:
+        console.print(f"[dim]  → {glossary.term_count} 個の用語を出力しました[/dim]")
 
 
 @click.group()
@@ -63,7 +134,7 @@ def main() -> None:
 @click.option(
     "--model",
     "-m",
-    default="llama2",
+    default="dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
     help="使用するOllamaモデル名",
 )
 @click.option(

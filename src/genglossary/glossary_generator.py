@@ -56,29 +56,34 @@ class GlossaryGenerator:
             return glossary
 
         for term_name in terms:
-            # Find occurrences
-            occurrences = self._find_term_occurrences(term_name, documents)
+            try:
+                # Find occurrences
+                occurrences = self._find_term_occurrences(term_name, documents)
 
-            # Generate definition using LLM
-            definition, confidence = self._generate_definition(
-                term_name, occurrences
-            )
+                # Generate definition using LLM
+                definition, confidence = self._generate_definition(
+                    term_name, occurrences
+                )
 
-            # Extract related terms
-            related = self._extract_related_terms(
-                term_name, definition, terms
-            )
+                # Extract related terms
+                related = self._extract_related_terms(
+                    term_name, definition, terms
+                )
 
-            # Create Term object
-            term = Term(
-                name=term_name,
-                definition=definition,
-                occurrences=occurrences,
-                related_terms=related,
-                confidence=confidence,
-            )
+                # Create Term object
+                term = Term(
+                    name=term_name,
+                    definition=definition,
+                    occurrences=occurrences,
+                    related_terms=related,
+                    confidence=confidence,
+                )
 
-            glossary.add_term(term)
+                glossary.add_term(term)
+            except Exception as e:
+                # Skip this term and continue with the next one
+                print(f"Warning: Failed to generate definition for '{term_name}': {e}")
+                continue
 
         return glossary
 

@@ -62,16 +62,21 @@ class GlossaryRefiner:
         resolved_count = 0
 
         for issue in issues:
-            term = refined_glossary.get_term(issue.term_name)
-            if term is None:
+            try:
+                term = refined_glossary.get_term(issue.term_name)
+                if term is None:
+                    continue
+
+                # Resolve the issue and get refined term
+                refined_term = self._resolve_issue(term, issue, documents)
+
+                # Update the glossary with the refined term
+                refined_glossary.terms[issue.term_name] = refined_term
+                resolved_count += 1
+            except Exception as e:
+                # Skip this issue and continue with the next one
+                print(f"Warning: Failed to refine '{issue.term_name}': {e}")
                 continue
-
-            # Resolve the issue and get refined term
-            refined_term = self._resolve_issue(term, issue, documents)
-
-            # Update the glossary with the refined term
-            refined_glossary.terms[issue.term_name] = refined_term
-            resolved_count += 1
 
         # Track resolved issues in metadata
         refined_glossary.metadata["resolved_issues"] = resolved_count
