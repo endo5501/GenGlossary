@@ -14,7 +14,6 @@ class MarkdownWriter:
     - Metadata header (generation date, document count, model)
     - Term entries with definitions
     - Occurrence references with file paths and line numbers
-    - Related term links
     """
 
     def write(self, glossary: Glossary, output_path: str) -> None:
@@ -120,11 +119,6 @@ class MarkdownWriter:
         if occurrences_text:
             lines.append(occurrences_text)
 
-        # Related terms
-        related_terms_text = self._format_related_terms(term.related_terms)
-        if related_terms_text:
-            lines.append(related_terms_text)
-
         return "\n".join(lines)
 
     def _format_occurrences(self, occurrences: list[TermOccurrence]) -> str:
@@ -144,20 +138,3 @@ class MarkdownWriter:
             lines.append(f"- `{occ.document_path}:{occ.line_number}` - \"{occ.context}\"")
 
         return "\n".join(lines) + "\n"
-
-    def _format_related_terms(self, related_terms: list[str]) -> str:
-        """Format related terms as Markdown links.
-
-        Args:
-            related_terms: List of related term names.
-
-        Returns:
-            Formatted related terms section, or empty string if no related terms.
-        """
-        if not related_terms:
-            return ""
-
-        # Create Markdown links for each related term
-        links = [f"[{term}](#{term})" for term in related_terms]
-
-        return "**関連用語**: " + ", ".join(links) + "\n"

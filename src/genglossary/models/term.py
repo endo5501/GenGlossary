@@ -24,14 +24,12 @@ class Term(BaseModel):
         name: The term name.
         definition: The definition of the term.
         occurrences: List of places where the term appears.
-        related_terms: List of related term names.
         confidence: Confidence score for the definition (0.0 to 1.0).
     """
 
     name: str
     definition: str = ""
     occurrences: list[TermOccurrence] = Field(default_factory=list)
-    related_terms: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
     @field_validator("name")
@@ -56,12 +54,3 @@ class Term(BaseModel):
             occurrence: The occurrence to add.
         """
         self.occurrences.append(occurrence)
-
-    def add_related_term(self, term_name: str) -> None:
-        """Add a related term if not already present.
-
-        Args:
-            term_name: The name of the related term.
-        """
-        if term_name not in self.related_terms:
-            self.related_terms.append(term_name)
