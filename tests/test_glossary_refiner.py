@@ -16,7 +16,6 @@ class MockRefinementResponse(BaseModel):
     """Mock response model for refinement."""
 
     refined_definition: str
-    related_terms: list[str]
     confidence: float
 
 
@@ -90,7 +89,6 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         """Test that refine returns a Glossary object."""
         mock_llm_client.generate_structured.return_value = MockRefinementResponse(
             refined_definition="用語集を自動生成するPythonツール",
-            related_terms=["LLM"],
             confidence=0.9,
         )
 
@@ -109,7 +107,6 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         """Test that term definitions are updated based on issues."""
         mock_llm_client.generate_structured.return_value = MockRefinementResponse(
             refined_definition="ドキュメントから用語集を自動生成するPythonベースのCLIツール",
-            related_terms=["LLM"],
             confidence=0.92,
         )
 
@@ -120,27 +117,6 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         assert term is not None
         assert "自動生成" in term.definition
         assert term.confidence == 0.92
-
-    def test_refine_adds_related_terms(
-        self,
-        mock_llm_client: MagicMock,
-        sample_glossary: Glossary,
-        sample_issues: list[GlossaryIssue],
-        sample_documents: list[Document],
-    ) -> None:
-        """Test that related terms are added during refinement."""
-        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
-            refined_definition="改善された定義",
-            related_terms=["LLM", "Python"],
-            confidence=0.9,
-        )
-
-        refiner = GlossaryRefiner(llm_client=mock_llm_client)
-        result = refiner.refine(sample_glossary, sample_issues, sample_documents)
-
-        term = result.get_term("GenGlossary")
-        assert term is not None
-        assert "LLM" in term.related_terms
 
     def test_refine_calls_llm_for_each_issue(
         self,
@@ -164,7 +140,6 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
 
         mock_llm_client.generate_structured.return_value = MockRefinementResponse(
             refined_definition="改善された定義",
-            related_terms=[],
             confidence=0.9,
         )
 
@@ -182,7 +157,6 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         """Test that _resolve_issue creates prompt with all necessary info."""
         mock_llm_client.generate_structured.return_value = MockRefinementResponse(
             refined_definition="改善された定義",
-            related_terms=[],
             confidence=0.9,
         )
 
@@ -289,7 +263,6 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         """Test that terms without issues are preserved unchanged."""
         mock_llm_client.generate_structured.return_value = MockRefinementResponse(
             refined_definition="改善された定義",
-            related_terms=[],
             confidence=0.9,
         )
 
@@ -312,7 +285,6 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         """Test that resolved issues are added to glossary metadata."""
         mock_llm_client.generate_structured.return_value = MockRefinementResponse(
             refined_definition="改善された定義",
-            related_terms=[],
             confidence=0.9,
         )
 
@@ -345,12 +317,10 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         mock_llm_client.generate_structured.side_effect = [
             MockRefinementResponse(
                 refined_definition="第一回改善",
-                related_terms=[],
                 confidence=0.8,
             ),
             MockRefinementResponse(
                 refined_definition="第二回改善",
-                related_terms=["LLM"],
                 confidence=0.9,
             ),
         ]
@@ -395,7 +365,6 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
 
         mock_llm_client.generate_structured.return_value = MockRefinementResponse(
             refined_definition="Improved definition",
-            related_terms=[],
             confidence=0.9,
         )
 

@@ -127,39 +127,6 @@ class TestMarkdownWriter:
 
         assert result == ""
 
-    def test_format_related_terms_single(self):
-        """Test formatting a single related term."""
-        writer = MarkdownWriter()
-        term = Term(name="アーキテクチャ")
-        term.add_related_term("コンポーネント")
-
-        result = writer._format_related_terms(term.related_terms)
-
-        assert "**関連用語**: [コンポーネント](#コンポーネント)" in result
-
-    def test_format_related_terms_multiple(self):
-        """Test formatting multiple related terms."""
-        writer = MarkdownWriter()
-        term = Term(name="設計")
-        term.add_related_term("アーキテクチャ")
-        term.add_related_term("パターン")
-        term.add_related_term("コンポーネント")
-
-        result = writer._format_related_terms(term.related_terms)
-
-        assert "**関連用語**:" in result
-        assert "[アーキテクチャ](#アーキテクチャ)" in result
-        assert "[パターン](#パターン)" in result
-        assert "[コンポーネント](#コンポーネント)" in result
-
-    def test_format_related_terms_empty(self):
-        """Test formatting with no related terms."""
-        writer = MarkdownWriter()
-
-        result = writer._format_related_terms([])
-
-        assert result == ""
-
     def test_write_complete_glossary(self, tmp_path: Path):
         """Test writing a complete glossary with multiple terms."""
         writer = MarkdownWriter()
@@ -182,8 +149,6 @@ class TestMarkdownWriter:
                 context="マイクロサービスアーキテクチャを採用する",
             )
         )
-        term1.add_related_term("コンポーネント")
-        term1.add_related_term("設計パターン")
         glossary.add_term(term1)
 
         # Second term
@@ -211,7 +176,6 @@ class TestMarkdownWriter:
         # Check terms
         assert "### アーキテクチャ" in content
         assert "### コンポーネント" in content
-        assert "[コンポーネント](#コンポーネント)" in content
 
         # Check separator
         assert "---" in content

@@ -33,12 +33,6 @@ class MockDefinitionResponse(BaseModel):
     confidence: float
 
 
-class MockRelatedTermsResponse(BaseModel):
-    """Mock response for related terms extraction."""
-
-    related_terms: list[str]
-
-
 class MockReviewResponse(BaseModel):
     """Mock response for glossary review."""
 
@@ -49,7 +43,6 @@ class MockRefinementResponse(BaseModel):
     """Mock response for definition refinement."""
 
     refined_definition: str
-    related_terms: list[str]
     confidence: float
 
 
@@ -72,36 +65,32 @@ class TestEndToEndPipeline:
             MockExtractedTerms(
                 terms=["マイクロサービス", "APIゲートウェイ", "PostgreSQL"]
             ),
-            # 2-7. Definition and related terms for each term (2 calls per term)
+            # 2-4. Definition for each term
             MockDefinitionResponse(
                 definition="独立して開発・デプロイ可能な小さなサービスに分割するアーキテクチャ",
                 confidence=0.9,
             ),
-            MockRelatedTermsResponse(related_terms=["APIゲートウェイ"]),
             MockDefinitionResponse(
                 definition="すべてのAPIリクエストの入り口となるコンポーネント",
                 confidence=0.85,
             ),
-            MockRelatedTermsResponse(related_terms=["マイクロサービス"]),
             MockDefinitionResponse(
                 definition="オープンソースのリレーショナルデータベース管理システム",
                 confidence=0.95,
             ),
-            MockRelatedTermsResponse(related_terms=[]),
-            # 8. Review
+            # 5. Review
             MockReviewResponse(
                 issues=[
                     {
                         "term": "マイクロサービス",
-                        "issue_type": "missing_relation",
-                        "description": "PostgreSQLとの関連性が記載されていない",
+                        "issue_type": "unclear",
+                        "description": "定義がやや曖昧",
                     }
                 ]
             ),
-            # 9. Refinement for マイクロサービス
+            # 6. Refinement for マイクロサービス
             MockRefinementResponse(
                 refined_definition="独立してデプロイ可能な小さなサービス群で構成されるアーキテクチャパターン",
-                related_terms=["APIゲートウェイ", "PostgreSQL"],
                 confidence=0.92,
             ),
         ]
@@ -137,7 +126,7 @@ class TestEndToEndPipeline:
         # Check refinement was applied
         refined_term = refined_glossary.get_term("マイクロサービス")
         assert refined_term is not None
-        assert "PostgreSQL" in refined_term.related_terms
+        assert "アーキテクチャパターン" in refined_term.definition
 
         # 6. Write output
         output_path = tmp_path_with_docs / "glossary.md"
@@ -241,7 +230,6 @@ class TestEndToEndPipeline:
             responses.append(
                 MockDefinitionResponse(definition=f"用語{i}の定義", confidence=0.8)
             )
-            responses.append(MockRelatedTermsResponse(related_terms=[]))
 
         # Add review response
         responses.append(MockReviewResponse(issues=[]))
@@ -409,23 +397,6 @@ class TestMarkdownWriterIntegration:
         # Check occurrences
         assert "**出現箇所**:" in content
 
-        # Check related terms
-        assert "**関連用語**:" in content
-
-    def test_output_has_valid_markdown_links(
-        self, tmp_path: Path, sample_glossary: Glossary
-    ) -> None:
-        """Test that related terms are formatted as valid Markdown links."""
-        output_path = tmp_path / "glossary.md"
-
-        writer = MarkdownWriter()
-        writer.write(sample_glossary, str(output_path))
-
-        content = output_path.read_text(encoding="utf-8")
-
-        # Check that related terms are linked
-        assert "[APIゲートウェイ](#APIゲートウェイ)" in content
-
 
 class TestPipelineWithVariousInputs:
     """Test the pipeline with various input scenarios."""
@@ -445,9 +416,7 @@ APIゲートウェイは重要なコンポーネントです。
         mock_llm.generate_structured.side_effect = [
             MockExtractedTerms(terms=["マイクロサービス", "APIゲートウェイ"]),
             MockDefinitionResponse(definition="日本語の定義1", confidence=0.9),
-            MockRelatedTermsResponse(related_terms=["APIゲートウェイ"]),
             MockDefinitionResponse(definition="日本語の定義2", confidence=0.85),
-            MockRelatedTermsResponse(related_terms=["マイクロサービス"]),
             MockReviewResponse(issues=[]),
         ]
 

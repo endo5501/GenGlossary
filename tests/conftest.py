@@ -29,12 +29,6 @@ class MockDefinitionResponse(BaseModel):
     confidence: float
 
 
-class MockRelatedTermsResponse(BaseModel):
-    """Mock response for related terms extraction."""
-
-    related_terms: list[str]
-
-
 class MockReviewResponse(BaseModel):
     """Mock response for glossary review."""
 
@@ -45,7 +39,6 @@ class MockRefinedDefinitionResponse(BaseModel):
     """Mock response for definition refinement."""
 
     refined_definition: str
-    related_terms: list[str]
 
 
 # --- Document Fixtures ---
@@ -120,7 +113,6 @@ def mock_llm_client_for_pipeline() -> MagicMock:
     This client is pre-configured to return appropriate responses for:
     - Term extraction
     - Definition generation
-    - Related terms extraction
     - Glossary review
     - Definition refinement
 
@@ -138,36 +130,29 @@ def mock_llm_client_for_pipeline() -> MagicMock:
             definition="独立して開発・デプロイ可能な小さなサービスに分割するアーキテクチャ",
             confidence=0.9,
         ),
-        # 3. Related terms for マイクロサービス
-        MockRelatedTermsResponse(related_terms=["APIゲートウェイ"]),
-        # 4. Definition for APIゲートウェイ
+        # 3. Definition for APIゲートウェイ
         MockDefinitionResponse(
             definition="すべてのAPIリクエストの入り口となるコンポーネント",
             confidence=0.85,
         ),
-        # 5. Related terms for APIゲートウェイ
-        MockRelatedTermsResponse(related_terms=["マイクロサービス"]),
-        # 6. Definition for PostgreSQL
+        # 4. Definition for PostgreSQL
         MockDefinitionResponse(
             definition="オープンソースのリレーショナルデータベース管理システム",
             confidence=0.95,
         ),
-        # 7. Related terms for PostgreSQL
-        MockRelatedTermsResponse(related_terms=[]),
-        # 8. Review response
+        # 5. Review response
         MockReviewResponse(
             issues=[
                 {
                     "term_name": "マイクロサービス",
-                    "issue_type": "missing_relation",
-                    "description": "PostgreSQLとの関連性が記載されていない",
+                    "issue_type": "unclear",
+                    "description": "定義がやや曖昧",
                 }
             ]
         ),
-        # 9. Refined definition for マイクロサービス
+        # 6. Refined definition for マイクロサービス
         MockRefinedDefinitionResponse(
             refined_definition="独立してデプロイ可能な小さなサービス群で構成されるアーキテクチャパターン",
-            related_terms=["APIゲートウェイ", "PostgreSQL"],
         ),
     ]
 
@@ -198,7 +183,6 @@ def sample_glossary() -> Glossary:
                 context="本システムはマイクロサービスアーキテクチャを採用しています。",
             )
         ],
-        related_terms=["APIゲートウェイ"],
         confidence=0.9,
     )
     glossary.add_term(term1)
@@ -218,7 +202,6 @@ def sample_glossary() -> Glossary:
                 context="APIゲートウェイからのリクエストを処理します。",
             ),
         ],
-        related_terms=["マイクロサービス"],
         confidence=0.85,
     )
     glossary.add_term(term2)
@@ -233,7 +216,6 @@ def sample_glossary() -> Glossary:
                 context="PostgreSQLを使用してデータを永続化します。",
             )
         ],
-        related_terms=[],
         confidence=0.95,
     )
     glossary.add_term(term3)
