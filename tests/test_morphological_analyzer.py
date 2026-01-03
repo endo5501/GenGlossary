@@ -408,3 +408,142 @@ class TestMorphologicalAnalyzerFiltering:
         # Both should be present, 大阪 should come before 東京
         if "大阪" in terms and "東京" in terms:
             assert terms.index("大阪") < terms.index("東京")
+
+
+class TestMorphologicalAnalyzerContainedTermsFilter:
+    """Test suite for contained terms filtering functionality.
+
+    This addresses the issue where compound noun extraction generates
+    all possible sub-combinations, creating redundant entries.
+    Example: "元エデルト軍陸軍士官" generates:
+        元エデルト, 元エデルト軍, 元エデルト軍陸軍, 元エデルト軍陸軍士官,
+        エデルト軍, エデルト軍陸軍, エデルト軍陸軍士官, 軍陸軍, 軍陸軍士官, 陸軍士官
+    After filtering, only the longest non-contained terms should remain.
+    """
+
+    def test_filter_contained_terms_basic(self) -> None:
+        """Test basic contained term filtering.
+
+        When a shorter term is contained in a longer term,
+        only the longer term should be kept.
+        """
+        analyzer = MorphologicalAnalyzer()
+        terms = ["エデルト軍", "元エデルト軍"]
+
+        result = analyzer.filter_contained_terms(terms)
+
+        # 元エデルト軍 contains エデルト軍, so only 元エデルト軍 should remain
+        assert "元エデルト軍" in result
+        assert "エデルト軍" not in result
+        assert len(result) == 1
+
+    def test_filter_contained_terms_multiple_levels(self) -> None:
+        """Test filtering with multiple levels of containment.
+
+        Example from ticket: 元エデルト軍陸軍士官 hierarchy.
+        """
+        analyzer = MorphologicalAnalyzer()
+        terms = [
+            "元エデルト",
+            "元エデルト軍",
+            "元エデルト軍陸軍",
+            "元エデルト軍陸軍士官",
+            "エデルト軍",
+            "エデルト軍陸軍",
+            "エデルト軍陸軍士官",
+            "軍陸軍",
+            "軍陸軍士官",
+            "陸軍士官",
+        ]
+
+        result = analyzer.filter_contained_terms(terms)
+
+        # Only the longest term containing each unique part should remain
+        assert "元エデルト軍陸軍士官" in result
+        # All shorter variants that are contained in the longest should be removed
+        assert "元エデルト" not in result
+        assert "元エデルト軍" not in result
+        assert "元エデルト軍陸軍" not in result
+        assert "エデルト軍" not in result
+        assert "エデルト軍陸軍" not in result
+        assert "エデルト軍陸軍士官" not in result
+
+    def test_filter_contained_terms_independent_terms(self) -> None:
+        """Test that independent terms (no containment) are preserved."""
+        analyzer = MorphologicalAnalyzer()
+        terms = ["東京", "大阪", "名古屋"]
+
+        result = analyzer.filter_contained_terms(terms)
+
+        # All independent terms should be preserved
+        assert set(result) == {"東京", "大阪", "名古屋"}
+        assert len(result) == 3
+
+    def test_filter_contained_terms_mixed(self) -> None:
+        """Test filtering with both contained and independent terms."""
+        analyzer = MorphologicalAnalyzer()
+        terms = ["騎士団", "騎士団長", "東京", "アソリウス島騎士団"]
+
+        result = analyzer.filter_contained_terms(terms)
+
+        # 東京 is independent
+        assert "東京" in result
+        # 騎士団長 contains 騎士団, so 騎士団 should be removed
+        assert "騎士団長" in result
+        assert "騎士団" not in result
+        # アソリウス島騎士団 contains 騎士団, 騎士団 is already removed
+        assert "アソリウス島騎士団" in result
+
+    def test_filter_contained_terms_empty_list(self) -> None:
+        """Test that empty list returns empty list."""
+        analyzer = MorphologicalAnalyzer()
+        terms: list[str] = []
+
+        result = analyzer.filter_contained_terms(terms)
+
+        assert result == []
+
+    def test_filter_contained_terms_single_term(self) -> None:
+        """Test that single term is returned as-is."""
+        analyzer = MorphologicalAnalyzer()
+        terms = ["騎士団長"]
+
+        result = analyzer.filter_contained_terms(terms)
+
+        assert result == ["騎士団長"]
+
+    def test_filter_contained_terms_preserves_order(self) -> None:
+        """Test that the order of first occurrence is preserved."""
+        analyzer = MorphologicalAnalyzer()
+        terms = ["東京", "騎士団長", "大阪", "騎士団"]
+
+        result = analyzer.filter_contained_terms(terms)
+
+        # Order should be preserved, with 騎士団 removed
+        assert result == ["東京", "騎士団長", "大阪"]
+
+    def test_filter_contained_terms_exact_match_kept(self) -> None:
+        """Test that exact duplicates are handled properly."""
+        analyzer = MorphologicalAnalyzer()
+        terms = ["騎士団", "騎士団"]  # Duplicate
+
+        result = analyzer.filter_contained_terms(terms)
+
+        # Duplicates should result in single entry
+        assert result == ["騎士団"]
+
+    def test_filter_contained_terms_partial_overlap_preserved(self) -> None:
+        """Test that partial overlaps (not containment) are preserved.
+
+        Example: "騎士団長" and "団長代理" share "団長" but
+        neither contains the other entirely.
+        """
+        analyzer = MorphologicalAnalyzer()
+        terms = ["騎士団長", "団長代理"]
+
+        result = analyzer.filter_contained_terms(terms)
+
+        # Both should be preserved as neither contains the other
+        assert "騎士団長" in result
+        assert "団長代理" in result
+        assert len(result) == 2
