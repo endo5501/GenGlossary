@@ -324,3 +324,41 @@ class MorphologicalAnalyzer:
             chunks.append(current_chunk)
 
         return chunks
+
+    def filter_contained_terms(self, terms: list[str]) -> list[str]:
+        """Filter out terms that are contained within other longer terms.
+
+        When compound noun extraction generates all possible sub-combinations,
+        this method keeps only the longest terms by removing any term that
+        is a substring of another term.
+
+        Args:
+            terms: List of terms to filter.
+
+        Returns:
+            List of terms with contained (substring) terms removed,
+            preserving the order of first occurrence.
+        """
+        if len(terms) <= 1:
+            return terms.copy() if terms else []
+
+        # Remove duplicates while preserving order
+        unique_terms: list[str] = []
+        seen: set[str] = set()
+        for term in terms:
+            if term not in seen:
+                unique_terms.append(term)
+                seen.add(term)
+
+        # Build a set of terms that are contained in other terms
+        contained_terms: set[str] = set()
+
+        for term in unique_terms:
+            for other_term in unique_terms:
+                # Check if term is contained in other_term (but not equal)
+                if term != other_term and term in other_term:
+                    contained_terms.add(term)
+                    break  # No need to check further once we know it's contained
+
+        # Return terms that are not contained in any other term
+        return [term for term in unique_terms if term not in contained_terms]
