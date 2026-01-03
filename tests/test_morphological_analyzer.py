@@ -128,3 +128,43 @@ Pythonで実装されています。"""
         if "東京" in proper_nouns and "大阪" in proper_nouns:
             # 東京 should come before 大阪
             assert proper_nouns.index("東京") < proper_nouns.index("大阪")
+
+    def test_extract_proper_nouns_from_long_text(self) -> None:
+        """Test that long text exceeding SudachiPy's limit is handled correctly.
+
+        SudachiPy has a maximum input size limit of 49149 bytes.
+        This test ensures that longer texts are processed by chunking.
+        """
+        analyzer = MorphologicalAnalyzer()
+
+        # Create text that exceeds 49149 bytes
+        # Each repetition is about 50 bytes, so 1000 repetitions = ~50000 bytes
+        base_text = "東京は日本の首都です。大阪は第二の都市です。"
+        long_text = base_text * 1000  # Should be > 49149 bytes
+
+        # Verify the text is actually long enough
+        assert len(long_text.encode("utf-8")) > 49149
+
+        # Should not raise an error
+        proper_nouns = analyzer.extract_proper_nouns(long_text)
+
+        # Should still extract proper nouns
+        assert isinstance(proper_nouns, list)
+        assert "東京" in proper_nouns
+        assert "日本" in proper_nouns
+        assert "大阪" in proper_nouns
+
+    def test_extract_proper_nouns_from_very_long_text(self) -> None:
+        """Test handling of very long text (100KB+)."""
+        analyzer = MorphologicalAnalyzer()
+
+        # Create a 100KB+ text
+        base_text = "トヨタ自動車は愛知県に本社があります。関西国際空港に行きました。"
+        long_text = base_text * 2000  # Should be > 100KB
+
+        # Should not raise an error
+        proper_nouns = analyzer.extract_proper_nouns(long_text)
+
+        # Should extract proper nouns
+        assert isinstance(proper_nouns, list)
+        assert len(proper_nouns) > 0
