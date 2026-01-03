@@ -20,6 +20,12 @@ from genglossary.term_extractor import TermExtractor
 # --- Mock Response Models ---
 
 
+class MockTermClassificationResponse(BaseModel):
+    """Mock response for term classification (two-phase processing)."""
+
+    classified_terms: dict[str, list[str]]
+
+
 class MockTermJudgmentResponse(BaseModel):
     """Mock response for term judgment (new architecture)."""
 
@@ -70,11 +76,17 @@ class TestEndToEndPipeline:
 
         # Set up responses in order of calls
         mock_llm.generate_structured.side_effect = [
-            # 1. Term extraction (judgment)
+            # 1. Term extraction - classification phase
+            MockTermClassificationResponse(
+                classified_terms={
+                    "technical_term": ["マイクロサービス", "APIゲートウェイ", "PostgreSQL"]
+                }
+            ),
+            # 2. Term extraction - selection phase
             MockTermJudgmentResponse(
                 approved_terms=["マイクロサービス", "APIゲートウェイ", "PostgreSQL"]
             ),
-            # 2-4. Definition for each term
+            # 3-5. Definition for each term
             MockDefinitionResponse(
                 definition="独立して開発・デプロイ可能な小さなサービスに分割するアーキテクチャ",
                 confidence=0.9,
@@ -188,9 +200,13 @@ class TestEndToEndPipeline:
 
         mock_llm = MagicMock(spec=BaseLLMClient)
 
-        # Note: New architecture uses SudachiPy + LLM judgment
+        # Note: New architecture uses SudachiPy + two-phase LLM judgment
         mock_llm.generate_structured.side_effect = [
-            # Term extraction (judgment)
+            # Term extraction - classification phase
+            MockTermClassificationResponse(
+                classified_terms={"technical_term": ["テスト用語"]}
+            ),
+            # Term extraction - selection phase
             MockTermJudgmentResponse(approved_terms=["テスト用語"]),
             # Definition (no related terms call since only 1 term)
             MockDefinitionResponse(definition="テスト用の定義", confidence=0.9),
@@ -244,8 +260,15 @@ class TestEndToEndPipeline:
 
         mock_llm = MagicMock(spec=BaseLLMClient)
 
-        # Set up responses
-        responses = [MockTermJudgmentResponse(approved_terms=terms)]
+        # Set up responses - two-phase term extraction
+        responses = [
+            # Classification phase
+            MockTermClassificationResponse(
+                classified_terms={"technical_term": terms}
+            ),
+            # Selection phase
+            MockTermJudgmentResponse(approved_terms=terms),
+        ]
 
         # Add responses for each term
         for i in range(5):
@@ -302,7 +325,10 @@ class TestErrorHandling:
         doc_path.write_text("Simple text without special terms.", encoding="utf-8")
 
         mock_llm = MagicMock(spec=BaseLLMClient)
-        mock_llm.generate_structured.return_value = MockTermJudgmentResponse(approved_terms=[])
+        # Two-phase extraction with no terms
+        mock_llm.generate_structured.side_effect = [
+            MockTermClassificationResponse(classified_terms={}),
+        ]
 
         loader = DocumentLoader()
         documents = loader.load_directory(str(tmp_path))
@@ -446,6 +472,12 @@ APIゲートウェイは重要なコンポーネントです。
 
         mock_llm = MagicMock(spec=BaseLLMClient)
         mock_llm.generate_structured.side_effect = [
+            # Two-phase term extraction
+            MockTermClassificationResponse(
+                classified_terms={
+                    "technical_term": ["マイクロサービス", "APIゲートウェイ"]
+                }
+            ),
             MockTermJudgmentResponse(approved_terms=["マイクロサービス", "APIゲートウェイ"]),
             MockDefinitionResponse(definition="日本語の定義1", confidence=0.9),
             MockDefinitionResponse(definition="日本語の定義2", confidence=0.85),

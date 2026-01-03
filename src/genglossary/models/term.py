@@ -1,6 +1,34 @@
 """Term and TermOccurrence models for representing glossary terms."""
 
+from enum import Enum
+
 from pydantic import BaseModel, Field, computed_field, field_validator
+
+
+class TermCategory(str, Enum):
+    """Category of a term for classification.
+
+    Used in the two-phase LLM classification process.
+    COMMON_NOUN is the category that gets filtered out.
+    """
+
+    PERSON_NAME = "person_name"
+    """Person names - both real and fictional"""
+
+    PLACE_NAME = "place_name"
+    """Place names - countries, cities, regions"""
+
+    ORGANIZATION = "organization"
+    """Organization and group names - companies, military units, orders"""
+
+    TITLE = "title"
+    """Titles and positions - ranks, honorifics"""
+
+    TECHNICAL_TERM = "technical_term"
+    """Technical and domain-specific terms"""
+
+    COMMON_NOUN = "common_noun"
+    """Common nouns - excluded from glossary"""
 
 
 class TermOccurrence(BaseModel):

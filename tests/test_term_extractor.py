@@ -52,10 +52,20 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that extract_terms returns a list of strings."""
-        mock_response = MockTermJudgmentResponse(
+        # Two-phase processing: classification then selection
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "place_name": ["東京", "日本"],
+                "organization": ["トヨタ自動車"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "日本", "トヨタ自動車"]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
@@ -67,8 +77,14 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that extract_terms uses MorphologicalAnalyzer for proper noun extraction."""
-        mock_response = MockTermJudgmentResponse(approved_terms=["東京"])
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京"])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -87,25 +103,40 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that extracted proper nouns are sent to LLM for judgment."""
-        mock_response = MockTermJudgmentResponse(
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "place_name": ["東京"],
+                "organization": ["トヨタ自動車"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "トヨタ自動車"]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         extractor.extract_terms([sample_document])
 
-        # Verify LLM was called
-        mock_llm_client.generate_structured.assert_called_once()
+        # Verify LLM was called twice (classification + selection)
+        assert mock_llm_client.generate_structured.call_count == 2
 
     def test_extract_terms_removes_duplicates(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that duplicate terms are removed from the result."""
-        mock_response = MockTermJudgmentResponse(
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京", "日本"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "東京", "日本"]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
@@ -134,8 +165,14 @@ class TestTermExtractor:
             file_path="/doc2.md", content="大阪に行きました。"
         )
 
-        mock_response = MockTermJudgmentResponse(approved_terms=["東京", "大阪"])
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京", "大阪"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京", "大阪"])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([doc1, doc2])
@@ -158,10 +195,16 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that whitespace is stripped from extracted terms."""
-        mock_response = MockTermJudgmentResponse(
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京", "日本", "大阪"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["  東京  ", " 日本", "大阪 "]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
@@ -175,10 +218,16 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that empty strings are filtered out from results."""
-        mock_response = MockTermJudgmentResponse(
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京", "日本"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "", "日本", "  "]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
@@ -191,10 +240,19 @@ class TestTermExtractor:
     ) -> None:
         """Test that only LLM-approved terms are returned."""
         # LLM approves only some of the candidates
-        mock_response = MockTermJudgmentResponse(
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "place_name": ["東京"],
+                "organization": ["トヨタ自動車"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "トヨタ自動車"]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
@@ -206,8 +264,14 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test handling when LLM approves no terms."""
-        mock_response = MockTermJudgmentResponse(approved_terms=[])
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=[])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
@@ -233,32 +297,44 @@ class TestTermJudgmentPrompt:
     def test_judgment_prompt_includes_candidates(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that judgment prompt includes candidate terms."""
-        mock_response = MockTermJudgmentResponse(approved_terms=[])
-        mock_llm_client.generate_structured.return_value = mock_response
+        """Test that classification prompt includes candidate terms."""
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=[])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         extractor.extract_terms([sample_document])
 
-        # Check that prompt contains candidate terms
-        call_args = mock_llm_client.generate_structured.call_args
-        prompt = call_args[0][0]
+        # Check first call (classification prompt)
+        call_args_list = mock_llm_client.generate_structured.call_args_list
+        prompt = call_args_list[0][0][0]
 
-        # Should contain guidance for judgment
-        assert "用語" in prompt or "候補" in prompt
+        # Should contain guidance for classification
+        assert "用語" in prompt or "候補" in prompt or "カテゴリ" in prompt
 
     def test_judgment_prompt_includes_context(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that judgment prompt includes document context."""
-        mock_response = MockTermJudgmentResponse(approved_terms=[])
-        mock_llm_client.generate_structured.return_value = mock_response
+        """Test that prompts include document context."""
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=[])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         extractor.extract_terms([sample_document])
 
-        call_args = mock_llm_client.generate_structured.call_args
-        prompt = call_args[0][0]
+        call_args_list = mock_llm_client.generate_structured.call_args_list
+        prompt = call_args_list[0][0][0]
 
         # Should include document content for context
         assert "東京" in prompt or "日本" in prompt
@@ -266,15 +342,22 @@ class TestTermJudgmentPrompt:
     def test_judgment_prompt_specifies_json_format(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that judgment prompt specifies JSON output format."""
-        mock_response = MockTermJudgmentResponse(approved_terms=[])
-        mock_llm_client.generate_structured.return_value = mock_response
+        """Test that prompts specify JSON output format."""
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=[])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         extractor.extract_terms([sample_document])
 
-        call_args = mock_llm_client.generate_structured.call_args
-        prompt = call_args[0][0]
+        call_args_list = mock_llm_client.generate_structured.call_args_list
+        # Second call should be the selection prompt with approved_terms
+        prompt = call_args_list[1][0][0]
 
         assert "JSON" in prompt or "json" in prompt
         assert "approved_terms" in prompt

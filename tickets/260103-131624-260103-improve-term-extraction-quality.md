@@ -3,7 +3,7 @@ priority: 1
 tags: [term-extraction, sudachipy, llm, quality]
 description: "用語抽出の品質向上（包含フィルタ + 2段階LLM分類）"
 created_at: "2026-01-03T13:16:24Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-03T13:21:09Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
