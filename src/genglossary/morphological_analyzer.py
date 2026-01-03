@@ -26,6 +26,7 @@ class MorphologicalAnalyzer:
         include_common_nouns: bool = False,
         min_length: int = 1,
         min_frequency: int = 1,
+        filter_contained: bool = False,
     ) -> list[str]:
         """Extract proper nouns from the given text.
 
@@ -49,6 +50,9 @@ class MorphologicalAnalyzer:
                 than this are filtered out. Default is 1 (no filtering).
             min_frequency: Minimum number of occurrences for a term to be included.
                 Terms appearing fewer times are filtered out. Default is 1 (no filtering).
+            filter_contained: If True, remove terms that are substrings of other
+                longer terms. Useful for removing redundant compound noun variants.
+                Default is False for backward compatibility.
 
         Returns:
             List of unique terms in order of first occurrence.
@@ -79,9 +83,13 @@ class MorphologicalAnalyzer:
 
             terms = terms_list
 
-        # Apply filtering
+        # Apply length and frequency filtering
         if min_length > 1 or min_frequency > 1:
             terms = self._apply_filters(text, terms, min_length, min_frequency)
+
+        # Apply contained term filtering
+        if filter_contained:
+            terms = self.filter_contained_terms(terms)
 
         return terms
 
