@@ -191,5 +191,115 @@ def generate(
         sys.exit(1)
 
 
+@main.command(name="analyze-terms")
+@click.option(
+    "--input",
+    "-i",
+    "input_dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
+    required=True,
+    help="入力ドキュメントのディレクトリ",
+)
+@click.option(
+    "--model",
+    "-m",
+    default="dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
+    help="使用するOllamaモデル名",
+)
+def analyze_terms(input_dir: Path, model: str) -> None:
+    """用語抽出の中間結果を分析・表示します。
+
+    SudachiPyによる固有名詞抽出とLLMによる用語判定の結果を表示し、
+    用語抽出の品質を確認するためのコマンドです。
+    """
+    try:
+        console.print("[bold green]=== 用語抽出分析 ===[/bold green]\n")
+
+        # Initialize LLM client
+        llm_client = OllamaClient(model=model, timeout=180.0)
+
+        if not llm_client.is_available():
+            console.print(
+                "[red]Ollamaサーバーに接続できません。\n"
+                "ollama serve でサーバーを起動してください。[/red]"
+            )
+            sys.exit(1)
+
+        # Load documents
+        console.print(f"[dim]入力: {input_dir}[/dim]")
+        loader = DocumentLoader()
+        documents = loader.load_directory(str(input_dir))
+
+        if not documents:
+            console.print(f"[red]ドキュメントが見つかりません: {input_dir}[/red]")
+            sys.exit(1)
+
+        console.print(f"[dim]ファイル数: {len(documents)}[/dim]")
+        console.print(f"[dim]モデル: {model}[/dim]\n")
+
+        # Analyze extraction
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("用語を分析中...", total=None)
+
+            extractor = TermExtractor(llm_client=llm_client)
+            analysis = extractor.analyze_extraction(documents)
+
+            progress.update(task, completed=True)
+
+        # Display results
+        console.print(
+            f"\n[bold cyan]■ SudachiPy抽出候補[/bold cyan] "
+            f"({len(analysis.sudachi_candidates)}件)"
+        )
+        if analysis.sudachi_candidates:
+            candidates_str = ", ".join(analysis.sudachi_candidates)
+            console.print(f"  {candidates_str}")
+        else:
+            console.print("  [dim](なし)[/dim]")
+
+        console.print(
+            f"\n[bold green]■ LLM承認用語[/bold green] "
+            f"({len(analysis.llm_approved)}件)"
+        )
+        if analysis.llm_approved:
+            approved_str = ", ".join(analysis.llm_approved)
+            console.print(f"  {approved_str}")
+        else:
+            console.print("  [dim](なし)[/dim]")
+
+        console.print(
+            f"\n[bold yellow]■ LLM除外用語[/bold yellow] "
+            f"({len(analysis.llm_rejected)}件)"
+        )
+        if analysis.llm_rejected:
+            rejected_str = ", ".join(analysis.llm_rejected)
+            console.print(f"  {rejected_str}")
+        else:
+            console.print("  [dim](なし)[/dim]")
+
+        # Statistics
+        console.print("\n[bold]■ 統計[/bold]")
+        total = len(analysis.sudachi_candidates)
+        approved = len(analysis.llm_approved)
+        if total > 0:
+            rate = (approved / total) * 100
+            console.print(f"  候補数: {total}")
+            console.print(f"  承認率: {rate:.1f}% ({approved}/{total})")
+        else:
+            console.print("  候補数: 0")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]処理を中断しました[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        console.print(f"\n[red]エラーが発生しました: {e}[/red]")
+        console.print_exception()
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()

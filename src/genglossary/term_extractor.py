@@ -13,6 +13,23 @@ class TermJudgmentResponse(BaseModel):
     approved_terms: list[str]
 
 
+class TermExtractionAnalysis(BaseModel):
+    """Analysis result of term extraction process.
+
+    Contains intermediate results from both SudachiPy and LLM stages,
+    useful for debugging and improving extraction quality.
+    """
+
+    sudachi_candidates: list[str]
+    """Proper nouns extracted by SudachiPy morphological analysis."""
+
+    llm_approved: list[str]
+    """Terms approved by LLM for inclusion in glossary."""
+
+    llm_rejected: list[str]
+    """Terms rejected by LLM (candidates - approved)."""
+
+
 class TermExtractor:
     """Extracts terms from documents using SudachiPy + LLM judgment.
 
@@ -65,6 +82,64 @@ class TermExtractor:
 
         # Process and deduplicate approved terms
         return self._process_terms(response.approved_terms)
+
+    def analyze_extraction(
+        self, documents: list[Document]
+    ) -> TermExtractionAnalysis:
+        """Analyze term extraction without generating full glossary.
+
+        Returns intermediate results from both SudachiPy and LLM stages,
+        useful for debugging and improving extraction quality.
+
+        Args:
+            documents: List of documents to analyze.
+
+        Returns:
+            TermExtractionAnalysis with candidates, approved, and rejected terms.
+        """
+        # Filter out empty or whitespace-only documents
+        non_empty_docs = [
+            doc for doc in documents if doc.content and doc.content.strip()
+        ]
+
+        if not non_empty_docs:
+            return TermExtractionAnalysis(
+                sudachi_candidates=[],
+                llm_approved=[],
+                llm_rejected=[],
+            )
+
+        # Step 1: Extract proper nouns using morphological analysis
+        candidates = self._extract_candidates(non_empty_docs)
+
+        if not candidates:
+            return TermExtractionAnalysis(
+                sudachi_candidates=[],
+                llm_approved=[],
+                llm_rejected=[],
+            )
+
+        # Step 2: Send to LLM for judgment
+        prompt = self._create_judgment_prompt(candidates, non_empty_docs)
+        response = self.llm_client.generate_structured(prompt, TermJudgmentResponse)
+
+        # Process approved terms
+        raw_approved = self._process_terms(response.approved_terms)
+
+        # Filter to only include terms that were in candidates
+        # (LLM may suggest terms not in the original candidates)
+        candidates_set = set(candidates)
+        approved = [t for t in raw_approved if t in candidates_set]
+
+        # Calculate rejected terms (candidates not in approved)
+        approved_set = set(approved)
+        rejected = [c for c in candidates if c not in approved_set]
+
+        return TermExtractionAnalysis(
+            sudachi_candidates=candidates,
+            llm_approved=approved,
+            llm_rejected=rejected,
+        )
 
     def _extract_candidates(self, documents: list[Document]) -> list[str]:
         """Extract candidate terms using morphological analysis.
