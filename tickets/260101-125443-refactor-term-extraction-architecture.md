@@ -4,7 +4,7 @@ tags: [refactor, term-extraction, sudachipy]
 description: "用語抽出アーキテクチャを刷新 - SudachiPy形態素解析 + LLM判定方式に変更"
 created_at: "2026-01-01T12:54:43Z"
 started_at: 2026-01-02T11:23:54Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-03T07:07:30Z # Do not modify manually
 ---
 
 # 用語抽出アーキテクチャ刷新
