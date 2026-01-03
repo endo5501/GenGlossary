@@ -41,6 +41,15 @@ class TermExtractionAnalysis(BaseModel):
     llm_rejected: list[str]
     """Terms rejected by LLM (candidates - approved)."""
 
+    pre_filter_candidate_count: int = 0
+    """Count of candidates before contained terms filtering."""
+
+    post_filter_candidate_count: int = 0
+    """Count of candidates after contained terms filtering."""
+
+    classification_results: dict[str, list[str]] = {}
+    """LLM classification results by category."""
+
 
 class TermExtractor:
     """Extracts terms from documents using SudachiPy + LLM judgment.
@@ -103,11 +112,16 @@ class TermExtractor:
         Returns intermediate results from both SudachiPy and LLM stages,
         useful for debugging and improving extraction quality.
 
+        Uses two-phase LLM processing:
+        1. Classification phase: Categorize terms into 6 categories
+        2. Selection phase: Select terms from non-common-noun categories
+
         Args:
             documents: List of documents to analyze.
 
         Returns:
-            TermExtractionAnalysis with candidates, approved, and rejected terms.
+            TermExtractionAnalysis with candidates, approved, rejected terms,
+            filter counts, and classification results.
         """
         # Filter out empty or whitespace-only documents
         non_empty_docs = [
@@ -119,29 +133,34 @@ class TermExtractor:
                 sudachi_candidates=[],
                 llm_approved=[],
                 llm_rejected=[],
+                pre_filter_candidate_count=0,
+                post_filter_candidate_count=0,
+                classification_results={},
             )
 
-        # Step 1: Extract proper nouns using morphological analysis
+        # Step 1a: Extract candidates WITHOUT filter to get pre-filter count
+        pre_filter_candidates = self._extract_candidates_raw(non_empty_docs)
+        pre_filter_count = len(pre_filter_candidates)
+
+        # Step 1b: Extract candidates WITH filter to get post-filter count
         candidates = self._extract_candidates(non_empty_docs)
+        post_filter_count = len(candidates)
 
         if not candidates:
             return TermExtractionAnalysis(
                 sudachi_candidates=[],
                 llm_approved=[],
                 llm_rejected=[],
+                pre_filter_candidate_count=pre_filter_count,
+                post_filter_candidate_count=0,
+                classification_results={},
             )
 
-        # Step 2: Send to LLM for judgment
-        prompt = self._create_judgment_prompt(candidates, non_empty_docs)
-        response = self.llm_client.generate_structured(prompt, TermJudgmentResponse)
+        # Step 2: Classify terms (Phase 1 of LLM processing)
+        classification = self._classify_terms(candidates, non_empty_docs)
 
-        # Process approved terms
-        raw_approved = self._process_terms(response.approved_terms)
-
-        # Filter to only include terms that were in candidates
-        # (LLM may suggest terms not in the original candidates)
-        candidates_set = set(candidates)
-        approved = [t for t in raw_approved if t in candidates_set]
+        # Step 3: Select terms (Phase 2 of LLM processing)
+        approved = self._select_terms(classification, non_empty_docs)
 
         # Calculate rejected terms (candidates not in approved)
         approved_set = set(approved)
@@ -151,6 +170,9 @@ class TermExtractor:
             sudachi_candidates=candidates,
             llm_approved=approved,
             llm_rejected=rejected,
+            pre_filter_candidate_count=pre_filter_count,
+            post_filter_candidate_count=post_filter_count,
+            classification_results=classification.classified_terms,
         )
 
     def _extract_candidates(self, documents: list[Document]) -> list[str]:
@@ -181,6 +203,36 @@ class TermExtractor:
                 include_common_nouns=True,
                 min_length=2,
                 filter_contained=True,
+            )
+            for term in terms:
+                if term not in seen:
+                    candidates.append(term)
+                    seen.add(term)
+
+        return candidates
+
+    def _extract_candidates_raw(self, documents: list[Document]) -> list[str]:
+        """Extract candidate terms WITHOUT contained term filtering.
+
+        Used for analysis to show pre-filter candidate count.
+
+        Args:
+            documents: List of documents to analyze.
+
+        Returns:
+            List of unique candidate terms (before filtering).
+        """
+        candidates: list[str] = []
+        seen: set[str] = set()
+
+        for doc in documents:
+            # Same parameters as _extract_candidates but filter_contained=False
+            terms = self._morphological_analyzer.extract_proper_nouns(
+                doc.content,
+                extract_compound_nouns=True,
+                include_common_nouns=True,
+                min_length=2,
+                filter_contained=False,
             )
             for term in terms:
                 if term not in seen:

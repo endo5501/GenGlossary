@@ -380,16 +380,139 @@ class TestTermExtractionAnalysis:
 """
         return Document(file_path="/path/to/doc.md", content=content)
 
+    def test_analysis_contains_pre_filter_count(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that analysis contains pre-filter candidate count."""
+        from genglossary.term_extractor import TermExtractionAnalysis
+
+        # Two-phase LLM responses
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京都", "日本国", "愛知"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京都"])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            # Simulate: before filtering=5 terms, after filtering=3 terms
+            mock_analyzer.extract_proper_nouns.side_effect = [
+                ["東京", "東京都", "日本", "日本国", "愛知"],  # without filter
+                ["東京都", "日本国", "愛知"],  # with filter
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.analyze_extraction([sample_document])
+
+            assert hasattr(result, "pre_filter_candidate_count")
+            assert result.pre_filter_candidate_count == 5
+
+    def test_analysis_contains_post_filter_count(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that analysis contains post-filter candidate count."""
+        # Two-phase LLM responses
+        mock_classification = TermClassificationResponse(
+            classified_terms={"place_name": ["東京都", "日本国", "愛知"]}
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京都"])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            # Simulate: before filtering=5 terms, after filtering=3 terms
+            mock_analyzer.extract_proper_nouns.side_effect = [
+                ["東京", "東京都", "日本", "日本国", "愛知"],  # without filter
+                ["東京都", "日本国", "愛知"],  # with filter
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.analyze_extraction([sample_document])
+
+            assert hasattr(result, "post_filter_candidate_count")
+            assert result.post_filter_candidate_count == 3
+
+    def test_analysis_contains_classification_results(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that analysis contains LLM classification results."""
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "place_name": ["東京", "日本"],
+                "organization": ["トヨタ自動車"],
+                "common_noun": ["本社"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京", "トヨタ自動車"])
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.side_effect = [
+                ["東京", "日本", "トヨタ自動車", "本社"],  # without filter
+                ["東京", "日本", "トヨタ自動車", "本社"],  # with filter
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.analyze_extraction([sample_document])
+
+            assert hasattr(result, "classification_results")
+            assert result.classification_results == mock_classification.classified_terms
+
+    def test_analysis_classification_results_empty_when_no_candidates(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that classification_results is empty dict when no candidates."""
+        from genglossary.term_extractor import TermExtractionAnalysis
+
+        empty_doc = Document(file_path="/empty.md", content="")
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.analyze_extraction([empty_doc])
+
+        assert isinstance(result, TermExtractionAnalysis)
+        assert result.classification_results == {}
+        assert result.pre_filter_candidate_count == 0
+        assert result.post_filter_candidate_count == 0
+
     def test_analyze_extraction_returns_analysis_model(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analyze_extraction returns TermExtractionAnalysis."""
         from genglossary.term_extractor import TermExtractionAnalysis
 
-        mock_response = MockTermJudgmentResponse(
+        # Two-phase LLM responses
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "place_name": ["東京"],
+                "organization": ["トヨタ自動車"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "トヨタ自動車"]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.analyze_extraction([sample_document])
@@ -400,15 +523,26 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analysis contains SudachiPy candidates."""
-        mock_response = MockTermJudgmentResponse(
+        # Two-phase LLM responses
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "place_name": ["東京", "日本", "愛知県"],
+                "organization": ["トヨタ自動車"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "トヨタ自動車"]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
         ) as mock_analyzer_class:
             mock_analyzer = MagicMock()
+            # Both calls return the same candidates (no difference for this test)
             mock_analyzer.extract_proper_nouns.return_value = [
                 "東京", "日本", "トヨタ自動車", "愛知県"
             ]
@@ -425,10 +559,20 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analysis contains LLM-approved terms."""
-        mock_response = MockTermJudgmentResponse(
+        # Two-phase LLM responses
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "place_name": ["東京", "日本", "愛知県"],
+                "organization": ["トヨタ自動車"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "トヨタ自動車"]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -449,10 +593,20 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analysis contains LLM-rejected terms."""
-        mock_response = MockTermJudgmentResponse(
+        # Two-phase LLM responses
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "place_name": ["東京", "日本", "愛知県"],
+                "organization": ["トヨタ自動車"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
             approved_terms=["東京", "トヨタ自動車"]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"

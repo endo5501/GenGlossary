@@ -250,6 +250,18 @@ def analyze_terms(input_dir: Path, model: str) -> None:
 
             progress.update(task, completed=True)
 
+        # Display filtering results
+        console.print("\n[bold magenta]■ 包含フィルタリング[/bold magenta]")
+        pre_count = analysis.pre_filter_candidate_count
+        post_count = analysis.post_filter_candidate_count
+        filtered_count = pre_count - post_count
+        console.print(f"  フィルタ前: {pre_count}件")
+        console.print(f"  フィルタ後: {post_count}件")
+        console.print(f"  除去された重複: {filtered_count}件")
+        if pre_count > 0:
+            reduction_rate = (filtered_count / pre_count) * 100
+            console.print(f"  削減率: {reduction_rate:.1f}%")
+
         # Display results
         console.print(
             f"\n[bold cyan]■ SudachiPy抽出候補[/bold cyan] "
@@ -258,6 +270,32 @@ def analyze_terms(input_dir: Path, model: str) -> None:
         if analysis.sudachi_candidates:
             candidates_str = ", ".join(analysis.sudachi_candidates)
             console.print(f"  {candidates_str}")
+        else:
+            console.print("  [dim](なし)[/dim]")
+
+        # Display classification results
+        console.print("\n[bold blue]■ LLM分類結果[/bold blue]")
+        if analysis.classification_results:
+            category_labels = {
+                "person_name": "人名",
+                "place_name": "地名",
+                "organization": "組織・団体名",
+                "title": "役職・称号",
+                "technical_term": "技術用語",
+                "common_noun": "一般名詞（除外対象）",
+            }
+            for category, terms in analysis.classification_results.items():
+                label = category_labels.get(category, category)
+                if category == "common_noun":
+                    console.print(f"  [dim]{label}: {len(terms)}件[/dim]")
+                else:
+                    console.print(f"  {label}: {len(terms)}件")
+                if terms:
+                    terms_str = ", ".join(terms)
+                    if category == "common_noun":
+                        console.print(f"    [dim]{terms_str}[/dim]")
+                    else:
+                        console.print(f"    {terms_str}")
         else:
             console.print("  [dim](なし)[/dim]")
 
