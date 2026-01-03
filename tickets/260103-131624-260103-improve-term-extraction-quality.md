@@ -66,25 +66,25 @@ closed_at: null   # Do not modify manually
 ## Tasks
 
 ### Phase 1: SudachiPy改善（包含関係フィルタリング）
-- [ ] `filter_contained_terms()` メソッドのテスト作成
-- [ ] `filter_contained_terms()` メソッドの実装
-- [ ] `extract_proper_nouns()` に `filter_contained=True` オプション追加のテスト
-- [ ] `extract_proper_nouns()` に `filter_contained=True` オプション追加の実装
+- [x] `filter_contained_terms()` メソッドのテスト作成
+- [x] `filter_contained_terms()` メソッドの実装
+- [x] `extract_proper_nouns()` に `filter_contained=True` オプション追加のテスト
+- [x] `extract_proper_nouns()` に `filter_contained=True` オプション追加の実装
 
 ### Phase 2: 2段階LLM処理
-- [ ] 分類フェーズ用プロンプト・モデルのテスト作成
-- [ ] 分類フェーズ用プロンプト・モデルの実装
-- [ ] 選別フェーズ用プロンプト改善のテスト作成
-- [ ] 選別フェーズ用プロンプト改善の実装
-- [ ] `TermExtractor` リファクタリング
+- [x] 分類フェーズ用プロンプト・モデルのテスト作成
+- [x] 分類フェーズ用プロンプト・モデルの実装
+- [x] 選別フェーズ用プロンプト改善のテスト作成
+- [x] 選別フェーズ用プロンプト改善の実装
+- [x] `TermExtractor` リファクタリング
 
 ### Phase 3: 検証・調整
 - [ ] `analyze-terms`コマンドで検証
 - [ ] 結果評価と調整
 
 ### 完了条件
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## 成功基準
