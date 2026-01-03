@@ -144,23 +144,33 @@ class TermExtractor:
     def _extract_candidates(self, documents: list[Document]) -> list[str]:
         """Extract candidate terms using morphological analysis.
 
+        Uses enhanced extraction with:
+        - Compound noun extraction (e.g., 騎士団長, アソリウス島騎士団)
+        - Common noun inclusion (e.g., 聖印, 魔神討伐)
+        - Minimum length filtering (2 characters to keep common proper nouns)
+
         Args:
             documents: List of documents to analyze.
 
         Returns:
-            List of unique candidate proper nouns.
+            List of unique candidate terms.
         """
         candidates: list[str] = []
         seen: set[str] = set()
 
         for doc in documents:
-            proper_nouns = self._morphological_analyzer.extract_proper_nouns(
-                doc.content
+            # Use enhanced extraction parameters
+            # min_length=2 keeps common Japanese proper nouns (東京, 日本, etc.)
+            terms = self._morphological_analyzer.extract_proper_nouns(
+                doc.content,
+                extract_compound_nouns=True,
+                include_common_nouns=True,
+                min_length=2,
             )
-            for noun in proper_nouns:
-                if noun not in seen:
-                    candidates.append(noun)
-                    seen.add(noun)
+            for term in terms:
+                if term not in seen:
+                    candidates.append(term)
+                    seen.add(term)
 
         return candidates
 
@@ -180,7 +190,8 @@ class TermExtractor:
         combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
 
         prompt = f"""あなたは用語集作成の専門家です。
-形態素解析により以下の固有名詞候補が抽出されました。
+形態素解析により以下の用語候補が抽出されました。
+候補には固有名詞、複合名詞、技術用語が含まれています。
 
 ## 候補用語:
 {candidates_text}
@@ -191,11 +202,18 @@ class TermExtractor:
 
 1. 読者がこの用語の「この文脈での意味」を知りたいと思うか？
 2. 辞書を引いても、この文脈での意味は分からないか？
-3. 固有名詞であれば、説明があると文章理解が深まるか？
+3. 固有名詞・組織名・役職名であれば、説明があると文章理解が深まるか？
+4. 専門用語・技術用語として、この文脈での定義が必要か？
 
 ## 採用しない例
 - 広く知られた一般的な地名や国名（ただし、文脈で特殊な意味を持つ場合は採用）
-- 自明な略語や標準的な技術用語
+- 一般的すぎる普通名詞（「方角」「重要」など）
+- 文脈に依存しない基本的な単語
+
+## 採用する例
+- 固有の組織名、役職名、称号（例: アソリウス島騎士団、騎士代理爵位）
+- この文脈特有の意味を持つ用語（例: 聖印、魔神討伐）
+- 複合的な専門用語（例: 魔神代理領、近衛騎士団長）
 
 ## ドキュメントのコンテキスト:
 {combined_content}

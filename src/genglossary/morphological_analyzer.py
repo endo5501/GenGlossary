@@ -19,7 +19,14 @@ class MorphologicalAnalyzer:
         self._dictionary = Dictionary()
         self._tokenizer = self._dictionary.create()
 
-    def extract_proper_nouns(self, text: str) -> list[str]:
+    def extract_proper_nouns(
+        self,
+        text: str,
+        extract_compound_nouns: bool = False,
+        include_common_nouns: bool = False,
+        min_length: int = 1,
+        min_frequency: int = 1,
+    ) -> list[str]:
         """Extract proper nouns from the given text.
 
         Uses SudachiPy's morphological analysis to identify proper nouns.
@@ -34,9 +41,17 @@ class MorphologicalAnalyzer:
 
         Args:
             text: The Japanese text to analyze.
+            extract_compound_nouns: If True, extract compound nouns by combining
+                consecutive noun morphemes.
+            include_common_nouns: If True, include common nouns (普通名詞) in addition
+                to proper nouns. Useful for extracting domain-specific technical terms.
+            min_length: Minimum character length for extracted terms. Terms shorter
+                than this are filtered out. Default is 1 (no filtering).
+            min_frequency: Minimum number of occurrences for a term to be included.
+                Terms appearing fewer times are filtered out. Default is 1 (no filtering).
 
         Returns:
-            List of unique proper nouns in order of first occurrence.
+            List of unique terms in order of first occurrence.
         """
         if not text or not text.strip():
             return []
@@ -44,51 +59,188 @@ class MorphologicalAnalyzer:
         # Check if text exceeds the size limit
         text_bytes = len(text.encode("utf-8"))
         if text_bytes <= self.MAX_CHUNK_BYTES:
-            return self._extract_from_text(text)
+            terms = self._extract_from_text(
+                text, extract_compound_nouns, include_common_nouns
+            )
+        else:
+            # Split text into chunks and process each
+            chunks = self._split_into_chunks(text)
+            terms_list: list[str] = []
+            seen: set[str] = set()
 
-        # Split text into chunks and process each
-        chunks = self._split_into_chunks(text)
-        proper_nouns: list[str] = []
-        seen: set[str] = set()
+            for chunk in chunks:
+                chunk_terms = self._extract_from_text(
+                    chunk, extract_compound_nouns, include_common_nouns
+                )
+                for term in chunk_terms:
+                    if term not in seen:
+                        terms_list.append(term)
+                        seen.add(term)
 
-        for chunk in chunks:
-            chunk_nouns = self._extract_from_text(chunk)
-            for noun in chunk_nouns:
-                if noun not in seen:
-                    proper_nouns.append(noun)
-                    seen.add(noun)
+            terms = terms_list
 
-        return proper_nouns
+        # Apply filtering
+        if min_length > 1 or min_frequency > 1:
+            terms = self._apply_filters(text, terms, min_length, min_frequency)
 
-    def _extract_from_text(self, text: str) -> list[str]:
-        """Extract proper nouns from a single chunk of text.
+        return terms
+
+    def _extract_from_text(
+        self,
+        text: str,
+        extract_compound_nouns: bool = False,
+        include_common_nouns: bool = False,
+    ) -> list[str]:
+        """Extract terms from a single chunk of text.
 
         Args:
             text: The text chunk to analyze (must be within size limit).
+            extract_compound_nouns: If True, extract compound nouns.
+            include_common_nouns: If True, include common nouns.
 
         Returns:
-            List of unique proper nouns in order of first occurrence.
+            List of unique terms in order of first occurrence.
         """
         # Use split mode C for long unit segmentation
         morphemes = self._tokenizer.tokenize(text, SplitMode.C)
 
-        proper_nouns: list[str] = []
+        terms: list[str] = []
         seen: set[str] = set()
 
-        for morpheme in morphemes:
-            # Get part of speech info
-            pos = morpheme.part_of_speech()
+        # For compound noun extraction, track consecutive nouns and noun-like elements
+        if extract_compound_nouns:
+            i = 0
+            while i < len(morphemes):
+                pos = morphemes[i].part_of_speech()
 
-            # Check if it's a proper noun (固有名詞)
-            # pos[0] is the main category (e.g., "名詞")
-            # pos[1] is the subcategory (e.g., "固有名詞")
-            if len(pos) >= 2 and pos[0] == "名詞" and pos[1] == "固有名詞":
-                surface = morpheme.surface()
-                if surface not in seen:
-                    proper_nouns.append(surface)
-                    seen.add(surface)
+                # Check if it's a noun or noun-like element (including suffixes)
+                if self._is_noun_like(pos):
+                    # Start collecting consecutive noun-like elements
+                    compound_parts: list[str] = [morphemes[i].surface()]
+                    j = i + 1
 
-        return proper_nouns
+                    # Collect consecutive noun-like elements
+                    while j < len(morphemes):
+                        next_pos = morphemes[j].part_of_speech()
+                        if self._is_noun_like(next_pos):
+                            compound_parts.append(morphemes[j].surface())
+                            j += 1
+                        else:
+                            break
+
+                    # Extract all possible compound nouns (length >= 2)
+                    # This includes partial combinations like 騎士団, 団長, 騎士団長
+                    if len(compound_parts) >= 2:
+                        for start_idx in range(len(compound_parts)):
+                            for end_idx in range(start_idx + 2, len(compound_parts) + 1):
+                                compound = "".join(compound_parts[start_idx:end_idx])
+                                if compound not in seen:
+                                    terms.append(compound)
+                                    seen.add(compound)
+
+                    # Also add individual nouns if they match our criteria
+                    for k in range(i, j):
+                        if self._should_extract_noun(
+                            morphemes[k], include_common_nouns
+                        ):
+                            surface = morphemes[k].surface()
+                            if surface not in seen:
+                                terms.append(surface)
+                                seen.add(surface)
+
+                    i = j
+                else:
+                    i += 1
+        else:
+            # Original behavior: extract individual nouns
+            for morpheme in morphemes:
+                if self._should_extract_noun(morpheme, include_common_nouns):
+                    surface = morpheme.surface()
+                    if surface not in seen:
+                        terms.append(surface)
+                        seen.add(surface)
+
+        return terms
+
+    def _is_noun_like(self, pos: list[str]) -> bool:
+        """Check if a morpheme is noun-like (noun or noun-forming suffix).
+
+        Args:
+            pos: Part of speech information.
+
+        Returns:
+            True if the morpheme is noun-like.
+        """
+        if len(pos) < 1:
+            return False
+
+        # Include nouns
+        if pos[0] == "名詞":
+            return True
+
+        # Include noun-forming suffixes (接尾辞-名詞的)
+        if pos[0] == "接尾辞" and len(pos) >= 2 and pos[1] == "名詞的":
+            return True
+
+        return False
+
+    def _should_extract_noun(self, morpheme, include_common_nouns: bool) -> bool:
+        """Check if a morpheme should be extracted as a term.
+
+        Args:
+            morpheme: The morpheme to check.
+            include_common_nouns: Whether to include common nouns.
+
+        Returns:
+            True if the morpheme should be extracted.
+        """
+        pos = morpheme.part_of_speech()
+
+        # Always extract proper nouns
+        if len(pos) >= 2 and pos[0] == "名詞" and pos[1] == "固有名詞":
+            return True
+
+        # Extract common nouns if enabled
+        if include_common_nouns and len(pos) >= 2 and pos[0] == "名詞":
+            # Include 普通名詞 (common nouns)
+            if pos[1] == "普通名詞":
+                return True
+
+        return False
+
+    def _apply_filters(
+        self, text: str, terms: list[str], min_length: int, min_frequency: int
+    ) -> list[str]:
+        """Apply length and frequency filters to extracted terms.
+
+        Args:
+            text: The original text.
+            terms: List of extracted terms.
+            min_length: Minimum character length.
+            min_frequency: Minimum occurrence count.
+
+        Returns:
+            Filtered list of terms, preserving order of first occurrence.
+        """
+        # Count frequency of each term in the original text
+        frequency_map: dict[str, int] = {}
+        for term in terms:
+            frequency_map[term] = text.count(term)
+
+        # Apply filters while preserving order
+        filtered_terms: list[str] = []
+        for term in terms:
+            # Length filter
+            if len(term) < min_length:
+                continue
+
+            # Frequency filter
+            if frequency_map[term] < min_frequency:
+                continue
+
+            filtered_terms.append(term)
+
+        return filtered_terms
 
     def _split_into_chunks(self, text: str) -> list[str]:
         """Split text into chunks that fit within SudachiPy's size limit.
