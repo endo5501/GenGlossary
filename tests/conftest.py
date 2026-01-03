@@ -16,10 +16,10 @@ from genglossary.models.term import Term, TermOccurrence
 # --- Mock Response Models ---
 
 
-class MockExtractedTerms(BaseModel):
-    """Mock response for term extraction."""
+class MockTermJudgmentResponse(BaseModel):
+    """Mock response for term judgment (new architecture)."""
 
-    terms: list[str]
+    approved_terms: list[str]
 
 
 class MockDefinitionResponse(BaseModel):
@@ -123,8 +123,8 @@ def mock_llm_client_for_pipeline() -> MagicMock:
 
     # Responses will be set up in the order they're called
     responses = [
-        # 1. Term extraction
-        MockExtractedTerms(terms=["マイクロサービス", "APIゲートウェイ", "PostgreSQL"]),
+        # 1. Term extraction (judgment)
+        MockTermJudgmentResponse(approved_terms=["マイクロサービス", "APIゲートウェイ", "PostgreSQL"]),
         # 2. Definition for マイクロサービス
         MockDefinitionResponse(
             definition="独立して開発・デプロイ可能な小さなサービスに分割するアーキテクチャ",
