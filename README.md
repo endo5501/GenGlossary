@@ -68,6 +68,51 @@ uv run genglossary generate -i ./docs -o ./glossary.md --verbose
 uv run genglossary generate -m llama3.2
 ```
 
+### 用語抽出の分析（デバッグモード）
+
+用語抽出の品質を確認するため、中間結果を表示できます：
+
+```bash
+# 用語抽出の分析を実行
+uv run genglossary analyze-terms --input ./target_docs
+```
+
+このコマンドは以下の情報を表示します：
+
+- **SudachiPy抽出候補**: 形態素解析で抽出された固有名詞候補
+- **LLM承認用語**: LLMが用語集に含めるべきと判断した用語
+- **LLM除外用語**: LLMが除外した用語
+- **統計**: 候補数と承認率
+
+**オプション:**
+
+```bash
+uv run genglossary analyze-terms [OPTIONS]
+
+Options:
+  -i, --input DIRECTORY  入力ドキュメントのディレクトリ（必須）
+  -m, --model TEXT       使用するOllamaモデル名
+  --help                 ヘルプを表示
+```
+
+**使用例:**
+
+```bash
+# 用語抽出の品質を確認
+uv run genglossary analyze-terms -i ./examples/case2
+
+# 出力例:
+# ■ SudachiPy抽出候補 (19件)
+#   中央, 代理, 大陸, 近衛, ...
+#
+# ■ LLM承認用語 (5件)
+#   アソリウス島騎士団, 魔神代理領, ...
+#
+# ■ 統計
+#   候補数: 19
+#   承認率: 26.3% (5/19)
+```
+
 ## 設定
 
 ### 環境変数

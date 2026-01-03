@@ -17,12 +17,6 @@ class DefinitionResponse(BaseModel):
     confidence: float
 
 
-class RelatedTermsResponse(BaseModel):
-    """Response model for related terms extraction."""
-
-    related_terms: list[str]
-
-
 class GlossaryGenerator:
     """Generates provisional glossary from terms and documents using LLM.
 
@@ -65,17 +59,11 @@ class GlossaryGenerator:
                     term_name, occurrences
                 )
 
-                # Extract related terms
-                related = self._extract_related_terms(
-                    term_name, definition, terms
-                )
-
                 # Create Term object
                 term = Term(
                     name=term_name,
                     definition=definition,
                     occurrences=occurrences,
-                    related_terms=related,
                     confidence=confidence,
                 )
 
@@ -189,37 +177,3 @@ JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-
         )
 
         return response.definition, response.confidence
-
-    def _extract_related_terms(
-        self, term: str, definition: str, all_terms: list[str]
-    ) -> list[str]:
-        """Extract related terms using LLM.
-
-        Args:
-            term: The current term.
-            definition: The term's definition.
-            all_terms: List of all terms in the glossary.
-
-        Returns:
-            List of related term names.
-        """
-        # Filter out the current term from candidates
-        candidates = [t for t in all_terms if t != term]
-
-        if not candidates:
-            return []
-
-        candidates_text = ", ".join(candidates)
-
-        prompt = f"""用語: {term}
-定義: {definition}
-候補用語リスト: {candidates_text}
-
-上記の候補用語リストから、「{term}」と関連のある用語を選んでください。
-JSON形式で回答してください: {{"related_terms": ["用語1", "用語2", ...]}}"""
-
-        response = self.llm_client.generate_structured(
-            prompt, RelatedTermsResponse
-        )
-
-        return response.related_terms

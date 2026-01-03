@@ -47,7 +47,6 @@ class TestTerm:
         assert term.name == "API"
         assert term.definition == ""
         assert term.occurrences == []
-        assert term.related_terms == []
         assert term.confidence == 0.0
 
     def test_create_term_full(self) -> None:
@@ -61,14 +60,12 @@ class TestTerm:
             name="API",
             definition="Application Programming Interface",
             occurrences=[occurrence],
-            related_terms=["REST", "HTTP"],
             confidence=0.85,
         )
         assert term.name == "API"
         assert term.definition == "Application Programming Interface"
         assert len(term.occurrences) == 1
         assert term.occurrences[0].line_number == 10
-        assert term.related_terms == ["REST", "HTTP"]
         assert term.confidence == 0.85
 
     def test_term_confidence_validation_min(self) -> None:
@@ -116,19 +113,6 @@ class TestTerm:
         assert term.occurrences[0].line_number == 10
         assert term.occurrences[1].line_number == 20
         assert term.occurrences[2].line_number == 30
-
-    def test_term_add_related_term(self) -> None:
-        """Test adding a related term."""
-        term = Term(name="API")
-        term.add_related_term("REST")
-        assert "REST" in term.related_terms
-
-    def test_term_add_related_term_no_duplicates(self) -> None:
-        """Test that duplicate related terms are not added."""
-        term = Term(name="API")
-        term.add_related_term("REST")
-        term.add_related_term("REST")
-        assert term.related_terms.count("REST") == 1
 
     def test_term_occurrence_count(self) -> None:
         """Test occurrence_count property."""

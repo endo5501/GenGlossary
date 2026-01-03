@@ -3,8 +3,8 @@ priority: 1
 tags: [refactor, term-extraction, sudachipy]
 description: "用語抽出アーキテクチャを刷新 - SudachiPy形態素解析 + LLM判定方式に変更"
 created_at: "2026-01-01T12:54:43Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-02T11:23:54Z # Do not modify manually
+closed_at: 2026-01-03T07:07:30Z # Do not modify manually
 ---
 
 # 用語抽出アーキテクチャ刷新
@@ -26,46 +26,46 @@ closed_at: null   # Do not modify manually
 ## Tasks
 
 ### Step 1: 関連用語機能の削除
-- [ ] テスト修正（関連用語テストを削除）
-- [ ] `uv run pytest` → 失敗確認
-- [ ] コミット: "Remove related terms tests"
-- [ ] 実装修正（models, generator, refiner, writer）
-- [ ] `uv run pytest` → パス確認
-- [ ] コミット: "Remove related terms feature"
+- [x] テスト修正（関連用語テストを削除）
+- [x] `uv run pytest` → 失敗確認
+- [x] コミット: "Remove related terms tests"
+- [x] 実装修正（models, generator, refiner, writer）
+- [x] `uv run pytest` → パス確認
+- [x] コミット: "Remove related terms feature"
 
 ### Step 2: SudachiPy依存追加
-- [ ] `uv add sudachipy sudachidict_core`
-- [ ] コミット: "Add SudachiPy dependencies"
+- [x] `uv add sudachipy sudachidict_core`
+- [x] コミット: "Add SudachiPy dependencies"
 
 ### Step 3: MorphologicalAnalyzer実装
-- [ ] `tests/test_morphological_analyzer.py` 作成
-- [ ] `uv run pytest tests/test_morphological_analyzer.py` → 失敗確認
-- [ ] コミット: "Add MorphologicalAnalyzer tests"
-- [ ] `src/genglossary/morphological_analyzer.py` 実装
-- [ ] `uv run pytest tests/test_morphological_analyzer.py` → パス確認
-- [ ] コミット: "Implement MorphologicalAnalyzer with SudachiPy"
+- [x] `tests/test_morphological_analyzer.py` 作成
+- [x] `uv run pytest tests/test_morphological_analyzer.py` → 失敗確認
+- [x] コミット: "Add MorphologicalAnalyzer tests"
+- [x] `src/genglossary/morphological_analyzer.py` 実装
+- [x] `uv run pytest tests/test_morphological_analyzer.py` → パス確認
+- [x] コミット: "Implement MorphologicalAnalyzer with SudachiPy"
 
 ### Step 4: TermExtractor刷新
-- [ ] `tests/test_term_extractor.py` 書き換え（古いフィルタテスト削除）
-- [ ] `uv run pytest tests/test_term_extractor.py` → 失敗確認
-- [ ] コミット: "Update TermExtractor tests for new architecture"
-- [ ] `src/genglossary/term_extractor.py` 刷新
-- [ ] `uv run pytest tests/test_term_extractor.py` → パス確認
-- [ ] コミット: "Refactor TermExtractor to use SudachiPy and LLM judgment"
+- [x] `tests/test_term_extractor.py` 書き換え（古いフィルタテスト削除）
+- [x] `uv run pytest tests/test_term_extractor.py` → 失敗確認
+- [x] コミット: "Update TermExtractor tests for new architecture"
+- [x] `src/genglossary/term_extractor.py` 刷新
+- [x] `uv run pytest tests/test_term_extractor.py` → パス確認
+- [x] コミット: "Refactor TermExtractor to use SudachiPy and LLM judgment"
 
 ### Step 5: 統合テスト更新
-- [ ] `tests/test_integration.py`, `tests/conftest.py` 更新
-- [ ] `uv run pytest` → 全テストパス確認
-- [ ] コミット: "Update integration tests"
+- [x] `tests/test_integration.py`, `tests/conftest.py` 更新
+- [x] `uv run pytest` → 全テストパス確認
+- [x] コミット: "Update integration tests"
 
 ### Step 6: 動作確認
-- [ ] `uv run genglossary generate --input tmp/example2 --output tmp/test_output.md`
-- [ ] 抽出結果を検証
+- [x] `uv run genglossary generate --input tmp/example2 --output tmp/test_output.md`
+- [x] 抽出結果を検証
 
 ### 完了条件
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## 修正対象ファイル
 

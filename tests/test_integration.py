@@ -1,7 +1,7 @@
 """Integration tests for the complete glossary generation pipeline."""
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import BaseModel
@@ -20,10 +20,10 @@ from genglossary.term_extractor import TermExtractor
 # --- Mock Response Models ---
 
 
-class MockExtractedTerms(BaseModel):
-    """Mock response for term extraction."""
+class MockTermJudgmentResponse(BaseModel):
+    """Mock response for term judgment (new architecture)."""
 
-    terms: list[str]
+    approved_terms: list[str]
 
 
 class MockDefinitionResponse(BaseModel):
@@ -31,12 +31,6 @@ class MockDefinitionResponse(BaseModel):
 
     definition: str
     confidence: float
-
-
-class MockRelatedTermsResponse(BaseModel):
-    """Mock response for related terms extraction."""
-
-    related_terms: list[str]
 
 
 class MockReviewResponse(BaseModel):
@@ -49,59 +43,63 @@ class MockRefinementResponse(BaseModel):
     """Mock response for definition refinement."""
 
     refined_definition: str
-    related_terms: list[str]
     confidence: float
 
 
 class TestEndToEndPipeline:
     """Integration tests for the complete glossary generation pipeline."""
 
+    @patch("genglossary.term_extractor.MorphologicalAnalyzer")
     def test_full_pipeline_with_mock_llm(
         self,
+        mock_analyzer_class: MagicMock,
         tmp_path_with_docs: Path,
     ) -> None:
         """Test the full pipeline: DocumentLoader -> TermExtractor -> GlossaryGenerator
         -> GlossaryReviewer -> GlossaryRefiner -> MarkdownWriter.
         """
+        # Set up MorphologicalAnalyzer mock to return candidates
+        mock_analyzer = MagicMock()
+        mock_analyzer.extract_proper_nouns.return_value = [
+            "マイクロサービス", "APIゲートウェイ", "PostgreSQL"
+        ]
+        mock_analyzer_class.return_value = mock_analyzer
+
         # Create mock LLM client
         mock_llm = MagicMock(spec=BaseLLMClient)
 
         # Set up responses in order of calls
         mock_llm.generate_structured.side_effect = [
-            # 1. Term extraction
-            MockExtractedTerms(
-                terms=["マイクロサービス", "APIゲートウェイ", "PostgreSQL"]
+            # 1. Term extraction (judgment)
+            MockTermJudgmentResponse(
+                approved_terms=["マイクロサービス", "APIゲートウェイ", "PostgreSQL"]
             ),
-            # 2-7. Definition and related terms for each term (2 calls per term)
+            # 2-4. Definition for each term
             MockDefinitionResponse(
                 definition="独立して開発・デプロイ可能な小さなサービスに分割するアーキテクチャ",
                 confidence=0.9,
             ),
-            MockRelatedTermsResponse(related_terms=["APIゲートウェイ"]),
             MockDefinitionResponse(
                 definition="すべてのAPIリクエストの入り口となるコンポーネント",
                 confidence=0.85,
             ),
-            MockRelatedTermsResponse(related_terms=["マイクロサービス"]),
             MockDefinitionResponse(
                 definition="オープンソースのリレーショナルデータベース管理システム",
                 confidence=0.95,
             ),
-            MockRelatedTermsResponse(related_terms=[]),
-            # 8. Review
+            # 5. Review
             MockReviewResponse(
                 issues=[
                     {
                         "term": "マイクロサービス",
-                        "issue_type": "missing_relation",
-                        "description": "PostgreSQLとの関連性が記載されていない",
+                        "issue_type": "unclear",
+                        "description": "定義がやや曖昧",
                     }
                 ]
             ),
-            # 9. Refinement for マイクロサービス
+            # 6. Refinement for マイクロサービス
             MockRefinementResponse(
                 refined_definition="独立してデプロイ可能な小さなサービス群で構成されるアーキテクチャパターン",
-                related_terms=["APIゲートウェイ", "PostgreSQL"],
                 confidence=0.92,
             ),
         ]
@@ -137,7 +135,7 @@ class TestEndToEndPipeline:
         # Check refinement was applied
         refined_term = refined_glossary.get_term("マイクロサービス")
         assert refined_term is not None
-        assert "PostgreSQL" in refined_term.related_terms
+        assert "アーキテクチャパターン" in refined_term.definition
 
         # 6. Write output
         output_path = tmp_path_with_docs / "glossary.md"
@@ -176,18 +174,24 @@ class TestEndToEndPipeline:
         # LLM should not be called for empty documents
         mock_llm.generate_structured.assert_not_called()
 
+    @patch("genglossary.term_extractor.MorphologicalAnalyzer")
     def test_pipeline_with_no_issues(
         self,
+        mock_analyzer_class: MagicMock,
         tmp_path_with_docs: Path,
     ) -> None:
         """Test pipeline when review finds no issues."""
+        # Set up MorphologicalAnalyzer mock
+        mock_analyzer = MagicMock()
+        mock_analyzer.extract_proper_nouns.return_value = ["テスト用語"]
+        mock_analyzer_class.return_value = mock_analyzer
+
         mock_llm = MagicMock(spec=BaseLLMClient)
 
-        # Note: When there's only one term, _extract_related_terms skips LLM call
-        # because there are no candidate terms to compare against
+        # Note: New architecture uses SudachiPy + LLM judgment
         mock_llm.generate_structured.side_effect = [
-            # Term extraction
-            MockExtractedTerms(terms=["テスト用語"]),
+            # Term extraction (judgment)
+            MockTermJudgmentResponse(approved_terms=["テスト用語"]),
             # Definition (no related terms call since only 1 term)
             MockDefinitionResponse(definition="テスト用の定義", confidence=0.9),
             # Review - no issues
@@ -217,8 +221,10 @@ class TestEndToEndPipeline:
         assert term is not None
         assert term.definition == "テスト用の定義"
 
+    @patch("genglossary.term_extractor.MorphologicalAnalyzer")
     def test_pipeline_handles_large_document_count(
         self,
+        mock_analyzer_class: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test pipeline with multiple documents."""
@@ -230,18 +236,22 @@ class TestEndToEndPipeline:
                 encoding="utf-8",
             )
 
+        # Set up MorphologicalAnalyzer mock
+        terms = [f"用語{i}" for i in range(5)]
+        mock_analyzer = MagicMock()
+        mock_analyzer.extract_proper_nouns.return_value = terms
+        mock_analyzer_class.return_value = mock_analyzer
+
         mock_llm = MagicMock(spec=BaseLLMClient)
 
         # Set up responses
-        terms = [f"用語{i}" for i in range(5)]
-        responses = [MockExtractedTerms(terms=terms)]
+        responses = [MockTermJudgmentResponse(approved_terms=terms)]
 
         # Add responses for each term
         for i in range(5):
             responses.append(
                 MockDefinitionResponse(definition=f"用語{i}の定義", confidence=0.8)
             )
-            responses.append(MockRelatedTermsResponse(related_terms=[]))
 
         # Add review response
         responses.append(MockReviewResponse(issues=[]))
@@ -292,7 +302,7 @@ class TestErrorHandling:
         doc_path.write_text("Simple text without special terms.", encoding="utf-8")
 
         mock_llm = MagicMock(spec=BaseLLMClient)
-        mock_llm.generate_structured.return_value = MockExtractedTerms(terms=[])
+        mock_llm.generate_structured.return_value = MockTermJudgmentResponse(approved_terms=[])
 
         loader = DocumentLoader()
         documents = loader.load_directory(str(tmp_path))
@@ -409,28 +419,14 @@ class TestMarkdownWriterIntegration:
         # Check occurrences
         assert "**出現箇所**:" in content
 
-        # Check related terms
-        assert "**関連用語**:" in content
-
-    def test_output_has_valid_markdown_links(
-        self, tmp_path: Path, sample_glossary: Glossary
-    ) -> None:
-        """Test that related terms are formatted as valid Markdown links."""
-        output_path = tmp_path / "glossary.md"
-
-        writer = MarkdownWriter()
-        writer.write(sample_glossary, str(output_path))
-
-        content = output_path.read_text(encoding="utf-8")
-
-        # Check that related terms are linked
-        assert "[APIゲートウェイ](#APIゲートウェイ)" in content
-
 
 class TestPipelineWithVariousInputs:
     """Test the pipeline with various input scenarios."""
 
-    def test_japanese_content_handling(self, tmp_path: Path) -> None:
+    @patch("genglossary.term_extractor.MorphologicalAnalyzer")
+    def test_japanese_content_handling(
+        self, mock_analyzer_class: MagicMock, tmp_path: Path
+    ) -> None:
         """Test that Japanese content is properly handled throughout the pipeline."""
         doc_content = """# 日本語ドキュメント
 
@@ -441,13 +437,18 @@ APIゲートウェイは重要なコンポーネントです。
         doc_path = tmp_path / "japanese.md"
         doc_path.write_text(doc_content, encoding="utf-8")
 
+        # Set up MorphologicalAnalyzer mock
+        mock_analyzer = MagicMock()
+        mock_analyzer.extract_proper_nouns.return_value = [
+            "マイクロサービス", "APIゲートウェイ"
+        ]
+        mock_analyzer_class.return_value = mock_analyzer
+
         mock_llm = MagicMock(spec=BaseLLMClient)
         mock_llm.generate_structured.side_effect = [
-            MockExtractedTerms(terms=["マイクロサービス", "APIゲートウェイ"]),
+            MockTermJudgmentResponse(approved_terms=["マイクロサービス", "APIゲートウェイ"]),
             MockDefinitionResponse(definition="日本語の定義1", confidence=0.9),
-            MockRelatedTermsResponse(related_terms=["APIゲートウェイ"]),
             MockDefinitionResponse(definition="日本語の定義2", confidence=0.85),
-            MockRelatedTermsResponse(related_terms=["マイクロサービス"]),
             MockReviewResponse(issues=[]),
         ]
 
@@ -475,7 +476,7 @@ APIゲートウェイは重要なコンポーネントです。
         (tmp_path / "doc2.txt").write_text("Plain text doc with terms.", encoding="utf-8")
 
         mock_llm = MagicMock(spec=BaseLLMClient)
-        mock_llm.generate_structured.return_value = MockExtractedTerms(terms=["term1"])
+        mock_llm.generate_structured.return_value = MockTermJudgmentResponse(approved_terms=["term1"])
 
         loader = DocumentLoader()
         documents = loader.load_directory(str(tmp_path))

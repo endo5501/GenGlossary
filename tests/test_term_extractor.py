@@ -1,6 +1,6 @@
-"""Tests for TermExtractor - Step 1: Term extraction from documents."""
+"""Tests for TermExtractor - New architecture with SudachiPy + LLM judgment."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import BaseModel
@@ -10,9 +10,10 @@ from genglossary.models.document import Document
 from genglossary.term_extractor import TermExtractor
 
 
-class MockExtractedTerms(BaseModel):
-    """Mock response model for extracted terms."""
-    terms: list[str]
+class MockTermJudgmentResponse(BaseModel):
+    """Mock response model for term judgment."""
+
+    approved_terms: list[str]
 
 
 class TestTermExtractor:
@@ -27,10 +28,9 @@ class TestTermExtractor:
     @pytest.fixture
     def sample_document(self) -> Document:
         """Create a sample document for testing."""
-        content = """GenGlossaryは用語集を自動生成するツールです。
-LLMを活用して、ドキュメントから用語を抽出します。
-抽出された用語は、コンテキストに基づいて定義されます。
-GenGlossaryはPythonで実装されています。
+        content = """東京は日本の首都です。
+トヨタ自動車は愛知県に本社があります。
+大阪府にはユニバーサルスタジオがあります。
 """
         return Document(file_path="/path/to/doc.md", content=content)
 
@@ -48,7 +48,9 @@ GenGlossaryはPythonで実装されています。
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that extract_terms returns a list of strings."""
-        mock_response = MockExtractedTerms(terms=["GenGlossary", "LLM", "用語集"])
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "日本", "トヨタ自動車"]
+        )
         mock_llm_client.generate_structured.return_value = mock_response
 
         extractor = TermExtractor(llm_client=mock_llm_client)
@@ -56,15 +58,34 @@ GenGlossaryはPythonで実装されています。
 
         assert isinstance(result, list)
         assert all(isinstance(term, str) for term in result)
-        assert "GenGlossary" in result
-        assert "LLM" in result
-        assert "用語集" in result
 
-    def test_extract_terms_calls_llm_with_correct_prompt_format(
+    def test_extract_terms_uses_morphological_analyzer(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that LLM is called with prompt containing expected elements."""
-        mock_response = MockExtractedTerms(terms=["GenGlossary"])
+        """Test that extract_terms uses MorphologicalAnalyzer for proper noun extraction."""
+        mock_response = MockTermJudgmentResponse(approved_terms=["東京"])
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "日本"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            extractor.extract_terms([sample_document])
+
+            # Verify MorphologicalAnalyzer was used
+            mock_analyzer.extract_proper_nouns.assert_called()
+
+    def test_extract_terms_sends_candidates_to_llm(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extracted proper nouns are sent to LLM for judgment."""
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "トヨタ自動車"]
+        )
         mock_llm_client.generate_structured.return_value = mock_response
 
         extractor = TermExtractor(llm_client=mock_llm_client)
@@ -72,30 +93,21 @@ GenGlossaryはPythonで実装されています。
 
         # Verify LLM was called
         mock_llm_client.generate_structured.assert_called_once()
-        call_args = mock_llm_client.generate_structured.call_args
-
-        # Check prompt contains key elements
-        prompt = call_args[0][0]  # First positional argument
-        assert "専門用語" in prompt or "用語" in prompt
-        assert sample_document.content in prompt or "GenGlossary" in prompt
 
     def test_extract_terms_removes_duplicates(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that duplicate terms are removed from the result."""
-        # LLM returns duplicates
-        mock_response = MockExtractedTerms(
-            terms=["GenGlossary", "LLM", "GenGlossary", "LLM", "用語集"]
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "東京", "日本"]
         )
         mock_llm_client.generate_structured.return_value = mock_response
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
 
-        # Count occurrences - each term should appear only once
-        assert result.count("GenGlossary") == 1
-        assert result.count("LLM") == 1
-        assert result.count("用語集") == 1
+        assert result.count("東京") == 1
+        assert result.count("日本") == 1
 
     def test_extract_terms_handles_empty_document(
         self, mock_llm_client: MagicMock, empty_document: Document
@@ -105,58 +117,26 @@ GenGlossaryはPythonで実装されています。
         result = extractor.extract_terms([empty_document])
 
         assert result == []
-        # LLM should not be called for empty documents
         mock_llm_client.generate_structured.assert_not_called()
 
     def test_extract_terms_handles_multiple_documents(
         self, mock_llm_client: MagicMock
     ) -> None:
         """Test extraction from multiple documents."""
-        doc1 = Document(file_path="/doc1.md", content="Document about Python and LLM.")
-        doc2 = Document(file_path="/doc2.md", content="Document about API and LLM.")
+        doc1 = Document(
+            file_path="/doc1.md", content="東京に住んでいます。"
+        )
+        doc2 = Document(
+            file_path="/doc2.md", content="大阪に行きました。"
+        )
 
-        mock_response = MockExtractedTerms(terms=["Python", "LLM", "API"])
+        mock_response = MockTermJudgmentResponse(approved_terms=["東京", "大阪"])
         mock_llm_client.generate_structured.return_value = mock_response
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([doc1, doc2])
 
-        assert "Python" in result
-        assert "LLM" in result
-        assert "API" in result
-
-    def test_extract_terms_preserves_order_while_removing_duplicates(
-        self, mock_llm_client: MagicMock, sample_document: Document
-    ) -> None:
-        """Test that term order is preserved (first occurrence kept)."""
-        mock_response = MockExtractedTerms(
-            terms=["第一用語", "第二用語", "第一用語", "第三用語"]
-        )
-        mock_llm_client.generate_structured.return_value = mock_response
-
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
-
-        assert result == ["第一用語", "第二用語", "第三用語"]
-
-    def test_create_extraction_prompt_includes_document_content(
-        self, mock_llm_client: MagicMock, sample_document: Document
-    ) -> None:
-        """Test that _create_extraction_prompt includes document content."""
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        prompt = extractor._create_extraction_prompt([sample_document])
-
-        assert sample_document.content in prompt
-
-    def test_create_extraction_prompt_specifies_json_format(
-        self, mock_llm_client: MagicMock, sample_document: Document
-    ) -> None:
-        """Test that prompt specifies JSON output format."""
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        prompt = extractor._create_extraction_prompt([sample_document])
-
-        assert "JSON" in prompt or "json" in prompt
-        assert "terms" in prompt
+        assert isinstance(result, list)
 
     def test_extract_terms_handles_whitespace_only_document(
         self, mock_llm_client: MagicMock
@@ -174,94 +154,8 @@ GenGlossaryはPythonで実装されています。
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that whitespace is stripped from extracted terms."""
-        mock_response = MockExtractedTerms(
-            terms=["  GenGlossary  ", " LLM", "用語集 "]
-        )
-        mock_llm_client.generate_structured.return_value = mock_response
-
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
-
-        assert "GenGlossary" in result
-        assert "LLM" in result
-        assert "用語集" in result
-        # No whitespace-padded versions
-        assert "  GenGlossary  " not in result
-
-    def test_extract_terms_filters_empty_terms(
-        self, mock_llm_client: MagicMock, sample_document: Document
-    ) -> None:
-        """Test that empty strings are filtered out from results."""
-        mock_response = MockExtractedTerms(
-            terms=["GenGlossary", "", "LLM", "  ", "用語集"]
-        )
-        mock_llm_client.generate_structured.return_value = mock_response
-
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
-
-        assert "" not in result
-        assert len(result) == 3
-
-
-class TestTermFiltering:
-    """Test suite for term filtering functionality."""
-
-    @pytest.fixture
-    def mock_llm_client(self) -> MagicMock:
-        """Create a mock LLM client."""
-        client = MagicMock(spec=BaseLLMClient)
-        return client
-
-    @pytest.fixture
-    def sample_document(self) -> Document:
-        """Create a sample document for testing."""
-        content = """小説の登場人物について。
-主人公のシルシルは魔法使いです。
-彼は法則の発見に成功しました。
-"""
-        return Document(file_path="/path/to/novel.md", content=content)
-
-    def test_filter_verb_phrases(
-        self, mock_llm_client: MagicMock, sample_document: Document
-    ) -> None:
-        """Test that verb phrases are filtered out."""
-        mock_response = MockExtractedTerms(
-            terms=["法則の発見", "理性の崩壊", "死戦を潜り抜ける", "魔法使い"]
-        )
-        mock_llm_client.generate_structured.return_value = mock_response
-
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
-
-        # Verb phrases should be filtered
-        assert "法則の発見" not in result
-        assert "死戦を潜り抜ける" not in result
-        # Valid terms should remain
-        assert "魔法使い" in result
-
-    def test_filter_adjective_phrases(
-        self, mock_llm_client: MagicMock, sample_document: Document
-    ) -> None:
-        """Test that adjective phrases are filtered out."""
-        mock_response = MockExtractedTerms(
-            terms=["顔が良い", "銀色の髪", "アルケミスト"]
-        )
-        mock_llm_client.generate_structured.return_value = mock_response
-
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
-
-        assert "顔が良い" not in result
-        assert "銀色の髪" not in result
-        assert "アルケミスト" in result
-
-    def test_preserve_proper_nouns(
-        self, mock_llm_client: MagicMock, sample_document: Document
-    ) -> None:
-        """Test that proper nouns are preserved."""
-        mock_response = MockExtractedTerms(
-            terms=["東京", "田中太郎", "エルディア", "進撃の巨人"]
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["  東京  ", " 日本", "大阪 "]
         )
         mock_llm_client.generate_structured.return_value = mock_response
 
@@ -269,73 +163,56 @@ class TestTermFiltering:
         result = extractor.extract_terms([sample_document])
 
         assert "東京" in result
-        assert "田中太郎" in result
-        assert "エルディア" in result
-        assert "進撃の巨人" in result
+        assert "日本" in result
+        assert "大阪" in result
+        assert "  東京  " not in result
 
-    def test_filter_short_hiragana_terms(
+    def test_extract_terms_filters_empty_terms(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that short hiragana-only terms are filtered."""
-        mock_response = MockExtractedTerms(
-            terms=["しかし", "ただ", "マイクロサービス"]
+        """Test that empty strings are filtered out from results."""
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "", "日本", "  "]
         )
         mock_llm_client.generate_structured.return_value = mock_response
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
 
-        assert "しかし" not in result
-        assert "ただ" not in result
-        assert "マイクロサービス" in result
+        assert "" not in result
+        assert len(result) == 2
 
-    def test_filter_single_character_terms(
+    def test_extract_terms_returns_only_approved_terms(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that single character terms are filtered."""
-        mock_response = MockExtractedTerms(
-            terms=["A", "魔", "API"]
+        """Test that only LLM-approved terms are returned."""
+        # LLM approves only some of the candidates
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "トヨタ自動車"]
         )
         mock_llm_client.generate_structured.return_value = mock_response
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
 
-        assert "A" not in result
-        assert "魔" not in result
-        assert "API" in result
+        assert "東京" in result
+        assert "トヨタ自動車" in result
 
-    def test_filter_verb_ending_patterns(
+    def test_extract_terms_handles_no_approved_terms(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test various verb ending patterns are filtered."""
-        mock_response = MockExtractedTerms(
-            terms=[
-                "実行する",
-                "実施された",
-                "運用している",
-                "変換される",
-                "発見となる",
-                "システム",
-            ]
-        )
+        """Test handling when LLM approves no terms."""
+        mock_response = MockTermJudgmentResponse(approved_terms=[])
         mock_llm_client.generate_structured.return_value = mock_response
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
 
-        # Verb patterns should be filtered
-        assert "実行する" not in result
-        assert "実施された" not in result
-        assert "運用している" not in result
-        assert "変換される" not in result
-        assert "発見となる" not in result
-        # Valid term should remain
-        assert "システム" in result
+        assert result == []
 
 
-class TestPromptGeneration:
-    """Test suite for prompt generation."""
+class TestTermJudgmentPrompt:
+    """Test suite for LLM judgment prompt generation."""
 
     @pytest.fixture
     def mock_llm_client(self) -> MagicMock:
@@ -346,37 +223,204 @@ class TestPromptGeneration:
     @pytest.fixture
     def sample_document(self) -> Document:
         """Create a sample document for testing."""
-        content = "Sample content for prompt testing."
+        content = "東京は日本の首都です。"
         return Document(file_path="/path/to/doc.md", content=content)
 
-    def test_prompt_includes_proper_noun_guidance(
+    def test_judgment_prompt_includes_candidates(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that prompt includes guidance for proper nouns."""
+        """Test that judgment prompt includes candidate terms."""
+        mock_response = MockTermJudgmentResponse(approved_terms=[])
+        mock_llm_client.generate_structured.return_value = mock_response
+
         extractor = TermExtractor(llm_client=mock_llm_client)
-        prompt = extractor._create_extraction_prompt([sample_document])
+        extractor.extract_terms([sample_document])
 
-        # Check for proper noun guidance
-        assert "固有名詞" in prompt
+        # Check that prompt contains candidate terms
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
 
-    def test_prompt_specifies_exclusion_criteria(
+        # Should contain guidance for judgment
+        assert "用語" in prompt or "候補" in prompt
+
+    def test_judgment_prompt_includes_context(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that prompt specifies what should be excluded."""
+        """Test that judgment prompt includes document context."""
+        mock_response = MockTermJudgmentResponse(approved_terms=[])
+        mock_llm_client.generate_structured.return_value = mock_response
+
         extractor = TermExtractor(llm_client=mock_llm_client)
-        prompt = extractor._create_extraction_prompt([sample_document])
+        extractor.extract_terms([sample_document])
 
-        # Check exclusion criteria are mentioned
-        assert "除外" in prompt or "抽出しない" in prompt
-        assert "動詞" in prompt
-        assert "形容詞" in prompt or "描写" in prompt
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
 
-    def test_prompt_includes_judgment_criteria(
+        # Should include document content for context
+        assert "東京" in prompt or "日本" in prompt
+
+    def test_judgment_prompt_specifies_json_format(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that prompt includes judgment criteria."""
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        prompt = extractor._create_extraction_prompt([sample_document])
+        """Test that judgment prompt specifies JSON output format."""
+        mock_response = MockTermJudgmentResponse(approved_terms=[])
+        mock_llm_client.generate_structured.return_value = mock_response
 
-        # Check for judgment criteria
-        assert "判断基準" in prompt or "基準" in prompt
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        extractor.extract_terms([sample_document])
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+
+        assert "JSON" in prompt or "json" in prompt
+        assert "approved_terms" in prompt
+
+
+class TestTermExtractionAnalysis:
+    """Test suite for term extraction analysis functionality."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = """東京は日本の首都です。
+トヨタ自動車は愛知県に本社があります。
+"""
+        return Document(file_path="/path/to/doc.md", content=content)
+
+    def test_analyze_extraction_returns_analysis_model(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that analyze_extraction returns TermExtractionAnalysis."""
+        from genglossary.term_extractor import TermExtractionAnalysis
+
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "トヨタ自動車"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.analyze_extraction([sample_document])
+
+        assert isinstance(result, TermExtractionAnalysis)
+
+    def test_analyze_extraction_contains_sudachi_candidates(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that analysis contains SudachiPy candidates."""
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "トヨタ自動車"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "東京", "日本", "トヨタ自動車", "愛知県"
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.analyze_extraction([sample_document])
+
+            assert result.sudachi_candidates == [
+                "東京", "日本", "トヨタ自動車", "愛知県"
+            ]
+
+    def test_analyze_extraction_contains_llm_approved(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that analysis contains LLM-approved terms."""
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "トヨタ自動車"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "東京", "日本", "トヨタ自動車", "愛知県"
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.analyze_extraction([sample_document])
+
+            assert "東京" in result.llm_approved
+            assert "トヨタ自動車" in result.llm_approved
+
+    def test_analyze_extraction_contains_llm_rejected(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that analysis contains LLM-rejected terms."""
+        mock_response = MockTermJudgmentResponse(
+            approved_terms=["東京", "トヨタ自動車"]
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "東京", "日本", "トヨタ自動車", "愛知県"
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.analyze_extraction([sample_document])
+
+            # 日本 and 愛知県 should be rejected
+            assert "日本" in result.llm_rejected
+            assert "愛知県" in result.llm_rejected
+            assert "東京" not in result.llm_rejected
+
+    def test_analyze_extraction_handles_empty_documents(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that analyze_extraction handles empty documents."""
+        from genglossary.term_extractor import TermExtractionAnalysis
+
+        empty_doc = Document(file_path="/empty.md", content="")
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor.analyze_extraction([empty_doc])
+
+        assert isinstance(result, TermExtractionAnalysis)
+        assert result.sudachi_candidates == []
+        assert result.llm_approved == []
+        assert result.llm_rejected == []
+        mock_llm_client.generate_structured.assert_not_called()
+
+    def test_analyze_extraction_handles_no_candidates(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test analyze_extraction when SudachiPy finds no candidates."""
+        from genglossary.term_extractor import TermExtractionAnalysis
+
+        doc = Document(file_path="/doc.md", content="普通の文章です。")
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = []
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.analyze_extraction([doc])
+
+            assert isinstance(result, TermExtractionAnalysis)
+            assert result.sudachi_candidates == []
+            assert result.llm_approved == []
+            assert result.llm_rejected == []
+            mock_llm_client.generate_structured.assert_not_called()

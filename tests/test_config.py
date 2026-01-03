@@ -24,7 +24,7 @@ class TestConfig:
     def test_default_ollama_model(self):
         """Test default Ollama model."""
         config = Config()
-        assert config.ollama_model == "llama2"
+        assert config.ollama_model == "dengcao/Qwen3-30B-A3B-Instruct-2507:latest"
 
     def test_default_ollama_timeout(self):
         """Test default Ollama timeout."""
@@ -175,5 +175,5 @@ GENGLOSSARY_OUTPUT_FILE=./out/glossary.md
         config = Config()
 
         assert config.ollama_base_url == "http://localhost:11434"
-        assert config.ollama_model == "llama2"
+        assert config.ollama_model == "dengcao/Qwen3-30B-A3B-Instruct-2507:latest"
         assert config.ollama_timeout == 120

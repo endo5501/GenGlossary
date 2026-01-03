@@ -14,7 +14,6 @@ class RefinementResponse(BaseModel):
     """Response model for term refinement."""
 
     refined_definition: str
-    related_terms: list[str]
     confidence: float
 
 
@@ -107,7 +106,6 @@ class GlossaryRefiner:
             name=term.name,
             definition=response.refined_definition,
             occurrences=term.occurrences,  # Preserve occurrences
-            related_terms=list(set(term.related_terms + response.related_terms)),
             confidence=response.confidence,
         )
 
@@ -143,7 +141,7 @@ class GlossaryRefiner:
 改善された定義を提供してください。問題点を解消し、より明確で具体的な定義を作成してください。
 
 JSON形式で回答してください:
-{{"refined_definition": "改善された定義", "related_terms": ["関連用語1", "関連用語2"], "confidence": 0.0-1.0}}"""
+{{"refined_definition": "改善された定義", "confidence": 0.0-1.0}}"""
 
         return prompt
 

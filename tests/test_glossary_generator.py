@@ -20,12 +20,6 @@ class MockDefinitionResponse(BaseModel):
     confidence: float
 
 
-class MockRelatedTermsResponse(BaseModel):
-    """Mock response model for related terms extraction."""
-
-    related_terms: list[str]
-
-
 class TestGlossaryGenerator:
     """Test suite for GlossaryGenerator class."""
 
@@ -67,11 +61,9 @@ LLMは大規模言語モデルの略称です。
             MockDefinitionResponse(
                 definition="用語集を自動生成するツール", confidence=0.9
             ),
-            MockRelatedTermsResponse(related_terms=["LLM", "Python"]),
             MockDefinitionResponse(
                 definition="大規模言語モデルの略称", confidence=0.85
             ),
-            MockRelatedTermsResponse(related_terms=["GenGlossary"]),
         ]
 
         generator = GlossaryGenerator(llm_client=mock_llm_client)
@@ -90,11 +82,9 @@ LLMは大規模言語モデルの略称です。
             MockDefinitionResponse(
                 definition="用語集を自動生成するツール", confidence=0.9
             ),
-            MockRelatedTermsResponse(related_terms=[]),
             MockDefinitionResponse(
                 definition="大規模言語モデルの略称", confidence=0.85
             ),
-            MockRelatedTermsResponse(related_terms=[]),
         ]
 
         generator = GlossaryGenerator(llm_client=mock_llm_client)
@@ -234,57 +224,15 @@ LLMは大規模言語モデルの略称です。
         assert "MyTerm" in prompt
         assert "Context with MyTerm usage" in prompt
 
-    def test_extract_related_terms_calls_llm(
-        self,
-        mock_llm_client: MagicMock,
-    ) -> None:
-        """Test that _extract_related_terms calls LLM."""
-        mock_llm_client.generate_structured.return_value = MockRelatedTermsResponse(
-            related_terms=["Related1", "Related2"]
-        )
-
-        generator = GlossaryGenerator(llm_client=mock_llm_client)
-        related = generator._extract_related_terms(
-            "TestTerm", "Test definition", ["Candidate1", "Candidate2"]
-        )
-
-        assert related == ["Related1", "Related2"]
-        mock_llm_client.generate_structured.assert_called_once()
-
-    def test_generate_sets_related_terms(
-        self,
-        mock_llm_client: MagicMock,
-        sample_document: Document,
-    ) -> None:
-        """Test that generated terms have related terms set."""
-        mock_llm_client.generate_structured.side_effect = [
-            MockDefinitionResponse(
-                definition="用語集を自動生成するツール", confidence=0.9
-            ),
-            MockRelatedTermsResponse(related_terms=["LLM"]),
-            MockDefinitionResponse(
-                definition="大規模言語モデル", confidence=0.85
-            ),
-            MockRelatedTermsResponse(related_terms=["GenGlossary"]),
-        ]
-
-        generator = GlossaryGenerator(llm_client=mock_llm_client)
-        result = generator.generate(["GenGlossary", "LLM"], [sample_document])
-
-        genglossary_term = result.get_term("GenGlossary")
-        assert genglossary_term is not None
-        assert "LLM" in genglossary_term.related_terms
-
     def test_generate_sets_occurrences(
         self,
         mock_llm_client: MagicMock,
         sample_document: Document,
     ) -> None:
         """Test that generated terms have occurrences populated."""
-        mock_llm_client.generate_structured.side_effect = [
-            MockDefinitionResponse(definition="Definition", confidence=0.9),
-            MockRelatedTermsResponse(related_terms=[]),
-        ]
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Definition", confidence=0.9
+        )
 
         generator = GlossaryGenerator(llm_client=mock_llm_client)
         result = generator.generate(["GenGlossary"], [sample_document])
@@ -313,12 +261,9 @@ LLMは大規模言語モデルの略称です。
         sample_document: Document,
     ) -> None:
         """Test handling of terms not found in any document."""
-        mock_llm_client.generate_structured.side_effect = [
-            MockDefinitionResponse(
-                definition="Unknown term definition", confidence=0.5
-            ),
-            MockRelatedTermsResponse(related_terms=[]),
-        ]
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Unknown term definition", confidence=0.5
+        )
 
         generator = GlossaryGenerator(llm_client=mock_llm_client)
         result = generator.generate(["NonExistentTerm"], [sample_document])
@@ -336,12 +281,9 @@ LLMは大規模言語モデルの略称です。
             file_path="/test.md",
             content="用語集は便利です。\n用語集を自動生成します。",
         )
-        mock_llm_client.generate_structured.side_effect = [
-            MockDefinitionResponse(
-                definition="単語とその定義のリスト", confidence=0.9
-            ),
-            MockRelatedTermsResponse(related_terms=[]),
-        ]
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="単語とその定義のリスト", confidence=0.9
+        )
 
         generator = GlossaryGenerator(llm_client=mock_llm_client)
         result = generator.generate(["用語集"], [doc])
