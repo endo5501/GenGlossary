@@ -4,7 +4,7 @@ tags: [term-extraction, sudachipy, enhancement]
 description: "Expand SudachiPy extraction conditions to extract compound nouns and technical terms"
 created_at: "2026-01-03T06:58:31Z"
 started_at: 2026-01-03T10:26:22Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-03T11:34:09Z # Do not modify manually
 ---
 
 # Expand SudachiPy Extraction Conditions
