@@ -7,7 +7,11 @@ from pydantic import BaseModel
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
-from genglossary.term_extractor import TermExtractor
+from genglossary.models.term import TermCategory
+from genglossary.term_extractor import (
+    TermClassificationResponse,
+    TermExtractor,
+)
 
 
 class MockTermJudgmentResponse(BaseModel):
@@ -424,3 +428,272 @@ class TestTermExtractionAnalysis:
             assert result.llm_approved == []
             assert result.llm_rejected == []
             mock_llm_client.generate_structured.assert_not_called()
+
+
+class TestTermCategory:
+    """Test suite for TermCategory enum."""
+
+    def test_term_category_values(self) -> None:
+        """Test that TermCategory has the expected 6 categories."""
+        assert TermCategory.PERSON_NAME.value == "person_name"
+        assert TermCategory.PLACE_NAME.value == "place_name"
+        assert TermCategory.ORGANIZATION.value == "organization"
+        assert TermCategory.TITLE.value == "title"
+        assert TermCategory.TECHNICAL_TERM.value == "technical_term"
+        assert TermCategory.COMMON_NOUN.value == "common_noun"
+
+    def test_term_category_count(self) -> None:
+        """Test that there are exactly 6 categories."""
+        assert len(TermCategory) == 6
+
+    def test_common_noun_is_excluded_category(self) -> None:
+        """Test that common noun is identified as the excluded category."""
+        # COMMON_NOUN should be the category that gets filtered out
+        assert TermCategory.COMMON_NOUN.value == "common_noun"
+
+
+class TestTermClassificationResponse:
+    """Test suite for TermClassificationResponse model."""
+
+    def test_classification_response_structure(self) -> None:
+        """Test that classification response has correct structure."""
+        response = TermClassificationResponse(
+            classified_terms={
+                "person_name": ["田中太郎", "山田花子"],
+                "place_name": ["東京", "大阪"],
+                "organization": ["アソリウス島騎士団"],
+                "title": ["騎士団長", "将軍"],
+                "technical_term": ["聖印"],
+                "common_noun": ["未亡人", "行方不明"],
+            }
+        )
+
+        assert "person_name" in response.classified_terms
+        assert response.classified_terms["person_name"] == ["田中太郎", "山田花子"]
+
+    def test_classification_response_partial_categories(self) -> None:
+        """Test that classification response works with partial categories."""
+        response = TermClassificationResponse(
+            classified_terms={
+                "organization": ["エデルト軍"],
+                "common_noun": ["未亡人"],
+            }
+        )
+
+        assert len(response.classified_terms) == 2
+        assert "organization" in response.classified_terms
+
+    def test_classification_response_empty_categories(self) -> None:
+        """Test that classification response works with empty dict."""
+        response = TermClassificationResponse(classified_terms={})
+
+        assert response.classified_terms == {}
+
+
+class TestTermExtractorClassification:
+    """Test suite for term classification phase."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document with various term types."""
+        content = """アソリウス島騎士団の団長であるガウス卿は、
+エデルト軍との戦いに備えていた。
+聖印の力を持つ騎士だけが、魔神討伐に参加できる。
+未亡人となったアリスは行方不明になった。"""
+        return Document(file_path="/story.md", content=content)
+
+    def test_classify_terms_returns_classification_response(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms returns TermClassificationResponse."""
+        mock_response = TermClassificationResponse(
+            classified_terms={
+                "organization": ["アソリウス島騎士団", "エデルト軍"],
+                "title": ["団長", "騎士"],
+                "person_name": ["ガウス卿", "アリス"],
+                "technical_term": ["聖印", "魔神討伐"],
+                "common_noun": ["未亡人", "行方不明"],
+            }
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        candidates = ["アソリウス島騎士団", "エデルト軍", "団長", "未亡人"]
+        result = extractor._classify_terms(candidates, [sample_document])
+
+        assert isinstance(result, TermClassificationResponse)
+
+    def test_classify_terms_calls_llm_with_classification_prompt(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms sends correct prompt to LLM."""
+        mock_response = TermClassificationResponse(
+            classified_terms={"organization": ["アソリウス島騎士団"]}
+        )
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        candidates = ["アソリウス島騎士団"]
+        extractor._classify_terms(candidates, [sample_document])
+
+        # Verify LLM was called with TermClassificationResponse
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+        response_model = call_args[0][1]
+
+        # Check prompt contains classification instructions
+        assert "分類" in prompt or "カテゴリ" in prompt
+        assert response_model == TermClassificationResponse
+
+    def test_classify_terms_includes_all_categories_in_prompt(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that classification prompt includes all 6 categories."""
+        mock_response = TermClassificationResponse(classified_terms={})
+        mock_llm_client.generate_structured.return_value = mock_response
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        extractor._classify_terms(["テスト用語"], [sample_document])
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+
+        # All categories should be mentioned in the prompt
+        assert "人名" in prompt
+        assert "地名" in prompt
+        assert "組織" in prompt or "団体" in prompt
+        assert "役職" in prompt or "称号" in prompt
+        assert "技術用語" in prompt or "専門用語" in prompt
+        assert "一般名詞" in prompt
+
+
+class TestTermExtractorTwoPhase:
+    """Test suite for two-phase LLM processing."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document."""
+        content = """アソリウス島騎士団の団長は勇敢だった。
+エデルト軍との戦いが始まった。
+未亡人は行方不明になった。"""
+        return Document(file_path="/story.md", content=content)
+
+    def test_extract_terms_uses_filter_contained(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extract_terms uses filter_contained for SudachiPy extraction."""
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "organization": ["アソリウス島騎士団", "エデルト軍"],
+                "title": ["団長"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
+            approved_terms=["アソリウス島騎士団", "エデルト軍", "団長"]
+        )
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "アソリウス島騎士団",
+                "エデルト軍",
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            extractor.extract_terms([sample_document])
+
+            # Verify filter_contained=True was passed
+            call_kwargs = mock_analyzer.extract_proper_nouns.call_args[1]
+            assert call_kwargs.get("filter_contained") is True
+
+    def test_extract_terms_excludes_common_nouns(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that common nouns are excluded from final results."""
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "organization": ["アソリウス島騎士団"],
+                "common_noun": ["未亡人", "行方不明"],
+            }
+        )
+        # Note: Second phase should not include common nouns
+        mock_judgment = MockTermJudgmentResponse(
+            approved_terms=["アソリウス島騎士団"]
+        )
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "アソリウス島騎士団",
+                "未亡人",
+                "行方不明",
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document])
+
+            # Common nouns should not be in the result
+            assert "未亡人" not in result
+            assert "行方不明" not in result
+            # Organization should be included
+            assert "アソリウス島騎士団" in result
+
+    def test_extract_terms_two_phase_calls_llm_twice(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extract_terms makes two LLM calls (classify + select)."""
+        mock_classification = TermClassificationResponse(
+            classified_terms={
+                "organization": ["アソリウス島騎士団"],
+                "title": ["団長"],
+            }
+        )
+        mock_judgment = MockTermJudgmentResponse(
+            approved_terms=["アソリウス島騎士団", "団長"]
+        )
+        mock_llm_client.generate_structured.side_effect = [
+            mock_classification,
+            mock_judgment,
+        ]
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "アソリウス島騎士団",
+                "団長",
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            extractor.extract_terms([sample_document])
+
+            # Should call LLM twice: once for classification, once for selection
+            assert mock_llm_client.generate_structured.call_count == 2
