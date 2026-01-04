@@ -6,7 +6,13 @@ from pathlib import Path
 
 import click
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
@@ -206,7 +212,14 @@ def generate(
     default="dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
     help="使用するOllamaモデル名",
 )
-def analyze_terms(input_dir: Path, model: str) -> None:
+@click.option(
+    "--batch-size",
+    "-b",
+    default=10,
+    type=int,
+    help="LLM分類のバッチサイズ（デフォルト: 10）",
+)
+def analyze_terms(input_dir: Path, model: str, batch_size: int) -> None:
     """用語抽出の中間結果を分析・表示します。
 
     SudachiPyによる固有名詞抽出とLLMによる用語判定の結果を表示し、
@@ -235,20 +248,68 @@ def analyze_terms(input_dir: Path, model: str) -> None:
             sys.exit(1)
 
         console.print(f"[dim]ファイル数: {len(documents)}[/dim]")
-        console.print(f"[dim]モデル: {model}[/dim]\n")
+        console.print(f"[dim]モデル: {model}[/dim]")
+        console.print(f"[dim]バッチサイズ: {batch_size}[/dim]\n")
 
-        # Analyze extraction
+        # Analyze extraction with progress display
+        extractor = TermExtractor(llm_client=llm_client)
+
+        # First, get candidate count to show initial info
+        console.print("[dim]候補抽出中...[/dim]")
+        from genglossary.morphological_analyzer import MorphologicalAnalyzer
+        analyzer = MorphologicalAnalyzer()
+        all_candidates: list[str] = []
+        seen: set[str] = set()
+        for doc in documents:
+            if doc.content and doc.content.strip():
+                terms = analyzer.extract_proper_nouns(
+                    doc.content,
+                    extract_compound_nouns=True,
+                    include_common_nouns=True,
+                    min_length=2,
+                    filter_contained=True,
+                )
+                for term in terms:
+                    if term not in seen:
+                        all_candidates.append(term)
+                        seen.add(term)
+
+        total_candidates = len(all_candidates)
+        total_batches = (total_candidates + batch_size - 1) // batch_size if total_candidates > 0 else 0
+        console.print(f"[dim]候補数: {total_candidates}件 → {total_batches}バッチで分類[/dim]\n")
+
+        # Progress callback for batch classification
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
             console=console,
         ) as progress:
-            task = progress.add_task("用語を分析中...", total=None)
+            task = progress.add_task("LLM分類中...", total=total_batches)
 
-            extractor = TermExtractor(llm_client=llm_client)
-            analysis = extractor.analyze_extraction(documents)
+            def update_progress(current: int, _total: int) -> None:
+                progress.update(task, completed=current)
 
-            progress.update(task, completed=True)
+            analysis = extractor.analyze_extraction(
+                documents,
+                progress_callback=update_progress,
+                batch_size=batch_size,
+            )
+
+            progress.update(task, completed=total_batches)
+
+        # Display filtering results
+        console.print("\n[bold magenta]■ 包含フィルタリング[/bold magenta]")
+        pre_count = analysis.pre_filter_candidate_count
+        post_count = analysis.post_filter_candidate_count
+        filtered_count = pre_count - post_count
+        console.print(f"  フィルタ前: {pre_count}件")
+        console.print(f"  フィルタ後: {post_count}件")
+        console.print(f"  除去された重複: {filtered_count}件")
+        if pre_count > 0:
+            reduction_rate = (filtered_count / pre_count) * 100
+            console.print(f"  削減率: {reduction_rate:.1f}%")
 
         # Display results
         console.print(
@@ -258,6 +319,32 @@ def analyze_terms(input_dir: Path, model: str) -> None:
         if analysis.sudachi_candidates:
             candidates_str = ", ".join(analysis.sudachi_candidates)
             console.print(f"  {candidates_str}")
+        else:
+            console.print("  [dim](なし)[/dim]")
+
+        # Display classification results
+        console.print("\n[bold blue]■ LLM分類結果[/bold blue]")
+        if analysis.classification_results:
+            category_labels = {
+                "person_name": "人名",
+                "place_name": "地名",
+                "organization": "組織・団体名",
+                "title": "役職・称号",
+                "technical_term": "技術用語",
+                "common_noun": "一般名詞（除外対象）",
+            }
+            for category, terms in analysis.classification_results.items():
+                label = category_labels.get(category, category)
+                if category == "common_noun":
+                    console.print(f"  [dim]{label}: {len(terms)}件[/dim]")
+                else:
+                    console.print(f"  {label}: {len(terms)}件")
+                if terms:
+                    terms_str = ", ".join(terms)
+                    if category == "common_noun":
+                        console.print(f"    [dim]{terms_str}[/dim]")
+                    else:
+                        console.print(f"    {terms_str}")
         else:
             console.print("  [dim](なし)[/dim]")
 

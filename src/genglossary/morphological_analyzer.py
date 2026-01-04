@@ -26,6 +26,7 @@ class MorphologicalAnalyzer:
         include_common_nouns: bool = False,
         min_length: int = 1,
         min_frequency: int = 1,
+        filter_contained: bool = False,
     ) -> list[str]:
         """Extract proper nouns from the given text.
 
@@ -49,6 +50,9 @@ class MorphologicalAnalyzer:
                 than this are filtered out. Default is 1 (no filtering).
             min_frequency: Minimum number of occurrences for a term to be included.
                 Terms appearing fewer times are filtered out. Default is 1 (no filtering).
+            filter_contained: If True, remove terms that are substrings of other
+                longer terms. Useful for removing redundant compound noun variants.
+                Default is False for backward compatibility.
 
         Returns:
             List of unique terms in order of first occurrence.
@@ -79,9 +83,13 @@ class MorphologicalAnalyzer:
 
             terms = terms_list
 
-        # Apply filtering
+        # Apply length and frequency filtering
         if min_length > 1 or min_frequency > 1:
             terms = self._apply_filters(text, terms, min_length, min_frequency)
+
+        # Apply contained term filtering
+        if filter_contained:
+            terms = self.filter_contained_terms(terms)
 
         return terms
 
@@ -324,3 +332,41 @@ class MorphologicalAnalyzer:
             chunks.append(current_chunk)
 
         return chunks
+
+    def filter_contained_terms(self, terms: list[str]) -> list[str]:
+        """Filter out terms that are contained within other longer terms.
+
+        When compound noun extraction generates all possible sub-combinations,
+        this method keeps only the longest terms by removing any term that
+        is a substring of another term.
+
+        Args:
+            terms: List of terms to filter.
+
+        Returns:
+            List of terms with contained (substring) terms removed,
+            preserving the order of first occurrence.
+        """
+        if len(terms) <= 1:
+            return terms.copy() if terms else []
+
+        # Remove duplicates while preserving order
+        unique_terms: list[str] = []
+        seen: set[str] = set()
+        for term in terms:
+            if term not in seen:
+                unique_terms.append(term)
+                seen.add(term)
+
+        # Build a set of terms that are contained in other terms
+        contained_terms: set[str] = set()
+
+        for term in unique_terms:
+            for other_term in unique_terms:
+                # Check if term is contained in other_term (but not equal)
+                if term != other_term and term in other_term:
+                    contained_terms.add(term)
+                    break  # No need to check further once we know it's contained
+
+        # Return terms that are not contained in any other term
+        return [term for term in unique_terms if term not in contained_terms]

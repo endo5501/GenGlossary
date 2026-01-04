@@ -1,16 +1,57 @@
 """Term extractor - SudachiPy morphological analysis + LLM judgment."""
 
+from collections.abc import Callable
+
 from pydantic import BaseModel
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
+from genglossary.models.term import TermCategory
 from genglossary.morphological_analyzer import MorphologicalAnalyzer
+
+# Type alias for progress callback: (current_batch, total_batches) -> None
+ProgressCallback = Callable[[int, int], None]
 
 
 class TermJudgmentResponse(BaseModel):
     """Response model for term judgment by LLM."""
 
     approved_terms: list[str]
+
+
+class SingleTermClassificationResponse(BaseModel):
+    """Response model for single term classification by LLM.
+
+    Used when classifying one term at a time for improved accuracy.
+    """
+
+    term: str
+    """The term being classified."""
+
+    category: str
+    """The category of the term (person_name, place_name, organization, title, technical_term, common_noun)."""
+
+
+class BatchTermClassificationResponse(BaseModel):
+    """Response model for batch term classification by LLM.
+
+    Used when classifying multiple terms at once for better performance.
+    Default batch size is 10 terms.
+    """
+
+    classifications: list[dict[str, str]]
+    """List of term-category pairs, each with 'term' and 'category' keys."""
+
+
+class TermClassificationResponse(BaseModel):
+    """Response model for term classification by LLM.
+
+    Used in the first phase of two-phase LLM processing.
+    Each term is classified into one of the TermCategory categories.
+    """
+
+    classified_terms: dict[str, list[str]]
+    """Dictionary mapping category names to lists of terms."""
 
 
 class TermExtractionAnalysis(BaseModel):
@@ -28,6 +69,15 @@ class TermExtractionAnalysis(BaseModel):
 
     llm_rejected: list[str]
     """Terms rejected by LLM (candidates - approved)."""
+
+    pre_filter_candidate_count: int = 0
+    """Count of candidates before contained terms filtering."""
+
+    post_filter_candidate_count: int = 0
+    """Count of candidates after contained terms filtering."""
+
+    classification_results: dict[str, list[str]] = {}
+    """LLM classification results by category."""
 
 
 class TermExtractor:
@@ -53,8 +103,9 @@ class TermExtractor:
     def extract_terms(self, documents: list[Document]) -> list[str]:
         """Extract terms from the given documents.
 
-        Uses SudachiPy to extract proper nouns, then LLM judges
-        which are suitable for the glossary.
+        Uses a two-phase LLM process:
+        1. Classification phase: Categorize terms into 6 categories
+        2. Selection phase: Select terms from non-common-noun categories
 
         Args:
             documents: List of documents to extract terms from.
@@ -76,26 +127,36 @@ class TermExtractor:
         if not candidates:
             return []
 
-        # Step 2: Send to LLM for judgment
-        prompt = self._create_judgment_prompt(candidates, non_empty_docs)
-        response = self.llm_client.generate_structured(prompt, TermJudgmentResponse)
+        # Step 2: Classify terms (Phase 1 of LLM processing)
+        classification = self._classify_terms(candidates, non_empty_docs)
 
-        # Process and deduplicate approved terms
-        return self._process_terms(response.approved_terms)
+        # Step 3: Select terms, excluding common nouns (Phase 2 of LLM processing)
+        return self._select_terms(classification, non_empty_docs)
 
     def analyze_extraction(
-        self, documents: list[Document]
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
     ) -> TermExtractionAnalysis:
         """Analyze term extraction without generating full glossary.
 
         Returns intermediate results from both SudachiPy and LLM stages,
         useful for debugging and improving extraction quality.
 
+        Uses two-phase LLM processing:
+        1. Classification phase: Categorize terms into 6 categories
+        2. Selection phase: Select terms from non-common-noun categories
+
         Args:
             documents: List of documents to analyze.
+            progress_callback: Optional callback for progress updates.
+                Called with (current_batch, total_batches) during classification.
+            batch_size: Number of terms to classify per LLM call (default: 10).
 
         Returns:
-            TermExtractionAnalysis with candidates, approved, and rejected terms.
+            TermExtractionAnalysis with candidates, approved, rejected terms,
+            filter counts, and classification results.
         """
         # Filter out empty or whitespace-only documents
         non_empty_docs = [
@@ -107,29 +168,39 @@ class TermExtractor:
                 sudachi_candidates=[],
                 llm_approved=[],
                 llm_rejected=[],
+                pre_filter_candidate_count=0,
+                post_filter_candidate_count=0,
+                classification_results={},
             )
 
-        # Step 1: Extract proper nouns using morphological analysis
+        # Step 1a: Extract candidates WITHOUT filter to get pre-filter count
+        pre_filter_candidates = self._extract_candidates_raw(non_empty_docs)
+        pre_filter_count = len(pre_filter_candidates)
+
+        # Step 1b: Extract candidates WITH filter to get post-filter count
         candidates = self._extract_candidates(non_empty_docs)
+        post_filter_count = len(candidates)
 
         if not candidates:
             return TermExtractionAnalysis(
                 sudachi_candidates=[],
                 llm_approved=[],
                 llm_rejected=[],
+                pre_filter_candidate_count=pre_filter_count,
+                post_filter_candidate_count=0,
+                classification_results={},
             )
 
-        # Step 2: Send to LLM for judgment
-        prompt = self._create_judgment_prompt(candidates, non_empty_docs)
-        response = self.llm_client.generate_structured(prompt, TermJudgmentResponse)
+        # Step 2: Classify terms (Phase 1 of LLM processing)
+        classification = self._classify_terms(
+            candidates,
+            non_empty_docs,
+            batch_size=batch_size,
+            progress_callback=progress_callback,
+        )
 
-        # Process approved terms
-        raw_approved = self._process_terms(response.approved_terms)
-
-        # Filter to only include terms that were in candidates
-        # (LLM may suggest terms not in the original candidates)
-        candidates_set = set(candidates)
-        approved = [t for t in raw_approved if t in candidates_set]
+        # Step 3: Select terms (Phase 2 of LLM processing)
+        approved = self._select_terms(classification, non_empty_docs)
 
         # Calculate rejected terms (candidates not in approved)
         approved_set = set(approved)
@@ -139,6 +210,9 @@ class TermExtractor:
             sudachi_candidates=candidates,
             llm_approved=approved,
             llm_rejected=rejected,
+            pre_filter_candidate_count=pre_filter_count,
+            post_filter_candidate_count=post_filter_count,
+            classification_results=classification.classified_terms,
         )
 
     def _extract_candidates(self, documents: list[Document]) -> list[str]:
@@ -148,6 +222,7 @@ class TermExtractor:
         - Compound noun extraction (e.g., 騎士団長, アソリウス島騎士団)
         - Common noun inclusion (e.g., 聖印, 魔神討伐)
         - Minimum length filtering (2 characters to keep common proper nouns)
+        - Contained term filtering (removes redundant substring terms)
 
         Args:
             documents: List of documents to analyze.
@@ -161,11 +236,43 @@ class TermExtractor:
         for doc in documents:
             # Use enhanced extraction parameters
             # min_length=2 keeps common Japanese proper nouns (東京, 日本, etc.)
+            # filter_contained=True removes redundant compound noun variants
             terms = self._morphological_analyzer.extract_proper_nouns(
                 doc.content,
                 extract_compound_nouns=True,
                 include_common_nouns=True,
                 min_length=2,
+                filter_contained=True,
+            )
+            for term in terms:
+                if term not in seen:
+                    candidates.append(term)
+                    seen.add(term)
+
+        return candidates
+
+    def _extract_candidates_raw(self, documents: list[Document]) -> list[str]:
+        """Extract candidate terms WITHOUT contained term filtering.
+
+        Used for analysis to show pre-filter candidate count.
+
+        Args:
+            documents: List of documents to analyze.
+
+        Returns:
+            List of unique candidate terms (before filtering).
+        """
+        candidates: list[str] = []
+        seen: set[str] = set()
+
+        for doc in documents:
+            # Same parameters as _extract_candidates but filter_contained=False
+            terms = self._morphological_analyzer.extract_proper_nouns(
+                doc.content,
+                extract_compound_nouns=True,
+                include_common_nouns=True,
+                min_length=2,
+                filter_contained=False,
             )
             for term in terms:
                 if term not in seen:
@@ -252,3 +359,319 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
             result.append(stripped)
 
         return result
+
+    def _classify_terms(
+        self,
+        candidates: list[str],
+        documents: list[Document],
+        batch_size: int = 10,
+        progress_callback: ProgressCallback | None = None,
+    ) -> TermClassificationResponse:
+        """Classify terms into categories using LLM.
+
+        Classifies terms in batches for better performance.
+        Terms are classified into 6 categories:
+        - person_name: Person names
+        - place_name: Place names
+        - organization: Organization/group names
+        - title: Titles and positions
+        - technical_term: Technical/domain-specific terms
+        - common_noun: Common nouns (will be excluded)
+
+        Args:
+            candidates: List of candidate terms to classify.
+            documents: List of documents for context.
+            batch_size: Number of terms to classify per LLM call (default: 10).
+            progress_callback: Optional callback for progress updates.
+                Called with (current_batch, total_batches) after each batch.
+
+        Returns:
+            TermClassificationResponse with classified terms.
+        """
+        # Initialize empty lists for each category
+        classified: dict[str, list[str]] = {cat.value: [] for cat in TermCategory}
+
+        # Calculate total batches
+        total_batches = (len(candidates) + batch_size - 1) // batch_size if candidates else 0
+
+        # Classify terms in batches
+        batch_num = 0
+        for i in range(0, len(candidates), batch_size):
+            batch_num += 1
+            batch = candidates[i : i + batch_size]
+            prompt = self._create_batch_classification_prompt(batch, documents)
+            response = self.llm_client.generate_structured(
+                prompt, BatchTermClassificationResponse
+            )
+
+            # Aggregate classifications from batch response
+            for item in response.classifications:
+                term = item.get("term", "")
+                category = item.get("category", "")
+                if category in classified and term:
+                    classified[category].append(term)
+
+            # Call progress callback if provided
+            if progress_callback is not None:
+                progress_callback(batch_num, total_batches)
+
+        return TermClassificationResponse(classified_terms=classified)
+
+    def _create_classification_prompt(
+        self, candidates: list[str], documents: list[Document]
+    ) -> str:
+        """Create the prompt for LLM term classification.
+
+        Args:
+            candidates: List of candidate terms to classify.
+            documents: List of documents for context.
+
+        Returns:
+            The formatted prompt string.
+        """
+        candidates_text = ", ".join(candidates)
+        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+
+        prompt = f"""あなたは用語分類の専門家です。
+以下の用語候補を6つのカテゴリに分類してください。
+
+## 候補用語:
+{candidates_text}
+
+## カテゴリ定義
+
+1. **person_name（人名）**: 架空・実在の人物名
+   例: ガウス卿、田中太郎、アリス
+
+2. **place_name（地名）**: 国名、都市名、地域名、場所の名前
+   例: エデルト、アソリウス島、東京
+
+3. **organization（組織・団体名）**: 騎士団、軍隊、企業、団体など
+   例: アソリウス島騎士団、エデルト軍、近衛騎士団
+
+4. **title（役職・称号）**: 王子、騎士団長、将軍などの役職や称号
+   例: 騎士団長、騎士代理爵位、将軍
+
+5. **technical_term（技術用語・専門用語）**: この文脈特有の専門用語
+   例: 聖印、魔神討伐、魔神代理領
+
+6. **common_noun（一般名詞）**: 辞書的意味で理解できる一般的な名詞
+   例: 未亡人、行方不明、方角、重要
+
+## ドキュメントのコンテキスト:
+{combined_content}
+
+## 注意事項
+- 各用語は必ず1つのカテゴリにのみ分類してください
+- 文脈を考慮して、最も適切なカテゴリを選んでください
+- 迷った場合は、用語集に載せるべきかどうかを基準に判断してください
+
+JSON形式で回答してください:
+{{
+  "classified_terms": {{
+    "person_name": ["用語1", "用語2"],
+    "place_name": ["用語3"],
+    "organization": ["用語4"],
+    "title": ["用語5"],
+    "technical_term": ["用語6"],
+    "common_noun": ["用語7", "用語8"]
+  }}
+}}
+
+候補用語をすべて分類してください。"""
+
+        return prompt
+
+    def _create_single_term_classification_prompt(
+        self, term: str, documents: list[Document]
+    ) -> str:
+        """Create the prompt for LLM single term classification.
+
+        Args:
+            term: The term to classify.
+            documents: List of documents for context.
+
+        Returns:
+            The formatted prompt string.
+        """
+        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+
+        prompt = f"""あなたは用語分類の専門家です。
+以下の用語を1つのカテゴリに分類してください。
+
+## 分類対象の用語:
+{term}
+
+## カテゴリ定義
+
+1. **person_name（人名）**: 架空・実在の人物名
+   例: ガウス卿、田中太郎、アリス
+
+2. **place_name（地名）**: 国名、都市名、地域名、場所の名前
+   例: エデルト、アソリウス島、東京
+
+3. **organization（組織・団体名）**: 騎士団、軍隊、企業、団体など
+   例: アソリウス島騎士団、エデルト軍、近衛騎士団
+
+4. **title（役職・称号）**: 王子、騎士団長、将軍などの役職や称号
+   例: 騎士団長、騎士代理爵位、将軍
+
+5. **technical_term（技術用語・専門用語）**: この文脈特有の専門用語
+   例: 聖印、魔神討伐、魔神代理領
+
+6. **common_noun（一般名詞）**: 辞書的意味で理解できる一般的な名詞
+   例: 未亡人、行方不明、方角、重要
+
+## 注意事項
+- 用語集に載せるべきかどうかを基準に判断してください
+- 一般的に知られている地名・国名（日本、東京など）は common_noun に分類
+
+JSON形式で回答してください:
+{{"term": "{term}", "category": "カテゴリ名"}}
+
+カテゴリ名は person_name, place_name, organization, title, technical_term, common_noun のいずれかです。"""
+
+        return prompt
+
+    def _create_batch_classification_prompt(
+        self, terms: list[str], documents: list[Document]
+    ) -> str:
+        """Create the prompt for LLM batch term classification.
+
+        Args:
+            terms: List of terms to classify in this batch.
+            documents: List of documents for context.
+
+        Returns:
+            The formatted prompt string.
+        """
+        terms_text = "\n".join(f"- {term}" for term in terms)
+        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+
+        prompt = f"""あなたは用語分類の専門家です。
+以下の用語を各々1つのカテゴリに分類してください。
+
+## 分類対象の用語:
+{terms_text}
+
+## カテゴリ定義
+
+1. **person_name（人名）**: 架空・実在の人物名
+   例: ガウス卿、田中太郎、アリス
+
+2. **place_name（地名）**: 国名、都市名、地域名、場所の名前
+   例: エデルト、アソリウス島、東京
+
+3. **organization（組織・団体名）**: 騎士団、軍隊、企業、団体など
+   例: アソリウス島騎士団、エデルト軍、近衛騎士団
+
+4. **title（役職・称号）**: 王子、騎士団長、将軍などの役職や称号
+   例: 騎士団長、騎士代理爵位、将軍
+
+5. **technical_term（技術用語・専門用語）**: この文脈特有の専門用語
+   例: 聖印、魔神討伐、魔神代理領
+
+6. **common_noun（一般名詞）**: 辞書的意味で理解できる一般的な名詞
+   例: 未亡人、行方不明、方角、重要
+
+## 注意事項
+- 各用語を必ず1つのカテゴリに分類してください
+- 用語集に載せるべきかどうかを基準に判断してください
+
+JSON形式で回答してください:
+{{"classifications": [
+  {{"term": "用語1", "category": "カテゴリ名"}},
+  {{"term": "用語2", "category": "カテゴリ名"}}
+]}}
+
+カテゴリ名は person_name, place_name, organization, title, technical_term, common_noun のいずれかです。
+すべての用語を分類してください。"""
+
+        return prompt
+
+    def _select_terms(
+        self,
+        classification: TermClassificationResponse,
+        documents: list[Document],
+    ) -> list[str]:
+        """Select terms from classification results, excluding common nouns.
+
+        Automatically approves all terms that are not classified as common nouns.
+        No additional LLM call is needed - classification determines approval.
+
+        Args:
+            classification: Classification results from classification phase.
+            documents: List of documents for context (unused, kept for compatibility).
+
+        Returns:
+            List of approved terms (all non-common-noun terms).
+        """
+        # Collect all non-common-noun terms - they are automatically approved
+        approved: list[str] = []
+        for category, terms in classification.classified_terms.items():
+            if category != TermCategory.COMMON_NOUN.value:
+                approved.extend(terms)
+
+        return self._process_terms(approved)
+
+    def _create_selection_prompt(
+        self,
+        candidates: list[str],
+        classification: TermClassificationResponse,
+        documents: list[Document],
+    ) -> str:
+        """Create the prompt for LLM term selection (second phase).
+
+        Args:
+            candidates: List of candidate terms (excluding common nouns).
+            classification: Classification results for context.
+            documents: List of documents for context.
+
+        Returns:
+            The formatted prompt string.
+        """
+        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+
+        # Format classified terms for context
+        classification_text = ""
+        for category, terms in classification.classified_terms.items():
+            if category != TermCategory.COMMON_NOUN.value and terms:
+                category_label = {
+                    "person_name": "人名",
+                    "place_name": "地名",
+                    "organization": "組織・団体名",
+                    "title": "役職・称号",
+                    "technical_term": "技術用語",
+                }.get(category, category)
+                classification_text += f"- {category_label}: {', '.join(terms)}\n"
+
+        prompt = f"""あなたは用語集作成の専門家です。
+以下の分類済み用語から、用語集に掲載すべきものを選んでください。
+
+## 分類済み用語（一般名詞は除外済み）:
+{classification_text}
+
+## 選定基準
+この用語集は、ドキュメントの読者が文脈を理解するための補助として使われます。
+
+1. 読者がこの用語の「この文脈での意味」を知りたいと思うか？
+2. 辞書を引いても、この文脈での意味は分からないか？
+3. 説明があると文章理解が深まるか？
+
+## 採用しない例
+- 広く知られた一般的な地名や国名（東京、日本など）
+- 文脈に依存しない基本的な役職名（社長、部長など）
+
+## 採用する例
+- この作品/文脈特有の組織名、人名、地名
+- 特殊な意味を持つ役職や称号
+- 文脈特有の専門用語
+
+## ドキュメントのコンテキスト:
+{combined_content}
+
+JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2", ...]}}
+
+用語集に掲載すべきものだけを選んで approved_terms に含めてください。"""
+
+        return prompt

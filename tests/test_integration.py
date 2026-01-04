@@ -20,10 +20,17 @@ from genglossary.term_extractor import TermExtractor
 # --- Mock Response Models ---
 
 
-class MockTermJudgmentResponse(BaseModel):
-    """Mock response for term judgment (new architecture)."""
+class MockSingleTermClassificationResponse(BaseModel):
+    """Mock response for single term classification (per-term processing)."""
 
-    approved_terms: list[str]
+    term: str
+    category: str
+
+
+class MockBatchTermClassificationResponse(BaseModel):
+    """Mock response for batch term classification."""
+
+    classifications: list[dict[str, str]]
 
 
 class MockDefinitionResponse(BaseModel):
@@ -70,9 +77,13 @@ class TestEndToEndPipeline:
 
         # Set up responses in order of calls
         mock_llm.generate_structured.side_effect = [
-            # 1. Term extraction (judgment)
-            MockTermJudgmentResponse(
-                approved_terms=["マイクロサービス", "APIゲートウェイ", "PostgreSQL"]
+            # 1. Term extraction - batch classification
+            MockBatchTermClassificationResponse(
+                classifications=[
+                    {"term": "マイクロサービス", "category": "technical_term"},
+                    {"term": "APIゲートウェイ", "category": "technical_term"},
+                    {"term": "PostgreSQL", "category": "technical_term"},
+                ]
             ),
             # 2-4. Definition for each term
             MockDefinitionResponse(
@@ -188,10 +199,12 @@ class TestEndToEndPipeline:
 
         mock_llm = MagicMock(spec=BaseLLMClient)
 
-        # Note: New architecture uses SudachiPy + LLM judgment
+        # Note: New architecture uses SudachiPy + batch LLM classification
         mock_llm.generate_structured.side_effect = [
-            # Term extraction (judgment)
-            MockTermJudgmentResponse(approved_terms=["テスト用語"]),
+            # Term extraction - batch classification
+            MockBatchTermClassificationResponse(
+                classifications=[{"term": "テスト用語", "category": "technical_term"}]
+            ),
             # Definition (no related terms call since only 1 term)
             MockDefinitionResponse(definition="テスト用の定義", confidence=0.9),
             # Review - no issues
@@ -244,10 +257,20 @@ class TestEndToEndPipeline:
 
         mock_llm = MagicMock(spec=BaseLLMClient)
 
-        # Set up responses
-        responses = [MockTermJudgmentResponse(approved_terms=terms)]
+        # Set up responses - batch classification
+        responses = []
 
-        # Add responses for each term
+        # Classification phase - batch response for all terms
+        responses.append(
+            MockBatchTermClassificationResponse(
+                classifications=[
+                    {"term": f"用語{i}", "category": "technical_term"}
+                    for i in range(5)
+                ]
+            )
+        )
+
+        # Add definition responses for each term
         for i in range(5):
             responses.append(
                 MockDefinitionResponse(definition=f"用語{i}の定義", confidence=0.8)
@@ -295,14 +318,22 @@ class TestErrorHandling:
         with pytest.raises(ValueError, match="Unsupported file extension"):
             loader.load_file(str(unsupported_file))
 
-    def test_pipeline_handles_empty_glossary(self, tmp_path: Path) -> None:
+    @patch("genglossary.term_extractor.MorphologicalAnalyzer")
+    def test_pipeline_handles_empty_glossary(
+        self, mock_analyzer_class: MagicMock, tmp_path: Path
+    ) -> None:
         """Test pipeline behavior when no terms are extracted."""
         # Create document with no extractable terms
         doc_path = tmp_path / "empty_terms.md"
         doc_path.write_text("Simple text without special terms.", encoding="utf-8")
 
+        # Set up MorphologicalAnalyzer to return no candidates
+        mock_analyzer = MagicMock()
+        mock_analyzer.extract_proper_nouns.return_value = []
+        mock_analyzer_class.return_value = mock_analyzer
+
         mock_llm = MagicMock(spec=BaseLLMClient)
-        mock_llm.generate_structured.return_value = MockTermJudgmentResponse(approved_terms=[])
+        # No LLM calls expected when no candidates
 
         loader = DocumentLoader()
         documents = loader.load_directory(str(tmp_path))
@@ -320,6 +351,9 @@ class TestErrorHandling:
         reviewer = GlossaryReviewer(llm_client=mock_llm)
         issues = reviewer.review(glossary)
         assert issues == []
+
+        # No LLM classification calls should be made
+        mock_llm.generate_structured.assert_not_called()
 
     def test_markdown_writer_creates_parent_directories(
         self, tmp_path: Path, sample_glossary: Glossary
@@ -446,7 +480,13 @@ APIゲートウェイは重要なコンポーネントです。
 
         mock_llm = MagicMock(spec=BaseLLMClient)
         mock_llm.generate_structured.side_effect = [
-            MockTermJudgmentResponse(approved_terms=["マイクロサービス", "APIゲートウェイ"]),
+            # Batch classification
+            MockBatchTermClassificationResponse(
+                classifications=[
+                    {"term": "マイクロサービス", "category": "technical_term"},
+                    {"term": "APIゲートウェイ", "category": "technical_term"},
+                ]
+            ),
             MockDefinitionResponse(definition="日本語の定義1", confidence=0.9),
             MockDefinitionResponse(definition="日本語の定義2", confidence=0.85),
             MockReviewResponse(issues=[]),
@@ -474,9 +514,6 @@ APIゲートウェイは重要なコンポーネントです。
         """Test pipeline with both .md and .txt files."""
         (tmp_path / "doc1.md").write_text("# Markdown doc\n\nWith terms.", encoding="utf-8")
         (tmp_path / "doc2.txt").write_text("Plain text doc with terms.", encoding="utf-8")
-
-        mock_llm = MagicMock(spec=BaseLLMClient)
-        mock_llm.generate_structured.return_value = MockTermJudgmentResponse(approved_terms=["term1"])
 
         loader = DocumentLoader()
         documents = loader.load_directory(str(tmp_path))
