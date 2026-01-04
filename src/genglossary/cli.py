@@ -3,6 +3,7 @@
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 import click
 from rich.console import Console
@@ -19,10 +20,25 @@ from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.glossary_refiner import GlossaryRefiner
 from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.ollama_client import OllamaClient
+from genglossary.models.document import Document
+from genglossary.models.glossary import Glossary
 from genglossary.output.markdown_writer import MarkdownWriter
-from genglossary.term_extractor import TermExtractor
+from genglossary.term_extractor import TermExtractor, TermExtractionAnalysis
 
 console = Console()
+
+
+def _add_glossary_metadata(glossary: Glossary, model: str, document_count: int) -> None:
+    """Add metadata to glossary.
+
+    Args:
+        glossary: Glossary to update.
+        model: Model name used for generation.
+        document_count: Number of documents processed.
+    """
+    glossary.metadata["generated_at"] = datetime.now().isoformat()
+    glossary.metadata["document_count"] = document_count
+    glossary.metadata["model"] = model
 
 
 def generate_glossary(
@@ -96,9 +112,7 @@ def generate_glossary(
         glossary = refiner.refine(glossary, issues, documents)
 
     # Add metadata
-    glossary.metadata["generated_at"] = datetime.now().isoformat()
-    glossary.metadata["document_count"] = len(documents)
-    glossary.metadata["model"] = model
+    _add_glossary_metadata(glossary, model, len(documents))
 
     # 6. Write output
     if verbose:
@@ -197,6 +211,200 @@ def generate(
         sys.exit(1)
 
 
+def _extract_candidates_from_documents(documents: list[Document]) -> list[str]:
+    """Extract term candidates from documents using morphological analysis.
+
+    Args:
+        documents: List of documents to analyze.
+
+    Returns:
+        List of unique term candidates.
+    """
+    from genglossary.morphological_analyzer import MorphologicalAnalyzer
+
+    analyzer = MorphologicalAnalyzer()
+    all_candidates: list[str] = []
+    seen: set[str] = set()
+
+    for doc in documents:
+        if doc.content and doc.content.strip():
+            terms = analyzer.extract_proper_nouns(
+                doc.content,
+                extract_compound_nouns=True,
+                include_common_nouns=True,
+                min_length=2,
+                filter_contained=True,
+            )
+            for term in terms:
+                if term not in seen:
+                    all_candidates.append(term)
+                    seen.add(term)
+
+    return all_candidates
+
+
+def _display_filtering_results(analysis: TermExtractionAnalysis) -> None:
+    """Display filtering results section.
+
+    Args:
+        analysis: Term extraction analysis results.
+    """
+    console.print("\n[bold magenta]■ 包含フィルタリング[/bold magenta]")
+    pre_count = analysis.pre_filter_candidate_count
+    post_count = analysis.post_filter_candidate_count
+    filtered_count = pre_count - post_count
+    console.print(f"  フィルタ前: {pre_count}件")
+    console.print(f"  フィルタ後: {post_count}件")
+    console.print(f"  除去された重複: {filtered_count}件")
+    if pre_count > 0:
+        reduction_rate = (filtered_count / pre_count) * 100
+        console.print(f"  削減率: {reduction_rate:.1f}%")
+
+
+def _display_classification_results(analysis: TermExtractionAnalysis) -> None:
+    """Display classification results section.
+
+    Args:
+        analysis: Term extraction analysis results.
+    """
+    console.print("\n[bold blue]■ LLM分類結果[/bold blue]")
+    if not analysis.classification_results:
+        console.print("  [dim](なし)[/dim]")
+        return
+
+    category_labels = {
+        "person_name": "人名",
+        "place_name": "地名",
+        "organization": "組織・団体名",
+        "title": "役職・称号",
+        "technical_term": "技術用語",
+        "common_noun": "一般名詞（除外対象）",
+    }
+
+    for category, terms in analysis.classification_results.items():
+        label = category_labels.get(category, category)
+        is_common_noun = category == "common_noun"
+
+        if is_common_noun:
+            console.print(f"  [dim]{label}: {len(terms)}件[/dim]")
+        else:
+            console.print(f"  {label}: {len(terms)}件")
+
+        if terms:
+            terms_str = ", ".join(terms)
+            if is_common_noun:
+                console.print(f"    [dim]{terms_str}[/dim]")
+            else:
+                console.print(f"    {terms_str}")
+
+
+def _display_term_lists(analysis: TermExtractionAnalysis) -> None:
+    """Display term lists (candidates, approved, rejected).
+
+    Args:
+        analysis: Term extraction analysis results.
+    """
+    # SudachiPy candidates
+    console.print(
+        f"\n[bold cyan]■ SudachiPy抽出候補[/bold cyan] "
+        f"({len(analysis.sudachi_candidates)}件)"
+    )
+    if analysis.sudachi_candidates:
+        candidates_str = ", ".join(analysis.sudachi_candidates)
+        console.print(f"  {candidates_str}")
+    else:
+        console.print("  [dim](なし)[/dim]")
+
+    # LLM approved terms
+    console.print(
+        f"\n[bold green]■ LLM承認用語[/bold green] "
+        f"({len(analysis.llm_approved)}件)"
+    )
+    if analysis.llm_approved:
+        approved_str = ", ".join(analysis.llm_approved)
+        console.print(f"  {approved_str}")
+    else:
+        console.print("  [dim](なし)[/dim]")
+
+    # LLM rejected terms
+    console.print(
+        f"\n[bold yellow]■ LLM除外用語[/bold yellow] "
+        f"({len(analysis.llm_rejected)}件)"
+    )
+    if analysis.llm_rejected:
+        rejected_str = ", ".join(analysis.llm_rejected)
+        console.print(f"  {rejected_str}")
+    else:
+        console.print("  [dim](なし)[/dim]")
+
+
+def _display_statistics(analysis: TermExtractionAnalysis) -> None:
+    """Display statistics section.
+
+    Args:
+        analysis: Term extraction analysis results.
+    """
+    console.print("\n[bold]■ 統計[/bold]")
+    total = len(analysis.sudachi_candidates)
+    approved = len(analysis.llm_approved)
+
+    if total > 0:
+        rate = (approved / total) * 100
+        console.print(f"  候補数: {total}")
+        console.print(f"  承認率: {rate:.1f}% ({approved}/{total})")
+    else:
+        console.print("  候補数: 0")
+
+
+def _run_term_extraction_analysis(
+    documents: list[Document],
+    extractor: TermExtractor,
+    batch_size: int,
+) -> TermExtractionAnalysis:
+    """Run term extraction analysis with progress display.
+
+    Args:
+        documents: Documents to analyze.
+        extractor: Term extractor instance.
+        batch_size: Batch size for LLM classification.
+
+    Returns:
+        Term extraction analysis results.
+    """
+    # Extract candidates and show initial info
+    console.print("[dim]候補抽出中...[/dim]")
+    all_candidates = _extract_candidates_from_documents(documents)
+
+    total_candidates = len(all_candidates)
+    total_batches = (
+        (total_candidates + batch_size - 1) // batch_size if total_candidates > 0 else 0
+    )
+    console.print(f"[dim]候補数: {total_candidates}件 → {total_batches}バッチで分類[/dim]\n")
+
+    # Run analysis with progress bar
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("LLM分類中...", total=total_batches)
+
+        def update_progress(current: int, _total: int) -> None:
+            progress.update(task, completed=current)
+
+        analysis = extractor.analyze_extraction(
+            documents,
+            progress_callback=update_progress,
+            batch_size=batch_size,
+        )
+
+        progress.update(task, completed=total_batches)
+
+    return analysis
+
+
 @main.command(name="analyze-terms")
 @click.option(
     "--input",
@@ -251,133 +459,15 @@ def analyze_terms(input_dir: Path, model: str, batch_size: int) -> None:
         console.print(f"[dim]モデル: {model}[/dim]")
         console.print(f"[dim]バッチサイズ: {batch_size}[/dim]\n")
 
-        # Analyze extraction with progress display
+        # Run analysis
         extractor = TermExtractor(llm_client=llm_client)
-
-        # First, get candidate count to show initial info
-        console.print("[dim]候補抽出中...[/dim]")
-        from genglossary.morphological_analyzer import MorphologicalAnalyzer
-        analyzer = MorphologicalAnalyzer()
-        all_candidates: list[str] = []
-        seen: set[str] = set()
-        for doc in documents:
-            if doc.content and doc.content.strip():
-                terms = analyzer.extract_proper_nouns(
-                    doc.content,
-                    extract_compound_nouns=True,
-                    include_common_nouns=True,
-                    min_length=2,
-                    filter_contained=True,
-                )
-                for term in terms:
-                    if term not in seen:
-                        all_candidates.append(term)
-                        seen.add(term)
-
-        total_candidates = len(all_candidates)
-        total_batches = (total_candidates + batch_size - 1) // batch_size if total_candidates > 0 else 0
-        console.print(f"[dim]候補数: {total_candidates}件 → {total_batches}バッチで分類[/dim]\n")
-
-        # Progress callback for batch classification
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("LLM分類中...", total=total_batches)
-
-            def update_progress(current: int, _total: int) -> None:
-                progress.update(task, completed=current)
-
-            analysis = extractor.analyze_extraction(
-                documents,
-                progress_callback=update_progress,
-                batch_size=batch_size,
-            )
-
-            progress.update(task, completed=total_batches)
-
-        # Display filtering results
-        console.print("\n[bold magenta]■ 包含フィルタリング[/bold magenta]")
-        pre_count = analysis.pre_filter_candidate_count
-        post_count = analysis.post_filter_candidate_count
-        filtered_count = pre_count - post_count
-        console.print(f"  フィルタ前: {pre_count}件")
-        console.print(f"  フィルタ後: {post_count}件")
-        console.print(f"  除去された重複: {filtered_count}件")
-        if pre_count > 0:
-            reduction_rate = (filtered_count / pre_count) * 100
-            console.print(f"  削減率: {reduction_rate:.1f}%")
+        analysis = _run_term_extraction_analysis(documents, extractor, batch_size)
 
         # Display results
-        console.print(
-            f"\n[bold cyan]■ SudachiPy抽出候補[/bold cyan] "
-            f"({len(analysis.sudachi_candidates)}件)"
-        )
-        if analysis.sudachi_candidates:
-            candidates_str = ", ".join(analysis.sudachi_candidates)
-            console.print(f"  {candidates_str}")
-        else:
-            console.print("  [dim](なし)[/dim]")
-
-        # Display classification results
-        console.print("\n[bold blue]■ LLM分類結果[/bold blue]")
-        if analysis.classification_results:
-            category_labels = {
-                "person_name": "人名",
-                "place_name": "地名",
-                "organization": "組織・団体名",
-                "title": "役職・称号",
-                "technical_term": "技術用語",
-                "common_noun": "一般名詞（除外対象）",
-            }
-            for category, terms in analysis.classification_results.items():
-                label = category_labels.get(category, category)
-                if category == "common_noun":
-                    console.print(f"  [dim]{label}: {len(terms)}件[/dim]")
-                else:
-                    console.print(f"  {label}: {len(terms)}件")
-                if terms:
-                    terms_str = ", ".join(terms)
-                    if category == "common_noun":
-                        console.print(f"    [dim]{terms_str}[/dim]")
-                    else:
-                        console.print(f"    {terms_str}")
-        else:
-            console.print("  [dim](なし)[/dim]")
-
-        console.print(
-            f"\n[bold green]■ LLM承認用語[/bold green] "
-            f"({len(analysis.llm_approved)}件)"
-        )
-        if analysis.llm_approved:
-            approved_str = ", ".join(analysis.llm_approved)
-            console.print(f"  {approved_str}")
-        else:
-            console.print("  [dim](なし)[/dim]")
-
-        console.print(
-            f"\n[bold yellow]■ LLM除外用語[/bold yellow] "
-            f"({len(analysis.llm_rejected)}件)"
-        )
-        if analysis.llm_rejected:
-            rejected_str = ", ".join(analysis.llm_rejected)
-            console.print(f"  {rejected_str}")
-        else:
-            console.print("  [dim](なし)[/dim]")
-
-        # Statistics
-        console.print("\n[bold]■ 統計[/bold]")
-        total = len(analysis.sudachi_candidates)
-        approved = len(analysis.llm_approved)
-        if total > 0:
-            rate = (approved / total) * 100
-            console.print(f"  候補数: {total}")
-            console.print(f"  承認率: {rate:.1f}% ({approved}/{total})")
-        else:
-            console.print("  候補数: 0")
+        _display_filtering_results(analysis)
+        _display_term_lists(analysis)
+        _display_classification_results(analysis)
+        _display_statistics(analysis)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]処理を中断しました[/yellow]")
