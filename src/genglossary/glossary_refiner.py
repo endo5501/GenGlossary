@@ -1,6 +1,7 @@
 """Glossary refiner - Step 4: Refine glossary based on issues using LLM."""
 
 import re
+from collections import defaultdict
 
 from pydantic import BaseModel
 
@@ -48,7 +49,6 @@ class GlossaryRefiner:
         Returns:
             A refined Glossary object.
         """
-        # Create a copy of the glossary to avoid modifying the original
         refined_glossary = Glossary(
             terms=dict(glossary.terms),
             issues=list(glossary.issues),
@@ -58,79 +58,102 @@ class GlossaryRefiner:
         if not issues:
             return refined_glossary
 
+        # Build context index once for all issues
+        context_index = self._build_context_index(documents)
         resolved_count = 0
 
         for issue in issues:
+            term = refined_glossary.get_term(issue.term_name)
+            if term is None:
+                continue
+
             try:
-                term = refined_glossary.get_term(issue.term_name)
-                if term is None:
-                    continue
-
-                # Resolve the issue and get refined term
-                refined_term = self._resolve_issue(term, issue, documents)
-
-                # Update the glossary with the refined term
+                refined_term = self._resolve_issue(term, issue, context_index)
                 refined_glossary.terms[issue.term_name] = refined_term
                 resolved_count += 1
             except Exception as e:
-                # Skip this issue and continue with the next one
                 print(f"Warning: Failed to refine '{issue.term_name}': {e}")
-                continue
 
-        # Track resolved issues in metadata
         refined_glossary.metadata["resolved_issues"] = resolved_count
-
         return refined_glossary
+
+    def _build_context_index(
+        self, documents: list[Document]
+    ) -> dict[str, list[str]]:
+        """Build an index mapping normalized terms to their context lines.
+
+        This method processes all documents once to create a searchable index,
+        avoiding O(n²) complexity when looking up contexts for multiple terms.
+
+        Args:
+            documents: List of documents to index.
+
+        Returns:
+            Dictionary mapping normalized term names to their context lines.
+        """
+        index: dict[str, list[str]] = defaultdict(list)
+
+        for doc in documents:
+            for line_num, line in enumerate(doc.lines, start=1):
+                line_stripped = line.strip()
+                if not line_stripped:
+                    continue
+
+                # Store context with location for later retrieval
+                context = f"- [{doc.file_path}:{line_num}] {line_stripped}"
+
+                # Index by words in the line (normalized to lowercase)
+                words = re.findall(r"\w+", line_stripped)
+                for word in words:
+                    index[word.lower()].append(context)
+
+        return index
 
     def _resolve_issue(
         self,
         term: Term,
         issue: GlossaryIssue,
-        documents: list[Document],
+        context_index: dict[str, list[str]],
     ) -> Term:
         """Resolve a single issue for a term.
 
         Args:
             term: The term to refine.
             issue: The issue to resolve.
-            documents: List of documents for additional context.
+            context_index: Pre-built index of term contexts.
 
         Returns:
             A refined Term object.
         """
-        prompt = self._create_refinement_prompt(term, issue, documents)
+        prompt = self._create_refinement_prompt(term, issue, context_index)
         response = self.llm_client.generate_structured(prompt, RefinementResponse)
 
-        # Create a new term with updated values
-        refined_term = Term(
+        return Term(
             name=term.name,
             definition=response.refined_definition,
-            occurrences=term.occurrences,  # Preserve occurrences
+            occurrences=term.occurrences,
             confidence=response.confidence,
         )
-
-        return refined_term
 
     def _create_refinement_prompt(
         self,
         term: Term,
         issue: GlossaryIssue,
-        documents: list[Document],
+        context_index: dict[str, list[str]],
     ) -> str:
         """Create the prompt for term refinement.
 
         Args:
             term: The term to refine.
             issue: The issue to address.
-            documents: List of documents for additional context.
+            context_index: Pre-built index of term contexts.
 
         Returns:
             The formatted prompt string.
         """
-        # Extract relevant context from documents
-        additional_context = self._extract_context(term.name, documents)
+        additional_context = self._extract_context(term.name, context_index)
 
-        prompt = f"""用語: {term.name}
+        return f"""用語: {term.name}
 現在の定義: {term.definition}
 問題点: {issue.description}
 問題タイプ: {issue.issue_type}
@@ -143,29 +166,33 @@ class GlossaryRefiner:
 JSON形式で回答してください:
 {{"refined_definition": "改善された定義", "confidence": 0.0-1.0}}"""
 
-        return prompt
-
-    def _extract_context(self, term_name: str, documents: list[Document]) -> str:
-        """Extract relevant context for a term from documents.
+    def _extract_context(
+        self, term_name: str, context_index: dict[str, list[str]]
+    ) -> str:
+        """Extract relevant context for a term from the pre-built index.
 
         Args:
             term_name: The term to find context for.
-            documents: List of documents to search.
+            context_index: Pre-built index of term contexts.
 
         Returns:
             Formatted context string.
         """
-        contexts: list[str] = []
+        # Search for contexts containing the term (case-insensitive)
+        term_lower = term_name.lower()
+        matching_contexts: list[str] = []
 
-        # Escape special regex characters
-        escaped_term = re.escape(term_name)
+        # Check each word in the term name
+        term_words = re.findall(r"\w+", term_name)
+        for word in term_words:
+            word_lower = word.lower()
+            if word_lower in context_index:
+                for context in context_index[word_lower]:
+                    # Verify the full term appears in the context
+                    if re.search(re.escape(term_name), context, re.IGNORECASE):
+                        if context not in matching_contexts:
+                            matching_contexts.append(context)
 
-        for doc in documents:
-            for line_num, line in enumerate(doc.lines, start=1):
-                if re.search(escaped_term, line, re.IGNORECASE):
-                    contexts.append(f"- [{doc.file_path}:{line_num}] {line.strip()}")
-
-        if contexts:
-            return "\n".join(contexts[:5])  # Limit to 5 contexts
-        else:
-            return "(追加のコンテキストはありません)"
+        if matching_contexts:
+            return "\n".join(matching_contexts[:5])
+        return "(追加のコンテキストはありません)"
