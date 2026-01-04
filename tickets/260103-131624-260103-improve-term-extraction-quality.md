@@ -80,18 +80,18 @@ closed_at: null   # Do not modify manually
 
 ### Phase 3: 検証・調整
 - [x] `analyze-terms`コマンドで検証（包含フィルタリング結果・分類結果の出力を追加）
-- [ ] 結果評価と調整
+- [x] 結果評価と調整（バッチ分類・進捗表示・プロンプト最適化）
 
 ### 完了条件
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 ## 成功基準
 
-- [ ] 包含関係にある重複用語が除去される
-- [ ] 固有名詞・組織名（"エデルト軍", "アソリウス島騎士団"など）が承認される
-- [ ] 一般名詞（"未亡人", "行方不明"など）が除外される
+- [x] 包含関係にある重複用語が除去される
+- [x] 固有名詞・組織名（"エデルト軍", "アソリウス島騎士団"など）が承認される
+- [x] 一般名詞（"未亡人", "行方不明"など）が除外される
 
 ## 修正対象ファイル
 
