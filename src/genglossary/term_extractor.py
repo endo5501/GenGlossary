@@ -12,6 +12,27 @@ from genglossary.morphological_analyzer import MorphologicalAnalyzer
 # Type alias for progress callback: (current_batch, total_batches) -> None
 ProgressCallback = Callable[[int, int], None]
 
+# Category definitions for LLM prompts - used across all classification prompts
+CATEGORY_DEFINITIONS = """## カテゴリ定義
+
+1. **person_name（人名）**: 架空・実在の人物名
+   例: ガウス卿、田中太郎、アリス
+
+2. **place_name（地名）**: 国名、都市名、地域名、場所の名前
+   例: エデルト、アソリウス島、東京
+
+3. **organization（組織・団体名）**: 騎士団、軍隊、企業、団体など
+   例: アソリウス島騎士団、エデルト軍、近衛騎士団
+
+4. **title（役職・称号）**: 王子、騎士団長、将軍などの役職や称号
+   例: 騎士団長、騎士代理爵位、将軍
+
+5. **technical_term（技術用語・専門用語）**: この文脈特有の専門用語
+   例: 聖印、魔神討伐、魔神代理領
+
+6. **common_noun（一般名詞）**: 辞書的意味で理解できる一般的な名詞
+   例: 未亡人、行方不明、方角、重要"""
+
 
 class TermJudgmentResponse(BaseModel):
     """Response model for term judgment by LLM."""
@@ -100,6 +121,28 @@ class TermExtractor:
         self.llm_client = llm_client
         self._morphological_analyzer = MorphologicalAnalyzer()
 
+    def _filter_empty_documents(self, documents: list[Document]) -> list[Document]:
+        """Filter out empty or whitespace-only documents.
+
+        Args:
+            documents: List of documents to filter.
+
+        Returns:
+            List of non-empty documents.
+        """
+        return [doc for doc in documents if doc.content and doc.content.strip()]
+
+    def _combine_document_content(self, documents: list[Document]) -> str:
+        """Combine document content for use in prompts.
+
+        Args:
+            documents: List of documents to combine.
+
+        Returns:
+            Combined content separated by document separators.
+        """
+        return "\n\n---\n\n".join(doc.content for doc in documents)
+
     def extract_terms(self, documents: list[Document]) -> list[str]:
         """Extract terms from the given documents.
 
@@ -113,17 +156,12 @@ class TermExtractor:
         Returns:
             A list of unique approved terms.
         """
-        # Filter out empty or whitespace-only documents
-        non_empty_docs = [
-            doc for doc in documents if doc.content and doc.content.strip()
-        ]
-
+        non_empty_docs = self._filter_empty_documents(documents)
         if not non_empty_docs:
             return []
 
         # Step 1: Extract proper nouns using morphological analysis
         candidates = self._extract_candidates(non_empty_docs)
-
         if not candidates:
             return []
 
@@ -158,27 +196,29 @@ class TermExtractor:
             TermExtractionAnalysis with candidates, approved, rejected terms,
             filter counts, and classification results.
         """
-        # Filter out empty or whitespace-only documents
-        non_empty_docs = [
-            doc for doc in documents if doc.content and doc.content.strip()
-        ]
+        non_empty_docs = self._filter_empty_documents(documents)
+
+        # Create empty analysis result for empty documents
+        empty_analysis = TermExtractionAnalysis(
+            sudachi_candidates=[],
+            llm_approved=[],
+            llm_rejected=[],
+            pre_filter_candidate_count=0,
+            post_filter_candidate_count=0,
+            classification_results={},
+        )
 
         if not non_empty_docs:
-            return TermExtractionAnalysis(
-                sudachi_candidates=[],
-                llm_approved=[],
-                llm_rejected=[],
-                pre_filter_candidate_count=0,
-                post_filter_candidate_count=0,
-                classification_results={},
-            )
+            return empty_analysis
 
         # Step 1a: Extract candidates WITHOUT filter to get pre-filter count
-        pre_filter_candidates = self._extract_candidates_raw(non_empty_docs)
+        pre_filter_candidates = self._extract_candidates(
+            non_empty_docs, filter_contained=False
+        )
         pre_filter_count = len(pre_filter_candidates)
 
         # Step 1b: Extract candidates WITH filter to get post-filter count
-        candidates = self._extract_candidates(non_empty_docs)
+        candidates = self._extract_candidates(non_empty_docs, filter_contained=True)
         post_filter_count = len(candidates)
 
         if not candidates:
@@ -215,17 +255,20 @@ class TermExtractor:
             classification_results=classification.classified_terms,
         )
 
-    def _extract_candidates(self, documents: list[Document]) -> list[str]:
+    def _extract_candidates(
+        self, documents: list[Document], filter_contained: bool = True
+    ) -> list[str]:
         """Extract candidate terms using morphological analysis.
 
         Uses enhanced extraction with:
         - Compound noun extraction (e.g., 騎士団長, アソリウス島騎士団)
         - Common noun inclusion (e.g., 聖印, 魔神討伐)
         - Minimum length filtering (2 characters to keep common proper nouns)
-        - Contained term filtering (removes redundant substring terms)
+        - Optional contained term filtering (removes redundant substring terms)
 
         Args:
             documents: List of documents to analyze.
+            filter_contained: Whether to filter out contained terms (default: True).
 
         Returns:
             List of unique candidate terms.
@@ -236,43 +279,13 @@ class TermExtractor:
         for doc in documents:
             # Use enhanced extraction parameters
             # min_length=2 keeps common Japanese proper nouns (東京, 日本, etc.)
-            # filter_contained=True removes redundant compound noun variants
+            # filter_contained removes redundant compound noun variants when enabled
             terms = self._morphological_analyzer.extract_proper_nouns(
                 doc.content,
                 extract_compound_nouns=True,
                 include_common_nouns=True,
                 min_length=2,
-                filter_contained=True,
-            )
-            for term in terms:
-                if term not in seen:
-                    candidates.append(term)
-                    seen.add(term)
-
-        return candidates
-
-    def _extract_candidates_raw(self, documents: list[Document]) -> list[str]:
-        """Extract candidate terms WITHOUT contained term filtering.
-
-        Used for analysis to show pre-filter candidate count.
-
-        Args:
-            documents: List of documents to analyze.
-
-        Returns:
-            List of unique candidate terms (before filtering).
-        """
-        candidates: list[str] = []
-        seen: set[str] = set()
-
-        for doc in documents:
-            # Same parameters as _extract_candidates but filter_contained=False
-            terms = self._morphological_analyzer.extract_proper_nouns(
-                doc.content,
-                extract_compound_nouns=True,
-                include_common_nouns=True,
-                min_length=2,
-                filter_contained=False,
+                filter_contained=filter_contained,
             )
             for term in terms:
                 if term not in seen:
@@ -294,7 +307,7 @@ class TermExtractor:
             The formatted prompt string.
         """
         candidates_text = ", ".join(candidates)
-        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+        combined_content = self._combine_document_content(documents)
 
         prompt = f"""あなたは用語集作成の専門家です。
 形態素解析により以下の用語候補が抽出されました。
@@ -360,6 +373,23 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
 
         return result
 
+    def _process_batch_response(
+        self,
+        response: BatchTermClassificationResponse,
+        classified: dict[str, list[str]],
+    ) -> None:
+        """Process and aggregate classifications from a batch response.
+
+        Args:
+            response: Batch classification response from LLM.
+            classified: Dictionary to accumulate classifications.
+        """
+        for item in response.classifications:
+            term = item.get("term", "")
+            category = item.get("category", "")
+            if category in classified and term:
+                classified[category].append(term)
+
     def _classify_terms(
         self,
         candidates: list[str],
@@ -405,11 +435,7 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
             )
 
             # Aggregate classifications from batch response
-            for item in response.classifications:
-                term = item.get("term", "")
-                category = item.get("category", "")
-                if category in classified and term:
-                    classified[category].append(term)
+            self._process_batch_response(response, classified)
 
             # Call progress callback if provided
             if progress_callback is not None:
@@ -430,7 +456,7 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
             The formatted prompt string.
         """
         candidates_text = ", ".join(candidates)
-        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+        combined_content = self._combine_document_content(documents)
 
         prompt = f"""あなたは用語分類の専門家です。
 以下の用語候補を6つのカテゴリに分類してください。
@@ -438,25 +464,7 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
 ## 候補用語:
 {candidates_text}
 
-## カテゴリ定義
-
-1. **person_name（人名）**: 架空・実在の人物名
-   例: ガウス卿、田中太郎、アリス
-
-2. **place_name（地名）**: 国名、都市名、地域名、場所の名前
-   例: エデルト、アソリウス島、東京
-
-3. **organization（組織・団体名）**: 騎士団、軍隊、企業、団体など
-   例: アソリウス島騎士団、エデルト軍、近衛騎士団
-
-4. **title（役職・称号）**: 王子、騎士団長、将軍などの役職や称号
-   例: 騎士団長、騎士代理爵位、将軍
-
-5. **technical_term（技術用語・専門用語）**: この文脈特有の専門用語
-   例: 聖印、魔神討伐、魔神代理領
-
-6. **common_noun（一般名詞）**: 辞書的意味で理解できる一般的な名詞
-   例: 未亡人、行方不明、方角、重要
+{CATEGORY_DEFINITIONS}
 
 ## ドキュメントのコンテキスト:
 {combined_content}
@@ -494,7 +502,7 @@ JSON形式で回答してください:
         Returns:
             The formatted prompt string.
         """
-        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+        combined_content = self._combine_document_content(documents)
 
         prompt = f"""あなたは用語分類の専門家です。
 以下の用語を1つのカテゴリに分類してください。
@@ -502,25 +510,7 @@ JSON形式で回答してください:
 ## 分類対象の用語:
 {term}
 
-## カテゴリ定義
-
-1. **person_name（人名）**: 架空・実在の人物名
-   例: ガウス卿、田中太郎、アリス
-
-2. **place_name（地名）**: 国名、都市名、地域名、場所の名前
-   例: エデルト、アソリウス島、東京
-
-3. **organization（組織・団体名）**: 騎士団、軍隊、企業、団体など
-   例: アソリウス島騎士団、エデルト軍、近衛騎士団
-
-4. **title（役職・称号）**: 王子、騎士団長、将軍などの役職や称号
-   例: 騎士団長、騎士代理爵位、将軍
-
-5. **technical_term（技術用語・専門用語）**: この文脈特有の専門用語
-   例: 聖印、魔神討伐、魔神代理領
-
-6. **common_noun（一般名詞）**: 辞書的意味で理解できる一般的な名詞
-   例: 未亡人、行方不明、方角、重要
+{CATEGORY_DEFINITIONS}
 
 ## 注意事項
 - 用語集に載せるべきかどうかを基準に判断してください
@@ -546,7 +536,7 @@ JSON形式で回答してください:
             The formatted prompt string.
         """
         terms_text = "\n".join(f"- {term}" for term in terms)
-        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+        combined_content = self._combine_document_content(documents)
 
         prompt = f"""あなたは用語分類の専門家です。
 以下の用語を各々1つのカテゴリに分類してください。
@@ -554,25 +544,7 @@ JSON形式で回答してください:
 ## 分類対象の用語:
 {terms_text}
 
-## カテゴリ定義
-
-1. **person_name（人名）**: 架空・実在の人物名
-   例: ガウス卿、田中太郎、アリス
-
-2. **place_name（地名）**: 国名、都市名、地域名、場所の名前
-   例: エデルト、アソリウス島、東京
-
-3. **organization（組織・団体名）**: 騎士団、軍隊、企業、団体など
-   例: アソリウス島騎士団、エデルト軍、近衛騎士団
-
-4. **title（役職・称号）**: 王子、騎士団長、将軍などの役職や称号
-   例: 騎士団長、騎士代理爵位、将軍
-
-5. **technical_term（技術用語・専門用語）**: この文脈特有の専門用語
-   例: 聖印、魔神討伐、魔神代理領
-
-6. **common_noun（一般名詞）**: 辞書的意味で理解できる一般的な名詞
-   例: 未亡人、行方不明、方角、重要
+{CATEGORY_DEFINITIONS}
 
 ## 注意事項
 - 各用語を必ず1つのカテゴリに分類してください
@@ -630,7 +602,7 @@ JSON形式で回答してください:
         Returns:
             The formatted prompt string.
         """
-        combined_content = "\n\n---\n\n".join(doc.content for doc in documents)
+        combined_content = self._combine_document_content(documents)
 
         # Format classified terms for context
         classification_text = ""
