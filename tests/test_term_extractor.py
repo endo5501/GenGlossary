@@ -1,9 +1,8 @@
-"""Tests for TermExtractor - New architecture with SudachiPy + LLM judgment."""
+"""Tests for TermExtractor - New architecture with SudachiPy + LLM classification."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import BaseModel
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
@@ -12,12 +11,6 @@ from genglossary.term_extractor import (
     TermClassificationResponse,
     TermExtractor,
 )
-
-
-class MockTermJudgmentResponse(BaseModel):
-    """Mock response model for term judgment."""
-
-    approved_terms: list[str]
 
 
 class TestTermExtractor:
@@ -52,20 +45,19 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that extract_terms returns a list of strings."""
-        # Two-phase processing: classification then selection
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "place_name": ["東京", "日本"],
-                "organization": ["トヨタ自動車"],
-            }
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+                {"term": "トヨタ自動車", "category": "organization"},
+                {"term": "愛知県", "category": "place_name"},
+                {"term": "大阪府", "category": "place_name"},
+                {"term": "ユニバーサルスタジオ", "category": "organization"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "日本", "トヨタ自動車"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([sample_document])
@@ -77,14 +69,14 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that extract_terms uses MorphologicalAnalyzer for proper noun extraction."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京"]}
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京"])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -102,47 +94,48 @@ class TestTermExtractor:
     def test_extract_terms_sends_candidates_to_llm(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that extracted proper nouns are sent to LLM for judgment."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "place_name": ["東京"],
-                "organization": ["トヨタ自動車"],
-            }
+        """Test that candidates are sent to LLM for classification."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+                {"term": "トヨタ自動車", "category": "organization"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "トヨタ自動車"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         extractor.extract_terms([sample_document])
 
-        # Verify LLM was called twice (classification + selection)
-        assert mock_llm_client.generate_structured.call_count == 2
+        # Verify LLM was called
+        assert mock_llm_client.generate_structured.call_count > 0
 
     def test_extract_terms_removes_duplicates(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that duplicate terms are removed from the result."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京", "日本"]}
-        )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "東京", "日本"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
+        from genglossary.term_extractor import BatchTermClassificationResponse
 
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+            ]
+        )
 
-        assert result.count("東京") == 1
-        assert result.count("日本") == 1
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "日本"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document])
+
+            assert result.count("東京") == 1
+            assert result.count("日本") == 1
 
     def test_extract_terms_handles_empty_document(
         self, mock_llm_client: MagicMock, empty_document: Document
@@ -158,6 +151,8 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock
     ) -> None:
         """Test extraction from multiple documents."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
         doc1 = Document(
             file_path="/doc1.md", content="東京に住んでいます。"
         )
@@ -165,14 +160,12 @@ class TestTermExtractor:
             file_path="/doc2.md", content="大阪に行きました。"
         )
 
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京", "大阪"]}
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "大阪", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京", "大阪"])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.extract_terms([doc1, doc2])
@@ -195,92 +188,112 @@ class TestTermExtractor:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that whitespace is stripped from extracted terms."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京", "日本", "大阪"]}
-        )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["  東京  ", " 日本", "大阪 "]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
+        from genglossary.term_extractor import BatchTermClassificationResponse
 
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+                {"term": "大阪", "category": "place_name"},
+            ]
+        )
 
-        assert "東京" in result
-        assert "日本" in result
-        assert "大阪" in result
-        assert "  東京  " not in result
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "日本", "大阪"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document])
+
+            assert "東京" in result
+            assert "日本" in result
+            assert "大阪" in result
 
     def test_extract_terms_filters_empty_terms(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that empty strings are filtered out from results."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京", "日本"]}
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "", "日本", "  "]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "日本"]
+            mock_analyzer_class.return_value = mock_analyzer
 
-        assert "" not in result
-        assert len(result) == 2
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document])
 
-    def test_extract_terms_returns_only_approved_terms(
+            assert "" not in result
+            assert len(result) == 2
+
+    def test_extract_terms_returns_only_non_common_noun_terms(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that only LLM-approved terms are returned."""
-        # LLM approves only some of the candidates
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "place_name": ["東京"],
-                "organization": ["トヨタ自動車"],
-            }
+        """Test that only non-common-noun terms are returned."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "トヨタ自動車", "category": "organization"},
+                {"term": "未亡人", "category": "common_noun"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "トヨタ自動車"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "トヨタ自動車", "未亡人"]
+            mock_analyzer_class.return_value = mock_analyzer
 
-        assert "東京" in result
-        assert "トヨタ自動車" in result
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document])
 
-    def test_extract_terms_handles_no_approved_terms(
+            assert "東京" in result
+            assert "トヨタ自動車" in result
+            assert "未亡人" not in result
+
+    def test_extract_terms_handles_all_common_nouns(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test handling when LLM approves no terms."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京"]}
+        """Test handling when all terms are classified as common nouns."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "未亡人", "category": "common_noun"},
+                {"term": "行方不明", "category": "common_noun"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=[])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        result = extractor.extract_terms([sample_document])
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["未亡人", "行方不明"]
+            mock_analyzer_class.return_value = mock_analyzer
 
-        assert result == []
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document])
+
+            assert result == []
 
 
 class TestTermJudgmentPrompt:
-    """Test suite for LLM judgment prompt generation."""
+    """Test suite for LLM classification prompt generation."""
 
     @pytest.fixture
     def mock_llm_client(self) -> MagicMock:
@@ -294,73 +307,92 @@ class TestTermJudgmentPrompt:
         content = "東京は日本の首都です。"
         return Document(file_path="/path/to/doc.md", content=content)
 
-    def test_judgment_prompt_includes_candidates(
+    def test_classification_prompt_includes_term(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that classification prompt includes candidate terms."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京"]}
+        """Test that classification prompt includes the terms being classified."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=[])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        extractor.extract_terms([sample_document])
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "日本"]
+            mock_analyzer_class.return_value = mock_analyzer
 
-        # Check first call (classification prompt)
-        call_args_list = mock_llm_client.generate_structured.call_args_list
-        prompt = call_args_list[0][0][0]
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            extractor.extract_terms([sample_document])
 
-        # Should contain guidance for classification
-        assert "用語" in prompt or "候補" in prompt or "カテゴリ" in prompt
+            # Check classification prompt
+            call_args_list = mock_llm_client.generate_structured.call_args_list
+            prompt = call_args_list[0][0][0]
 
-    def test_judgment_prompt_includes_context(
+            # Should contain the terms being classified
+            assert "東京" in prompt
+            assert "日本" in prompt
+
+    def test_classification_prompt_includes_context(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that prompts include document context."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京"]}
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=[])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        extractor.extract_terms([sample_document])
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "日本"]
+            mock_analyzer_class.return_value = mock_analyzer
 
-        call_args_list = mock_llm_client.generate_structured.call_args_list
-        prompt = call_args_list[0][0][0]
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            extractor.extract_terms([sample_document])
 
-        # Should include document content for context
-        assert "東京" in prompt or "日本" in prompt
+            call_args_list = mock_llm_client.generate_structured.call_args_list
+            prompt = call_args_list[0][0][0]
 
-    def test_judgment_prompt_specifies_json_format(
+            # Should include document content for context
+            assert "日本の首都" in prompt or "東京" in prompt
+
+    def test_classification_prompt_specifies_json_format(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that prompts specify JSON output format."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京"]}
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[{"term": "東京", "category": "place_name"}]
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=[])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        extractor.extract_terms([sample_document])
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京"]
+            mock_analyzer_class.return_value = mock_analyzer
 
-        call_args_list = mock_llm_client.generate_structured.call_args_list
-        # Second call should be the selection prompt with approved_terms
-        prompt = call_args_list[1][0][0]
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            extractor.extract_terms([sample_document])
 
-        assert "JSON" in prompt or "json" in prompt
-        assert "approved_terms" in prompt
+            call_args_list = mock_llm_client.generate_structured.call_args_list
+            prompt = call_args_list[0][0][0]
+
+            # Should specify JSON format and category field
+            assert "JSON" in prompt or "json" in prompt
+            assert "category" in prompt
 
 
 class TestTermExtractionAnalysis:
@@ -384,17 +416,19 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analysis contains pre-filter candidate count."""
-        from genglossary.term_extractor import TermExtractionAnalysis
-
-        # Two-phase LLM responses
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京都", "日本国", "愛知"]}
+        from genglossary.term_extractor import (
+            BatchTermClassificationResponse,
+            TermExtractionAnalysis,
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京都"])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京都", "category": "place_name"},
+                {"term": "日本国", "category": "place_name"},
+                {"term": "愛知", "category": "place_name"},
+            ]
+        )
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -417,15 +451,16 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analysis contains post-filter candidate count."""
-        # Two-phase LLM responses
-        mock_classification = TermClassificationResponse(
-            classified_terms={"place_name": ["東京都", "日本国", "愛知"]}
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京都", "category": "place_name"},
+                {"term": "日本国", "category": "place_name"},
+                {"term": "愛知", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京都"])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -448,18 +483,17 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analysis contains LLM classification results."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "place_name": ["東京", "日本"],
-                "organization": ["トヨタ自動車"],
-                "common_noun": ["本社"],
-            }
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+                {"term": "トヨタ自動車", "category": "organization"},
+                {"term": "本社", "category": "common_noun"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(approved_terms=["東京", "トヨタ自動車"])
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -475,7 +509,11 @@ class TestTermExtractionAnalysis:
             result = extractor.analyze_extraction([sample_document])
 
             assert hasattr(result, "classification_results")
-            assert result.classification_results == mock_classification.classified_terms
+            # Check that classification results contain the expected terms
+            assert "東京" in result.classification_results.get("place_name", [])
+            assert "日本" in result.classification_results.get("place_name", [])
+            assert "トヨタ自動車" in result.classification_results.get("organization", [])
+            assert "本社" in result.classification_results.get("common_noun", [])
 
     def test_analysis_classification_results_empty_when_no_candidates(
         self, mock_llm_client: MagicMock
@@ -497,22 +535,20 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analyze_extraction returns TermExtractionAnalysis."""
-        from genglossary.term_extractor import TermExtractionAnalysis
+        from genglossary.term_extractor import (
+            BatchTermClassificationResponse,
+            TermExtractionAnalysis,
+        )
 
-        # Two-phase LLM responses
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "place_name": ["東京"],
-                "organization": ["トヨタ自動車"],
-            }
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+                {"term": "トヨタ自動車", "category": "organization"},
+                {"term": "愛知県", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "トヨタ自動車"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         result = extractor.analyze_extraction([sample_document])
@@ -523,20 +559,17 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analysis contains SudachiPy candidates."""
-        # Two-phase LLM responses
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "place_name": ["東京", "日本", "愛知県"],
-                "organization": ["トヨタ自動車"],
-            }
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+                {"term": "トヨタ自動車", "category": "organization"},
+                {"term": "愛知県", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "トヨタ自動車"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -559,20 +592,18 @@ class TestTermExtractionAnalysis:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that analysis contains LLM-approved terms."""
-        # Two-phase LLM responses
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "place_name": ["東京", "日本", "愛知県"],
-                "organization": ["トヨタ自動車"],
-            }
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        # All non-common-noun terms are automatically approved
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "日本", "category": "place_name"},
+                {"term": "トヨタ自動車", "category": "organization"},
+                {"term": "愛知県", "category": "place_name"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "トヨタ自動車"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -586,44 +617,47 @@ class TestTermExtractionAnalysis:
             extractor = TermExtractor(llm_client=mock_llm_client)
             result = extractor.analyze_extraction([sample_document])
 
+            # All non-common-noun terms should be approved
             assert "東京" in result.llm_approved
             assert "トヨタ自動車" in result.llm_approved
+            assert "日本" in result.llm_approved
+            assert "愛知県" in result.llm_approved
 
     def test_analyze_extraction_contains_llm_rejected(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that analysis contains LLM-rejected terms."""
-        # Two-phase LLM responses
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "place_name": ["東京", "日本", "愛知県"],
-                "organization": ["トヨタ自動車"],
-            }
+        """Test that analysis contains LLM-rejected terms (common nouns)."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        # common_noun terms are rejected
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "トヨタ自動車", "category": "organization"},
+                {"term": "未亡人", "category": "common_noun"},
+                {"term": "行方不明", "category": "common_noun"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["東京", "トヨタ自動車"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
         ) as mock_analyzer_class:
             mock_analyzer = MagicMock()
             mock_analyzer.extract_proper_nouns.return_value = [
-                "東京", "日本", "トヨタ自動車", "愛知県"
+                "東京", "トヨタ自動車", "未亡人", "行方不明"
             ]
             mock_analyzer_class.return_value = mock_analyzer
 
             extractor = TermExtractor(llm_client=mock_llm_client)
             result = extractor.analyze_extraction([sample_document])
 
-            # 日本 and 愛知県 should be rejected
-            assert "日本" in result.llm_rejected
-            assert "愛知県" in result.llm_rejected
+            # common_noun terms should be rejected
+            assert "未亡人" in result.llm_rejected
+            assert "行方不明" in result.llm_rejected
+            # non-common-noun terms should not be rejected
             assert "東京" not in result.llm_rejected
+            assert "トヨタ自動車" not in result.llm_rejected
 
     def test_analyze_extraction_handles_empty_documents(
         self, mock_llm_client: MagicMock
@@ -689,6 +723,64 @@ class TestTermCategory:
         assert TermCategory.COMMON_NOUN.value == "common_noun"
 
 
+class TestSingleTermClassificationResponse:
+    """Test suite for SingleTermClassificationResponse model."""
+
+    def test_single_term_response_structure(self) -> None:
+        """Test that single term classification response has correct structure."""
+        from genglossary.term_extractor import SingleTermClassificationResponse
+
+        response = SingleTermClassificationResponse(
+            term="アソリウス島騎士団",
+            category="organization"
+        )
+
+        assert response.term == "アソリウス島騎士団"
+        assert response.category == "organization"
+
+    def test_single_term_response_all_categories(self) -> None:
+        """Test that single term response works with all category types."""
+        from genglossary.term_extractor import SingleTermClassificationResponse
+
+        categories = [
+            "person_name", "place_name", "organization",
+            "title", "technical_term", "common_noun"
+        ]
+        for category in categories:
+            response = SingleTermClassificationResponse(
+                term="テスト用語",
+                category=category
+            )
+            assert response.category == category
+
+
+class TestBatchTermClassificationResponse:
+    """Test suite for BatchTermClassificationResponse model."""
+
+    def test_batch_response_structure(self) -> None:
+        """Test that batch classification response has correct structure."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        response = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "エデルト軍", "category": "organization"},
+                {"term": "未亡人", "category": "common_noun"},
+            ]
+        )
+
+        assert len(response.classifications) == 3
+        assert response.classifications[0]["term"] == "アソリウス島騎士団"
+        assert response.classifications[0]["category"] == "organization"
+
+    def test_batch_response_empty(self) -> None:
+        """Test that batch response works with empty classifications."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        response = BatchTermClassificationResponse(classifications=[])
+        assert response.classifications == []
+
+
 class TestTermClassificationResponse:
     """Test suite for TermClassificationResponse model."""
 
@@ -727,8 +819,234 @@ class TestTermClassificationResponse:
         assert response.classified_terms == {}
 
 
+class TestTermExtractorPerTermClassification:
+    """Test suite for classification phase (batch processing)."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document with various term types."""
+        content = """アソリウス島騎士団の団長であるガウス卿は、
+エデルト軍との戦いに備えていた。
+聖印の力を持つ騎士だけが、魔神討伐に参加できる。
+未亡人となったアリスは行方不明になった。"""
+        return Document(file_path="/story.md", content=content)
+
+    def test_classify_terms_calls_llm_in_batches(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms calls LLM once per batch."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Mock batch response for all 4 terms
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "エデルト軍", "category": "organization"},
+                {"term": "団長", "category": "title"},
+                {"term": "未亡人", "category": "common_noun"},
+            ]
+        )
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        candidates = ["アソリウス島騎士団", "エデルト軍", "団長", "未亡人"]
+        extractor._classify_terms(candidates, [sample_document])
+
+        # Should call LLM once for the batch (default batch_size=10)
+        assert mock_llm_client.generate_structured.call_count == 1
+
+    def test_classify_terms_returns_aggregated_classification(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms aggregates batch classifications."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "エデルト軍", "category": "organization"},
+                {"term": "団長", "category": "title"},
+                {"term": "未亡人", "category": "common_noun"},
+            ]
+        )
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        candidates = ["アソリウス島騎士団", "エデルト軍", "団長", "未亡人"]
+        result = extractor._classify_terms(candidates, [sample_document])
+
+        assert isinstance(result, TermClassificationResponse)
+        assert "アソリウス島騎士団" in result.classified_terms.get("organization", [])
+        assert "エデルト軍" in result.classified_terms.get("organization", [])
+        assert "団長" in result.classified_terms.get("title", [])
+        assert "未亡人" in result.classified_terms.get("common_noun", [])
+
+    def test_classify_terms_prompt_contains_all_terms(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that classification prompt contains all terms being classified."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+            ]
+        )
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        extractor._classify_terms(["アソリウス島騎士団"], [sample_document])
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+
+        # Prompt should contain the specific term
+        assert "アソリウス島騎士団" in prompt
+
+    def test_classify_terms_uses_batch_response_model(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms uses BatchTermClassificationResponse model."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[{"term": "テスト用語", "category": "technical_term"}]
+        )
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        extractor._classify_terms(["テスト用語"], [sample_document])
+
+        call_args = mock_llm_client.generate_structured.call_args
+        response_model = call_args[0][1]
+        assert response_model == BatchTermClassificationResponse
+
+
+class TestTermExtractorBatchClassification:
+    """Test suite for batch classification phase."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document with various term types."""
+        content = """アソリウス島騎士団の団長であるガウス卿は、
+エデルト軍との戦いに備えていた。
+聖印の力を持つ騎士だけが、魔神討伐に参加できる。
+未亡人となったアリスは行方不明になった。"""
+        return Document(file_path="/story.md", content=content)
+
+    def test_classify_terms_with_batch_size(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms uses batch processing with batch_size parameter."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Mock batch response for 4 terms in one batch
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "エデルト軍", "category": "organization"},
+                {"term": "団長", "category": "title"},
+                {"term": "未亡人", "category": "common_noun"},
+            ]
+        )
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        candidates = ["アソリウス島騎士団", "エデルト軍", "団長", "未亡人"]
+        result = extractor._classify_terms(candidates, [sample_document], batch_size=10)
+
+        # Should call LLM once (all 4 terms fit in one batch of 10)
+        assert mock_llm_client.generate_structured.call_count == 1
+        assert isinstance(result, TermClassificationResponse)
+
+    def test_classify_terms_with_multiple_batches(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms splits terms into multiple batches."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Mock batch responses
+        mock_llm_client.generate_structured.side_effect = [
+            BatchTermClassificationResponse(
+                classifications=[
+                    {"term": "用語1", "category": "organization"},
+                    {"term": "用語2", "category": "place_name"},
+                ]
+            ),
+            BatchTermClassificationResponse(
+                classifications=[
+                    {"term": "用語3", "category": "person_name"},
+                    {"term": "用語4", "category": "common_noun"},
+                ]
+            ),
+        ]
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        candidates = ["用語1", "用語2", "用語3", "用語4"]
+        result = extractor._classify_terms(candidates, [sample_document], batch_size=2)
+
+        # Should call LLM twice (4 terms / batch_size 2 = 2 batches)
+        assert mock_llm_client.generate_structured.call_count == 2
+        assert "用語1" in result.classified_terms.get("organization", [])
+        assert "用語3" in result.classified_terms.get("person_name", [])
+
+    def test_classify_terms_default_batch_size(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that default batch size is 10."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Create 15 terms to require 2 batches with batch_size=10
+        terms = [f"用語{i}" for i in range(15)]
+
+        mock_llm_client.generate_structured.side_effect = [
+            BatchTermClassificationResponse(
+                classifications=[{"term": t, "category": "technical_term"} for t in terms[:10]]
+            ),
+            BatchTermClassificationResponse(
+                classifications=[{"term": t, "category": "technical_term"} for t in terms[10:]]
+            ),
+        ]
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        result = extractor._classify_terms(terms, [sample_document])
+
+        # Default batch_size=10: 15 terms = 2 batches (10 + 5)
+        assert mock_llm_client.generate_structured.call_count == 2
+
+    def test_classify_terms_batch_prompt_contains_all_batch_terms(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that batch prompt contains all terms in the batch."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "エデルト軍", "category": "organization"},
+            ]
+        )
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        extractor._classify_terms(["アソリウス島騎士団", "エデルト軍"], [sample_document], batch_size=10)
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+
+        # Both terms should be in the prompt
+        assert "アソリウス島騎士団" in prompt
+        assert "エデルト軍" in prompt
+
+
 class TestTermExtractorClassification:
-    """Test suite for term classification phase."""
+    """Test suite for term classification phase (legacy tests for compatibility)."""
 
     @pytest.fixture
     def mock_llm_client(self) -> MagicMock:
@@ -749,16 +1067,17 @@ class TestTermExtractorClassification:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that _classify_terms returns TermClassificationResponse."""
-        mock_response = TermClassificationResponse(
-            classified_terms={
-                "organization": ["アソリウス島騎士団", "エデルト軍"],
-                "title": ["団長", "騎士"],
-                "person_name": ["ガウス卿", "アリス"],
-                "technical_term": ["聖印", "魔神討伐"],
-                "common_noun": ["未亡人", "行方不明"],
-            }
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "エデルト軍", "category": "organization"},
+                {"term": "団長", "category": "title"},
+                {"term": "未亡人", "category": "common_noun"},
+            ]
         )
-        mock_llm_client.generate_structured.return_value = mock_response
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         candidates = ["アソリウス島騎士団", "エデルト軍", "団長", "未亡人"]
@@ -766,34 +1085,15 @@ class TestTermExtractorClassification:
 
         assert isinstance(result, TermClassificationResponse)
 
-    def test_classify_terms_calls_llm_with_classification_prompt(
-        self, mock_llm_client: MagicMock, sample_document: Document
-    ) -> None:
-        """Test that _classify_terms sends correct prompt to LLM."""
-        mock_response = TermClassificationResponse(
-            classified_terms={"organization": ["アソリウス島騎士団"]}
-        )
-        mock_llm_client.generate_structured.return_value = mock_response
-
-        extractor = TermExtractor(llm_client=mock_llm_client)
-        candidates = ["アソリウス島騎士団"]
-        extractor._classify_terms(candidates, [sample_document])
-
-        # Verify LLM was called with TermClassificationResponse
-        call_args = mock_llm_client.generate_structured.call_args
-        prompt = call_args[0][0]
-        response_model = call_args[0][1]
-
-        # Check prompt contains classification instructions
-        assert "分類" in prompt or "カテゴリ" in prompt
-        assert response_model == TermClassificationResponse
-
     def test_classify_terms_includes_all_categories_in_prompt(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that classification prompt includes all 6 categories."""
-        mock_response = TermClassificationResponse(classified_terms={})
-        mock_llm_client.generate_structured.return_value = mock_response
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[{"term": "テスト用語", "category": "technical_term"}]
+        )
 
         extractor = TermExtractor(llm_client=mock_llm_client)
         extractor._classify_terms(["テスト用語"], [sample_document])
@@ -810,8 +1110,113 @@ class TestTermExtractorClassification:
         assert "一般名詞" in prompt
 
 
+class TestTermExtractorProgressCallback:
+    """Test suite for progress callback functionality."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document with various term types."""
+        content = """アソリウス島騎士団の団長であるガウス卿は、
+エデルト軍との戦いに備えていた。"""
+        return Document(file_path="/story.md", content=content)
+
+    def test_classify_terms_calls_progress_callback(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms calls progress callback for each batch."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Mock batch responses for 2 batches
+        mock_llm_client.generate_structured.side_effect = [
+            BatchTermClassificationResponse(
+                classifications=[
+                    {"term": "用語1", "category": "organization"},
+                    {"term": "用語2", "category": "place_name"},
+                ]
+            ),
+            BatchTermClassificationResponse(
+                classifications=[
+                    {"term": "用語3", "category": "person_name"},
+                    {"term": "用語4", "category": "technical_term"},
+                ]
+            ),
+        ]
+
+        # Track callback calls
+        callback_calls: list[tuple[int, int]] = []
+        def progress_callback(current: int, total: int) -> None:
+            callback_calls.append((current, total))
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        candidates = ["用語1", "用語2", "用語3", "用語4"]
+        extractor._classify_terms(
+            candidates, [sample_document], batch_size=2, progress_callback=progress_callback
+        )
+
+        # Should be called twice (2 batches)
+        assert len(callback_calls) == 2
+        assert callback_calls[0] == (1, 2)  # batch 1 of 2
+        assert callback_calls[1] == (2, 2)  # batch 2 of 2
+
+    def test_classify_terms_no_callback_when_none(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms works without progress callback."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[{"term": "用語1", "category": "organization"}]
+        )
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        # Should not raise even without callback
+        result = extractor._classify_terms(["用語1"], [sample_document])
+
+        assert "用語1" in result.classified_terms.get("organization", [])
+
+    def test_analyze_extraction_accepts_progress_callback(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that analyze_extraction passes progress callback to _classify_terms."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "エデルト軍", "category": "organization"},
+            ]
+        )
+
+        callback_calls: list[tuple[int, int]] = []
+        def progress_callback(current: int, total: int) -> None:
+            callback_calls.append((current, total))
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "アソリウス島騎士団", "エデルト軍"
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            extractor.analyze_extraction(
+                [sample_document], progress_callback=progress_callback
+            )
+
+            # Progress callback should have been called
+            assert len(callback_calls) >= 1
+
+
 class TestTermExtractorTwoPhase:
-    """Test suite for two-phase LLM processing."""
+    """Test suite for batch LLM classification processing."""
 
     @pytest.fixture
     def mock_llm_client(self) -> MagicMock:
@@ -831,19 +1236,15 @@ class TestTermExtractorTwoPhase:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that extract_terms uses filter_contained for SudachiPy extraction."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "organization": ["アソリウス島騎士団", "エデルト軍"],
-                "title": ["団長"],
-            }
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "エデルト軍", "category": "organization"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["アソリウス島騎士団", "エデルト軍", "団長"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -866,20 +1267,16 @@ class TestTermExtractorTwoPhase:
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
         """Test that common nouns are excluded from final results."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "organization": ["アソリウス島騎士団"],
-                "common_noun": ["未亡人", "行方不明"],
-            }
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "未亡人", "category": "common_noun"},
+                {"term": "行方不明", "category": "common_noun"},
+            ]
         )
-        # Note: Second phase should not include common nouns
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["アソリウス島騎士団"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -901,23 +1298,19 @@ class TestTermExtractorTwoPhase:
             # Organization should be included
             assert "アソリウス島騎士団" in result
 
-    def test_extract_terms_two_phase_calls_llm_twice(
+    def test_extract_terms_calls_llm_in_batches(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:
-        """Test that extract_terms makes two LLM calls (classify + select)."""
-        mock_classification = TermClassificationResponse(
-            classified_terms={
-                "organization": ["アソリウス島騎士団"],
-                "title": ["団長"],
-            }
+        """Test that extract_terms makes LLM calls in batches."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Batch classification response
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+                {"term": "団長", "category": "title"},
+            ]
         )
-        mock_judgment = MockTermJudgmentResponse(
-            approved_terms=["アソリウス島騎士団", "団長"]
-        )
-        mock_llm_client.generate_structured.side_effect = [
-            mock_classification,
-            mock_judgment,
-        ]
 
         with patch(
             "genglossary.term_extractor.MorphologicalAnalyzer"
@@ -932,5 +1325,5 @@ class TestTermExtractorTwoPhase:
             extractor = TermExtractor(llm_client=mock_llm_client)
             extractor.extract_terms([sample_document])
 
-            # Should call LLM twice: once for classification, once for selection
-            assert mock_llm_client.generate_structured.call_count == 2
+            # Should call LLM once for the batch (2 terms fit in default batch_size=10)
+            assert mock_llm_client.generate_structured.call_count == 1

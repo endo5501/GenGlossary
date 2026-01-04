@@ -79,7 +79,7 @@ closed_at: null   # Do not modify manually
 - [x] `TermExtractor` リファクタリング
 
 ### Phase 3: 検証・調整
-- [ ] `analyze-terms`コマンドで検証
+- [x] `analyze-terms`コマンドで検証（包含フィルタリング結果・分類結果の出力を追加）
 - [ ] 結果評価と調整
 
 ### 完了条件
