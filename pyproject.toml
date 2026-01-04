@@ -44,5 +44,6 @@ typeCheckingMode = "basic"
 
 [dependency-groups]
 dev = [
+    "debugpy>=1.8.19",
     "respx>=0.21.0",
 ]
