@@ -24,6 +24,14 @@ class GlossaryGenerator:
     generating definitions for terms using context from documents.
     """
 
+    # Unicode ranges for CJK character detection
+    CJK_RANGES = [
+        ("\u4e00", "\u9fff"),  # CJK Unified Ideographs
+        ("\u3040", "\u309f"),  # Hiragana
+        ("\u30a0", "\u30ff"),  # Katakana
+        ("\uac00", "\ud7af"),  # Korean Hangul
+    ]
+
     def __init__(self, llm_client: BaseLLMClient) -> None:
         """Initialize the GlossaryGenerator.
 
@@ -75,6 +83,47 @@ class GlossaryGenerator:
 
         return glossary
 
+    def _build_search_pattern(self, term: str) -> re.Pattern:
+        """Build a regex pattern for searching a term.
+
+        For CJK characters, uses simple matching without word boundaries.
+        For ASCII terms, uses lookahead/lookbehind for word boundaries.
+
+        Args:
+            term: The term to build a pattern for.
+
+        Returns:
+            Compiled regex pattern.
+        """
+        escaped_term = re.escape(term)
+
+        if self._contains_cjk(term):
+            return re.compile(escaped_term)
+
+        # For ASCII terms, match if not preceded/followed by ASCII word characters
+        return re.compile(rf"(?<![a-zA-Z0-9_]){escaped_term}(?![a-zA-Z0-9_])")
+
+    def _create_occurrence(
+        self, doc: Document, line_num: int
+    ) -> TermOccurrence:
+        """Create a TermOccurrence with context from a document.
+
+        Args:
+            doc: The document containing the occurrence.
+            line_num: The line number where the term occurs.
+
+        Returns:
+            A TermOccurrence object with context.
+        """
+        context_lines = doc.get_context(line_num, context_lines=1)
+        context = "\n".join(context_lines)
+
+        return TermOccurrence(
+            document_path=doc.file_path,
+            line_number=line_num,
+            context=context,
+        )
+
     def _find_term_occurrences(
         self, term: str, documents: list[Document]
     ) -> list[TermOccurrence]:
@@ -89,37 +138,13 @@ class GlossaryGenerator:
         Returns:
             List of TermOccurrence objects.
         """
+        pattern = self._build_search_pattern(term)
         occurrences: list[TermOccurrence] = []
-
-        # Escape special regex characters in the term
-        escaped_term = re.escape(term)
-
-        # Create pattern with word boundaries
-        # For Japanese/CJK characters, we need different handling
-        if self._contains_cjk(term):
-            # For CJK characters, don't use word boundaries
-            pattern = re.compile(escaped_term)
-        else:
-            # For ASCII terms, use lookahead/lookbehind for word boundaries
-            # This works better with mixed Japanese/English text
-            # Match if not preceded/followed by ASCII word characters
-            pattern = re.compile(
-                rf"(?<![a-zA-Z0-9_]){escaped_term}(?![a-zA-Z0-9_])"
-            )
 
         for doc in documents:
             for line_num, line in enumerate(doc.lines, start=1):
                 if pattern.search(line):
-                    # Get context (the line itself and surrounding context)
-                    context_lines = doc.get_context(line_num, context_lines=1)
-                    context = "\n".join(context_lines)
-
-                    occurrence = TermOccurrence(
-                        document_path=doc.file_path,
-                        line_number=line_num,
-                        context=context,
-                    )
-                    occurrences.append(occurrence)
+                    occurrences.append(self._create_occurrence(doc, line_num))
 
         return occurrences
 
@@ -132,17 +157,11 @@ class GlossaryGenerator:
         Returns:
             True if the text contains CJK characters.
         """
-        for char in text:
-            # CJK Unified Ideographs and common ranges
-            if "\u4e00" <= char <= "\u9fff":  # CJK Unified Ideographs
-                return True
-            if "\u3040" <= char <= "\u309f":  # Hiragana
-                return True
-            if "\u30a0" <= char <= "\u30ff":  # Katakana
-                return True
-            if "\uac00" <= char <= "\ud7af":  # Korean Hangul
-                return True
-        return False
+        return any(
+            start <= char <= end
+            for char in text
+            for start, end in self.CJK_RANGES
+        )
 
     def _generate_definition(
         self, term: str, occurrences: list[TermOccurrence]
