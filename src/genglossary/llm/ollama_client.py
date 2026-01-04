@@ -77,49 +77,58 @@ class OllamaClient(BaseLLMClient):
             ValueError: If JSON parsing or validation fails after all retries.
             httpx.HTTPError: If the request fails after all retries.
         """
-        # Add JSON instruction to prompt
         json_prompt = f"{prompt}\n\nPlease respond in valid JSON format matching this structure: {response_model.model_json_schema()}"
-
         url = f"{self.base_url}/api/generate"
-        payload = {
-            "model": self.model,
-            "prompt": json_prompt,
-            "stream": False
-        }
+        payload = {"model": self.model, "prompt": json_prompt, "stream": False}
 
         last_error = None
+        response_text = ""
 
-        # Retry JSON parsing up to max_json_retries times
         for attempt in range(max_json_retries):
             response = self._request_with_retry(url, payload)
             response_text = response.json()["response"]
 
-            # Try to parse JSON directly
-            try:
-                data = json.loads(response_text)
-                return response_model(**data)
-            except (json.JSONDecodeError, ValidationError) as e:
-                # Fallback: extract JSON using regex
-                json_match = re.search(r'\{[^{}]*\}', response_text)
-                if json_match:
-                    try:
-                        data = json.loads(json_match.group())
-                        return response_model(**data)
-                    except (json.JSONDecodeError, ValidationError):
-                        pass
+            parsed_model = self._parse_json_response(response_text, response_model)
+            if parsed_model is not None:
+                return parsed_model
 
-                last_error = e
-                if attempt < max_json_retries - 1:
-                    # Wait a bit before retrying
-                    time.sleep(0.5)
-                    continue
+            last_error = ValueError(f"Failed to parse JSON on attempt {attempt + 1}")
+            if attempt < max_json_retries - 1:
+                time.sleep(0.5)
 
-        # All retries exhausted
         raise ValueError(
             f"Failed to parse structured output after {max_json_retries} attempts.\n"
             f"Last error: {last_error}\n"
-            f"Response text: {response_text[:500]}"  # Show first 500 chars
+            f"Response text: {response_text[:500]}"
         )
+
+    def _parse_json_response(self, response_text: str, response_model: Type[T]) -> T | None:
+        """Parse JSON response with fallback to regex extraction.
+
+        Args:
+            response_text: Raw text response from LLM.
+            response_model: Pydantic model for validation.
+
+        Returns:
+            Validated model instance if parsing succeeds, None otherwise.
+        """
+        # Try direct JSON parsing
+        try:
+            data = json.loads(response_text)
+            return response_model(**data)
+        except (json.JSONDecodeError, ValidationError):
+            pass
+
+        # Fallback: extract JSON using regex
+        json_match = re.search(r'\{[^{}]*\}', response_text)
+        if json_match:
+            try:
+                data = json.loads(json_match.group())
+                return response_model(**data)
+            except (json.JSONDecodeError, ValidationError):
+                pass
+
+        return None
 
     def is_available(self) -> bool:
         """Check if Ollama service is available.
@@ -148,27 +157,17 @@ class OllamaClient(BaseLLMClient):
         Raises:
             httpx.HTTPError: If all retries are exhausted.
         """
-        last_exception = None
-
         for attempt in range(self.max_retries + 1):
             try:
                 response = self.client.post(url, json=payload)
                 response.raise_for_status()
                 return response
-            except httpx.HTTPError as e:
-                last_exception = e
+            except httpx.HTTPError:
                 if attempt < self.max_retries:
-                    # Exponential backoff: 2^attempt seconds
                     sleep_time = 2 ** attempt
                     time.sleep(sleep_time)
                 else:
-                    # Last attempt failed, raise the exception
                     raise
-
-        # This should never be reached, but just in case
-        if last_exception:
-            raise last_exception
-        raise RuntimeError("Unexpected error in retry logic")
 
     def __del__(self):
         """Clean up HTTP client on deletion."""
