@@ -115,58 +115,10 @@ class MorphologicalAnalyzer:
         terms: list[str] = []
         seen: set[str] = set()
 
-        # For compound noun extraction, track consecutive nouns and noun-like elements
         if extract_compound_nouns:
-            i = 0
-            while i < len(morphemes):
-                pos = morphemes[i].part_of_speech()
-
-                # Check if it's a noun or noun-like element (including suffixes)
-                if self._is_noun_like(pos):
-                    # Start collecting consecutive noun-like elements
-                    compound_parts: list[str] = [morphemes[i].surface()]
-                    j = i + 1
-
-                    # Collect consecutive noun-like elements
-                    while j < len(morphemes):
-                        next_pos = morphemes[j].part_of_speech()
-                        if self._is_noun_like(next_pos):
-                            compound_parts.append(morphemes[j].surface())
-                            j += 1
-                        else:
-                            break
-
-                    # Extract all possible compound nouns (length >= 2)
-                    # This includes partial combinations like 騎士団, 団長, 騎士団長
-                    if len(compound_parts) >= 2:
-                        for start_idx in range(len(compound_parts)):
-                            for end_idx in range(start_idx + 2, len(compound_parts) + 1):
-                                compound = "".join(compound_parts[start_idx:end_idx])
-                                if compound not in seen:
-                                    terms.append(compound)
-                                    seen.add(compound)
-
-                    # Also add individual nouns if they match our criteria
-                    for k in range(i, j):
-                        if self._should_extract_noun(
-                            morphemes[k], include_common_nouns
-                        ):
-                            surface = morphemes[k].surface()
-                            if surface not in seen:
-                                terms.append(surface)
-                                seen.add(surface)
-
-                    i = j
-                else:
-                    i += 1
+            self._extract_compound_nouns(morphemes, include_common_nouns, terms, seen)
         else:
-            # Original behavior: extract individual nouns
-            for morpheme in morphemes:
-                if self._should_extract_noun(morpheme, include_common_nouns):
-                    surface = morpheme.surface()
-                    if surface not in seen:
-                        terms.append(surface)
-                        seen.add(surface)
+            self._extract_individual_nouns(morphemes, include_common_nouns, terms, seen)
 
         return terms
 
@@ -191,6 +143,119 @@ class MorphologicalAnalyzer:
             return True
 
         return False
+
+    def _extract_compound_nouns(
+        self, morphemes, include_common_nouns: bool, terms: list[str], seen: set[str]
+    ) -> None:
+        """Extract compound nouns from consecutive noun-like morphemes.
+
+        This method processes morphemes sequentially, identifying consecutive
+        noun-like elements and generating all possible compound combinations.
+
+        Args:
+            morphemes: List of morphemes from SudachiPy tokenization.
+            include_common_nouns: Whether to include common nouns.
+            terms: List to append extracted terms to.
+            seen: Set to track already seen terms.
+        """
+        i = 0
+        while i < len(morphemes):
+            if not self._is_noun_like(morphemes[i].part_of_speech()):
+                i += 1
+                continue
+
+            # Collect consecutive noun-like elements
+            noun_sequence_end = self._find_noun_sequence_end(morphemes, i)
+            compound_parts = [morphemes[k].surface() for k in range(i, noun_sequence_end)]
+
+            # Generate all compound combinations (length >= 2)
+            self._add_compound_combinations(compound_parts, terms, seen)
+
+            # Also add individual nouns that match extraction criteria
+            self._add_individual_nouns_from_sequence(
+                morphemes, i, noun_sequence_end, include_common_nouns, terms, seen
+            )
+
+            i = noun_sequence_end
+
+    def _find_noun_sequence_end(self, morphemes, start: int) -> int:
+        """Find the end index of a consecutive noun-like sequence.
+
+        Args:
+            morphemes: List of morphemes.
+            start: Starting index of the sequence.
+
+        Returns:
+            Index of the first non-noun-like morpheme after the sequence.
+        """
+        j = start + 1
+        while j < len(morphemes) and self._is_noun_like(morphemes[j].part_of_speech()):
+            j += 1
+        return j
+
+    def _add_compound_combinations(
+        self, compound_parts: list[str], terms: list[str], seen: set[str]
+    ) -> None:
+        """Generate and add all compound noun combinations to the terms list.
+
+        Args:
+            compound_parts: List of surface forms from consecutive noun-like morphemes.
+            terms: List to append extracted terms to.
+            seen: Set to track already seen terms.
+        """
+        if len(compound_parts) < 2:
+            return
+
+        for start_idx in range(len(compound_parts)):
+            for end_idx in range(start_idx + 2, len(compound_parts) + 1):
+                compound = "".join(compound_parts[start_idx:end_idx])
+                if compound not in seen:
+                    terms.append(compound)
+                    seen.add(compound)
+
+    def _add_individual_nouns_from_sequence(
+        self,
+        morphemes,
+        start: int,
+        end: int,
+        include_common_nouns: bool,
+        terms: list[str],
+        seen: set[str],
+    ) -> None:
+        """Add individual nouns from a sequence if they match extraction criteria.
+
+        Args:
+            morphemes: List of morphemes.
+            start: Start index of the sequence.
+            end: End index of the sequence.
+            include_common_nouns: Whether to include common nouns.
+            terms: List to append extracted terms to.
+            seen: Set to track already seen terms.
+        """
+        for k in range(start, end):
+            if self._should_extract_noun(morphemes[k], include_common_nouns):
+                surface = morphemes[k].surface()
+                if surface not in seen:
+                    terms.append(surface)
+                    seen.add(surface)
+
+    def _extract_individual_nouns(
+        self, morphemes, include_common_nouns: bool, terms: list[str], seen: set[str]
+    ) -> None:
+        """Extract individual nouns from morphemes.
+
+        Args:
+            morphemes: List of morphemes from SudachiPy tokenization.
+            include_common_nouns: Whether to include common nouns.
+            terms: List to append extracted terms to.
+            seen: Set to track already seen terms.
+        """
+        for morpheme in morphemes:
+            if self._should_extract_noun(morpheme, include_common_nouns):
+                surface = morpheme.surface()
+                if surface not in seen:
+                    terms.append(surface)
+                    seen.add(surface)
 
     def _should_extract_noun(self, morpheme, include_common_nouns: bool) -> bool:
         """Check if a morpheme should be extracted as a term.
@@ -267,41 +332,48 @@ class MorphologicalAnalyzer:
         current_bytes = 0
 
         # Split by sentences first
-        sentences = text.split("。")
+        sentences = self._prepare_sentences(text)
 
-        for i, sentence in enumerate(sentences):
-            # Add back the period except for the last empty part
-            if i < len(sentences) - 1:
-                sentence = sentence + "。"
-
+        for sentence in sentences:
             sentence_bytes = len(sentence.encode("utf-8"))
 
-            # If a single sentence exceeds the limit, split by characters
             if sentence_bytes > self.MAX_CHUNK_BYTES:
-                # First, flush the current chunk if any
+                # Flush current chunk and split the oversized sentence
                 if current_chunk:
                     chunks.append(current_chunk)
                     current_chunk = ""
                     current_bytes = 0
-
-                # Split the long sentence by characters
-                char_chunks = self._split_long_sentence(sentence)
-                chunks.extend(char_chunks)
+                chunks.extend(self._split_long_sentence(sentence))
             elif current_bytes + sentence_bytes > self.MAX_CHUNK_BYTES:
                 # Start a new chunk
-                if current_chunk:
-                    chunks.append(current_chunk)
+                chunks.append(current_chunk)
                 current_chunk = sentence
                 current_bytes = sentence_bytes
             else:
+                # Add to current chunk
                 current_chunk += sentence
                 current_bytes += sentence_bytes
 
-        # Don't forget the last chunk
         if current_chunk:
             chunks.append(current_chunk)
 
         return chunks
+
+    def _prepare_sentences(self, text: str) -> list[str]:
+        """Split text into sentences and restore delimiters.
+
+        Args:
+            text: The text to split.
+
+        Returns:
+            List of sentences with delimiters restored.
+        """
+        sentences = text.split("。")
+        # Add back the period except for the last empty part
+        return [
+            s + "。" if i < len(sentences) - 1 else s
+            for i, s in enumerate(sentences)
+        ]
 
     def _split_long_sentence(self, sentence: str) -> list[str]:
         """Split a very long sentence into smaller chunks by characters.
@@ -340,6 +412,9 @@ class MorphologicalAnalyzer:
         this method keeps only the longest terms by removing any term that
         is a substring of another term.
 
+        Uses an optimized algorithm that sorts terms by length (descending)
+        and builds a set of known non-contained terms for efficient lookup.
+
         Args:
             terms: List of terms to filter.
 
@@ -351,22 +426,70 @@ class MorphologicalAnalyzer:
             return terms.copy() if terms else []
 
         # Remove duplicates while preserving order
+        unique_terms = self._remove_duplicates(terms)
+
+        # Identify contained terms efficiently
+        contained_terms = self._identify_contained_terms(unique_terms)
+
+        # Return non-contained terms in original order
+        return [term for term in unique_terms if term not in contained_terms]
+
+    def _remove_duplicates(self, terms: list[str]) -> list[str]:
+        """Remove duplicate terms while preserving order.
+
+        Args:
+            terms: List of terms potentially containing duplicates.
+
+        Returns:
+            List of unique terms in order of first occurrence.
+        """
         unique_terms: list[str] = []
         seen: set[str] = set()
         for term in terms:
             if term not in seen:
                 unique_terms.append(term)
                 seen.add(term)
+        return unique_terms
 
-        # Build a set of terms that are contained in other terms
+    def _identify_contained_terms(self, unique_terms: list[str]) -> set[str]:
+        """Identify which terms are contained in other terms.
+
+        Uses length-based sorting to optimize containment checking.
+        Longer terms are checked first, building a set of known
+        non-contained terms for efficient substring checking.
+
+        Args:
+            unique_terms: List of unique terms.
+
+        Returns:
+            Set of terms that are contained in other terms.
+        """
+        # Sort by length descending - check longest terms first
+        sorted_by_length = sorted(unique_terms, key=len, reverse=True)
+
+        non_contained_terms: set[str] = set()
         contained_terms: set[str] = set()
 
-        for term in unique_terms:
-            for other_term in unique_terms:
-                # Check if term is contained in other_term (but not equal)
-                if term != other_term and term in other_term:
-                    contained_terms.add(term)
-                    break  # No need to check further once we know it's contained
+        for term in sorted_by_length:
+            # Check if this term is contained in any longer term we've seen
+            if self._is_contained_in_any(term, non_contained_terms):
+                contained_terms.add(term)
+            else:
+                non_contained_terms.add(term)
 
-        # Return terms that are not contained in any other term
-        return [term for term in unique_terms if term not in contained_terms]
+        return contained_terms
+
+    def _is_contained_in_any(self, term: str, longer_terms: set[str]) -> bool:
+        """Check if a term is contained in any of the longer terms.
+
+        Args:
+            term: The term to check.
+            longer_terms: Set of longer terms to check against.
+
+        Returns:
+            True if term is a substring of any longer term.
+        """
+        for longer_term in longer_terms:
+            if len(longer_term) > len(term) and term in longer_term:
+                return True
+        return False
