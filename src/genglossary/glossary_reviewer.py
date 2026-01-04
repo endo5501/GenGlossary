@@ -1,11 +1,17 @@
 """Glossary reviewer - Step 3: Review glossary for issues using LLM."""
 
-from typing import Any
-
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.glossary import Glossary, GlossaryIssue, IssueType
+
+
+class RawIssue(BaseModel):
+    """Raw issue data from LLM response."""
+
+    term: str
+    issue_type: IssueType
+    description: str
 
 
 class ReviewResponse(BaseModel):
@@ -21,8 +27,6 @@ class GlossaryReviewer:
     reviewing the glossary and identifying issues like unclear definitions,
     contradictions, or missing relationships.
     """
-
-    VALID_ISSUE_TYPES: set[str] = {"unclear", "contradiction", "missing_relation"}
 
     def __init__(self, llm_client: BaseLLMClient) -> None:
         """Initialize the GlossaryReviewer.
@@ -92,7 +96,7 @@ JSON形式で回答してください:
 
         return prompt
 
-    def _parse_issues(self, raw_issues: list[dict[str, Any]]) -> list[GlossaryIssue]:
+    def _parse_issues(self, raw_issues: list[dict[str, str]]) -> list[GlossaryIssue]:
         """Parse raw issue data into GlossaryIssue objects.
 
         Args:
@@ -104,24 +108,16 @@ JSON形式で回答してください:
         issues: list[GlossaryIssue] = []
 
         for raw in raw_issues:
-            # Check required fields
-            if not all(key in raw for key in ["term", "issue_type", "description"]):
+            try:
+                validated = RawIssue(**raw)
+                issue = GlossaryIssue(
+                    term_name=validated.term,
+                    issue_type=validated.issue_type,
+                    description=validated.description,
+                )
+                issues.append(issue)
+            except ValidationError:
+                # Skip invalid issues
                 continue
-
-            term_name = raw.get("term", "")
-            issue_type = raw.get("issue_type", "")
-            description = raw.get("description", "")
-
-            # Validate issue type
-            if issue_type not in self.VALID_ISSUE_TYPES:
-                continue
-
-            # Create GlossaryIssue
-            issue = GlossaryIssue(
-                term_name=term_name,
-                issue_type=issue_type,  # type: ignore[arg-type]
-                description=description,
-            )
-            issues.append(issue)
 
         return issues
