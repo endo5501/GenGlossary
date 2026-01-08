@@ -5,7 +5,7 @@
 ## 必須ルール（MUST）
 
 1. **日本語で会話**: ユーザーとは常に日本語で会話（思考は英語）
-2. **TDD厳守**: テストファースト開発を必ず実施 → [詳細](@.claude/rules/01-tdd-workflow.md)
+2. **TDD厳守**: テストファースト開発を必ず実施 → `/tdd-workflow` スキルを使用
 3. **Git管理**: チケットシステムと連携したワークフロー → [詳細](@.claude/rules/02-git-workflow.md)
 
 ## クイックスタート
@@ -31,7 +31,6 @@ bash scripts/ticket.sh close
 
 ### 必須ドキュメント
 - [プロジェクト概要](@.claude/rules/00-overview.md) - 4ステップフロー、技術スタック
-- [TDDワークフロー](@.claude/rules/01-tdd-workflow.md) ⭐ - Red-Green-Commit サイクル
 - [Gitワークフロー](@.claude/rules/02-git-workflow.md) - ブランチ戦略、コミット規約
 
 ### 推奨ドキュメント
@@ -41,13 +40,12 @@ bash scripts/ticket.sh close
 - [コードスタイル](@.claude/rules/06-code-style.md) - 命名規則、型ヒント
 
 ### 具体例集
-- [TDDサイクル例](@.claude/rules/examples/tdd-cycle-example.md) ⭐ - 完全な実装例
 - [良い/悪いコミット](@.claude/rules/examples/good-bad-commits.md) - コミットメッセージの例
 - [モックパターン](@.claude/rules/examples/mock-patterns.md) - respx, MagicMock の活用
 - [プロンプト例](@.claude/rules/examples/llm-prompt-examples.md) - LLMプロンプト設計
 
 ## 困ったときは
 
-- TDDのやり方が分からない → [TDDサイクル例](@.claude/rules/examples/tdd-cycle-example.md)
+- TDDのやり方が分からない → `/tdd-workflow` スキルを使用
 - コミットメッセージの書き方 → [良い例/悪い例](@.claude/rules/examples/good-bad-commits.md)
 - モックの書き方 → [モックパターン集](@.claude/rules/examples/mock-patterns.md)

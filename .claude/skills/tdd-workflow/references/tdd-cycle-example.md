@@ -333,9 +333,3 @@ $ git commit -m "Implement <ClassName>.<method_name>()"
 $ uv run pytest tests/<module>/test_<name>.py -v
 # → PASSED
 ```
-
-## 関連ドキュメント
-
-- [TDDワークフロー](@.claude/rules/01-tdd-workflow.md) - TDDの基本ルール
-- [Gitワークフロー](@.claude/rules/02-git-workflow.md) - コミット規約
-- [良い/悪いコミット例](@.claude/rules/examples/good-bad-commits.md) - コミットメッセージの例
