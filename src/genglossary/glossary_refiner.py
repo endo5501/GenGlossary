@@ -2,6 +2,7 @@
 
 import re
 from collections import defaultdict
+from collections.abc import Callable
 
 from pydantic import BaseModel
 
@@ -9,6 +10,10 @@ from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.models.term import Term
+
+
+# Type alias for progress callback: (current, total) -> None
+ProgressCallback = Callable[[int, int], None]
 
 
 class RefinementResponse(BaseModel):
@@ -38,6 +43,7 @@ class GlossaryRefiner:
         glossary: Glossary,
         issues: list[GlossaryIssue],
         documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
     ) -> Glossary:
         """Refine the glossary based on identified issues.
 
@@ -45,6 +51,8 @@ class GlossaryRefiner:
             glossary: The glossary to refine.
             issues: List of issues to address.
             documents: List of documents for additional context.
+            progress_callback: Optional callback called after each issue is resolved.
+                Receives (current, total) where current is 1-indexed.
 
         Returns:
             A refined Glossary object.
@@ -62,7 +70,8 @@ class GlossaryRefiner:
         context_index = self._build_context_index(documents)
         resolved_count = 0
 
-        for issue in issues:
+        total_issues = len(issues)
+        for idx, issue in enumerate(issues, start=1):
             term = refined_glossary.get_term(issue.term_name)
             if term is None:
                 continue
@@ -73,6 +82,10 @@ class GlossaryRefiner:
                 resolved_count += 1
             except Exception as e:
                 print(f"Warning: Failed to refine '{issue.term_name}': {e}")
+            finally:
+                # Call progress callback if provided
+                if progress_callback is not None:
+                    progress_callback(idx, total_issues)
 
         refined_glossary.metadata["resolved_issues"] = resolved_count
         return refined_glossary
