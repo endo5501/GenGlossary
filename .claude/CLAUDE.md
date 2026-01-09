@@ -36,16 +36,14 @@ bash scripts/ticket.sh close
 ### 推奨ドキュメント
 - [アーキテクチャ](@.claude/rules/03-architecture.md) - ディレクトリ構成、データフロー
 - [LLM統合](@.claude/rules/04-llm-integration.md) - Ollama連携パターン
-- [テスト戦略](@.claude/rules/05-testing-strategy.md) - カバレッジ、モック戦略
 - [コードスタイル](@.claude/rules/06-code-style.md) - 命名規則、型ヒント
 
 ### 具体例集
 - [良い/悪いコミット](@.claude/rules/examples/good-bad-commits.md) - コミットメッセージの例
-- [モックパターン](@.claude/rules/examples/mock-patterns.md) - respx, MagicMock の活用
 - [プロンプト例](@.claude/rules/examples/llm-prompt-examples.md) - LLMプロンプト設計
 
 ## 困ったときは
 
 - TDDのやり方が分からない → `/tdd-workflow` スキルを使用
+- テスト・モックの書き方 → `/testing-strategy` スキルを使用
 - コミットメッセージの書き方 → [良い例/悪い例](@.claude/rules/examples/good-bad-commits.md)
-- モックの書き方 → [モックパターン集](@.claude/rules/examples/mock-patterns.md)

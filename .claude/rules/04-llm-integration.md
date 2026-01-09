@@ -351,8 +351,6 @@ def test_generate_returns_response_text():
 - ✅ モックレスポンスをJSON形式で定義
 - ✅ ネットワークなしでテスト可能
 
-詳しくは [モックパターン集](@.claude/rules/examples/mock-patterns.md) を参照。
-
 ## パフォーマンス最適化
 
 ### タイムアウト設定
@@ -380,6 +378,4 @@ payload = {
 ## 関連ドキュメント
 
 - [アーキテクチャ](@.claude/rules/03-architecture.md) - LLM層の位置づけ
-- [テスト戦略](@.claude/rules/05-testing-strategy.md) - モック戦略
-- [モックパターン集](@.claude/rules/examples/mock-patterns.md) - respxの詳細
 - [プロンプト例集](@.claude/rules/examples/llm-prompt-examples.md) - 実際のプロンプト

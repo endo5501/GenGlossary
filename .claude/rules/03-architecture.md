@@ -424,4 +424,3 @@ class Document(BaseModel):
 
 - [プロジェクト概要](@.claude/rules/00-overview.md) - 4ステップフロー、技術スタック
 - [LLM統合](@.claude/rules/04-llm-integration.md) - Ollama連携の詳細
-- [テスト戦略](@.claude/rules/05-testing-strategy.md) - テストの構成
