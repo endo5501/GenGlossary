@@ -292,3 +292,71 @@ LLMは大規模言語モデルの略称です。
         assert term is not None
         assert term.occurrence_count == 2
         assert term.definition == "単語とその定義のリスト"
+
+
+class TestGlossaryGeneratorProgressCallback:
+    """Test suite for GlossaryGenerator progress callback functionality."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = """GenGlossary is a tool.
+LLM is a language model.
+API is an interface.
+"""
+        return Document(file_path="/path/to/doc.md", content=content)
+
+    def test_generate_calls_progress_callback(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate calls progress callback for each term."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.9
+        )
+
+        callback_calls: list[tuple[int, int]] = []
+
+        def progress_callback(current: int, total: int) -> None:
+            callback_calls.append((current, total))
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        terms = ["GenGlossary", "LLM", "API"]
+        generator.generate(terms, [sample_document], progress_callback=progress_callback)
+
+        assert len(callback_calls) == 3
+        assert callback_calls[0] == (1, 3)
+        assert callback_calls[1] == (2, 3)
+        assert callback_calls[2] == (3, 3)
+
+    def test_generate_works_without_callback(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate works without progress callback."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.9
+        )
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        # Should not raise even without callback
+        result = generator.generate(["GenGlossary"], [sample_document])
+
+        assert result.has_term("GenGlossary")
+
+    def test_generate_callback_on_empty_terms(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that callback is not called when terms list is empty."""
+        callback_calls: list[tuple[int, int]] = []
+
+        def progress_callback(current: int, total: int) -> None:
+            callback_calls.append((current, total))
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        generator.generate([], [sample_document], progress_callback=progress_callback)
+
+        assert len(callback_calls) == 0
