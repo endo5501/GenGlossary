@@ -1,6 +1,11 @@
-# コードスタイルガイド
+---
+name: code-style
+description: "Python code style guide for GenGlossary project. Covers naming conventions (PascalCase classes, snake_case functions/variables), type hints, Google-style docstrings, import ordering, and Pydantic model patterns. Use when: (1) Writing new code, (2) Reviewing code style, (3) Naming classes/functions/variables, (4) Adding type hints, (5) Writing docstrings."
+---
 
-このドキュメントでは、GenGlossaryプロジェクトのコードスタイル、命名規則、型ヒント、docstring規約について説明します。
+# Code Style Guide
+
+GenGlossaryプロジェクトのコードスタイル、命名規則、型ヒント、docstring規約のガイドです。
 
 ## 命名規則
 
@@ -457,7 +462,19 @@ class Glossary(BaseModel):
         return v
 ```
 
-## 関連ドキュメント
+## クイックチェックリスト
 
-- [TDDワークフロー](@.claude/rules/01-tdd-workflow.md) - テスト命名規則
-- [アーキテクチャ](@.claude/rules/03-architecture.md) - モジュール構成
+### コーディング前
+- [ ] クラス名はPascalCaseか
+- [ ] 関数・変数名はsnake_caseか
+- [ ] 定数はUPPER_SNAKE_CASEか
+
+### コーディング中
+- [ ] すべての関数に型ヒントを付けたか
+- [ ] Docstringを書いたか（Google style）
+- [ ] インポートの順序は正しいか（標準→サードパーティ→自プロジェクト）
+
+### コーディング後
+- [ ] 行の長さは88文字以内か
+- [ ] インデントは4スペースか
+- [ ] 適切な空行を入れたか（クラス間2行、メソッド間1行）

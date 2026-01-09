@@ -34,7 +34,6 @@ bash scripts/ticket.sh close
 
 ### 推奨ドキュメント
 - [アーキテクチャ](@.claude/rules/03-architecture.md) - ディレクトリ構成、データフロー
-- [コードスタイル](@.claude/rules/06-code-style.md) - 命名規則、型ヒント
 
 ## 困ったときは
 
@@ -42,3 +41,4 @@ bash scripts/ticket.sh close
 - テスト・モックの書き方 → `/testing-strategy` スキルを使用
 - コミットメッセージの書き方 → `/git-workflow` スキルを使用
 - LLMとの連携方法、プロンプト設計 → `/llm-integration` スキルを使用
+- コードスタイル、命名規則 → `/code-style` スキルを使用
