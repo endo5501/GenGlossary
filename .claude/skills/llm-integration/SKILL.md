@@ -1,6 +1,11 @@
+---
+name: llm-integration
+description: "LLM integration patterns for GenGlossary using Ollama. Covers retry logic, structured output with Pydantic, JSON extraction, prompt design best practices, and error handling. Use when: (1) Implementing LLM API calls, (2) Designing prompts for term extraction/glossary generation, (3) Handling LLM response parsing, (4) Setting up retry and timeout logic, (5) Mocking LLM calls in tests."
+---
+
 # LLM統合パターン
 
-このドキュメントでは、GenGlossaryにおけるOllama統合の設計パターン、理由、ベストプラクティスを説明します。
+このスキルでは、GenGlossaryにおけるOllama統合の設計パターン、理由、ベストプラクティスを説明します。
 
 **参照コード**: `src/genglossary/llm/ollama_client.py`
 
@@ -377,5 +382,5 @@ payload = {
 
 ## 関連ドキュメント
 
+- [プロンプト例集](references/prompt-examples.md) - 4ステップごとの実際のプロンプト設計例
 - [アーキテクチャ](@.claude/rules/03-architecture.md) - LLM層の位置づけ
-- [プロンプト例集](@.claude/rules/examples/llm-prompt-examples.md) - 実際のプロンプト

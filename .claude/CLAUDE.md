@@ -34,14 +34,11 @@ bash scripts/ticket.sh close
 
 ### 推奨ドキュメント
 - [アーキテクチャ](@.claude/rules/03-architecture.md) - ディレクトリ構成、データフロー
-- [LLM統合](@.claude/rules/04-llm-integration.md) - Ollama連携パターン
 - [コードスタイル](@.claude/rules/06-code-style.md) - 命名規則、型ヒント
-
-### 具体例集
-- [プロンプト例](@.claude/rules/examples/llm-prompt-examples.md) - LLMプロンプト設計
 
 ## 困ったときは
 
 - TDDのやり方が分からない → `/tdd-workflow` スキルを使用
 - テスト・モックの書き方 → `/testing-strategy` スキルを使用
 - コミットメッセージの書き方 → `/git-workflow` スキルを使用
+- LLMとの連携方法、プロンプト設計 → `/llm-integration` スキルを使用

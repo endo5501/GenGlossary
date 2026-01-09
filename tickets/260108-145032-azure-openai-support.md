@@ -66,7 +66,7 @@ Azure OpenAI Serviceにも対応できるよう拡張し、会社のAzure OpenAI
 
 ### 6. ドキュメント更新
 - [ ] README.md に Azure OpenAI の設定方法を追加
-- [ ] .claude/rules/04-llm-integration.md に Azure OpenAI のパターンを追加
+- [ ] `/llm-integration` スキル (SKILL.md) に Azure OpenAI のパターンを追加
 - [ ] 環境変数の一覧をドキュメント化
 
 ### 7. 最終確認

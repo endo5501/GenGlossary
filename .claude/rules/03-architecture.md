@@ -423,4 +423,4 @@ class Document(BaseModel):
 ## 関連ドキュメント
 
 - [プロジェクト概要](@.claude/rules/00-overview.md) - 4ステップフロー、技術スタック
-- [LLM統合](@.claude/rules/04-llm-integration.md) - Ollama連携の詳細
+- LLM統合 → `/llm-integration` スキルを使用

@@ -378,5 +378,4 @@ class TermExtractionPrompt:
 
 ## 関連ドキュメント
 
-- [LLM統合](@.claude/rules/04-llm-integration.md) - Ollama連携パターン
 - [プロジェクト概要](@.claude/rules/00-overview.md) - 4ステップの処理フロー

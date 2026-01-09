@@ -362,6 +362,6 @@ def test_term_extractor(mock_llm_client):
 
 ## 関連ドキュメント
 
-- [テスト戦略](@.claude/rules/05-testing-strategy.md) - テストの全体像
-- [TDDワークフロー](@.claude/rules/01-tdd-workflow.md) - TDDサイクル
-- [LLM統合](@.claude/rules/04-llm-integration.md) - OllamaClientの設計
+- テスト戦略 → `/testing-strategy` スキルを使用
+- TDDワークフロー → `/tdd-workflow` スキルを使用
+- LLM統合 → `/llm-integration` スキルを使用
