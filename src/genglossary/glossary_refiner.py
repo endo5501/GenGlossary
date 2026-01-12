@@ -66,12 +66,33 @@ class GlossaryRefiner:
         if not issues:
             return refined_glossary
 
+        # 1. Extract issues with should_exclude=True
+        exclude_issues = [issue for issue in issues if issue.should_exclude]
+        refine_issues = [issue for issue in issues if not issue.should_exclude]
+
+        # 2. Process exclusions
+        excluded_terms: list[dict[str, str]] = []
+        for issue in exclude_issues:
+            if refined_glossary.remove_term(issue.term_name):
+                excluded_terms.append({
+                    "term_name": issue.term_name,
+                    "reason": issue.exclusion_reason or issue.description,
+                })
+
+        # 3. Track excluded terms in metadata
+        if excluded_terms:
+            refined_glossary.metadata["excluded_terms"] = excluded_terms
+
+        # 4. Process remaining issues with normal refinement
+        if not refine_issues:
+            return refined_glossary
+
         # Build context index once for all issues
         context_index = self._build_context_index(documents)
         resolved_count = 0
 
-        total_issues = len(issues)
-        for idx, issue in enumerate(issues, start=1):
+        total_issues = len(refine_issues)
+        for idx, issue in enumerate(refine_issues, start=1):
             term = refined_glossary.get_term(issue.term_name)
             if term is None:
                 continue
