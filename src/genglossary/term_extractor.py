@@ -1,16 +1,12 @@
 """Term extractor - SudachiPy morphological analysis + LLM judgment."""
 
-from collections.abc import Callable
-
 from pydantic import BaseModel
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.term import TermCategory
 from genglossary.morphological_analyzer import MorphologicalAnalyzer
-
-# Type alias for progress callback: (current_batch, total_batches) -> None
-ProgressCallback = Callable[[int, int], None]
+from genglossary.types import ProgressCallback
 
 # Category definitions for LLM prompts - used across all classification prompts
 CATEGORY_DEFINITIONS = """## カテゴリ定義
@@ -306,6 +302,20 @@ class TermExtractor:
                     seen.add(term)
 
         return candidates
+
+    def get_candidates(
+        self, documents: list[Document], filter_contained: bool = True
+    ) -> list[str]:
+        """Public API for extracting candidate terms (for analysis purposes).
+
+        Args:
+            documents: List of documents to analyze.
+            filter_contained: Whether to filter out contained terms (default: True).
+
+        Returns:
+            List of unique candidate terms.
+        """
+        return self._extract_candidates(documents, filter_contained)
 
     def _create_judgment_prompt(
         self, candidates: list[str], documents: list[Document]

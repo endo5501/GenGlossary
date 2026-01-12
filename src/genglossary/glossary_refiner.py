@@ -2,7 +2,6 @@
 
 import re
 from collections import defaultdict
-from collections.abc import Callable
 
 from pydantic import BaseModel
 
@@ -10,10 +9,7 @@ from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.models.term import Term
-
-
-# Type alias for progress callback: (current, total) -> None
-ProgressCallback = Callable[[int, int], None]
+from genglossary.types import ProgressCallback
 
 
 class RefinementResponse(BaseModel):

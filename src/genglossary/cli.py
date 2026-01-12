@@ -7,14 +7,6 @@ from typing import Callable
 
 import click
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
 
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
@@ -23,6 +15,7 @@ from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.ollama_client import OllamaClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
+from genglossary.progress import progress_task
 from genglossary.output.markdown_writer import MarkdownWriter
 from genglossary.term_extractor import TermExtractor, TermExtractionAnalysis
 
@@ -84,27 +77,8 @@ def generate_glossary(
     # 2. Extract terms
     extractor = TermExtractor(llm_client=llm_client)
     if verbose:
-        # Use progress bar during term extraction
-        # Note: We don't know total batches in advance, so we use indeterminate progress
-        # However, _classify_terms will call back with (current, total)
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("用語を分類中...", total=None)  # Start indeterminate
-
-            def update_progress(current: int, total: int) -> None:
-                # Update total on first call if not set
-                if progress.tasks[task].total is None:
-                    progress.update(task, total=total)
-                progress.update(task, completed=current)
-
-            terms = extractor.extract_terms(documents, progress_callback=update_progress)
-
+        with progress_task(console, "用語を分類中...", total=None) as update:
+            terms = extractor.extract_terms(documents, progress_callback=update)
         console.print(f"[dim]  → {len(terms)} 個の用語を抽出しました[/dim]")
     else:
         terms = extractor.extract_terms(documents)
@@ -112,33 +86,15 @@ def generate_glossary(
     # 3. Generate glossary
     generator = GlossaryGenerator(llm_client=llm_client)
     if verbose:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("定義を生成中...", total=len(terms))
-
-            def update_progress(current: int, total: int) -> None:
-                progress.update(task, completed=current)
-
-            glossary = generator.generate(terms, documents, progress_callback=update_progress)
+        with progress_task(console, "定義を生成中...", total=len(terms)) as update:
+            glossary = generator.generate(terms, documents, progress_callback=update)
     else:
         glossary = generator.generate(terms, documents)
 
     # 4. Review glossary
     reviewer = GlossaryReviewer(llm_client=llm_client)
     if verbose:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("精査中..."),
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            progress.add_task("精査中...", total=None)
+        with progress_task(console, "精査中...", use_spinner_only=True):
             issues = reviewer.review(glossary)
     else:
         issues = reviewer.review(glossary)
@@ -154,20 +110,8 @@ def generate_glossary(
     if issues:
         refiner = GlossaryRefiner(llm_client=llm_client)
         if verbose:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-                TimeElapsedColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task("改善中...", total=len(issues))
-
-                def update_progress(current: int, total: int) -> None:
-                    progress.update(task, completed=current)
-
-                glossary = refiner.refine(glossary, issues, documents, progress_callback=update_progress)
+            with progress_task(console, "改善中...", total=len(issues)) as update:
+                glossary = refiner.refine(glossary, issues, documents, progress_callback=update)
         else:
             glossary = refiner.refine(glossary, issues, documents)
 
@@ -253,19 +197,11 @@ def generate(
         console.print(f"出力: {output_file}")
         console.print(f"モデル: {model}\n")
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("用語集を生成中...", total=None)
-
+        with progress_task(console, "用語集を生成中...", use_spinner_only=True):
             # Call the main generation function
             generate_glossary(
                 str(input_dir), str(output_file), model, verbose
             )
-
-            progress.update(task, completed=True)
 
         console.print("\n[bold green]✓ 用語集の生成が完了しました[/bold green]")
         console.print(f"出力ファイル: {output_file}")
@@ -278,38 +214,6 @@ def generate(
         if verbose:
             console.print_exception()
         sys.exit(1)
-
-
-def _extract_candidates_from_documents(documents: list[Document]) -> list[str]:
-    """Extract term candidates from documents using morphological analysis.
-
-    Args:
-        documents: List of documents to analyze.
-
-    Returns:
-        List of unique term candidates.
-    """
-    from genglossary.morphological_analyzer import MorphologicalAnalyzer
-
-    analyzer = MorphologicalAnalyzer()
-    all_candidates: list[str] = []
-    seen: set[str] = set()
-
-    for doc in documents:
-        if doc.content and doc.content.strip():
-            terms = analyzer.extract_proper_nouns(
-                doc.content,
-                extract_compound_nouns=True,
-                include_common_nouns=True,
-                min_length=2,
-                filter_contained=True,
-            )
-            for term in terms:
-                if term not in seen:
-                    all_candidates.append(term)
-                    seen.add(term)
-
-    return all_candidates
 
 
 def _display_filtering_results(analysis: TermExtractionAnalysis) -> None:
@@ -442,7 +346,7 @@ def _run_term_extraction_analysis(
     """
     # Extract candidates and show initial info
     console.print("[dim]候補抽出中...[/dim]")
-    all_candidates = _extract_candidates_from_documents(documents)
+    all_candidates = extractor.get_candidates(documents, filter_contained=True)
 
     total_candidates = len(all_candidates)
     total_batches = (
@@ -451,25 +355,12 @@ def _run_term_extraction_analysis(
     console.print(f"[dim]候補数: {total_candidates}件 → {total_batches}バッチで分類[/dim]\n")
 
     # Run analysis with progress bar
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("LLM分類中...", total=total_batches)
-
-        def update_progress(current: int, _total: int) -> None:
-            progress.update(task, completed=current)
-
+    with progress_task(console, "LLM分類中...", total=total_batches) as update:
         analysis = extractor.analyze_extraction(
             documents,
-            progress_callback=update_progress,
+            progress_callback=update,
             batch_size=batch_size,
         )
-
-        progress.update(task, completed=total_batches)
 
     return analysis
 

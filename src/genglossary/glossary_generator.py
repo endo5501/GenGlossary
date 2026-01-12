@@ -1,7 +1,6 @@
 """Glossary generator - Step 2: Generate provisional glossary using LLM."""
 
 import re
-from collections.abc import Callable
 
 from pydantic import BaseModel
 
@@ -9,10 +8,7 @@ from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.models.term import Term, TermOccurrence
-
-
-# Type alias for progress callback: (current, total) -> None
-ProgressCallback = Callable[[int, int], None]
+from genglossary.types import ProgressCallback
 
 
 class DefinitionResponse(BaseModel):
