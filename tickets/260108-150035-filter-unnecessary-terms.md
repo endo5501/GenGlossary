@@ -3,7 +3,7 @@ priority: 1
 tags: [enhancement, glossary, review]
 description: "Filter out unnecessary terms during glossary review phase"
 created_at: "2026-01-08T15:00:35Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-12T06:27:48Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
