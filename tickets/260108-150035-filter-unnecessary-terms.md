@@ -4,7 +4,7 @@ tags: [enhancement, glossary, review]
 description: "Filter out unnecessary terms during glossary review phase"
 created_at: "2026-01-08T15:00:35Z"
 started_at: 2026-01-12T06:27:48Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-12T12:16:41Z # Do not modify manually
 ---
 
 # 用語集の精査フェーズで不要な用語をフィルタリング
