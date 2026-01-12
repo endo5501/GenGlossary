@@ -1214,6 +1214,77 @@ class TestTermExtractorProgressCallback:
             # Progress callback should have been called
             assert len(callback_calls) >= 1
 
+    def test_extract_terms_calls_progress_callback(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extract_terms calls progress callback during classification."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Mock batch responses for 2 batches
+        mock_llm_client.generate_structured.side_effect = [
+            BatchTermClassificationResponse(
+                classifications=[
+                    {"term": "用語1", "category": "organization"},
+                    {"term": "用語2", "category": "place_name"},
+                ]
+            ),
+            BatchTermClassificationResponse(
+                classifications=[
+                    {"term": "用語3", "category": "person_name"},
+                ]
+            ),
+        ]
+
+        # Track callback calls
+        callback_calls: list[tuple[int, int]] = []
+        def progress_callback(current: int, total: int) -> None:
+            callback_calls.append((current, total))
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            # Provide enough candidates for 2 batches with batch_size=2
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "用語1", "用語2", "用語3"
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            extractor.extract_terms(
+                [sample_document],
+                progress_callback=progress_callback,
+                batch_size=2,
+            )
+
+            # Should be called twice (2 batches: batch 1 with 2 terms, batch 2 with 1 term)
+            assert len(callback_calls) == 2
+            assert callback_calls[0] == (1, 2)
+            assert callback_calls[1] == (2, 2)
+
+    def test_extract_terms_works_without_callback(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extract_terms works without progress callback."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[{"term": "用語1", "category": "organization"}]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["用語1"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            # Should not raise even without callback
+            result = extractor.extract_terms([sample_document])
+
+            assert "用語1" in result
+
 
 class TestTermExtractorTwoPhase:
     """Test suite for batch LLM classification processing."""
