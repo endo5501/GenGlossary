@@ -1,5 +1,7 @@
 """Glossary reviewer - Step 3: Review glossary for issues using LLM."""
 
+from typing import Any
+
 from pydantic import BaseModel, ValidationError
 
 from genglossary.llm.base import BaseLLMClient
@@ -19,7 +21,7 @@ class RawIssue(BaseModel):
 class ReviewResponse(BaseModel):
     """Response model for glossary review."""
 
-    issues: list[dict[str, str]]
+    issues: list[dict[str, Any]]
 
 
 class GlossaryReviewer:
@@ -103,7 +105,7 @@ JSON形式で回答してください:
 
         return prompt
 
-    def _parse_issues(self, raw_issues: list[dict[str, str]]) -> list[GlossaryIssue]:
+    def _parse_issues(self, raw_issues: list[dict[str, Any]]) -> list[GlossaryIssue]:
         """Parse raw issue data into GlossaryIssue objects.
 
         Args:
