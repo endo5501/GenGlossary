@@ -4,7 +4,7 @@ tags: [enhancement, cli, progress-display]
 description: "Add detailed progress display to glossary generation command"
 created_at: "2026-01-08T14:44:26Z"
 started_at: 2026-01-09T21:11:09Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-12T06:26:28Z # Do not modify manually
 ---
 
 # Add Progress Display to Generate Command
