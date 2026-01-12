@@ -1,6 +1,7 @@
 """Glossary generator - Step 2: Generate provisional glossary using LLM."""
 
 import re
+from collections.abc import Callable
 
 from pydantic import BaseModel
 
@@ -8,6 +9,10 @@ from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.models.term import Term, TermOccurrence
+
+
+# Type alias for progress callback: (current, total) -> None
+ProgressCallback = Callable[[int, int], None]
 
 
 class DefinitionResponse(BaseModel):
@@ -41,13 +46,18 @@ class GlossaryGenerator:
         self.llm_client = llm_client
 
     def generate(
-        self, terms: list[str], documents: list[Document]
+        self,
+        terms: list[str],
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
     ) -> Glossary:
         """Generate a provisional glossary.
 
         Args:
             terms: List of terms to generate definitions for.
             documents: List of documents containing the terms.
+            progress_callback: Optional callback called after each term is processed.
+                Receives (current, total) where current is 1-indexed.
 
         Returns:
             A Glossary object with terms and their definitions.
@@ -57,7 +67,8 @@ class GlossaryGenerator:
         if not terms:
             return glossary
 
-        for term_name in terms:
+        total_terms = len(terms)
+        for idx, term_name in enumerate(terms, start=1):
             try:
                 # Find occurrences
                 occurrences = self._find_term_occurrences(term_name, documents)
@@ -80,6 +91,10 @@ class GlossaryGenerator:
                 # Skip this term and continue with the next one
                 print(f"Warning: Failed to generate definition for '{term_name}': {e}")
                 continue
+            finally:
+                # Call progress callback if provided
+                if progress_callback is not None:
+                    progress_callback(idx, total_terms)
 
         return glossary
 

@@ -13,6 +13,7 @@ from rich.progress import (
     SpinnerColumn,
     TaskProgressColumn,
     TextColumn,
+    TimeElapsedColumn,
 )
 
 from genglossary.document_loader import DocumentLoader
@@ -81,35 +82,90 @@ def generate_glossary(
         console.print(f"[dim]  → {len(documents)} ファイルを読み込みました[/dim]")
 
     # 2. Extract terms
-    if verbose:
-        console.print("[dim]用語を抽出中...[/dim]")
     extractor = TermExtractor(llm_client=llm_client)
-    terms = extractor.extract_terms(documents)
-
     if verbose:
+        # Use progress bar during term extraction
+        # Note: We don't know total batches in advance, so we use indeterminate progress
+        # However, _classify_terms will call back with (current, total)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("用語を分類中...", total=None)  # Start indeterminate
+
+            def update_progress(current: int, total: int) -> None:
+                # Update total on first call if not set
+                if progress.tasks[task].total is None:
+                    progress.update(task, total=total)
+                progress.update(task, completed=current)
+
+            terms = extractor.extract_terms(documents, progress_callback=update_progress)
+
         console.print(f"[dim]  → {len(terms)} 個の用語を抽出しました[/dim]")
+    else:
+        terms = extractor.extract_terms(documents)
 
     # 3. Generate glossary
-    if verbose:
-        console.print("[dim]用語集を生成中...[/dim]")
     generator = GlossaryGenerator(llm_client=llm_client)
-    glossary = generator.generate(terms, documents)
+    if verbose:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("定義を生成中...", total=len(terms))
+
+            def update_progress(current: int, total: int) -> None:
+                progress.update(task, completed=current)
+
+            glossary = generator.generate(terms, documents, progress_callback=update_progress)
+    else:
+        glossary = generator.generate(terms, documents)
 
     # 4. Review glossary
-    if verbose:
-        console.print("[dim]用語集を精査中...[/dim]")
     reviewer = GlossaryReviewer(llm_client=llm_client)
-    issues = reviewer.review(glossary)
+    if verbose:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("精査中..."),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            progress.add_task("精査中...", total=None)
+            issues = reviewer.review(glossary)
+    else:
+        issues = reviewer.review(glossary)
 
     if verbose:
         console.print(f"[dim]  → {len(issues)} 個の問題を検出しました[/dim]")
 
     # 5. Refine glossary
     if issues:
-        if verbose:
-            console.print("[dim]用語集を改善中...[/dim]")
         refiner = GlossaryRefiner(llm_client=llm_client)
-        glossary = refiner.refine(glossary, issues, documents)
+        if verbose:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeElapsedColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("改善中...", total=len(issues))
+
+                def update_progress(current: int, total: int) -> None:
+                    progress.update(task, completed=current)
+
+                glossary = refiner.refine(glossary, issues, documents, progress_callback=update_progress)
+        else:
+            glossary = refiner.refine(glossary, issues, documents)
 
     # Add metadata
     _add_glossary_metadata(glossary, model, len(documents))

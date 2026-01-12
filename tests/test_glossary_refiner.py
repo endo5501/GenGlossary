@@ -375,3 +375,106 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         assert refined_term is not None
         assert refined_term.occurrence_count == 1
         assert refined_term.occurrences[0].context == "Test context"
+
+
+class TestGlossaryRefinerProgressCallback:
+    """Test suite for GlossaryRefiner progress callback functionality."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_glossary(self) -> Glossary:
+        """Create a sample glossary for testing."""
+        glossary = Glossary()
+        glossary.add_term(
+            Term(name="Term1", definition="Definition 1", confidence=0.8)
+        )
+        glossary.add_term(
+            Term(name="Term2", definition="Definition 2", confidence=0.7)
+        )
+        glossary.add_term(
+            Term(name="Term3", definition="Definition 3", confidence=0.9)
+        )
+        return glossary
+
+    @pytest.fixture
+    def sample_documents(self) -> list[Document]:
+        """Create sample documents for testing."""
+        return [
+            Document(
+                file_path="/test.md",
+                content="Term1 and Term2 and Term3 are all here.",
+            )
+        ]
+
+    def test_refine_calls_progress_callback(
+        self,
+        mock_llm_client: MagicMock,
+        sample_glossary: Glossary,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that refine calls progress callback for each issue."""
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="Improved definition",
+            confidence=0.9,
+        )
+
+        issues = [
+            GlossaryIssue(term_name="Term1", issue_type="unclear", description="Issue 1"),
+            GlossaryIssue(term_name="Term2", issue_type="unclear", description="Issue 2"),
+        ]
+
+        callback_calls: list[tuple[int, int]] = []
+
+        def progress_callback(current: int, total: int) -> None:
+            callback_calls.append((current, total))
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        refiner.refine(sample_glossary, issues, sample_documents, progress_callback=progress_callback)
+
+        assert len(callback_calls) == 2
+        assert callback_calls[0] == (1, 2)
+        assert callback_calls[1] == (2, 2)
+
+    def test_refine_works_without_callback(
+        self,
+        mock_llm_client: MagicMock,
+        sample_glossary: Glossary,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that refine works without progress callback."""
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="Improved definition",
+            confidence=0.9,
+        )
+
+        issues = [
+            GlossaryIssue(term_name="Term1", issue_type="unclear", description="Issue 1"),
+        ]
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        # Should not raise even without callback
+        result = refiner.refine(sample_glossary, issues, sample_documents)
+
+        assert result is not None
+        assert result.has_term("Term1")
+
+    def test_refine_callback_on_empty_issues(
+        self,
+        mock_llm_client: MagicMock,
+        sample_glossary: Glossary,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that callback is not called when issues list is empty."""
+        callback_calls: list[tuple[int, int]] = []
+
+        def progress_callback(current: int, total: int) -> None:
+            callback_calls.append((current, total))
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        refiner.refine(sample_glossary, [], sample_documents, progress_callback=progress_callback)
+
+        assert len(callback_calls) == 0
