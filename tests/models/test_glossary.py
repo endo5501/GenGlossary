@@ -40,6 +40,47 @@ class TestGlossaryIssue:
                 description="Test description",
             )
 
+    def test_glossary_issue_unnecessary_type(self) -> None:
+        """Test that 'unnecessary' is a valid issue type."""
+        issue = GlossaryIssue(
+            term_name="一般語",
+            issue_type="unnecessary",
+            description="一般的な語彙のため不要",
+        )
+        assert issue.issue_type == "unnecessary"
+
+    def test_glossary_issue_should_exclude_default_false(self) -> None:
+        """Test that should_exclude defaults to False."""
+        issue = GlossaryIssue(
+            term_name="test",
+            issue_type="unclear",
+            description="Test description",
+        )
+        assert issue.should_exclude is False
+        assert issue.exclusion_reason is None
+
+    def test_glossary_issue_should_exclude_true(self) -> None:
+        """Test creating issue with should_exclude=True."""
+        issue = GlossaryIssue(
+            term_name="一般語",
+            issue_type="unnecessary",
+            description="一般的な語彙のため不要",
+            should_exclude=True,
+            exclusion_reason="辞書的な意味で十分理解できる",
+        )
+        assert issue.should_exclude is True
+        assert issue.exclusion_reason == "辞書的な意味で十分理解できる"
+
+    def test_glossary_issue_exclusion_reason_optional(self) -> None:
+        """Test that exclusion_reason is optional."""
+        issue = GlossaryIssue(
+            term_name="test",
+            issue_type="unnecessary",
+            description="Test",
+            should_exclude=True,
+        )
+        assert issue.exclusion_reason is None
+
 
 class TestGlossary:
     """Test cases for Glossary model."""
