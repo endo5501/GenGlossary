@@ -145,6 +145,10 @@ def generate_glossary(
 
     if verbose:
         console.print(f"[dim]  → {len(issues)} 個の問題を検出しました[/dim]")
+        # Display count of terms to be excluded
+        exclude_count = sum(1 for issue in issues if issue.should_exclude)
+        if exclude_count > 0:
+            console.print(f"[dim]  → {exclude_count} 個の用語を除外予定[/dim]")
 
     # 5. Refine glossary
     if issues:
@@ -166,6 +170,15 @@ def generate_glossary(
                 glossary = refiner.refine(glossary, issues, documents, progress_callback=update_progress)
         else:
             glossary = refiner.refine(glossary, issues, documents)
+
+        # Display excluded terms if any
+        if verbose and "excluded_terms" in glossary.metadata:
+            excluded_terms = glossary.metadata["excluded_terms"]
+            console.print(f"[dim]  → {len(excluded_terms)} 個の用語を除外しました[/dim]")
+            if excluded_terms:
+                for excluded in excluded_terms:
+                    reason = excluded.get("reason", "理由不明")
+                    console.print(f"[dim]    - {excluded['term_name']}: {reason}[/dim]")
 
     # Add metadata
     _add_glossary_metadata(glossary, model, len(documents))
