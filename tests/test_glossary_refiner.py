@@ -376,6 +376,101 @@ GenGlossaryはCLIとして動作し、Markdownファイルを出力します。
         assert refined_term.occurrence_count == 1
         assert refined_term.occurrences[0].context == "Test context"
 
+    def test_refine_excludes_terms_with_should_exclude_true(
+        self,
+        mock_llm_client: MagicMock,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that terms with should_exclude=True are removed from glossary."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="ImportantTerm", definition="重要な用語", confidence=0.9))
+        glossary.add_term(Term(name="一般語", definition="一般的な言葉", confidence=0.8))
+
+        issues = [
+            GlossaryIssue(
+                term_name="一般語",
+                issue_type="unnecessary",
+                description="一般的な語彙のため不要",
+                should_exclude=True,
+                exclusion_reason="辞書的な意味で十分理解できる",
+            ),
+        ]
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        result = refiner.refine(glossary, issues, sample_documents)
+
+        assert result.has_term("ImportantTerm") is True
+        assert result.has_term("一般語") is False
+        mock_llm_client.generate_structured.assert_not_called()
+
+    def test_refine_tracks_excluded_terms_in_metadata(
+        self,
+        mock_llm_client: MagicMock,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that excluded terms are tracked in metadata."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="一般語", definition="一般的な言葉", confidence=0.8))
+
+        issues = [
+            GlossaryIssue(
+                term_name="一般語",
+                issue_type="unnecessary",
+                description="不要",
+                should_exclude=True,
+                exclusion_reason="辞書的な意味で十分",
+            ),
+        ]
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        result = refiner.refine(glossary, issues, sample_documents)
+
+        assert "excluded_terms" in result.metadata
+        excluded = result.metadata["excluded_terms"]
+        assert len(excluded) == 1
+        assert excluded[0]["term_name"] == "一般語"
+        assert excluded[0]["reason"] == "辞書的な意味で十分"
+
+    def test_refine_processes_remaining_issues_after_exclusion(
+        self,
+        mock_llm_client: MagicMock,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that non-excluded issues are still processed for refinement."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="Term1", definition="曖昧な定義", confidence=0.5))
+        glossary.add_term(Term(name="一般語", definition="一般的", confidence=0.8))
+
+        issues = [
+            GlossaryIssue(
+                term_name="一般語",
+                issue_type="unnecessary",
+                description="不要",
+                should_exclude=True,
+            ),
+            GlossaryIssue(
+                term_name="Term1",
+                issue_type="unclear",
+                description="定義が曖昧",
+                should_exclude=False,
+            ),
+        ]
+
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="改善された定義",
+            confidence=0.9,
+        )
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        result = refiner.refine(glossary, issues, sample_documents)
+
+        assert result.has_term("一般語") is False
+        assert result.has_term("Term1") is True
+        term1 = result.get_term("Term1")
+        assert term1 is not None
+        assert term1.definition == "改善された定義"
+        mock_llm_client.generate_structured.assert_called_once()
+
 
 class TestGlossaryRefinerProgressCallback:
     """Test suite for GlossaryRefiner progress callback functionality."""

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 from genglossary.models.term import Term
 
 
-IssueType = Literal["unclear", "contradiction", "missing_relation"]
+IssueType = Literal["unclear", "contradiction", "missing_relation", "unnecessary"]
 
 
 class GlossaryIssue(BaseModel):
@@ -15,19 +15,23 @@ class GlossaryIssue(BaseModel):
 
     Attributes:
         term_name: The name of the term this issue relates to.
-        issue_type: The type of issue (unclear, contradiction, missing_relation).
+        issue_type: The type of issue (unclear, contradiction, missing_relation, unnecessary).
         description: A description of the issue.
+        should_exclude: Whether the term should be excluded from the glossary.
+        exclusion_reason: Reason for exclusion if should_exclude is True.
     """
 
     term_name: str
     issue_type: IssueType
     description: str
+    should_exclude: bool = False
+    exclusion_reason: str | None = None
 
     @field_validator("issue_type")
     @classmethod
     def validate_issue_type(cls, v: str) -> str:
         """Validate that issue_type is one of the allowed values."""
-        valid_types = {"unclear", "contradiction", "missing_relation"}
+        valid_types = {"unclear", "contradiction", "missing_relation", "unnecessary"}
         if v not in valid_types:
             raise ValueError(
                 f"issue_type must be one of {valid_types}, got '{v}'"

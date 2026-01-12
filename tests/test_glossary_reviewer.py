@@ -285,3 +285,44 @@ class TestGlossaryReviewer:
 
         # Should indicate confidence levels
         assert "0.95" in prompt or "95" in prompt or "0.3" in prompt or "30" in prompt
+
+    def test_parse_issues_handles_should_exclude(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that should_exclude is correctly parsed."""
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        raw_issues = [
+            {
+                "term": "一般語",
+                "issue_type": "unnecessary",
+                "description": "不要な用語",
+                "should_exclude": True,
+                "exclusion_reason": "一般語彙",
+            }
+        ]
+        issues = reviewer._parse_issues(raw_issues)
+        assert len(issues) == 1
+        assert issues[0].should_exclude is True
+        assert issues[0].exclusion_reason == "一般語彙"
+
+    def test_parse_issues_defaults_should_exclude_to_false(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that should_exclude defaults to False when not provided."""
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        raw_issues = [
+            {"term": "TestTerm", "issue_type": "unclear", "description": "定義が曖昧"}
+        ]
+        issues = reviewer._parse_issues(raw_issues)
+        assert len(issues) == 1
+        assert issues[0].should_exclude is False
+
+    def test_create_review_prompt_includes_necessity_judgment(
+        self, mock_llm_client: MagicMock, sample_glossary: Glossary
+    ) -> None:
+        """Test that prompt includes criteria for term necessity judgment."""
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        prompt = reviewer._create_review_prompt(sample_glossary)
+        # Should mention unnecessary or exclusion criteria
+        assert "unnecessary" in prompt or "不要" in prompt
+        assert "should_exclude" in prompt
