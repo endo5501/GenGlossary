@@ -39,15 +39,15 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] GlossaryIssue モデルに `should_exclude` フィールドを追加
-- [ ] GlossaryReviewer のプロンプトを更新して、各用語の必要性判断を含める
-- [ ] GlossaryRefiner で `should_exclude=True` の用語を除外する処理を追加
-- [ ] 除外理由をログ出力またはデバッグ情報として表示
-- [ ] 単体テストを追加（除外ロジック、プロンプト更新）
-- [ ] 統合テストで除外機能の動作確認
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] GlossaryIssue モデルに `should_exclude` フィールドを追加
+- [x] GlossaryReviewer のプロンプトを更新して、各用語の必要性判断を含める
+- [x] GlossaryRefiner で `should_exclude=True` の用語を除外する処理を追加
+- [x] 除外理由をログ出力またはデバッグ情報として表示
+- [x] 単体テストを追加（除外ロジック、プロンプト更新）
+- [x] 統合テストで除外機能の動作確認
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## 技術的詳細
