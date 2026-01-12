@@ -12,6 +12,8 @@ class RawIssue(BaseModel):
     term: str
     issue_type: IssueType
     description: str
+    should_exclude: bool = False
+    exclusion_reason: str | None = None
 
 
 class ReviewResponse(BaseModel):
@@ -88,9 +90,14 @@ class GlossaryReviewer:
 2. 複数の用語間で矛盾する説明 (issue_type: "contradiction")
 3. 関連用語の欠落や関係性の不明確さ (issue_type: "missing_relation")
 4. 定義が実際の使用例と一致していない箇所
+5. 用語集に含める必要性の判断:
+   - 一般的な語彙で説明不要なもの (issue_type: "unnecessary", should_exclude: true)
+   - 文脈から意味が明確で補足説明が不要なもの (issue_type: "unnecessary", should_exclude: true)
+   - 単純すぎて定義する価値がないもの (issue_type: "unnecessary", should_exclude: true)
+   注意: 判断が難しい場合は、用語集に含める方向で判断してください。
 
 JSON形式で回答してください:
-{{"issues": [{{"term": "用語名", "issue_type": "unclear|contradiction|missing_relation", "description": "問題の説明"}}]}}
+{{"issues": [{{"term": "用語名", "issue_type": "unclear|contradiction|missing_relation|unnecessary", "description": "問題の説明", "should_exclude": true/false, "exclusion_reason": "除外理由（should_exclude=trueの場合）"}}]}}
 
 問題がない場合は空のリストを返してください: {{"issues": []}}"""
 
@@ -114,6 +121,8 @@ JSON形式で回答してください:
                     term_name=validated.term,
                     issue_type=validated.issue_type,
                     description=validated.description,
+                    should_exclude=validated.should_exclude,
+                    exclusion_reason=validated.exclusion_reason,
                 )
                 issues.append(issue)
             except ValidationError:
