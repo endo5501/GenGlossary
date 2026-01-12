@@ -143,7 +143,12 @@ class TermExtractor:
         """
         return "\n\n---\n\n".join(doc.content for doc in documents)
 
-    def extract_terms(self, documents: list[Document]) -> list[str]:
+    def extract_terms(
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
+    ) -> list[str]:
         """Extract terms from the given documents.
 
         Uses a two-phase LLM process:
@@ -152,6 +157,9 @@ class TermExtractor:
 
         Args:
             documents: List of documents to extract terms from.
+            progress_callback: Optional callback called after each batch is classified.
+                Receives (current_batch, total_batches) where current is 1-indexed.
+            batch_size: Number of terms to classify per LLM call (default: 10).
 
         Returns:
             A list of unique approved terms.
@@ -166,7 +174,12 @@ class TermExtractor:
             return []
 
         # Step 2: Classify terms (Phase 1 of LLM processing)
-        classification = self._classify_terms(candidates, non_empty_docs)
+        classification = self._classify_terms(
+            candidates,
+            non_empty_docs,
+            batch_size=batch_size,
+            progress_callback=progress_callback,
+        )
 
         # Step 3: Select terms, excluding common nouns (Phase 2 of LLM processing)
         return self._select_terms(classification, non_empty_docs)
