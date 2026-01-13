@@ -117,10 +117,19 @@ def generate_glossary(
                 "エンドポイントURLとAPIキーを確認してください。"
             )
 
+    # Determine actual model name for logging and metadata
+    if model is None:
+        config = Config()
+        actual_model = (
+            config.ollama_model if provider == "ollama" else config.openai_model
+        )
+    else:
+        actual_model = model
+
     if verbose:
         console.print(f"[dim]入力ディレクトリ: {input_dir}[/dim]")
         console.print(f"[dim]出力ファイル: {output_file}[/dim]")
-        console.print(f"[dim]モデル: {model}[/dim]")
+        console.print(f"[dim]モデル: {actual_model}[/dim]")
 
     # 1. Load documents
     if verbose:
@@ -185,7 +194,7 @@ def generate_glossary(
                     console.print(f"[dim]    - {excluded['term_name']}: {reason}[/dim]")
 
     # Add metadata
-    _add_glossary_metadata(glossary, model, len(documents))
+    _add_glossary_metadata(glossary, actual_model, len(documents))
 
     # 6. Write output
     if verbose:
