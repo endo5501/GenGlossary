@@ -4,7 +4,7 @@ tags: [llm, azure, openai, integration]
 description: "Add Azure OpenAI Service support as an alternative LLM provider"
 created_at: "2026-01-08T14:50:32Z"
 started_at: 2026-01-13T00:03:36Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-13T04:33:55Z # Do not modify manually
 ---
 
 # Ticket Overview
