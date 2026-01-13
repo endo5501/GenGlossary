@@ -169,6 +169,9 @@ class OllamaClient(BaseLLMClient):
                 else:
                     raise
 
+        # This should never be reached, but for type safety
+        raise httpx.HTTPError("Maximum retries exceeded")
+
     def __del__(self):
         """Clean up HTTP client on deletion."""
         if hasattr(self, 'client'):
