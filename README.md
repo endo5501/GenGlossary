@@ -4,7 +4,7 @@ AIを活用した用語集自動生成ツール
 
 ## 概要
 
-GenGlossaryは、ドキュメントから用語を自動抽出し、その文脈に基づいた定義を生成する用語集自動作成ツールです。ローカルで動作するOllamaを使用することで、プライバシーを確保しながら高品質な用語集を生成できます。
+GenGlossaryは、ドキュメントから用語を自動抽出し、その文脈に基づいた定義を生成する用語集自動作成ツールです。ローカルで動作するOllamaに加え、OpenAI、Azure OpenAI、llama.cpp、LM Studioなど、OpenAI互換APIをサポートします。
 
 ### 主な機能
 
@@ -51,21 +51,32 @@ uv run genglossary generate --input ./target_docs --output ./output/glossary.md
 uv run genglossary generate [OPTIONS]
 
 Options:
-  -i, --input DIRECTORY  入力ドキュメントのディレクトリ (デフォルト: ./target_docs)
-  -o, --output PATH      出力する用語集ファイルのパス (デフォルト: ./output/glossary.md)
-  -m, --model TEXT       使用するOllamaモデル名 (デフォルト: dengcao/Qwen3-30B-A3B-Instruct-2507:latest)
-  -v, --verbose          詳細ログを表示
-  --help                 ヘルプを表示
+  -i, --input DIRECTORY         入力ドキュメントのディレクトリ (デフォルト: ./target_docs)
+  -o, --output PATH             出力する用語集ファイルのパス (デフォルト: ./output/glossary.md)
+  --llm-provider [ollama|openai]  LLMプロバイダー (デフォルト: ollama)
+  -m, --model TEXT              使用するモデル名（プロバイダーごとのデフォルトあり）
+  --openai-base-url TEXT        OpenAI互換APIのベースURL
+  -v, --verbose                 詳細ログを表示
+  --help                        ヘルプを表示
 ```
 
 ### 使用例
 
 ```bash
-# 詳細ログ付きで実行
+# Ollamaで詳細ログ付きで実行
 uv run genglossary generate -i ./docs -o ./glossary.md --verbose
 
-# 別のモデルを使用
+# Ollama: 別のモデルを使用
 uv run genglossary generate -m llama3.2
+
+# OpenAI APIを使用
+uv run genglossary generate --llm-provider openai -m gpt-4o-mini
+
+# Azure OpenAIを使用
+uv run genglossary generate --llm-provider openai --openai-base-url https://your-resource.openai.azure.com
+
+# llama.cpp (OpenAI互換モード) を使用
+uv run genglossary generate --llm-provider openai --openai-base-url http://localhost:8080/v1 -m local-model
 ```
 
 ### 用語抽出の分析（デバッグモード）
@@ -125,13 +136,85 @@ cp .env.example .env
 ```
 
 ```env
+# LLMプロバイダー選択
+LLM_PROVIDER=ollama  # ollama または openai
+
 # Ollama設定
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=dengcao/Qwen3-30B-A3B-Instruct-2507:latest
-OLLAMA_TIMEOUT=60
+OLLAMA_TIMEOUT=120
+
+# OpenAI互換API設定
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=sk-your-api-key-here
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT=60
+
+# Azure OpenAI設定（オプション）
+# AZURE_OPENAI_API_VERSION=2024-02-15-preview
 
 # 出力設定
 DEFAULT_OUTPUT_PATH=./output/glossary.md
+```
+
+### LLMプロバイダー
+
+GenGlossaryは以下のLLMプロバイダーをサポートします：
+
+#### 1. Ollama（デフォルト）
+
+ローカルで動作するLLMランタイム。プライバシーを確保しながら使用できます。
+
+```bash
+# Ollamaのセットアップ
+ollama pull dengcao/Qwen3-30B-A3B-Instruct-2507:latest
+ollama serve
+
+# 使用
+uv run genglossary generate -i ./docs
+```
+
+#### 2. OpenAI API
+
+OpenAIの公式API。高品質なGPTモデルを使用できます。
+
+```bash
+# 環境変数を設定
+export OPENAI_API_KEY=sk-your-api-key-here
+
+# 使用
+uv run genglossary generate --llm-provider openai -i ./docs
+```
+
+#### 3. Azure OpenAI Service
+
+Azureで提供されるOpenAIサービス。エンタープライズ向け。
+
+```bash
+# 環境変数を設定
+export OPENAI_BASE_URL=https://your-resource.openai.azure.com
+export OPENAI_API_KEY=your-azure-key
+export OPENAI_MODEL=your-deployment-name
+export AZURE_OPENAI_API_VERSION=2024-02-15-preview
+
+# 使用
+uv run genglossary generate --llm-provider openai -i ./docs
+```
+
+#### 4. llama.cpp / LM Studio
+
+OpenAI互換モードで動作するローカルLLM。
+
+```bash
+# llama.cppサーバーを起動
+./llama-server -m model.gguf --port 8080
+
+# 使用
+uv run genglossary generate \
+  --llm-provider openai \
+  --openai-base-url http://localhost:8080/v1 \
+  -m local-model \
+  -i ./docs
 ```
 
 ### サポートするファイル形式
@@ -209,6 +292,28 @@ GenGlossary/
    ```bash
    ollama list
    ```
+
+### OpenAI APIに接続できない
+
+```
+エラー: openai APIに接続できません
+```
+
+**解決方法:**
+
+1. APIキーが正しく設定されていることを確認:
+   ```bash
+   echo $OPENAI_API_KEY
+   ```
+
+2. ベースURLが正しいことを確認（Azure OpenAIの場合）:
+   ```bash
+   echo $OPENAI_BASE_URL
+   ```
+
+3. ネットワーク接続を確認
+
+4. APIの利用制限やクォータを確認
 
 ### モデルが見つからない
 

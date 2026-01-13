@@ -1,13 +1,15 @@
 ---
 name: llm-integration
-description: "LLM integration patterns for GenGlossary using Ollama. Covers retry logic, structured output with Pydantic, JSON extraction, prompt design best practices, and error handling. Use when: (1) Implementing LLM API calls, (2) Designing prompts for term extraction/glossary generation, (3) Handling LLM response parsing, (4) Setting up retry and timeout logic, (5) Mocking LLM calls in tests."
+description: "LLM integration patterns for GenGlossary using Ollama and OpenAI-compatible APIs. Covers retry logic, structured output with Pydantic, JSON extraction, prompt design best practices, and error handling. Use when: (1) Implementing LLM API calls, (2) Designing prompts for term extraction/glossary generation, (3) Handling LLM response parsing, (4) Setting up retry and timeout logic, (5) Mocking LLM calls in tests."
 ---
 
 # LLM統合パターン
 
-このスキルでは、GenGlossaryにおけるOllama統合の設計パターン、理由、ベストプラクティスを説明します。
+このスキルでは、GenGlossaryにおけるLLM統合（Ollama、OpenAI互換API）の設計パターン、理由、ベストプラクティスを説明します。
 
-**参照コード**: `src/genglossary/llm/ollama_client.py`
+**参照コード**:
+- `src/genglossary/llm/ollama_client.py` - Ollama専用クライアント
+- `src/genglossary/llm/openai_compatible_client.py` - OpenAI互換APIクライアント
 
 ## なぜこの設計なのか
 
@@ -19,6 +21,17 @@ description: "LLM integration patterns for GenGlossary using Ollama. Covers retr
 
 ### 3. JSON抽出の正規表現フォールバック
 **理由**: LLMが余分なテキストを含める場合があるため、正規表現で柔軟に対応します。
+
+## プロバイダーの選択
+
+GenGlossaryは以下のLLMプロバイダーをサポートします：
+
+| プロバイダー | クライアント | エンドポイント | 特徴 |
+|------------|-------------|--------------|------|
+| Ollama | `OllamaClient` | `/api/generate` | ローカル実行、プライバシー確保 |
+| OpenAI | `OpenAICompatibleClient` | `/v1/chat/completions` | 高品質、API課金 |
+| Azure OpenAI | `OpenAICompatibleClient` | `/chat/completions?api-version=...` | エンタープライズ向け |
+| llama.cpp | `OpenAICompatibleClient` | `/v1/chat/completions` | ローカル実行、OpenAI互換 |
 
 ## Ollama統合の基本
 
@@ -32,6 +45,22 @@ endpoint = f"{base_url}/api/generate"
 # ❌ 悪い例
 endpoint = "http://localhost:11434/api/generate/"  # 末尾のスラッシュは不要
 base_url = "localhost:11434"  # スキーマ（http://）が必要
+```
+
+## OpenAI互換API統合の基本
+
+### エンドポイント
+
+OpenAI互換APIは統一されたエンドポイント `/v1/chat/completions` を使用します。
+
+```python
+# ✅ 良い例
+base_url = "https://api.openai.com/v1"
+endpoint = f"{base_url}/chat/completions"
+
+# Azure OpenAIの場合はapi-versionが必要
+base_url = "https://your-resource.openai.azure.com"
+endpoint = f"{base_url}/chat/completions?api-version=2024-02-15-preview"
 ```
 
 ### 初期化
@@ -52,6 +81,45 @@ class OllamaClient(BaseLLMClient):
         self.max_retries = max_retries
         self.client = httpx.Client(timeout=timeout)
 ```
+
+### OpenAI互換APIの初期化
+
+```python
+# ✅ 良い例（プロバイダー別の認証を考慮）
+class OpenAICompatibleClient(BaseLLMClient):
+    def __init__(
+        self,
+        base_url: str = "https://api.openai.com/v1",
+        api_key: str | None = None,
+        model: str = "gpt-4o-mini",
+        timeout: float = 60.0,
+        max_retries: int = 3,
+        api_version: str | None = None,  # Azure用
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.model = model
+        self.api_version = api_version
+        self.client = httpx.Client(timeout=timeout)
+
+    @property
+    def _headers(self) -> dict[str, str]:
+        """Get authentication headers based on provider."""
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            # Azure uses api-key header
+            if "azure" in self.base_url.lower():
+                headers["api-key"] = self.api_key
+            # OpenAI and others use Bearer token
+            else:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
+```
+
+**ポイント**:
+- ✅ Azureと OpenAIで認証ヘッダーが異なる
+- ✅ AzureはURLに `azure` を含むことで自動判定
+- ✅ API versionはAzure専用（オプショナル）
 
 ## リトライロジックの実装
 
@@ -110,6 +178,53 @@ wait_time = random.uniform(1, 5)
 - サーバーが高負荷の場合、間隔を空けることで回復の時間を与える
 - 固定ウェイトは、多数のクライアントが同時にリトライすると「雷の群れ」問題を引き起こす
 - 指数バックオフは業界標準（AWS, Google Cloud など）
+
+### OpenAI互換API のリトライ戦略
+
+```python
+def _request_with_retry(self, payload: dict) -> httpx.Response:
+    """Make HTTP request with provider-specific retry logic."""
+    params = {}
+    if self.api_version:  # Azure only
+        params["api-version"] = self.api_version
+
+    for attempt in range(self.max_retries + 1):
+        try:
+            response = self.client.post(
+                self._endpoint_url,
+                json=payload,
+                headers=self._headers,
+                params=params,
+            )
+
+            # Handle rate limiting (429)
+            if response.status_code == 429:
+                if attempt < self.max_retries:
+                    # Check Retry-After header
+                    retry_after = int(response.headers.get("Retry-After", 2 ** attempt))
+                    time.sleep(min(retry_after, 60))  # Cap at 60 seconds
+                    continue
+
+            response.raise_for_status()
+            return response
+
+        except httpx.HTTPStatusError as e:
+            # Don't retry on client errors (4xx except 429)
+            if 400 <= e.response.status_code < 500 and e.response.status_code != 429:
+                raise
+
+            # Retry on server errors (5xx)
+            if attempt < self.max_retries and e.response.status_code >= 500:
+                time.sleep(2 ** attempt)
+                continue
+            raise
+```
+
+**ポイント**:
+- ✅ 429（Rate Limit）は `Retry-After` ヘッダーを確認
+- ✅ 4xx（401, 400など）は即座にエラー（リトライ不可）
+- ✅ 5xxはリトライ可能
+- ✅ Azure用の `api-version` クエリパラメータを追加
 
 ## 構造化出力のパターン
 
@@ -179,6 +294,45 @@ def generate_structured(
 - ✅ JSON schema を明示的に追加
 - ✅ HTTPリトライとJSONパースリトライを分離
 - ✅ パース失敗時は短い待機後にリトライ
+
+### OpenAI互換API でのJSON mode
+
+OpenAI互換APIは `response_format` で JSON モードをサポートします。
+
+```python
+def generate_structured(
+    self,
+    prompt: str,
+    response_model: Type[T],
+    max_json_retries: int = 3
+) -> T:
+    """Generate structured output using JSON mode."""
+    json_prompt = f"{prompt}\n\nPlease respond in valid JSON format matching this structure: {response_model.model_json_schema()}"
+
+    payload = {
+        "model": self.model,
+        "messages": [{"role": "user", "content": json_prompt}],
+        "response_format": {"type": "json_object"},  # JSON mode
+    }
+
+    for attempt in range(max_json_retries):
+        response = self._request_with_retry(payload)
+        response_text = response.json()["choices"][0]["message"]["content"]
+
+        parsed_model = self._parse_json_response(response_text, response_model)
+        if parsed_model is not None:
+            return parsed_model
+
+        if attempt < max_json_retries - 1:
+            time.sleep(0.5)
+
+    raise ValueError(f"Failed to parse structured output after {max_json_retries} attempts")
+```
+
+**ポイント**:
+- ✅ `response_format: {"type": "json_object"}` でJSON出力を強制
+- ✅ Ollamaと異なり、メッセージ形式（`messages`）を使用
+- ✅ レスポンスは `choices[0].message.content` から取得
 
 ## JSON抽出の正規表現パターン
 
@@ -379,6 +533,96 @@ payload = {
 ```
 
 **理由**: ストリーミングは複雑で、エラーハンドリングが困難。バッチ処理で十分。
+
+## プロバイダー別の実装例
+
+### プロバイダー選択のファクトリパターン
+
+```python
+from genglossary.llm.base import BaseLLMClient
+from genglossary.llm.ollama_client import OllamaClient
+from genglossary.llm.openai_compatible_client import OpenAICompatibleClient
+from genglossary.config import Config
+
+def create_llm_client(provider: str, model: str | None = None) -> BaseLLMClient:
+    """Create LLM client based on provider.
+
+    Args:
+        provider: "ollama" or "openai"
+        model: Optional model name
+
+    Returns:
+        Configured LLM client
+    """
+    if provider == "ollama":
+        return OllamaClient(
+            model=model or "dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
+            timeout=180.0,
+        )
+    elif provider == "openai":
+        config = Config()
+        return OpenAICompatibleClient(
+            base_url=config.openai_base_url,
+            api_key=config.openai_api_key,
+            model=model or config.openai_model,
+            timeout=180.0,
+            api_version=config.azure_openai_api_version,
+        )
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+```
+
+**使用例**:
+
+```python
+# Ollamaを使用
+client = create_llm_client("ollama")
+
+# OpenAI APIを使用
+client = create_llm_client("openai", model="gpt-4o-mini")
+
+# Azure OpenAIを使用（環境変数で設定）
+# OPENAI_BASE_URL=https://your-resource.openai.azure.com
+# AZURE_OPENAI_API_VERSION=2024-02-15-preview
+client = create_llm_client("openai")
+```
+
+## テストでのプロバイダー別モック
+
+### OpenAI互換APIのモック
+
+```python
+import respx
+from httpx import Response
+
+@respx.mock
+def test_openai_generate_returns_response_text():
+    """Test OpenAI-compatible API generate method."""
+    # OpenAI APIのレスポンスをモック
+    respx.post("https://api.openai.com/v1/chat/completions").mock(
+        return_value=Response(
+            200,
+            json={
+                "id": "chatcmpl-123",
+                "choices": [{
+                    "message": {"content": "Generated text"}
+                }]
+            }
+        )
+    )
+
+    client = OpenAICompatibleClient(
+        base_url="https://api.openai.com/v1",
+        api_key="test-key"
+    )
+    result = client.generate("Test prompt")
+
+    assert result == "Generated text"
+```
+
+**ポイント**:
+- ✅ OpenAI APIのレスポンス構造（`choices[].message.content`）に従う
+- ✅ Ollamaとは異なるエンドポイント（`/v1/chat/completions`）
 
 ## 関連ドキュメント
 
