@@ -46,12 +46,12 @@ def create_llm_client(
         ValueError: If provider is unknown.
     """
     if provider == "ollama":
-        default_model = "dengcao/Qwen3-30B-A3B-Instruct-2507:latest"
         return OllamaClient(
-            model=model or default_model,
+            model=model or "dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
             timeout=timeout,
         )
-    elif provider == "openai":
+
+    if provider == "openai":
         config = Config()
         return OpenAICompatibleClient(
             base_url=openai_base_url or config.openai_base_url,
@@ -60,8 +60,8 @@ def create_llm_client(
             timeout=timeout,
             api_version=config.azure_openai_api_version,
         )
-    else:
-        raise ValueError(f"Unknown provider: {provider}. Must be 'ollama' or 'openai'.")
+
+    raise ValueError(f"Unknown provider: {provider}. Must be 'ollama' or 'openai'.")
 
 
 def _add_glossary_metadata(glossary: Glossary, model: str, document_count: int) -> None:

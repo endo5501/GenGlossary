@@ -1,11 +1,9 @@
 """OpenAI-compatible LLM client implementation."""
-import json
-import re
 import time
 from typing import Type, TypeVar
 
 import httpx
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from genglossary.llm.base import BaseLLMClient
 
@@ -108,64 +106,18 @@ class OpenAICompatibleClient(BaseLLMClient):
             ValueError: If JSON parsing or validation fails after all retries.
             httpx.HTTPError: If the request fails after all retries.
         """
-        json_prompt = f"{prompt}\n\nPlease respond in valid JSON format matching this structure: {response_model.model_json_schema()}"
-
+        json_prompt = self._build_json_prompt(prompt, response_model)
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": json_prompt}],
             "response_format": {"type": "json_object"},
         }
 
-        last_error = None
-        response_text = ""
-
-        for attempt in range(max_json_retries):
+        def _generate() -> str:
             response = self._request_with_retry(payload)
-            response_text = response.json()["choices"][0]["message"]["content"]
+            return response.json()["choices"][0]["message"]["content"]
 
-            parsed_model = self._parse_json_response(response_text, response_model)
-            if parsed_model is not None:
-                return parsed_model
-
-            last_error = ValueError(f"Failed to parse JSON on attempt {attempt + 1}")
-            if attempt < max_json_retries - 1:
-                time.sleep(0.5)
-
-        raise ValueError(
-            f"Failed to parse structured output after {max_json_retries} attempts.\n"
-            f"Last error: {last_error}\n"
-            f"Response text: {response_text[:500]}"
-        )
-
-    def _parse_json_response(
-        self, response_text: str, response_model: Type[T]
-    ) -> T | None:
-        """Parse JSON response with fallback to regex extraction.
-
-        Args:
-            response_text: Raw text response from LLM.
-            response_model: Pydantic model for validation.
-
-        Returns:
-            Validated model instance if parsing succeeds, None otherwise.
-        """
-        # Try direct JSON parsing
-        try:
-            data = json.loads(response_text)
-            return response_model(**data)
-        except (json.JSONDecodeError, ValidationError):
-            pass
-
-        # Fallback: extract JSON using regex
-        json_match = re.search(r"\{[^{}]*\}", response_text)
-        if json_match:
-            try:
-                data = json.loads(json_match.group())
-                return response_model(**data)
-            except (json.JSONDecodeError, ValidationError):
-                pass
-
-        return None
+        return self._retry_json_parsing(_generate, response_model, max_json_retries)
 
     def is_available(self) -> bool:
         """Check if the API service is available.
@@ -177,10 +129,7 @@ class OpenAICompatibleClient(BaseLLMClient):
         """
         try:
             url = f"{self.base_url}/models"
-            params = {}
-            if self.api_version:
-                params["api-version"] = self.api_version
-
+            params = {"api-version": self.api_version} if self.api_version else {}
             response = self.client.get(url, headers=self._headers, params=params)
             response.raise_for_status()
             return True
@@ -203,9 +152,7 @@ class OpenAICompatibleClient(BaseLLMClient):
         Raises:
             httpx.HTTPError: If all retries are exhausted.
         """
-        params = {}
-        if self.api_version:
-            params["api-version"] = self.api_version
+        params = {"api-version": self.api_version} if self.api_version else {}
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -216,14 +163,11 @@ class OpenAICompatibleClient(BaseLLMClient):
                     params=params,
                 )
 
-                # Handle rate limiting (429)
-                if response.status_code == 429:
-                    if attempt < self.max_retries:
-                        retry_after = int(
-                            response.headers.get("Retry-After", 2**attempt)
-                        )
-                        time.sleep(min(retry_after, 60))  # Cap at 60 seconds
-                        continue
+                # Handle rate limiting (429) - retry with backoff
+                if response.status_code == 429 and attempt < self.max_retries:
+                    retry_after = int(response.headers.get("Retry-After", 2**attempt))
+                    time.sleep(min(retry_after, 60))  # Cap at 60 seconds
+                    continue
 
                 response.raise_for_status()
                 return response
@@ -234,7 +178,7 @@ class OpenAICompatibleClient(BaseLLMClient):
                     raise
 
                 # Retry on server errors (5xx)
-                if attempt < self.max_retries and e.response.status_code >= 500:
+                if e.response.status_code >= 500 and attempt < self.max_retries:
                     time.sleep(2**attempt)
                     continue
                 raise
@@ -242,8 +186,8 @@ class OpenAICompatibleClient(BaseLLMClient):
             except httpx.HTTPError:
                 if attempt < self.max_retries:
                     time.sleep(2**attempt)
-                else:
-                    raise
+                    continue
+                raise
 
         # This should never be reached, but for type safety
         raise httpx.HTTPError("Maximum retries exceeded")
