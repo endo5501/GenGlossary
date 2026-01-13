@@ -8,11 +8,14 @@ from typing import Callable
 import click
 from rich.console import Console
 
+from genglossary.config import Config
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.glossary_refiner import GlossaryRefiner
 from genglossary.glossary_reviewer import GlossaryReviewer
+from genglossary.llm.base import BaseLLMClient
 from genglossary.llm.ollama_client import OllamaClient
+from genglossary.llm.openai_compatible_client import OpenAICompatibleClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.progress import progress_task
@@ -20,6 +23,45 @@ from genglossary.output.markdown_writer import MarkdownWriter
 from genglossary.term_extractor import TermExtractor, TermExtractionAnalysis
 
 console = Console()
+
+
+def create_llm_client(
+    provider: str,
+    model: str | None = None,
+    openai_base_url: str | None = None,
+    timeout: float = 180.0,
+) -> BaseLLMClient:
+    """Create LLM client based on provider.
+
+    Args:
+        provider: LLM provider ("ollama" or "openai").
+        model: Model name (provider-specific default if None).
+        openai_base_url: Base URL for OpenAI-compatible API (optional).
+        timeout: Request timeout in seconds.
+
+    Returns:
+        Configured LLM client instance.
+
+    Raises:
+        ValueError: If provider is unknown.
+    """
+    if provider == "ollama":
+        default_model = "dengcao/Qwen3-30B-A3B-Instruct-2507:latest"
+        return OllamaClient(
+            model=model or default_model,
+            timeout=timeout,
+        )
+    elif provider == "openai":
+        config = Config()
+        return OpenAICompatibleClient(
+            base_url=openai_base_url or config.openai_base_url,
+            api_key=config.openai_api_key,
+            model=model or config.openai_model,
+            timeout=timeout,
+            api_version=config.azure_openai_api_version,
+        )
+    else:
+        raise ValueError(f"Unknown provider: {provider}. Must be 'ollama' or 'openai'.")
 
 
 def _add_glossary_metadata(glossary: Glossary, model: str, document_count: int) -> None:
@@ -36,26 +78,44 @@ def _add_glossary_metadata(glossary: Glossary, model: str, document_count: int) 
 
 
 def generate_glossary(
-    input_dir: str, output_file: str, model: str, verbose: bool
+    input_dir: str,
+    output_file: str,
+    provider: str,
+    model: str | None,
+    openai_base_url: str | None,
+    verbose: bool
 ) -> None:
     """Generate glossary from documents.
 
     Args:
         input_dir: Input directory containing documents.
         output_file: Output file path for the glossary.
-        model: Ollama model to use.
+        provider: LLM provider ("ollama" or "openai").
+        model: Model name to use (None for provider default).
+        openai_base_url: Base URL for OpenAI-compatible API (optional).
         verbose: Whether to show verbose output.
     """
     # Initialize LLM client
     # Use longer timeout for large glossaries (reviews can take time)
-    llm_client = OllamaClient(model=model, timeout=180.0)
+    llm_client = create_llm_client(
+        provider=provider,
+        model=model,
+        openai_base_url=openai_base_url,
+        timeout=180.0,
+    )
 
-    # Check Ollama availability
+    # Check service availability
     if not llm_client.is_available():
-        raise RuntimeError(
-            "Ollamaサーバーに接続できません。\n"
-            "ollama serve でサーバーを起動してください。"
-        )
+        if provider == "ollama":
+            raise RuntimeError(
+                "Ollamaサーバーに接続できません。\n"
+                "ollama serve でサーバーを起動してください。"
+            )
+        else:
+            raise RuntimeError(
+                f"{provider} APIに接続できません。\n"
+                "エンドポイントURLとAPIキーを確認してください。"
+            )
 
     if verbose:
         console.print(f"[dim]入力ディレクトリ: {input_dir}[/dim]")
@@ -165,10 +225,21 @@ def main() -> None:
     help="出力する用語集ファイルのパス",
 )
 @click.option(
+    "--llm-provider",
+    type=click.Choice(["ollama", "openai"], case_sensitive=False),
+    default="ollama",
+    help="LLMプロバイダー: ollama または openai（OpenAI互換API）",
+)
+@click.option(
     "--model",
     "-m",
-    default="dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
-    help="使用するOllamaモデル名",
+    default=None,
+    help="使用するモデル名（省略時はプロバイダーごとのデフォルト値）",
+)
+@click.option(
+    "--openai-base-url",
+    default=None,
+    help="OpenAI互換APIのベースURL（--llm-provider=openai時のみ有効）",
 )
 @click.option(
     "--verbose",
@@ -177,7 +248,12 @@ def main() -> None:
     help="詳細ログを表示",
 )
 def generate(
-    input_dir: Path, output_file: Path, model: str, verbose: bool
+    input_dir: Path,
+    output_file: Path,
+    llm_provider: str,
+    model: str | None,
+    openai_base_url: str | None,
+    verbose: bool
 ) -> None:
     """ドキュメントから用語集を生成します。
 
@@ -192,15 +268,30 @@ def generate(
             )
             sys.exit(1)
 
+        # Determine model name for display
+        if model is None:
+            config = Config()
+            display_model = (
+                config.ollama_model if llm_provider == "ollama" else config.openai_model
+            )
+        else:
+            display_model = model
+
         console.print("[bold green]GenGlossary[/bold green]")
         console.print(f"入力: {input_dir}")
         console.print(f"出力: {output_file}")
-        console.print(f"モデル: {model}\n")
+        console.print(f"プロバイダー: {llm_provider}")
+        console.print(f"モデル: {display_model}\n")
 
         with progress_task(console, "用語集を生成中...", use_spinner_only=True):
             # Call the main generation function
             generate_glossary(
-                str(input_dir), str(output_file), model, verbose
+                str(input_dir),
+                str(output_file),
+                llm_provider,
+                model,
+                openai_base_url,
+                verbose
             )
 
         console.print("\n[bold green]✓ 用語集の生成が完了しました[/bold green]")
@@ -375,10 +466,21 @@ def _run_term_extraction_analysis(
     help="入力ドキュメントのディレクトリ",
 )
 @click.option(
+    "--llm-provider",
+    type=click.Choice(["ollama", "openai"], case_sensitive=False),
+    default="ollama",
+    help="LLMプロバイダー: ollama または openai（OpenAI互換API）",
+)
+@click.option(
     "--model",
     "-m",
-    default="dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
-    help="使用するOllamaモデル名",
+    default=None,
+    help="使用するモデル名（省略時はプロバイダーごとのデフォルト値）",
+)
+@click.option(
+    "--openai-base-url",
+    default=None,
+    help="OpenAI互換APIのベースURL（--llm-provider=openai時のみ有効）",
 )
 @click.option(
     "--batch-size",
@@ -387,7 +489,13 @@ def _run_term_extraction_analysis(
     type=int,
     help="LLM分類のバッチサイズ（デフォルト: 10）",
 )
-def analyze_terms(input_dir: Path, model: str, batch_size: int) -> None:
+def analyze_terms(
+    input_dir: Path,
+    llm_provider: str,
+    model: str | None,
+    openai_base_url: str | None,
+    batch_size: int
+) -> None:
     """用語抽出の中間結果を分析・表示します。
 
     SudachiPyによる固有名詞抽出とLLMによる用語判定の結果を表示し、
@@ -397,14 +505,34 @@ def analyze_terms(input_dir: Path, model: str, batch_size: int) -> None:
         console.print("[bold green]=== 用語抽出分析 ===[/bold green]\n")
 
         # Initialize LLM client
-        llm_client = OllamaClient(model=model, timeout=180.0)
+        llm_client = create_llm_client(
+            provider=llm_provider,
+            model=model,
+            openai_base_url=openai_base_url,
+            timeout=180.0,
+        )
 
         if not llm_client.is_available():
-            console.print(
-                "[red]Ollamaサーバーに接続できません。\n"
-                "ollama serve でサーバーを起動してください。[/red]"
-            )
+            if llm_provider == "ollama":
+                console.print(
+                    "[red]Ollamaサーバーに接続できません。\n"
+                    "ollama serve でサーバーを起動してください。[/red]"
+                )
+            else:
+                console.print(
+                    f"[red]{llm_provider} APIに接続できません。\n"
+                    "エンドポイントURLとAPIキーを確認してください。[/red]"
+                )
             sys.exit(1)
+
+        # Determine model name for display
+        if model is None:
+            config = Config()
+            display_model = (
+                config.ollama_model if llm_provider == "ollama" else config.openai_model
+            )
+        else:
+            display_model = model
 
         # Load documents
         console.print(f"[dim]入力: {input_dir}[/dim]")
@@ -416,7 +544,8 @@ def analyze_terms(input_dir: Path, model: str, batch_size: int) -> None:
             sys.exit(1)
 
         console.print(f"[dim]ファイル数: {len(documents)}[/dim]")
-        console.print(f"[dim]モデル: {model}[/dim]")
+        console.print(f"[dim]プロバイダー: {llm_provider}[/dim]")
+        console.print(f"[dim]モデル: {display_model}[/dim]")
         console.print(f"[dim]バッチサイズ: {batch_size}[/dim]\n")
 
         # Run analysis
