@@ -119,3 +119,29 @@ def list_refined_terms_by_run(
         )
         for row in rows
     ]
+
+
+def update_refined_term(
+    conn: sqlite3.Connection,
+    term_id: int,
+    definition: str,
+    confidence: float,
+) -> None:
+    """Update a refined term's definition and confidence.
+
+    Args:
+        conn: Database connection.
+        term_id: The term ID to update.
+        definition: The new definition.
+        confidence: The new confidence score (0.0 to 1.0).
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE glossary_refined
+        SET definition = ?, confidence = ?
+        WHERE id = ?
+        """,
+        (definition, confidence, term_id),
+    )
+    conn.commit()
