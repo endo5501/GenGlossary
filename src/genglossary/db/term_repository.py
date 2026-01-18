@@ -67,3 +67,41 @@ def list_terms_by_run(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row
         (run_id,),
     )
     return cursor.fetchall()
+
+
+def update_term(
+    conn: sqlite3.Connection,
+    term_id: int,
+    term_text: str,
+    category: str | None = None,
+) -> None:
+    """Update an existing term record.
+
+    Args:
+        conn: Database connection.
+        term_id: The term ID to update.
+        term_text: The new term text.
+        category: The new category (or None to set NULL).
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE terms_extracted
+        SET term_text = ?, category = ?
+        WHERE id = ?
+        """,
+        (term_text, category, term_id),
+    )
+    conn.commit()
+
+
+def delete_term(conn: sqlite3.Connection, term_id: int) -> None:
+    """Delete a term record.
+
+    Args:
+        conn: Database connection.
+        term_id: The term ID to delete.
+    """
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM terms_extracted WHERE id = ?", (term_id,))
+    conn.commit()
