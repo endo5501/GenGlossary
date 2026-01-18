@@ -68,6 +68,13 @@ closed_at: null   # Do not modify manually
   - [x] 全コマンドの使用例をREADME.mdに記載
 - [x] Run static analysis (`pyright`) before closing and pass all tests ✅ (0エラー、0警告)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests ✅ (414テストすべてパス)
+- [x] Code simplification review using code-simplifier agent ✅
+  - TypedDict統一化: ~30行削減
+  - CLI表示ロジック共通化: ~60行削減
+  - モデル名ロジック統一: ~14行削減
+  - SQLクエリ簡素化: ~5行削減
+  - 接続管理改善: context manager追加
+  - 合計: ~110行のコード削減
 - [ ] Get developer approval before closing
 
 ## Notes
