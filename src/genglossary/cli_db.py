@@ -3,10 +3,12 @@
 from pathlib import Path
 
 import click
+import sqlite3
 from rich.console import Console
 from rich.table import Table
 
 from genglossary.db.connection import get_connection
+from genglossary.db.models import GlossaryTermRow
 from genglossary.db.provisional_repository import (
     get_provisional_term,
     list_provisional_terms_by_run,
@@ -28,6 +30,71 @@ from genglossary.db.term_repository import (
 )
 
 console = Console()
+
+
+def _display_run_details(run: sqlite3.Row) -> None:
+    """Display run details in a consistent format.
+
+    Args:
+        run: Run record from database.
+    """
+    console.print(f"\n[bold]Run #{run['id']}[/bold]")
+    console.print(f"入力パス: {run['input_path']}")
+    console.print(f"プロバイダー: {run['llm_provider']}")
+    console.print(f"モデル: {run['llm_model']}")
+    console.print(f"ステータス: {run['status']}")
+    console.print(f"開始時刻: {run['started_at']}")
+
+    if run["completed_at"]:
+        console.print(f"完了時刻: {run['completed_at']}")
+
+    if run["error_message"]:
+        console.print(f"[red]エラー: {run['error_message']}[/red]")
+
+
+def _create_glossary_term_table(
+    term_list: list[GlossaryTermRow], title: str
+) -> Table:
+    """Create a Rich table for glossary terms (provisional or refined).
+
+    Args:
+        term_list: List of glossary term rows.
+        title: Table title.
+
+    Returns:
+        Rich Table object.
+    """
+    table = Table(title=title)
+    table.add_column("ID", style="cyan")
+    table.add_column("用語", style="magenta")
+    table.add_column("定義", style="white")
+    table.add_column("信頼度", style="green")
+
+    for term in term_list:
+        definition = term["definition"]
+        truncated_def = definition[:50] + "..." if len(definition) > 50 else definition
+        table.add_row(
+            str(term["id"]),
+            term["term_name"],
+            truncated_def,
+            f"{term['confidence']:.2f}",
+        )
+
+    return table
+
+
+def _display_glossary_term_details(term: GlossaryTermRow, term_type: str) -> None:
+    """Display glossary term details (provisional or refined).
+
+    Args:
+        term: Glossary term record.
+        term_type: Type of term ("Provisional" or "Refined").
+    """
+    console.print(f"\n[bold]{term_type} Term #{term['id']}[/bold]")
+    console.print(f"用語: {term['term_name']}")
+    console.print(f"定義: {term['definition']}")
+    console.print(f"信頼度: {term['confidence']:.2f}")
+    console.print(f"Run ID: {term['run_id']}")
 
 
 @click.group()
@@ -160,19 +227,7 @@ def runs_show(run_id: int, db_path: str) -> None:
             console.print(f"[red]Run ID {run_id} が見つかりません[/red]")
             raise click.Abort()
 
-        # Display run details
-        console.print(f"\n[bold]Run #{run['id']}[/bold]")
-        console.print(f"入力パス: {run['input_path']}")
-        console.print(f"プロバイダー: {run['llm_provider']}")
-        console.print(f"モデル: {run['llm_model']}")
-        console.print(f"ステータス: {run['status']}")
-        console.print(f"開始時刻: {run['started_at']}")
-
-        if run["completed_at"]:
-            console.print(f"完了時刻: {run['completed_at']}")
-
-        if run["error_message"]:
-            console.print(f"[red]エラー: {run['error_message']}[/red]")
+        _display_run_details(run)
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
@@ -201,19 +256,8 @@ def runs_latest(db_path: str) -> None:
             console.print("[yellow]実行履歴がありません[/yellow]")
             return
 
-        # Display run details (same as show command)
-        console.print(f"\n[bold]Run #{run['id']} (最新)[/bold]")
-        console.print(f"入力パス: {run['input_path']}")
-        console.print(f"プロバイダー: {run['llm_provider']}")
-        console.print(f"モデル: {run['llm_model']}")
-        console.print(f"ステータス: {run['status']}")
-        console.print(f"開始時刻: {run['started_at']}")
-
-        if run["completed_at"]:
-            console.print(f"完了時刻: {run['completed_at']}")
-
-        if run["error_message"]:
-            console.print(f"[red]エラー: {run['error_message']}[/red]")
+        console.print("\n[bold](最新)[/bold]", end="")
+        _display_run_details(run)
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
@@ -450,21 +494,7 @@ def provisional_list(run_id: int, db_path: str) -> None:
             console.print("[yellow]暫定用語がありません[/yellow]")
             return
 
-        # Create table
-        table = Table(title=f"暫定用語集 (Run #{run_id})")
-        table.add_column("ID", style="cyan")
-        table.add_column("用語", style="magenta")
-        table.add_column("定義", style="white")
-        table.add_column("信頼度", style="green")
-
-        for term in term_list:
-            table.add_row(
-                str(term["id"]),
-                term["term_name"],
-                term["definition"][:50] + "..." if len(term["definition"]) > 50 else term["definition"],
-                f"{term['confidence']:.2f}",
-            )
-
+        table = _create_glossary_term_table(term_list, f"暫定用語集 (Run #{run_id})")
         console.print(table)
 
     except Exception as e:
@@ -495,12 +525,7 @@ def provisional_show(term_id: int, db_path: str) -> None:
             console.print(f"[red]Provisional Term ID {term_id} が見つかりません[/red]")
             raise click.Abort()
 
-        # Display term details
-        console.print(f"\n[bold]Provisional Term #{term['id']}[/bold]")
-        console.print(f"用語: {term['term_name']}")
-        console.print(f"定義: {term['definition']}")
-        console.print(f"信頼度: {term['confidence']:.2f}")
-        console.print(f"Run ID: {term['run_id']}")
+        _display_glossary_term_details(term, "Provisional")
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
@@ -579,21 +604,7 @@ def refined_list(run_id: int, db_path: str) -> None:
             console.print("[yellow]最終用語がありません[/yellow]")
             return
 
-        # Create table
-        table = Table(title=f"最終用語集 (Run #{run_id})")
-        table.add_column("ID", style="cyan")
-        table.add_column("用語", style="magenta")
-        table.add_column("定義", style="white")
-        table.add_column("信頼度", style="green")
-
-        for term in term_list:
-            table.add_row(
-                str(term["id"]),
-                term["term_name"],
-                term["definition"][:50] + "..." if len(term["definition"]) > 50 else term["definition"],
-                f"{term['confidence']:.2f}",
-            )
-
+        table = _create_glossary_term_table(term_list, f"最終用語集 (Run #{run_id})")
         console.print(table)
 
     except Exception as e:
@@ -624,12 +635,7 @@ def refined_show(term_id: int, db_path: str) -> None:
             console.print(f"[red]Refined Term ID {term_id} が見つかりません[/red]")
             raise click.Abort()
 
-        # Display term details
-        console.print(f"\n[bold]Refined Term #{term['id']}[/bold]")
-        console.print(f"用語: {term['term_name']}")
-        console.print(f"定義: {term['definition']}")
-        console.print(f"信頼度: {term['confidence']:.2f}")
-        console.print(f"Run ID: {term['run_id']}")
+        _display_glossary_term_details(term, "Refined")
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")

@@ -1,21 +1,14 @@
 """Repository for glossary_provisional table CRUD operations."""
 
 import sqlite3
-from typing import TypedDict, cast
+from typing import cast
 
-from genglossary.db.models import deserialize_occurrences, serialize_occurrences
+from genglossary.db.models import (
+    GlossaryTermRow,
+    deserialize_occurrences,
+    serialize_occurrences,
+)
 from genglossary.models.term import TermOccurrence
-
-
-class ProvisionalTermRow(TypedDict):
-    """Typed dict for provisional term row with deserialized occurrences."""
-
-    id: int
-    run_id: int
-    term_name: str
-    definition: str
-    confidence: float
-    occurrences: list[TermOccurrence]
 
 
 def create_provisional_term(
@@ -59,7 +52,7 @@ def create_provisional_term(
 
 def get_provisional_term(
     conn: sqlite3.Connection, term_id: int
-) -> ProvisionalTermRow | None:
+) -> GlossaryTermRow | None:
     """Get a provisional term by ID.
 
     Args:
@@ -67,7 +60,7 @@ def get_provisional_term(
         term_id: The term ID to retrieve.
 
     Returns:
-        ProvisionalTermRow | None: The term record with deserialized occurrences,
+        GlossaryTermRow | None: The term record with deserialized occurrences,
             or None if not found.
     """
     cursor = conn.cursor()
@@ -78,7 +71,7 @@ def get_provisional_term(
         return None
 
     # Deserialize occurrences from JSON
-    return ProvisionalTermRow(
+    return GlossaryTermRow(
         id=row["id"],
         run_id=row["run_id"],
         term_name=row["term_name"],
@@ -90,7 +83,7 @@ def get_provisional_term(
 
 def list_provisional_terms_by_run(
     conn: sqlite3.Connection, run_id: int
-) -> list[ProvisionalTermRow]:
+) -> list[GlossaryTermRow]:
     """List all provisional terms for a specific run.
 
     Args:
@@ -98,7 +91,7 @@ def list_provisional_terms_by_run(
         run_id: The run ID to filter by.
 
     Returns:
-        list[ProvisionalTermRow]: List of term records with deserialized occurrences.
+        list[GlossaryTermRow]: List of term records with deserialized occurrences.
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -109,7 +102,7 @@ def list_provisional_terms_by_run(
 
     # Deserialize occurrences for each row
     return [
-        ProvisionalTermRow(
+        GlossaryTermRow(
             id=row["id"],
             run_id=row["run_id"],
             term_name=row["term_name"],

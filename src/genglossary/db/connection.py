@@ -1,7 +1,9 @@
 """Database connection management."""
 
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 
 def get_connection(db_path: str) -> sqlite3.Connection:
@@ -32,3 +34,26 @@ def get_connection(db_path: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
 
     return conn
+
+
+@contextmanager
+def database_connection(db_path: str) -> Iterator[sqlite3.Connection]:
+    """Context manager for database connections.
+
+    Ensures connections are properly closed even if exceptions occur.
+
+    Args:
+        db_path: Path to database file or ":memory:" for in-memory database.
+
+    Yields:
+        sqlite3.Connection: Database connection.
+
+    Example:
+        with database_connection("./db.sqlite") as conn:
+            run = get_run(conn, 1)
+    """
+    conn = get_connection(db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()

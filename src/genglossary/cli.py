@@ -75,6 +75,23 @@ def create_llm_client(
     raise ValueError(f"Unknown provider: {provider}. Must be 'ollama' or 'openai'.")
 
 
+def _get_actual_model_name(provider: str, model: str | None) -> str:
+    """Get the actual model name to use.
+
+    Args:
+        provider: LLM provider name.
+        model: User-specified model name (None for default).
+
+    Returns:
+        str: Actual model name to use.
+    """
+    if model is not None:
+        return model
+
+    config = Config()
+    return config.ollama_model if provider == "ollama" else config.openai_model
+
+
 def _add_glossary_metadata(glossary: Glossary, model: str, document_count: int) -> None:
     """Add metadata to glossary.
 
@@ -140,13 +157,7 @@ def generate_glossary(
             )
 
     # Determine actual model name for logging and metadata
-    if model is None:
-        config = Config()
-        actual_model = (
-            config.ollama_model if provider == "ollama" else config.openai_model
-        )
-    else:
-        actual_model = model
+    actual_model = _get_actual_model_name(provider, model)
 
     if verbose:
         console.print(f"[dim]入力ディレクトリ: {input_dir}[/dim]")
@@ -424,13 +435,7 @@ def generate(
             sys.exit(1)
 
         # Determine model name for display
-        if model is None:
-            config = Config()
-            display_model = (
-                config.ollama_model if llm_provider == "ollama" else config.openai_model
-            )
-        else:
-            display_model = model
+        display_model = _get_actual_model_name(llm_provider, model)
 
         console.print("[bold green]GenGlossary[/bold green]")
         console.print(f"入力: {input_dir}")
@@ -685,13 +690,7 @@ def analyze_terms(
             sys.exit(1)
 
         # Determine model name for display
-        if model is None:
-            config = Config()
-            display_model = (
-                config.ollama_model if llm_provider == "ollama" else config.openai_model
-            )
-        else:
-            display_model = model
+        display_model = _get_actual_model_name(llm_provider, model)
 
         # Load documents
         console.print(f"[dim]入力: {input_dir}[/dim]")

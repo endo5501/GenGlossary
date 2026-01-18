@@ -117,14 +117,14 @@ def list_runs(conn: sqlite3.Connection, limit: int | None = None) -> list[sqlite
     """
     cursor = conn.cursor()
 
-    if limit is not None:
-        cursor.execute(
-            "SELECT * FROM runs ORDER BY id DESC LIMIT ?",
-            (limit,),
-        )
-    else:
-        cursor.execute("SELECT * FROM runs ORDER BY id DESC")
+    query = "SELECT * FROM runs ORDER BY id DESC"
+    params = ()
 
+    if limit is not None:
+        query += " LIMIT ?"
+        params = (limit,)
+
+    cursor.execute(query, params)
     return cursor.fetchall()
 
 
