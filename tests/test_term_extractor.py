@@ -1398,3 +1398,24 @@ class TestTermExtractorTwoPhase:
 
             # Should call LLM once for the batch (2 terms fit in default batch_size=10)
             assert mock_llm_client.generate_structured.call_count == 1
+
+    def test_batch_classification_prompt_includes_few_shot_examples(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that batch classification prompt includes few-shot examples."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "アソリウス島騎士団", "category": "organization"},
+            ]
+        )
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        extractor._classify_terms(["アソリウス島騎士団"], [sample_document], batch_size=10)
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+
+        # Should include few-shot examples section
+        assert "Few-shot Examples" in prompt or "few-shot examples" in prompt or "分類の例" in prompt
