@@ -16,7 +16,11 @@ class TestSchemaInitialization:
 
         cursor = in_memory_db.cursor()
         cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            """
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+            ORDER BY name
+            """
         )
         tables = [row[0] for row in cursor.fetchall()]
 
@@ -45,7 +49,11 @@ class TestSchemaInitialization:
 
         cursor = in_memory_db.cursor()
         cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            """
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+            ORDER BY name
+            """
         )
         tables = [row[0] for row in cursor.fetchall()]
 
