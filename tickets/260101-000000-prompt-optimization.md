@@ -59,15 +59,21 @@ Phase 3で実装した4つのコアコンポーネントのLLMプロンプトを
 
 ### Few-shot Examples
 
-- [ ] TermExtractorにfew-shot examplesを追加
-- [ ] GlossaryGeneratorにfew-shot examplesを追加
+- [x] TermExtractorにfew-shot examplesを追加
+- [x] GlossaryGeneratorにfew-shot examplesを追加
 - [x] GlossaryReviewerにfew-shot examplesを追加
-- [ ] GlossaryRefinerにfew-shot examplesを追加
+- [x] GlossaryRefinerにfew-shot examplesを追加
 - [x] テストでexampleが含まれることを確認（GlossaryReviewer）
+- [x] テストでexampleが含まれることを確認（TermExtractor）
+- [x] テストでexampleが含まれることを確認（GlossaryGenerator）
+- [x] テストでexampleが含まれることを確認（GlossaryRefiner）
 
 ### トークン数最適化
 
-- [ ] 各プロンプトのトークン数を測定
+- [x] 各プロンプトのトークン数を測定
+  - トークン数測定ツールの作成（TDD）
+  - TermExtractor、GlossaryGenerator、GlossaryReviewer、GlossaryRefinerのプロンプトを測定
+  - ベースラインの記録: TermExtractor: 331トークン, GlossaryGenerator: 199トークン, GlossaryReviewer: 151トークン, GlossaryRefiner: 201トークン, 合計: 882トークン
 - [ ] 冗長な説明を削減
 - [ ] プロンプトテンプレートを簡潔化
 - [ ] コンテキスト長を制限（最大5例など）
@@ -81,8 +87,8 @@ Phase 3で実装した4つのコアコンポーネントのLLMプロンプトを
 
 ### 最終確認
 
-- [ ] すべてのテストがパス
-- [ ] pyrightチェックがパス
+- [x] すべてのテストがパス (319 passed, 1 xfailed, 3 xpassed)
+- [x] pyrightチェックがパス (0 errors, 0 warnings)
 - [ ] ドキュメント更新
 
 ## 成功基準
@@ -93,5 +99,5 @@ Phase 3で実装した4つのコアコンポーネントのLLMプロンプトを
 
 ## 参考
 
-- Phase 3実装: `tickets/251231-123015-phase3-core-logic.md`
+- Phase 3実装: `tickets/done/251231-123015-phase3-core-logic.md`
 - プロンプト例: `current-ticket.md` の Notes セクション
