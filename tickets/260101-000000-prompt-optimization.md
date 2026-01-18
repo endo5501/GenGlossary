@@ -3,7 +3,7 @@ priority: 5
 tags: [enhancement, prompt-optimization, llm]
 description: "Optimize LLM prompts with few-shot examples and token efficiency"
 created_at: "2026-01-01T00:00:00Z"
-started_at: null
+started_at: 2026-01-13T04:35:22Z
 closed_at: null
 ---
 
@@ -61,9 +61,9 @@ Phase 3で実装した4つのコアコンポーネントのLLMプロンプトを
 
 - [ ] TermExtractorにfew-shot examplesを追加
 - [ ] GlossaryGeneratorにfew-shot examplesを追加
-- [ ] GlossaryReviewerにfew-shot examplesを追加
+- [x] GlossaryReviewerにfew-shot examplesを追加
 - [ ] GlossaryRefinerにfew-shot examplesを追加
-- [ ] テストでexampleが含まれることを確認
+- [x] テストでexampleが含まれることを確認（GlossaryReviewer）
 
 ### トークン数最適化
 
