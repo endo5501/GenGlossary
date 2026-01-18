@@ -360,3 +360,28 @@ API is an interface.
         generator.generate([], [sample_document], progress_callback=progress_callback)
 
         assert len(callback_calls) == 0
+
+    def test_definition_prompt_includes_few_shot_examples(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that definition prompt includes few-shot examples."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.8
+        )
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        occurrences = [
+            TermOccurrence(
+                document_path="/test.md",
+                line_number=1,
+                context="Context with MyTerm usage.",
+            )
+        ]
+
+        generator._generate_definition("MyTerm", occurrences)
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+
+        # Should include few-shot examples section
+        assert "Few-shot Examples" in prompt or "few-shot examples" in prompt or "定義の例" in prompt
