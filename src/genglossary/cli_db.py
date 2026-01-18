@@ -9,6 +9,13 @@ from rich.table import Table
 from genglossary.db.connection import get_connection
 from genglossary.db.run_repository import get_latest_run, get_run, list_runs
 from genglossary.db.schema import initialize_db
+from genglossary.db.term_repository import (
+    create_term,
+    delete_term,
+    get_term,
+    list_terms_by_run,
+    update_term,
+)
 
 console = Console()
 
@@ -197,6 +204,202 @@ def runs_latest(db_path: str) -> None:
 
         if run["error_message"]:
             console.print(f"[red]エラー: {run['error_message']}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+@db.group()
+def terms() -> None:
+    """抽出用語の管理コマンド."""
+    pass
+
+
+@terms.command("list")
+@click.option(
+    "--run-id",
+    type=int,
+    required=True,
+    help="Run ID to filter by",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def terms_list(run_id: int, db_path: str) -> None:
+    """指定されたrun_idの抽出用語一覧を表示.
+
+    Example:
+        genglossary db terms list --run-id 1
+    """
+    try:
+        conn = get_connection(db_path)
+        term_list = list_terms_by_run(conn, run_id)
+        conn.close()
+
+        if not term_list:
+            console.print("[yellow]用語がありません[/yellow]")
+            return
+
+        # Create table
+        table = Table(title=f"抽出用語 (Run #{run_id})")
+        table.add_column("ID", style="cyan")
+        table.add_column("用語", style="magenta")
+        table.add_column("カテゴリ", style="green")
+
+        for term in term_list:
+            table.add_row(
+                str(term["id"]),
+                term["term_text"],
+                term["category"] or "[dim]なし[/dim]",
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@terms.command("show")
+@click.argument("term_id", type=int)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def terms_show(term_id: int, db_path: str) -> None:
+    """指定されたterm_idの詳細を表示.
+
+    Example:
+        genglossary db terms show 1
+    """
+    try:
+        conn = get_connection(db_path)
+        term = get_term(conn, term_id)
+        conn.close()
+
+        if term is None:
+            console.print(f"[red]Term ID {term_id} が見つかりません[/red]")
+            raise click.Abort()
+
+        # Display term details
+        console.print(f"\n[bold]Term #{term['id']}[/bold]")
+        console.print(f"用語: {term['term_text']}")
+        console.print(f"カテゴリ: {term['category'] or '[dim]なし[/dim]'}")
+        console.print(f"Run ID: {term['run_id']}")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@terms.command("update")
+@click.argument("term_id", type=int)
+@click.option(
+    "--text",
+    type=str,
+    required=True,
+    help="New term text",
+)
+@click.option(
+    "--category",
+    type=str,
+    default=None,
+    help="New category (optional)",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def terms_update(term_id: int, text: str, category: str | None, db_path: str) -> None:
+    """用語を更新.
+
+    Example:
+        genglossary db terms update 1 --text "量子計算機" --category "technical"
+    """
+    try:
+        conn = get_connection(db_path)
+        update_term(conn, term_id, text, category)
+        conn.close()
+
+        console.print(f"[green]✓[/green] Term #{term_id} を更新しました")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@terms.command("delete")
+@click.argument("term_id", type=int)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def terms_delete(term_id: int, db_path: str) -> None:
+    """用語を削除.
+
+    Example:
+        genglossary db terms delete 1
+    """
+    try:
+        conn = get_connection(db_path)
+        delete_term(conn, term_id)
+        conn.close()
+
+        console.print(f"[green]✓[/green] Term #{term_id} を削除しました")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@terms.command("import")
+@click.option(
+    "--run-id",
+    type=int,
+    required=True,
+    help="Run ID to associate terms with",
+)
+@click.option(
+    "--file",
+    type=click.Path(exists=True),
+    required=True,
+    help="Text file with one term per line",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def terms_import(run_id: int, file: str, db_path: str) -> None:
+    """テキストファイルから用語をインポート（1行1用語）.
+
+    Example:
+        genglossary db terms import --run-id 1 --file terms.txt
+    """
+    try:
+        # Read terms from file
+        with open(file, "r", encoding="utf-8") as f:
+            term_texts = [line.strip() for line in f if line.strip()]
+
+        # Import terms
+        conn = get_connection(db_path)
+        for term_text in term_texts:
+            create_term(conn, run_id, term_text)
+        conn.close()
+
+        console.print(
+            f"[green]✓[/green] {len(term_texts)}件の用語をインポートしました"
+        )
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
