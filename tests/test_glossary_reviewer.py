@@ -326,3 +326,23 @@ class TestGlossaryReviewer:
         # Should mention unnecessary or exclusion criteria
         assert "unnecessary" in prompt or "不要" in prompt
         assert "should_exclude" in prompt
+
+    def test_prompt_uses_strict_exclusion_criteria(
+        self, mock_llm_client: MagicMock, sample_glossary: Glossary
+    ) -> None:
+        """Test that prompt says 'exclude when in doubt'."""
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        prompt = reviewer._create_review_prompt(sample_glossary)
+
+        assert "迷った場合は除外" in prompt
+        assert "含める方向で判断" not in prompt
+
+    def test_prompt_includes_exclusion_examples(
+        self, mock_llm_client: MagicMock, sample_glossary: Glossary
+    ) -> None:
+        """Test that prompt includes few-shot examples of terms to exclude."""
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        prompt = reviewer._create_review_prompt(sample_glossary)
+
+        # Should include exclusion examples
+        assert "除外基準" in prompt or "❌" in prompt

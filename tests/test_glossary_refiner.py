@@ -573,3 +573,36 @@ class TestGlossaryRefinerProgressCallback:
         refiner.refine(sample_glossary, [], sample_documents, progress_callback=progress_callback)
 
         assert len(callback_calls) == 0
+
+    def test_refinement_prompt_includes_few_shot_examples(
+        self, mock_llm_client: MagicMock, sample_glossary: Glossary
+    ) -> None:
+        """Test that refinement prompt includes few-shot examples."""
+        mock_llm_client.generate_structured.return_value = MagicMock(
+            refined_definition="Improved definition", confidence=0.9
+        )
+
+        sample_glossary.add_term(
+            Term(
+                name="TestTerm",
+                definition="Original definition",
+                occurrences=[],
+                confidence=0.7,
+            )
+        )
+
+        issue = GlossaryIssue(
+            term_name="TestTerm",
+            issue_type="unclear",
+            description="Definition is too vague",
+        )
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        context_index: dict[str, list[str]] = {}
+        term = sample_glossary.get_term("TestTerm")
+        assert term is not None
+
+        prompt = refiner._create_refinement_prompt(term, issue, context_index)
+
+        # Should include few-shot examples section
+        assert "Few-shot Examples" in prompt or "few-shot examples" in prompt or "改善例" in prompt

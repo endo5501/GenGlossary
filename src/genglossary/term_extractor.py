@@ -9,25 +9,13 @@ from genglossary.morphological_analyzer import MorphologicalAnalyzer
 from genglossary.types import ProgressCallback
 
 # Category definitions for LLM prompts - used across all classification prompts
-CATEGORY_DEFINITIONS = """## カテゴリ定義
-
-1. **person_name（人名）**: 架空・実在の人物名
-   例: ガウス卿、田中太郎、アリス
-
-2. **place_name（地名）**: 国名、都市名、地域名、場所の名前
-   例: エデルト、アソリウス島、東京
-
-3. **organization（組織・団体名）**: 騎士団、軍隊、企業、団体など
-   例: アソリウス島騎士団、エデルト軍、近衛騎士団
-
-4. **title（役職・称号）**: 王子、騎士団長、将軍などの役職や称号
-   例: 騎士団長、騎士代理爵位、将軍
-
-5. **technical_term（技術用語・専門用語）**: この文脈特有の専門用語
-   例: 聖印、魔神討伐、魔神代理領
-
-6. **common_noun（一般名詞）**: 辞書的意味で理解できる一般的な名詞
-   例: 未亡人、行方不明、方角、重要"""
+CATEGORY_DEFINITIONS = """## カテゴリ
+1. person_name: 人名（例: ガウス卿）
+2. place_name: 地名（例: アソリウス島）
+3. organization: 組織・団体（例: 騎士団）
+4. title: 役職・称号（例: 団長）
+5. technical_term: 専門用語（例: 聖印）
+6. common_noun: 一般名詞（例: 未亡人）"""
 
 
 class TermJudgmentResponse(BaseModel):
@@ -569,9 +557,22 @@ JSON形式で回答してください:
 
 {CATEGORY_DEFINITIONS}
 
-## 注意事項
-- 各用語を必ず1つのカテゴリに分類してください
-- 用語集に載せるべきかどうかを基準に判断してください
+## Few-shot Examples
+
+### 正しい分類の例
+
+**入力:** ["ガウス卿", "アソリウス島", "アソリウス島騎士団", "騎士団長", "聖印", "未亡人", "偵察"]
+
+**出力:**
+- ガウス卿 → person_name (人物の固有名)
+- アソリウス島 → place_name (地名)
+- アソリウス島騎士団 → organization (組織名)
+- 騎士団長 → title (役職)
+- 聖印 → technical_term (この作品固有の概念)
+- 未亡人 → common_noun (一般的な辞書語)
+- 偵察 → common_noun (一般的な軍事用語)
+
+各用語を1カテゴリに分類。迷う場合は文脈固有性で判断。
 
 JSON形式で回答してください:
 {{"classifications": [

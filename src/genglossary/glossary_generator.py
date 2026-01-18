@@ -199,7 +199,13 @@ class GlossaryGenerator:
 出現箇所とコンテキスト:
 {context_text}
 
-このドキュメント固有の使われ方を説明してください。
+## Few-shot Examples
+
+**用語:** アソリウス島騎士団
+**定義:** エデルト王国の辺境、アソリウス島を守る騎士団。魔神討伐の最前線として重要な役割を担う。
+**信頼度:** 0.9
+
+文脈固有の意味を1-2文で説明。信頼度: 明確=0.8+, 推測可能=0.5-0.7, 不明確=0.0-0.4
 JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-1.0}}"""
 
         response = self.llm_client.generate_structured(

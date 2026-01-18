@@ -87,16 +87,38 @@ class GlossaryReviewer:
 用語集:
 {terms_text}
 
-チェック観点:
-1. 定義が曖昧または不完全な用語 (issue_type: "unclear")
-2. 複数の用語間で矛盾する説明 (issue_type: "contradiction")
-3. 関連用語の欠落や関係性の不明確さ (issue_type: "missing_relation")
-4. 定義が実際の使用例と一致していない箇所
-5. 用語集に含める必要性の判断:
-   - 一般的な語彙で説明不要なもの (issue_type: "unnecessary", should_exclude: true)
-   - 文脈から意味が明確で補足説明が不要なもの (issue_type: "unnecessary", should_exclude: true)
-   - 単純すぎて定義する価値がないもの (issue_type: "unnecessary", should_exclude: true)
-   注意: 判断が難しい場合は、用語集に含める方向で判断してください。
+## チェック観点
+
+### 1. 定義の品質チェック
+- 定義が曖昧または不完全な用語 (issue_type: "unclear")
+- 複数の用語間で矛盾する説明 (issue_type: "contradiction")
+- 関連用語の欠落や関係性の不明確さ (issue_type: "missing_relation")
+
+### 2. 用語の必要性チェック（重要）
+
+用語集は「この文書を読む人が、文脈での意味を理解するため」に存在します。
+以下の条件に該当する用語は除外してください (issue_type: "unnecessary", should_exclude: true):
+
+**除外基準（1つでも該当すれば除外）:**
+1. 一般的な辞書で調べれば意味が分かり、この文書固有の特別な意味を持たない
+2. 日常会話で普通に使われる語彙で、専門知識なしに理解できる
+3. 複数の一般語を組み合わせただけで、組み合わせ自体に特別な意味がない
+
+**重要: 迷った場合は除外してください。用語集は必要最小限が望ましいです。**
+
+## Few-shot Examples
+
+### 除外すべき用語の例
+❌ **全力疾走** - 一般的な動作表現。辞書で分かる。
+❌ **偵察** - 一般的な軍事用語。文脈固有の意味なし。
+❌ **侵攻** - 一般的な軍事用語。辞書で分かる。
+❌ **傭兵団** - 「傭兵」+「団」の単純な組み合わせ。
+❌ **個人戦闘能力** - 各語の辞書的意味から理解可能。
+
+### 用語集に含めるべき例
+✅ **アソリウス島騎士団** - この作品固有の組織名。辞書には載っていない。
+✅ **聖印** - この文脈で特別な意味を持つ概念。
+✅ **魔神討伐** - この世界観特有の概念。単なる「討伐」とは異なる。
 
 JSON形式で回答してください:
 {{"issues": [{{"term": "用語名", "issue_type": "unclear|contradiction|missing_relation|unnecessary", "description": "問題の説明", "should_exclude": true/false, "exclusion_reason": "除外理由（should_exclude=trueの場合）"}}]}}
