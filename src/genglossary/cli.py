@@ -8,6 +8,7 @@ from typing import Callable
 import click
 from rich.console import Console
 
+from genglossary.cli_db import db
 from genglossary.config import Config
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
@@ -574,6 +575,10 @@ def analyze_terms(
         console.print(f"\n[red]エラーが発生しました: {e}[/red]")
         console.print_exception()
         sys.exit(1)
+
+
+# Register db subcommand group
+main.add_command(db)
 
 
 if __name__ == "__main__":
