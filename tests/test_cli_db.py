@@ -432,3 +432,119 @@ class TestDbTermsImport:
         assert terms[0]["term_text"] == "量子コンピュータ"
         assert terms[1]["term_text"] == "量子ビット"
         assert terms[2]["term_text"] == "キュービット"
+
+
+class TestDbProvisionalList:
+    """Test db provisional list command."""
+
+    def test_provisional_list_shows_terms(self, tmp_path: Path) -> None:
+        """Test that provisional list displays terms."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database and create provisional terms
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+
+        from genglossary.db.provisional_repository import create_provisional_term
+        from genglossary.models.term import TermOccurrence
+
+        occurrences = [
+            TermOccurrence(
+                document_path="/path/to/doc.txt", line_number=1, context="Context"
+            )
+        ]
+        create_provisional_term(
+            conn, run_id, "量子コンピュータ", "定義", 0.95, occurrences
+        )
+        conn.close()
+
+        result = runner.invoke(
+            db, ["provisional", "list", "--run-id", str(run_id), "--db-path", str(db_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "量子コンピュータ" in result.output
+
+
+class TestDbRefinedList:
+    """Test db refined list command."""
+
+    def test_refined_list_shows_terms(self, tmp_path: Path) -> None:
+        """Test that refined list displays terms."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database and create refined terms
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+
+        from genglossary.db.refined_repository import create_refined_term
+        from genglossary.models.term import TermOccurrence
+
+        occurrences = [
+            TermOccurrence(
+                document_path="/path/to/doc.txt", line_number=1, context="Context"
+            )
+        ]
+        create_refined_term(
+            conn, run_id, "量子コンピュータ", "定義", 0.98, occurrences
+        )
+        conn.close()
+
+        result = runner.invoke(
+            db, ["refined", "list", "--run-id", str(run_id), "--db-path", str(db_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "量子コンピュータ" in result.output
+
+
+class TestDbRefinedExportMd:
+    """Test db refined export-md command."""
+
+    def test_refined_export_md_creates_file(self, tmp_path: Path) -> None:
+        """Test that refined export-md creates a markdown file."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+        output_path = tmp_path / "glossary.md"
+
+        # Initialize database and create refined terms
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+
+        from genglossary.db.refined_repository import create_refined_term
+        from genglossary.models.term import TermOccurrence
+
+        occurrences = [
+            TermOccurrence(
+                document_path="/path/to/doc.txt", line_number=1, context="Context"
+            )
+        ]
+        create_refined_term(
+            conn, run_id, "量子コンピュータ", "量子力学の原理を利用したコンピュータ", 0.98, occurrences
+        )
+        conn.close()
+
+        result = runner.invoke(
+            db,
+            [
+                "refined",
+                "export-md",
+                "--run-id",
+                str(run_id),
+                "--output",
+                str(output_path),
+                "--db-path",
+                str(db_path),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert output_path.exists()
+        content = output_path.read_text()
+        assert "量子コンピュータ" in content
+        assert "量子力学の原理を利用したコンピュータ" in content
