@@ -8,8 +8,10 @@ from genglossary.db.run_repository import create_run
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import (
     create_term,
+    delete_term,
     get_term,
     list_terms_by_run,
+    update_term,
 )
 
 
@@ -148,3 +150,122 @@ class TestListTermsByRun:
         terms = list_terms_by_run(db_with_schema, run_id)
 
         assert len(terms) == 2
+
+
+class TestUpdateTerm:
+    """Test update_term function."""
+
+    def test_update_term_updates_text_and_category(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that update_term updates term_text and category."""
+        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
+        term_id = create_term(
+            db_with_schema,
+            run_id=run_id,
+            term_text="量子コンピュータ",
+            category="technical_term",
+        )
+
+        update_term(
+            db_with_schema,
+            term_id=term_id,
+            term_text="量子計算機",
+            category="updated_category",
+        )
+
+        term = get_term(db_with_schema, term_id)
+        assert term is not None
+        assert term["term_text"] == "量子計算機"
+        assert term["category"] == "updated_category"
+
+    def test_update_term_with_none_category_sets_null(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that update_term sets category to NULL when None is provided."""
+        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
+        term_id = create_term(
+            db_with_schema,
+            run_id=run_id,
+            term_text="量子コンピュータ",
+            category="technical_term",
+        )
+
+        update_term(
+            db_with_schema,
+            term_id=term_id,
+            term_text="量子コンピュータ",
+            category=None,
+        )
+
+        term = get_term(db_with_schema, term_id)
+        assert term is not None
+        assert term["category"] is None
+
+    def test_update_term_with_nonexistent_id_does_nothing(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that update_term does nothing for non-existent term ID."""
+        update_term(
+            db_with_schema,
+            term_id=999,
+            term_text="存在しない用語",
+            category="category",
+        )
+
+        term = get_term(db_with_schema, 999)
+        assert term is None
+
+
+class TestDeleteTerm:
+    """Test delete_term function."""
+
+    def test_delete_term_removes_term(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that delete_term removes the term."""
+        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
+        term_id = create_term(
+            db_with_schema,
+            run_id=run_id,
+            term_text="量子コンピュータ",
+            category="technical_term",
+        )
+
+        delete_term(db_with_schema, term_id)
+
+        term = get_term(db_with_schema, term_id)
+        assert term is None
+
+    def test_delete_term_with_nonexistent_id_does_nothing(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that delete_term does nothing for non-existent term ID."""
+        delete_term(db_with_schema, 999)
+
+        term = get_term(db_with_schema, 999)
+        assert term is None
+
+    def test_delete_term_removes_from_list(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that deleted term is removed from list_terms_by_run."""
+        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
+        term_id_1 = create_term(
+            db_with_schema,
+            run_id=run_id,
+            term_text="量子コンピュータ",
+            category="technical_term",
+        )
+        term_id_2 = create_term(
+            db_with_schema,
+            run_id=run_id,
+            term_text="量子ビット",
+            category="technical_term",
+        )
+
+        delete_term(db_with_schema, term_id_1)
+
+        terms = list_terms_by_run(db_with_schema, run_id)
+        assert len(terms) == 1
+        assert terms[0]["id"] == term_id_2
