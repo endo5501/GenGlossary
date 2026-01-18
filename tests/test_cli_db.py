@@ -9,6 +9,7 @@ from genglossary.cli_db import db
 from genglossary.db.connection import get_connection
 from genglossary.db.run_repository import create_run
 from genglossary.db.schema import initialize_db
+from genglossary.db.term_repository import create_term
 
 
 class TestDbInit:
@@ -223,3 +224,211 @@ class TestDbRunsLatest:
         assert "openai" in result.output
         # Old run should not be shown
         assert "/path/to/old.txt" not in result.output
+
+
+class TestDbTermsList:
+    """Test db terms list command."""
+
+    def test_terms_list_shows_no_terms_message(self, tmp_path: Path) -> None:
+        """Test that terms list shows message when no terms exist."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database and create a run
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+        conn.close()
+
+        result = runner.invoke(
+            db, ["terms", "list", "--run-id", str(run_id), "--db-path", str(db_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "用語がありません" in result.output
+
+    def test_terms_list_shows_terms(self, tmp_path: Path) -> None:
+        """Test that terms list displays terms."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database and create terms
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+        create_term(conn, run_id, "量子コンピュータ", "technical_term")
+        create_term(conn, run_id, "量子ビット", "technical_term")
+        conn.close()
+
+        result = runner.invoke(
+            db, ["terms", "list", "--run-id", str(run_id), "--db-path", str(db_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "量子コンピュータ" in result.output
+        assert "量子ビット" in result.output
+
+
+class TestDbTermsShow:
+    """Test db terms show command."""
+
+    def test_terms_show_displays_term_details(self, tmp_path: Path) -> None:
+        """Test that terms show displays term details."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database and create a term
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+        term_id = create_term(conn, run_id, "量子コンピュータ", "technical_term")
+        conn.close()
+
+        result = runner.invoke(
+            db, ["terms", "show", str(term_id), "--db-path", str(db_path)]
+        )
+
+        assert result.exit_code == 0
+        assert f"Term #{term_id}" in result.output
+        assert "量子コンピュータ" in result.output
+        assert "technical_term" in result.output
+
+    def test_terms_show_nonexistent_term(self, tmp_path: Path) -> None:
+        """Test that terms show handles nonexistent term ID."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        conn.close()
+
+        result = runner.invoke(db, ["terms", "show", "999", "--db-path", str(db_path)])
+
+        assert result.exit_code == 1
+        assert "が見つかりません" in result.output
+
+
+class TestDbTermsUpdate:
+    """Test db terms update command."""
+
+    def test_terms_update_updates_term(self, tmp_path: Path) -> None:
+        """Test that terms update updates a term."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database and create a term
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+        term_id = create_term(conn, run_id, "量子コンピュータ", "technical_term")
+        conn.close()
+
+        result = runner.invoke(
+            db,
+            [
+                "terms",
+                "update",
+                str(term_id),
+                "--text",
+                "量子計算機",
+                "--category",
+                "updated_category",
+                "--db-path",
+                str(db_path),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "更新しました" in result.output
+
+        # Verify update
+        conn = get_connection(str(db_path))
+        from genglossary.db.term_repository import get_term
+
+        term = get_term(conn, term_id)
+        conn.close()
+
+        assert term is not None
+        assert term["term_text"] == "量子計算機"
+        assert term["category"] == "updated_category"
+
+
+class TestDbTermsDelete:
+    """Test db terms delete command."""
+
+    def test_terms_delete_deletes_term(self, tmp_path: Path) -> None:
+        """Test that terms delete deletes a term."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database and create a term
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+        term_id = create_term(conn, run_id, "量子コンピュータ", "technical_term")
+        conn.close()
+
+        result = runner.invoke(
+            db, ["terms", "delete", str(term_id), "--db-path", str(db_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "削除しました" in result.output
+
+        # Verify deletion
+        conn = get_connection(str(db_path))
+        from genglossary.db.term_repository import get_term
+
+        term = get_term(conn, term_id)
+        conn.close()
+
+        assert term is None
+
+
+class TestDbTermsImport:
+    """Test db terms import command."""
+
+    def test_terms_import_imports_terms(self, tmp_path: Path) -> None:
+        """Test that terms import imports terms from a file."""
+        runner = CliRunner()
+        db_path = tmp_path / "test.db"
+
+        # Initialize database
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
+        conn.close()
+
+        # Create import file
+        import_file = tmp_path / "terms.txt"
+        import_file.write_text("量子コンピュータ\n量子ビット\nキュービット\n")
+
+        result = runner.invoke(
+            db,
+            [
+                "terms",
+                "import",
+                "--run-id",
+                str(run_id),
+                "--file",
+                str(import_file),
+                "--db-path",
+                str(db_path),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "3件の用語をインポートしました" in result.output
+
+        # Verify import
+        conn = get_connection(str(db_path))
+        from genglossary.db.term_repository import list_terms_by_run
+
+        terms = list_terms_by_run(conn, run_id)
+        conn.close()
+
+        assert len(terms) == 3
+        assert terms[0]["term_text"] == "量子コンピュータ"
+        assert terms[1]["term_text"] == "量子ビット"
+        assert terms[2]["term_text"] == "キュービット"
