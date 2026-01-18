@@ -349,3 +349,96 @@ MIT License
 3. 変更をコミット (`git commit -m 'Add new feature'`)
 4. ブランチをプッシュ (`git push origin feature/new-feature`)
 5. プルリクエストを作成
+
+## データベース機能 (SQLite)
+
+GenGlossaryは、生成した用語集をSQLiteデータベースに保存し、管理する機能を提供します。
+
+### DB保存付きで用語集生成
+
+```bash
+# データベースに保存しながら用語集を生成
+uv run genglossary generate -i ./docs -o ./glossary.md --db-path ./genglossary.db
+```
+
+### データベースコマンド
+
+#### 初期化
+
+```bash
+# データベースを初期化
+uv run genglossary db init --path ./genglossary.db
+```
+
+#### 実行履歴の管理
+
+```bash
+# 実行履歴の一覧を表示
+uv run genglossary db runs list
+
+# 最新の実行履歴を表示
+uv run genglossary db runs latest
+
+# 特定のRunの詳細を表示
+uv run genglossary db runs show 1
+```
+
+#### 抽出用語の管理
+
+```bash
+# 用語一覧を表示
+uv run genglossary db terms list --run-id 1
+
+# 用語詳細を表示
+uv run genglossary db terms show 1
+
+# 用語を更新
+uv run genglossary db terms update 1 --text "量子計算機" --category "technical"
+
+# 用語を削除
+uv run genglossary db terms delete 1
+
+# テキストファイルから用語をインポート（1行1用語）
+uv run genglossary db terms import --run-id 1 --file terms.txt
+```
+
+#### 暫定用語集の管理
+
+```bash
+# 暫定用語集の一覧を表示
+uv run genglossary db provisional list --run-id 1
+
+# 暫定用語の詳細を表示
+uv run genglossary db provisional show 1
+
+# 暫定用語を更新
+uv run genglossary db provisional update 1 --definition "新しい定義" --confidence 0.95
+```
+
+#### 最終用語集の管理
+
+```bash
+# 最終用語集の一覧を表示
+uv run genglossary db refined list --run-id 1
+
+# 最終用語の詳細を表示
+uv run genglossary db refined show 1
+
+# 最終用語を更新
+uv run genglossary db refined update 1 --definition "新しい定義" --confidence 0.98
+
+# 最終用語集をMarkdown形式でエクスポート
+uv run genglossary db refined export-md --run-id 1 --output ./exported.md
+```
+
+### データベーススキーマ
+
+GenGlossaryは以下のテーブルを使用します：
+
+- `runs`: 実行履歴
+- `documents`: 処理したドキュメント
+- `terms_extracted`: 抽出された用語
+- `glossary_provisional`: 暫定用語集
+- `glossary_refined`: 最終用語集
+- `glossary_issues`: 用語集の問題点
+
