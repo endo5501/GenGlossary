@@ -2,16 +2,16 @@ Prompt Token Count Baseline
 ================================================================================
 
 TermExtractor:
-  Characters: 1,326
-  Words: 148
-  Lines: 69
-  Estimated Tokens: 331
+  Characters: 844
+  Words: 109
+  Lines: 42
+  Estimated Tokens: 211
 
 GlossaryGenerator:
-  Characters: 796
-  Words: 69
-  Lines: 42
-  Estimated Tokens: 199
+  Characters: 330
+  Words: 25
+  Lines: 14
+  Estimated Tokens: 82
 
 GlossaryReviewer:
   Characters: 605
@@ -20,12 +20,12 @@ GlossaryReviewer:
   Estimated Tokens: 151
 
 GlossaryRefiner:
-  Characters: 806
-  Words: 63
-  Lines: 46
-  Estimated Tokens: 201
+  Characters: 779
+  Words: 53
+  Lines: 37
+  Estimated Tokens: 194
 
 
 Summary:
-Total Characters: 3,533
-Total Estimated Tokens: 882
+Total Characters: 2,558
+Total Estimated Tokens: 638

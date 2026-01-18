@@ -74,20 +74,25 @@ Phase 3で実装した4つのコアコンポーネントのLLMプロンプトを
   - トークン数測定ツールの作成（TDD）
   - TermExtractor、GlossaryGenerator、GlossaryReviewer、GlossaryRefinerのプロンプトを測定
   - ベースラインの記録: TermExtractor: 331トークン, GlossaryGenerator: 199トークン, GlossaryReviewer: 151トークン, GlossaryRefiner: 201トークン, 合計: 882トークン
-- [ ] 冗長な説明を削減
-- [ ] プロンプトテンプレートを簡潔化
-- [ ] コンテキスト長を制限（最大5例など）
-- [ ] 最適化後のトークン数を測定・比較
+- [x] 冗長な説明を削減
+- [x] プロンプトテンプレートを簡潔化
+- [x] コンテキスト長を制限（最大5例など）
+- [x] 最適化後のトークン数を測定・比較
+  - 最適化後: TermExtractor: 211トークン (-120), GlossaryGenerator: 82トークン (-117), GlossaryReviewer: 151トークン (±0), GlossaryRefiner: 194トークン (-7), 合計: 638トークン (-244, -27.7%)
 
 ### 効果測定
 
-- [ ] 実際のOllamaで出力品質を評価
-- [ ] トークン数削減率を計算
-- [ ] レスポンス時間を測定
+- [x] 実際のOllamaで出力品質を評価
+  - サンプルドキュメント: target_docs/sample_story.md
+  - 最終用語数: 12用語、平均信頼度: 0.88
+  - 品質: 高品質な用語集を生成、適切な除外判断
+  - 評価結果: quality_evaluation_results.md
+- [x] トークン数削減率を計算: 27.7%削減（目標20%を達成）
+- [x] レスポンス時間を測定: 合計97.19秒（用語抽出24.39s、生成27.63s、精査29.25s、改善15.90s）
 
 ### 最終確認
 
-- [x] すべてのテストがパス (319 passed, 1 xfailed, 3 xpassed)
+- [x] すべてのテストがパス (325 passed, 3 xfailed, 1 xpassed)
 - [x] pyrightチェックがパス (0 errors, 0 warnings)
 - [ ] ドキュメント更新
 
