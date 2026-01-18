@@ -16,6 +16,7 @@ def in_memory_db() -> Generator[sqlite3.Connection, None, None]:
     """
     conn = sqlite3.connect(":memory:")
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.row_factory = sqlite3.Row
     yield conn
     conn.close()
 

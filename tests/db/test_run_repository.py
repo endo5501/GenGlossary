@@ -193,8 +193,9 @@ class TestListRuns:
         runs = list_runs(db_with_schema)
 
         assert len(runs) == 2
-        assert runs[0]["id"] == run_id1
-        assert runs[1]["id"] == run_id2
+        # Runs are ordered by ID descending (most recent first)
+        assert runs[0]["id"] == run_id2
+        assert runs[1]["id"] == run_id1
 
     def test_list_runs_ordered_by_id_desc(
         self, db_with_schema: sqlite3.Connection
