@@ -4,7 +4,7 @@ tags: [enhancement, prompt-optimization, llm]
 description: "Optimize LLM prompts with few-shot examples and token efficiency"
 created_at: "2026-01-01T00:00:00Z"
 started_at: 2026-01-13T04:35:22Z
-closed_at: null
+closed_at: 2026-01-18T11:10:08Z
 ---
 
 # プロンプト最適化
