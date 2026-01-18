@@ -8,6 +8,7 @@ from genglossary.db.refined_repository import (
     create_refined_term,
     get_refined_term,
     list_refined_terms_by_run,
+    update_refined_term,
 )
 from genglossary.db.run_repository import create_run
 from genglossary.db.schema import initialize_db
@@ -204,3 +205,55 @@ class TestListRefinedTermsByRun:
 
         assert len(terms) == 2
         assert all(isinstance(term["occurrences"][0], TermOccurrence) for term in terms)
+
+
+class TestUpdateRefinedTerm:
+    """Test update_refined_term function."""
+
+    def test_update_refined_term_updates_definition_and_confidence(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that update_refined_term updates definition and confidence."""
+        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
+
+        occurrences = [
+            TermOccurrence(
+                document_path="/path/to/doc.txt", line_number=1, context="Context"
+            )
+        ]
+
+        term_id = create_refined_term(
+            db_with_schema,
+            run_id=run_id,
+            term_name="量子コンピュータ",
+            definition="古い定義",
+            confidence=0.85,
+            occurrences=occurrences,
+        )
+
+        update_refined_term(
+            db_with_schema,
+            term_id=term_id,
+            definition="新しい定義",
+            confidence=0.98,
+        )
+
+        term = get_refined_term(db_with_schema, term_id)
+        assert term is not None
+        assert term["definition"] == "新しい定義"
+        assert term["confidence"] == 0.98
+        assert term["term_name"] == "量子コンピュータ"
+
+    def test_update_refined_term_with_nonexistent_id_does_nothing(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that update_refined_term does nothing for non-existent ID."""
+        update_refined_term(
+            db_with_schema,
+            term_id=999,
+            definition="存在しない定義",
+            confidence=0.5,
+        )
+
+        term = get_refined_term(db_with_schema, 999)
+        assert term is None
