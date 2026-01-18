@@ -7,6 +7,16 @@ from rich.console import Console
 from rich.table import Table
 
 from genglossary.db.connection import get_connection
+from genglossary.db.provisional_repository import (
+    get_provisional_term,
+    list_provisional_terms_by_run,
+    update_provisional_term,
+)
+from genglossary.db.refined_repository import (
+    get_refined_term,
+    list_refined_terms_by_run,
+    update_refined_term,
+)
 from genglossary.db.run_repository import get_latest_run, get_run, list_runs
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import (
@@ -400,6 +410,324 @@ def terms_import(run_id: int, file: str, db_path: str) -> None:
         console.print(
             f"[green]✓[/green] {len(term_texts)}件の用語をインポートしました"
         )
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@db.group()
+def provisional() -> None:
+    """暫定用語集の管理コマンド."""
+    pass
+
+
+@provisional.command("list")
+@click.option(
+    "--run-id",
+    type=int,
+    required=True,
+    help="Run ID to filter by",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def provisional_list(run_id: int, db_path: str) -> None:
+    """指定されたrun_idの暫定用語集一覧を表示.
+
+    Example:
+        genglossary db provisional list --run-id 1
+    """
+    try:
+        conn = get_connection(db_path)
+        term_list = list_provisional_terms_by_run(conn, run_id)
+        conn.close()
+
+        if not term_list:
+            console.print("[yellow]暫定用語がありません[/yellow]")
+            return
+
+        # Create table
+        table = Table(title=f"暫定用語集 (Run #{run_id})")
+        table.add_column("ID", style="cyan")
+        table.add_column("用語", style="magenta")
+        table.add_column("定義", style="white")
+        table.add_column("信頼度", style="green")
+
+        for term in term_list:
+            table.add_row(
+                str(term["id"]),
+                term["term_name"],
+                term["definition"][:50] + "..." if len(term["definition"]) > 50 else term["definition"],
+                f"{term['confidence']:.2f}",
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@provisional.command("show")
+@click.argument("term_id", type=int)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def provisional_show(term_id: int, db_path: str) -> None:
+    """指定されたterm_idの詳細を表示.
+
+    Example:
+        genglossary db provisional show 1
+    """
+    try:
+        conn = get_connection(db_path)
+        term = get_provisional_term(conn, term_id)
+        conn.close()
+
+        if term is None:
+            console.print(f"[red]Provisional Term ID {term_id} が見つかりません[/red]")
+            raise click.Abort()
+
+        # Display term details
+        console.print(f"\n[bold]Provisional Term #{term['id']}[/bold]")
+        console.print(f"用語: {term['term_name']}")
+        console.print(f"定義: {term['definition']}")
+        console.print(f"信頼度: {term['confidence']:.2f}")
+        console.print(f"Run ID: {term['run_id']}")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@provisional.command("update")
+@click.argument("term_id", type=int)
+@click.option(
+    "--definition",
+    type=str,
+    required=True,
+    help="New definition",
+)
+@click.option(
+    "--confidence",
+    type=float,
+    required=True,
+    help="New confidence score (0.0-1.0)",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def provisional_update(term_id: int, definition: str, confidence: float, db_path: str) -> None:
+    """暫定用語を更新.
+
+    Example:
+        genglossary db provisional update 1 --definition "新しい定義" --confidence 0.95
+    """
+    try:
+        conn = get_connection(db_path)
+        update_provisional_term(conn, term_id, definition, confidence)
+        conn.close()
+
+        console.print(f"[green]✓[/green] Provisional Term #{term_id} を更新しました")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@db.group()
+def refined() -> None:
+    """最終用語集の管理コマンド."""
+    pass
+
+
+@refined.command("list")
+@click.option(
+    "--run-id",
+    type=int,
+    required=True,
+    help="Run ID to filter by",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def refined_list(run_id: int, db_path: str) -> None:
+    """指定されたrun_idの最終用語集一覧を表示.
+
+    Example:
+        genglossary db refined list --run-id 1
+    """
+    try:
+        conn = get_connection(db_path)
+        term_list = list_refined_terms_by_run(conn, run_id)
+        conn.close()
+
+        if not term_list:
+            console.print("[yellow]最終用語がありません[/yellow]")
+            return
+
+        # Create table
+        table = Table(title=f"最終用語集 (Run #{run_id})")
+        table.add_column("ID", style="cyan")
+        table.add_column("用語", style="magenta")
+        table.add_column("定義", style="white")
+        table.add_column("信頼度", style="green")
+
+        for term in term_list:
+            table.add_row(
+                str(term["id"]),
+                term["term_name"],
+                term["definition"][:50] + "..." if len(term["definition"]) > 50 else term["definition"],
+                f"{term['confidence']:.2f}",
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@refined.command("show")
+@click.argument("term_id", type=int)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def refined_show(term_id: int, db_path: str) -> None:
+    """指定されたterm_idの詳細を表示.
+
+    Example:
+        genglossary db refined show 1
+    """
+    try:
+        conn = get_connection(db_path)
+        term = get_refined_term(conn, term_id)
+        conn.close()
+
+        if term is None:
+            console.print(f"[red]Refined Term ID {term_id} が見つかりません[/red]")
+            raise click.Abort()
+
+        # Display term details
+        console.print(f"\n[bold]Refined Term #{term['id']}[/bold]")
+        console.print(f"用語: {term['term_name']}")
+        console.print(f"定義: {term['definition']}")
+        console.print(f"信頼度: {term['confidence']:.2f}")
+        console.print(f"Run ID: {term['run_id']}")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@refined.command("update")
+@click.argument("term_id", type=int)
+@click.option(
+    "--definition",
+    type=str,
+    required=True,
+    help="New definition",
+)
+@click.option(
+    "--confidence",
+    type=float,
+    required=True,
+    help="New confidence score (0.0-1.0)",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def refined_update(term_id: int, definition: str, confidence: float, db_path: str) -> None:
+    """最終用語を更新.
+
+    Example:
+        genglossary db refined update 1 --definition "新しい定義" --confidence 0.98
+    """
+    try:
+        conn = get_connection(db_path)
+        update_refined_term(conn, term_id, definition, confidence)
+        conn.close()
+
+        console.print(f"[green]✓[/green] Refined Term #{term_id} を更新しました")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@refined.command("export-md")
+@click.option(
+    "--run-id",
+    type=int,
+    required=True,
+    help="Run ID to export",
+)
+@click.option(
+    "--output",
+    type=click.Path(),
+    required=True,
+    help="Output Markdown file path",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def refined_export_md(run_id: int, output: str, db_path: str) -> None:
+    """最終用語集をMarkdown形式でエクスポート.
+
+    Example:
+        genglossary db refined export-md --run-id 1 --output ./glossary.md
+    """
+    try:
+        conn = get_connection(db_path)
+        term_list = list_refined_terms_by_run(conn, run_id)
+        conn.close()
+
+        if not term_list:
+            console.print("[yellow]エクスポートする用語がありません[/yellow]")
+            return
+
+        # Generate Markdown
+        md_lines = ["# 用語集\n"]
+        for term in term_list:
+            md_lines.append(f"## {term['term_name']}\n")
+            md_lines.append(f"**定義**: {term['definition']}\n")
+            md_lines.append(f"**信頼度**: {term['confidence']:.2f}\n")
+
+            if term["occurrences"]:
+                md_lines.append("\n**出現箇所**:\n")
+                for occ in term["occurrences"]:
+                    md_lines.append(f"- {occ.document_path}:{occ.line_number}\n")
+
+            md_lines.append("\n---\n\n")
+
+        # Write to file
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("".join(md_lines), encoding="utf-8")
+
+        console.print(f"[green]✓[/green] {len(term_list)}件の用語を {output} にエクスポートしました")
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
