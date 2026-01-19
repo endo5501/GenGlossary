@@ -66,6 +66,12 @@ closed_at: null   # Do not modify manually
   - [x] DB初期化/閲覧/更新コマンド例を追記
   - [x] DBの保存場所と運用方針を追記
   - [x] 全コマンドの使用例をREADME.mdに記載
+  - [x] アーキテクチャドキュメント更新 (.claude/rules/03-architecture.md)
+    - DB層のディレクトリ構造追加
+    - DB層モジュール説明追加
+    - データフロー図更新（DB保存付き）
+    - 依存関係図にDB層追加
+    - データベース設計の原則を記載
 - [x] Run static analysis (`pyright`) before closing and pass all tests ✅ (0エラー、0警告)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests ✅ (414テストすべてパス)
 - [x] Code simplification review using code-simplifier agent ✅
