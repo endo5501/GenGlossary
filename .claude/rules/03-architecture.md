@@ -17,6 +17,17 @@ GenGlossary/
 │   │   ├── __init__.py
 │   │   ├── base.py              # BaseLLMClient
 │   │   └── ollama_client.py     # OllamaClient
+│   ├── db/                       # データベース層
+│   │   ├── __init__.py
+│   │   ├── connection.py        # SQLite接続管理
+│   │   ├── schema.py            # スキーマ定義・初期化
+│   │   ├── models.py            # DB用TypedDict・シリアライズ
+│   │   ├── run_repository.py    # 実行履歴CRUD
+│   │   ├── document_repository.py    # ドキュメントCRUD
+│   │   ├── term_repository.py   # 抽出用語CRUD
+│   │   ├── provisional_repository.py # 暫定用語集CRUD
+│   │   ├── issue_repository.py  # 精査結果CRUD
+│   │   └── refined_repository.py     # 最終用語集CRUD
 │   ├── document_loader.py        # ドキュメント読み込み
 │   ├── term_extractor.py         # ステップ1: 用語抽出
 │   ├── glossary_generator.py     # ステップ2: 用語集生成
@@ -26,7 +37,8 @@ GenGlossary/
 │   │   ├── __init__.py
 │   │   └── markdown_writer.py    # Markdown出力
 │   ├── config.py                 # 設定管理
-│   └── cli.py                    # CLIエントリーポイント
+│   ├── cli.py                    # CLIエントリーポイント (generate)
+│   └── cli_db.py                 # DB管理CLI (db サブコマンド)
 ├── tests/                        # テストコード
 │   ├── models/
 │   │   ├── test_document.py
@@ -35,11 +47,23 @@ GenGlossary/
 │   ├── llm/
 │   │   ├── test_base.py
 │   │   └── test_ollama_client.py
+│   ├── db/                       # DB層テスト
+│   │   ├── conftest.py          # DBテスト用fixture
+│   │   ├── test_connection.py
+│   │   ├── test_schema.py
+│   │   ├── test_models.py
+│   │   ├── test_run_repository.py
+│   │   ├── test_document_repository.py
+│   │   ├── test_term_repository.py
+│   │   ├── test_provisional_repository.py
+│   │   ├── test_issue_repository.py
+│   │   └── test_refined_repository.py
 │   ├── test_document_loader.py
 │   ├── test_term_extractor.py
 │   ├── test_glossary_generator.py
 │   ├── test_glossary_reviewer.py
 │   ├── test_glossary_refiner.py
+│   ├── test_cli_db.py           # DB CLI統合テスト
 │   └── output/
 │       └── test_markdown_writer.py
 ├── target_docs/                  # 入力ドキュメント
@@ -143,7 +167,133 @@ class OllamaClient(BaseLLMClient):
         ...
 ```
 
-### 3. 処理レイヤー
+### 3. db/ - データベース層
+
+**役割**: SQLiteへのデータ永続化とCRUD操作
+
+#### connection.py
+```python
+import sqlite3
+from contextlib import contextmanager
+
+def get_connection(db_path: str) -> sqlite3.Connection:
+    """データベース接続を取得"""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+@contextmanager
+def database_connection(db_path: str):
+    """データベース接続のコンテキストマネージャー"""
+    conn = get_connection(db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()
+```
+
+#### schema.py
+```python
+def initialize_db(conn: sqlite3.Connection) -> None:
+    """データベーススキーマを初期化"""
+    # テーブル作成: runs, documents, terms_extracted,
+    # glossary_provisional, glossary_issues, glossary_refined
+    ...
+
+def get_schema_version(conn: sqlite3.Connection) -> int:
+    """現在のスキーマバージョンを取得"""
+    ...
+```
+
+#### models.py
+```python
+from typing import TypedDict
+from genglossary.models.term import TermOccurrence
+
+class GlossaryTermRow(TypedDict):
+    """用語集テーブル共通型 (provisional/refined)"""
+    id: int
+    run_id: int
+    term_name: str
+    definition: str
+    confidence: float
+    occurrences: list[TermOccurrence]
+
+def serialize_occurrences(occurrences: list[TermOccurrence]) -> str:
+    """TermOccurrenceをJSON文字列に変換"""
+    ...
+
+def deserialize_occurrences(json_str: str) -> list[TermOccurrence]:
+    """JSON文字列をTermOccurrenceに変換"""
+    ...
+```
+
+#### run_repository.py
+```python
+def create_run(
+    conn: sqlite3.Connection,
+    input_path: str,
+    llm_provider: str,
+    llm_model: str
+) -> int:
+    """実行履歴を作成し、run_idを返す"""
+    ...
+
+def list_runs(conn: sqlite3.Connection, limit: int = 20) -> list[sqlite3.Row]:
+    """実行履歴一覧を取得"""
+    ...
+```
+
+#### term_repository.py
+```python
+def create_term(
+    conn: sqlite3.Connection,
+    run_id: int,
+    term_text: str,
+    category: str | None = None
+) -> int:
+    """抽出用語を作成"""
+    ...
+
+def update_term(
+    conn: sqlite3.Connection,
+    term_id: int,
+    term_text: str,
+    category: str | None = None
+) -> None:
+    """用語を更新"""
+    ...
+
+def delete_term(conn: sqlite3.Connection, term_id: int) -> None:
+    """用語を削除"""
+    ...
+```
+
+#### provisional_repository.py / refined_repository.py
+```python
+def create_provisional_term(
+    conn: sqlite3.Connection,
+    run_id: int,
+    term_name: str,
+    definition: str,
+    confidence: float,
+    occurrences: list[TermOccurrence]
+) -> int:
+    """暫定用語集エントリを作成"""
+    ...
+
+def update_provisional_term(
+    conn: sqlite3.Connection,
+    term_id: int,
+    definition: str,
+    confidence: float
+) -> None:
+    """暫定用語を更新"""
+    ...
+```
+
+### 4. 処理レイヤー
 
 #### document_loader.py
 ```python
@@ -208,7 +358,7 @@ class GlossaryRefiner:
         ...
 ```
 
-### 4. output/ - 出力層
+### 5. output/ - 出力層
 
 #### markdown_writer.py
 ```python
@@ -217,9 +367,9 @@ def write_glossary(glossary: Glossary, output_path: str) -> None:
     ...
 ```
 
-### 5. CLI層
+### 6. CLI層
 
-#### cli.py
+#### cli.py (メインコマンド)
 ```python
 import click
 
@@ -254,7 +404,53 @@ def main(input_file: str, output: str) -> None:
     write_glossary(refined_glossary, output)
 ```
 
+#### cli_db.py (DBサブコマンド)
+```python
+import click
+
+@click.group()
+def db() -> None:
+    """Database management commands."""
+    pass
+
+@db.group()
+def runs() -> None:
+    """実行履歴の管理コマンド"""
+    pass
+
+@runs.command("list")
+@click.option("--db-path", default="./genglossary.db")
+def runs_list(db_path: str) -> None:
+    """実行履歴一覧を表示"""
+    conn = get_connection(db_path)
+    run_list = list_runs(conn)
+    # Rich tableで表示
+    ...
+
+@db.group()
+def terms() -> None:
+    """抽出用語の管理コマンド"""
+    pass
+
+@terms.command("list")
+@click.option("--run-id", type=int, required=True)
+def terms_list(run_id: int, db_path: str) -> None:
+    """用語一覧を表示"""
+    ...
+
+# provisional, refined コマンド群も同様
+```
+
+**利用可能なDBコマンド:**
+- `genglossary db init` - DB初期化
+- `genglossary db runs list/show/latest` - 実行履歴管理
+- `genglossary db terms list/show/update/delete/import` - 用語管理
+- `genglossary db provisional list/show/update` - 暫定用語集管理
+- `genglossary db refined list/show/update/export-md` - 最終用語集管理
+
 ## データフロー
+
+### 基本フロー (Markdown出力のみ)
 
 ```
 ┌──────────────────┐
@@ -296,24 +492,64 @@ def main(input_file: str, output: str) -> None:
 └──────────────────┘
 ```
 
+### DB保存付きフロー (--db-path指定時)
+
+```
+┌──────────────────┐
+│  target_docs/    │ 入力ドキュメント
+│  sample.txt      │
+└────────┬─────────┘
+         │ load_document()
+         ↓
+┌──────────────────┐     ┌──────────────────┐
+│    Document      │────→│ DB: documents    │
+└────────┬─────────┘     └──────────────────┘
+         │ extract()
+         ↓
+┌──────────────────┐     ┌──────────────────┐
+│   List[str]      │────→│ DB: terms_       │
+│   用語リスト     │     │     extracted    │
+└────────┬─────────┘     └──────────────────┘
+         │ generate()
+         ↓
+┌──────────────────┐     ┌──────────────────┐
+│    Glossary      │────→│ DB: glossary_    │
+│  (provisional)   │     │     provisional  │
+└────────┬─────────┘     └──────────────────┘
+         │ review()
+         ↓
+┌──────────────────┐     ┌──────────────────┐
+│ List[Issue]      │────→│ DB: glossary_    │
+│  問題点リスト    │     │     issues       │
+└────────┬─────────┘     └──────────────────┘
+         │ refine()
+         ↓
+┌──────────────────┐     ┌──────────────────┐
+│    Glossary      │────→│ DB: glossary_    │
+│   (refined)      │     │     refined      │
+└────────┬─────────┘     └──────────────────┘
+         │ write_glossary()
+         ↓
+┌──────────────────┐
+│   output/        │ Markdown出力
+│   glossary.md    │
+└──────────────────┘
+
+         ↓ DB CLIで操作可能
+┌──────────────────┐
+│ genglossary db   │
+│ - terms list     │
+│ - provisional    │
+│ - refined        │
+│   export-md      │
+└──────────────────┘
+```
+
 ## import文の例
 
 ### ✅ 良いimport
 
 ```python
-# モデルのimport
-from genglossary.models.document import Document
-from genglossary.models.term import Term, TermOccurrence
-from genglossary.models.glossary import Glossary, GlossaryIssue
-
-# LLMクライアントのimport
-from genglossary.llm.base import BaseLLMClient
-from genglossary.llm.ollama_client import OllamaClient
-
-# 処理レイヤーのimport
-from genglossary.term_extractor import TermExtractor
-from genglossary.glossary_generator import GlossaryGenerator
-
 # 標準ライブラリは先頭
 import sys
 from pathlib import Path
@@ -323,7 +559,24 @@ import httpx
 from pydantic import BaseModel
 
 # 自プロジェクトは最後
+# モデルのimport
 from genglossary.models.document import Document
+from genglossary.models.term import Term, TermOccurrence
+from genglossary.models.glossary import Glossary, GlossaryIssue
+
+# LLMクライアントのimport
+from genglossary.llm.base import BaseLLMClient
+from genglossary.llm.ollama_client import OllamaClient
+
+# DB層のimport
+from genglossary.db.connection import get_connection
+from genglossary.db.schema import initialize_db
+from genglossary.db.term_repository import create_term, list_terms_by_run
+from genglossary.db.provisional_repository import create_provisional_term
+
+# 処理レイヤーのimport
+from genglossary.term_extractor import TermExtractor
+from genglossary.glossary_generator import GlossaryGenerator
 ```
 
 ### ❌ 悪いimport
@@ -379,27 +632,40 @@ class TermExtractor:
 ### レイヤー間の依存方向
 
 ```
-┌──────────┐
-│   CLI    │
-└────┬─────┘
+┌──────────────┐
+│   CLI層      │ (cli.py, cli_db.py)
+└────┬─────────┘
      │ depends on
-     ↓
-┌──────────┐
-│ 処理層   │ (Extractor, Generator, Reviewer, Refiner)
-└────┬─────┘
-     │ depends on
-     ↓
-┌──────────┐
-│ LLM層    │ (BaseLLMClient, OllamaClient)
-└────┬─────┘
-     │ depends on
-     ↓
-┌──────────┐
-│ モデル層 │ (Document, Term, Glossary)
-└──────────┘
+     ├─────────────────────────┐
+     ↓                         ↓
+┌──────────────┐          ┌──────────────┐
+│  処理層      │          │   DB層       │
+│ (Extractor,  │          │ (repositories│
+│  Generator,  │          │  schema,     │
+│  Reviewer,   │          │  connection) │
+│  Refiner)    │          └────┬─────────┘
+└────┬─────────┘               │
+     │ depends on              │
+     ↓                         │
+┌──────────────┐               │
+│   LLM層      │               │
+│ (BaseLLM,    │               │
+│  OllamaClient│               │
+└────┬─────────┘               │
+     │ depends on              │
+     ↓                         ↓
+┌──────────────────────────────┐
+│        モデル層              │
+│ (Document, Term, Glossary,   │
+│  TermOccurrence)             │
+└──────────────────────────────┘
 ```
 
-**原則**: 上位レイヤーは下位レイヤーに依存できるが、逆は不可
+**原則**:
+- 上位レイヤーは下位レイヤーに依存できるが、逆は不可
+- CLI層は処理層とDB層の両方に依存可能
+- DB層はモデル層にのみ依存（処理層には依存しない）
+- 処理層はDB層を意識しない（疎結合）
 
 ### ✅ 良い依存関係
 
@@ -424,3 +690,21 @@ class Document(BaseModel):
 
 - [プロジェクト概要](@.claude/rules/00-overview.md) - 4ステップフロー、技術スタック
 - LLM統合 → `/llm-integration` スキルを使用
+- データベース機能 → README.md「データベース機能 (SQLite)」セクション参照
+
+## データベース設計の原則
+
+### Repository パターン
+- 各テーブルに対して専用のrepositoryモジュールを作成
+- CRUD操作を関数として実装（クラス化せず、シンプルに）
+- 接続管理はrepositoryの外で行う（呼び出し元の責任）
+
+### トランザクション管理
+- 各repository関数は`conn.commit()`を実行
+- エラー時のロールバックは呼び出し元で処理
+- 複数のrepository操作をまとめる場合はCLI層でトランザクション管理
+
+### 型安全性
+- `sqlite3.Row`を使用してカラム名でアクセス
+- TypedDictで型ヒントを提供（`GlossaryTermRow`など）
+- JSONシリアライズは専用関数で統一（`serialize_occurrences`など）
