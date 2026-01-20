@@ -208,8 +208,8 @@ def provisional_regenerate(
 - [x] cli_db.py: db info コマンド実装
 - [x] cli_db.py: db issues list コマンド実装
 - [x] テスト実行して成功を確認
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Update .claude/rules/03-architecture.md
+- [x] Code simplification review using code-simplifier agent
+- [x] Update .claude/rules/03-architecture.md
 - [x] Phase 3をコミット
 
 ### Phase 4タスク
