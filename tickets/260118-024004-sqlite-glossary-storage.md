@@ -26,9 +26,9 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] 既存のデータフローにDB保存ポイントを定義する(抽出語・暫定用語集・最終用語集)
-  - [ ] どのステップがDBの単一トランザクションで完結するか整理
-  - [ ] 途中失敗時のロールバック方針を決める
+- [x] 既存のデータフローにDB保存ポイントを定義する(抽出語・暫定用語集・最終用語集)
+  - [x] どのステップがDBの単一トランザクションで完結するか整理
+  - [x] 途中失敗時のロールバック方針を決める
 - [x] SQLiteスキーマ設計 ✅
   - [x] `runs`(実行/更新履歴): 入力パス、LLM設定、開始/完了時刻、ステータス
   - [x] `documents`(入力ドキュメント): run_id, file_path, content_hash
@@ -81,7 +81,7 @@ closed_at: null   # Do not modify manually
   - SQLクエリ簡素化: ~5行削減
   - 接続管理改善: context manager追加
   - 合計: ~110行のコード削減
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 ## Notes
 
