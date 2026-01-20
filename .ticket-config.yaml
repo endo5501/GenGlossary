@@ -44,6 +44,8 @@ default_content: |
   - [ ] {{Task 1}}
   - [ ] {{Task 2}}
   ...
+  - [ ] Code simplification review using code-simplifier agent
+  - [ ] Update .claude/rules/03-architecture.md
   - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
   - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
   - [ ] Get developer approval before closing
