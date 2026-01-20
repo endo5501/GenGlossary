@@ -7,7 +7,6 @@ from click.testing import CliRunner
 
 from genglossary.cli_db import db
 from genglossary.db.connection import get_connection
-from genglossary.db.run_repository import create_run
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import create_term
 
@@ -75,18 +74,18 @@ class TestDbInit:
             "glossary_issues",
             "glossary_provisional",
             "glossary_refined",
-            "runs",
+            "metadata",
             "schema_version",
             "terms_extracted",
         ]
         assert tables == expected_tables
 
 
-class TestDbRunsList:
-    """Test db runs list command."""
+class TestDbInfo:
+    """Test db info command."""
 
-    def test_runs_list_shows_no_runs_message(self, tmp_path: Path) -> None:
-        """Test that runs list shows message when no runs exist."""
+    def test_info_shows_no_metadata_message(self, tmp_path: Path) -> None:
+        """Test that info shows message when no metadata exists."""
         runner = CliRunner()
         db_path = tmp_path / "test.db"
 
@@ -95,135 +94,29 @@ class TestDbRunsList:
         initialize_db(conn)
         conn.close()
 
-        result = runner.invoke(db, ["runs", "list", "--db-path", str(db_path)])
+        result = runner.invoke(db, ["info", "--db-path", str(db_path)])
 
         assert result.exit_code == 0
-        assert "実行履歴がありません" in result.output
+        assert "メタデータがありません" in result.output
 
-    def test_runs_list_shows_runs(self, tmp_path: Path) -> None:
-        """Test that runs list displays runs."""
+    def test_info_shows_metadata(self, tmp_path: Path) -> None:
+        """Test that info displays metadata."""
         runner = CliRunner()
         db_path = tmp_path / "test.db"
 
-        # Initialize database and create runs
+        # Initialize database and create metadata
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
-        create_run(conn, "/path/to/other.txt", "openai", "gpt-4")
+        from genglossary.db.metadata_repository import upsert_metadata
+
+        upsert_metadata(conn, "ollama", "llama3.2")
         conn.close()
 
-        result = runner.invoke(db, ["runs", "list", "--db-path", str(db_path)])
+        result = runner.invoke(db, ["info", "--db-path", str(db_path)])
 
         assert result.exit_code == 0
-        assert "実行履歴" in result.output
-        # Rich table may truncate paths, so check for provider/model instead
-        assert "ollama" in result.output
-        assert "openai" in result.output
-        assert "llama3.2" in result.output
-        assert "gpt-4" in result.output
-
-    def test_runs_list_respects_limit(self, tmp_path: Path) -> None:
-        """Test that runs list respects limit parameter."""
-        runner = CliRunner()
-        db_path = tmp_path / "test.db"
-
-        # Initialize database and create multiple runs
-        conn = get_connection(str(db_path))
-        initialize_db(conn)
-        for i in range(5):
-            create_run(conn, f"/path/to/doc{i}.txt", "ollama", "llama3.2")
-        conn.close()
-
-        result = runner.invoke(
-            db, ["runs", "list", "--db-path", str(db_path), "--limit", "2"]
-        )
-
-        assert result.exit_code == 0
-        # Check that only 2 runs are shown (most recent ones)
-        # Rich table may truncate, so check for parts
-        assert "doc4" in result.output
-        assert "doc3" in result.output
-        assert "doc0" not in result.output
-
-
-class TestDbRunsShow:
-    """Test db runs show command."""
-
-    def test_runs_show_displays_run_details(self, tmp_path: Path) -> None:
-        """Test that runs show displays run details."""
-        runner = CliRunner()
-        db_path = tmp_path / "test.db"
-
-        # Initialize database and create a run
-        conn = get_connection(str(db_path))
-        initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
-        conn.close()
-
-        result = runner.invoke(db, ["runs", "show", str(run_id), "--db-path", str(db_path)])
-
-        assert result.exit_code == 0
-        assert f"Run #{run_id}" in result.output
-        assert "/path/to/doc.txt" in result.output
         assert "ollama" in result.output
         assert "llama3.2" in result.output
-        assert "running" in result.output
-
-    def test_runs_show_nonexistent_run(self, tmp_path: Path) -> None:
-        """Test that runs show handles nonexistent run ID."""
-        runner = CliRunner()
-        db_path = tmp_path / "test.db"
-
-        # Initialize database
-        conn = get_connection(str(db_path))
-        initialize_db(conn)
-        conn.close()
-
-        result = runner.invoke(db, ["runs", "show", "999", "--db-path", str(db_path)])
-
-        assert result.exit_code == 1
-        assert "が見つかりません" in result.output
-
-
-class TestDbRunsLatest:
-    """Test db runs latest command."""
-
-    def test_runs_latest_shows_no_runs_message(self, tmp_path: Path) -> None:
-        """Test that runs latest shows message when no runs exist."""
-        runner = CliRunner()
-        db_path = tmp_path / "test.db"
-
-        # Initialize database
-        conn = get_connection(str(db_path))
-        initialize_db(conn)
-        conn.close()
-
-        result = runner.invoke(db, ["runs", "latest", "--db-path", str(db_path)])
-
-        assert result.exit_code == 0
-        assert "実行履歴がありません" in result.output
-
-    def test_runs_latest_shows_most_recent_run(self, tmp_path: Path) -> None:
-        """Test that runs latest shows the most recent run."""
-        runner = CliRunner()
-        db_path = tmp_path / "test.db"
-
-        # Initialize database and create runs
-        conn = get_connection(str(db_path))
-        initialize_db(conn)
-        create_run(conn, "/path/to/old.txt", "ollama", "llama3.2")
-        run_id = create_run(conn, "/path/to/new.txt", "openai", "gpt-4")
-        conn.close()
-
-        result = runner.invoke(db, ["runs", "latest", "--db-path", str(db_path)])
-
-        assert result.exit_code == 0
-        assert f"Run #{run_id}" in result.output
-        assert "(最新)" in result.output
-        assert "/path/to/new.txt" in result.output
-        assert "openai" in result.output
-        # Old run should not be shown
-        assert "/path/to/old.txt" not in result.output
 
 
 class TestDbTermsList:
@@ -234,15 +127,12 @@ class TestDbTermsList:
         runner = CliRunner()
         db_path = tmp_path / "test.db"
 
-        # Initialize database and create a run
+        # Initialize database
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
         conn.close()
 
-        result = runner.invoke(
-            db, ["terms", "list", "--run-id", str(run_id), "--db-path", str(db_path)]
-        )
+        result = runner.invoke(db, ["terms", "list", "--db-path", str(db_path)])
 
         assert result.exit_code == 0
         assert "用語がありません" in result.output
@@ -255,14 +145,11 @@ class TestDbTermsList:
         # Initialize database and create terms
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
-        create_term(conn, run_id, "量子コンピュータ", "technical_term")
-        create_term(conn, run_id, "量子ビット", "technical_term")
+        create_term(conn, "量子コンピュータ", "technical_term")
+        create_term(conn, "量子ビット", "technical_term")
         conn.close()
 
-        result = runner.invoke(
-            db, ["terms", "list", "--run-id", str(run_id), "--db-path", str(db_path)]
-        )
+        result = runner.invoke(db, ["terms", "list", "--db-path", str(db_path)])
 
         assert result.exit_code == 0
         assert "量子コンピュータ" in result.output
@@ -280,8 +167,7 @@ class TestDbTermsShow:
         # Initialize database and create a term
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
-        term_id = create_term(conn, run_id, "量子コンピュータ", "technical_term")
+        term_id = create_term(conn, "量子コンピュータ", "technical_term")
         conn.close()
 
         result = runner.invoke(
@@ -320,8 +206,7 @@ class TestDbTermsUpdate:
         # Initialize database and create a term
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
-        term_id = create_term(conn, run_id, "量子コンピュータ", "technical_term")
+        term_id = create_term(conn, "量子コンピュータ", "technical_term")
         conn.close()
 
         result = runner.invoke(
@@ -365,8 +250,7 @@ class TestDbTermsDelete:
         # Initialize database and create a term
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
-        term_id = create_term(conn, run_id, "量子コンピュータ", "technical_term")
+        term_id = create_term(conn, "量子コンピュータ", "technical_term")
         conn.close()
 
         result = runner.invoke(
@@ -397,7 +281,6 @@ class TestDbTermsImport:
         # Initialize database
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
         conn.close()
 
         # Create import file
@@ -409,8 +292,6 @@ class TestDbTermsImport:
             [
                 "terms",
                 "import",
-                "--run-id",
-                str(run_id),
                 "--file",
                 str(import_file),
                 "--db-path",
@@ -423,9 +304,9 @@ class TestDbTermsImport:
 
         # Verify import
         conn = get_connection(str(db_path))
-        from genglossary.db.term_repository import list_terms_by_run
+        from genglossary.db.term_repository import list_all_terms
 
-        terms = list_terms_by_run(conn, run_id)
+        terms = list_all_terms(conn)
         conn.close()
 
         assert len(terms) == 3
@@ -445,7 +326,6 @@ class TestDbProvisionalList:
         # Initialize database and create provisional terms
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
 
         from genglossary.db.provisional_repository import create_provisional_term
         from genglossary.models.term import TermOccurrence
@@ -456,12 +336,12 @@ class TestDbProvisionalList:
             )
         ]
         create_provisional_term(
-            conn, run_id, "量子コンピュータ", "定義", 0.95, occurrences
+            conn, "量子コンピュータ", "定義", 0.95, occurrences
         )
         conn.close()
 
         result = runner.invoke(
-            db, ["provisional", "list", "--run-id", str(run_id), "--db-path", str(db_path)]
+            db, ["provisional", "list", "--db-path", str(db_path)]
         )
 
         assert result.exit_code == 0
@@ -479,7 +359,6 @@ class TestDbRefinedList:
         # Initialize database and create refined terms
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
 
         from genglossary.db.refined_repository import create_refined_term
         from genglossary.models.term import TermOccurrence
@@ -490,12 +369,12 @@ class TestDbRefinedList:
             )
         ]
         create_refined_term(
-            conn, run_id, "量子コンピュータ", "定義", 0.98, occurrences
+            conn, "量子コンピュータ", "定義", 0.98, occurrences
         )
         conn.close()
 
         result = runner.invoke(
-            db, ["refined", "list", "--run-id", str(run_id), "--db-path", str(db_path)]
+            db, ["refined", "list", "--db-path", str(db_path)]
         )
 
         assert result.exit_code == 0
@@ -514,7 +393,6 @@ class TestDbRefinedExportMd:
         # Initialize database and create refined terms
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        run_id = create_run(conn, "/path/to/doc.txt", "ollama", "llama3.2")
 
         from genglossary.db.refined_repository import create_refined_term
         from genglossary.models.term import TermOccurrence
@@ -525,7 +403,7 @@ class TestDbRefinedExportMd:
             )
         ]
         create_refined_term(
-            conn, run_id, "量子コンピュータ", "量子力学の原理を利用したコンピュータ", 0.98, occurrences
+            conn, "量子コンピュータ", "量子力学の原理を利用したコンピュータ", 0.98, occurrences
         )
         conn.close()
 
@@ -534,8 +412,6 @@ class TestDbRefinedExportMd:
             [
                 "refined",
                 "export-md",
-                "--run-id",
-                str(run_id),
                 "--output",
                 str(output_path),
                 "--db-path",

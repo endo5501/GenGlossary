@@ -11,45 +11,26 @@ from genglossary.db.connection import get_connection
 from genglossary.db.models import GlossaryTermRow
 from genglossary.db.provisional_repository import (
     get_provisional_term,
-    list_provisional_terms_by_run,
+    list_all_provisional,
     update_provisional_term,
 )
 from genglossary.db.refined_repository import (
     get_refined_term,
-    list_refined_terms_by_run,
+    list_all_refined,
     update_refined_term,
 )
-from genglossary.db.run_repository import get_latest_run, get_run, list_runs
+from genglossary.db.metadata_repository import get_metadata
+from genglossary.db.issue_repository import list_all_issues
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import (
     create_term,
     delete_term,
     get_term,
-    list_terms_by_run,
+    list_all_terms,
     update_term,
 )
 
 console = Console()
-
-
-def _display_run_details(run: sqlite3.Row) -> None:
-    """Display run details in a consistent format.
-
-    Args:
-        run: Run record from database.
-    """
-    console.print(f"\n[bold]Run #{run['id']}[/bold]")
-    console.print(f"入力パス: {run['input_path']}")
-    console.print(f"プロバイダー: {run['llm_provider']}")
-    console.print(f"モデル: {run['llm_model']}")
-    console.print(f"ステータス: {run['status']}")
-    console.print(f"開始時刻: {run['started_at']}")
-
-    if run["completed_at"]:
-        console.print(f"完了時刻: {run['completed_at']}")
-
-    if run["error_message"]:
-        console.print(f"[red]エラー: {run['error_message']}[/red]")
 
 
 def _create_glossary_term_table(
@@ -94,7 +75,6 @@ def _display_glossary_term_details(term: GlossaryTermRow, term_type: str) -> Non
     console.print(f"用語: {term['term_name']}")
     console.print(f"定義: {term['definition']}")
     console.print(f"信頼度: {term['confidence']:.2f}")
-    console.print(f"Run ID: {term['run_id']}")
 
 
 @click.group()
@@ -137,131 +117,38 @@ def init(path: str) -> None:
         raise click.Abort()
 
 
-@db.group()
-def runs() -> None:
-    """実行履歴の管理コマンド."""
-    pass
-
-
-@runs.command("list")
+@db.command()
 @click.option(
     "--db-path",
     type=click.Path(exists=True),
     default="./genglossary.db",
     help="Path to database file",
 )
-@click.option(
-    "--limit",
-    type=int,
-    default=20,
-    help="Maximum number of runs to display",
-)
-def runs_list(db_path: str, limit: int) -> None:
-    """実行履歴の一覧を表示.
+def info(db_path: str) -> None:
+    """メタデータを表示.
 
     Example:
-        genglossary db runs list
-        genglossary db runs list --limit 10
+        genglossary db info
     """
     try:
         conn = get_connection(db_path)
-        run_list = list_runs(conn, limit=limit)
+        metadata = get_metadata(conn)
         conn.close()
 
-        if not run_list:
-            console.print("[yellow]実行履歴がありません[/yellow]")
+        if metadata is None:
+            console.print("[yellow]メタデータがありません[/yellow]")
             return
 
-        # Create table
-        table = Table(title="実行履歴")
-        table.add_column("ID", style="cyan")
-        table.add_column("入力パス", style="magenta")
-        table.add_column("プロバイダー", style="green")
-        table.add_column("モデル", style="blue")
-        table.add_column("ステータス", style="yellow")
-        table.add_column("開始時刻", style="dim")
-
-        for run in run_list:
-            status_color = {
-                "running": "yellow",
-                "completed": "green",
-                "failed": "red",
-            }.get(run["status"], "white")
-
-            table.add_row(
-                str(run["id"]),
-                run["input_path"],
-                run["llm_provider"],
-                run["llm_model"],
-                f"[{status_color}]{run['status']}[/{status_color}]",
-                run["started_at"],
-            )
-
-        console.print(table)
+        # Display metadata
+        console.print("\n[bold]メタデータ[/bold]")
+        console.print(f"LLMプロバイダー: {metadata['llm_provider']}")
+        console.print(f"LLMモデル: {metadata['llm_model']}")
+        console.print(f"作成日時: {metadata['created_at']}")
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
         raise click.Abort()
 
-
-@runs.command("show")
-@click.argument("run_id", type=int)
-@click.option(
-    "--db-path",
-    type=click.Path(exists=True),
-    default="./genglossary.db",
-    help="Path to database file",
-)
-def runs_show(run_id: int, db_path: str) -> None:
-    """指定されたrun_idの詳細を表示.
-
-    Example:
-        genglossary db runs show 1
-    """
-    try:
-        conn = get_connection(db_path)
-        run = get_run(conn, run_id)
-        conn.close()
-
-        if run is None:
-            console.print(f"[red]Run ID {run_id} が見つかりません[/red]")
-            raise click.Abort()
-
-        _display_run_details(run)
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
-
-
-@runs.command("latest")
-@click.option(
-    "--db-path",
-    type=click.Path(exists=True),
-    default="./genglossary.db",
-    help="Path to database file",
-)
-def runs_latest(db_path: str) -> None:
-    """最新の実行履歴を表示.
-
-    Example:
-        genglossary db runs latest
-    """
-    try:
-        conn = get_connection(db_path)
-        run = get_latest_run(conn)
-        conn.close()
-
-        if run is None:
-            console.print("[yellow]実行履歴がありません[/yellow]")
-            return
-
-        console.print("\n[bold](最新)[/bold]", end="")
-        _display_run_details(run)
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
 
 @db.group()
 def terms() -> None:
@@ -271,26 +158,20 @@ def terms() -> None:
 
 @terms.command("list")
 @click.option(
-    "--run-id",
-    type=int,
-    required=True,
-    help="Run ID to filter by",
-)
-@click.option(
     "--db-path",
     type=click.Path(exists=True),
     default="./genglossary.db",
     help="Path to database file",
 )
-def terms_list(run_id: int, db_path: str) -> None:
-    """指定されたrun_idの抽出用語一覧を表示.
+def terms_list(db_path: str) -> None:
+    """抽出用語一覧を表示.
 
     Example:
-        genglossary db terms list --run-id 1
+        genglossary db terms list
     """
     try:
         conn = get_connection(db_path)
-        term_list = list_terms_by_run(conn, run_id)
+        term_list = list_all_terms(conn)
         conn.close()
 
         if not term_list:
@@ -298,7 +179,7 @@ def terms_list(run_id: int, db_path: str) -> None:
             return
 
         # Create table
-        table = Table(title=f"抽出用語 (Run #{run_id})")
+        table = Table(title="抽出用語")
         table.add_column("ID", style="cyan")
         table.add_column("用語", style="magenta")
         table.add_column("カテゴリ", style="green")
@@ -344,7 +225,6 @@ def terms_show(term_id: int, db_path: str) -> None:
         console.print(f"\n[bold]Term #{term['id']}[/bold]")
         console.print(f"用語: {term['term_text']}")
         console.print(f"カテゴリ: {term['category'] or '[dim]なし[/dim]'}")
-        console.print(f"Run ID: {term['run_id']}")
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
@@ -417,12 +297,6 @@ def terms_delete(term_id: int, db_path: str) -> None:
 
 @terms.command("import")
 @click.option(
-    "--run-id",
-    type=int,
-    required=True,
-    help="Run ID to associate terms with",
-)
-@click.option(
     "--file",
     type=click.Path(exists=True),
     required=True,
@@ -434,11 +308,11 @@ def terms_delete(term_id: int, db_path: str) -> None:
     default="./genglossary.db",
     help="Path to database file",
 )
-def terms_import(run_id: int, file: str, db_path: str) -> None:
+def terms_import(file: str, db_path: str) -> None:
     """テキストファイルから用語をインポート（1行1用語）.
 
     Example:
-        genglossary db terms import --run-id 1 --file terms.txt
+        genglossary db terms import --file terms.txt
     """
     try:
         # Read terms from file
@@ -448,7 +322,7 @@ def terms_import(run_id: int, file: str, db_path: str) -> None:
         # Import terms
         conn = get_connection(db_path)
         for term_text in term_texts:
-            create_term(conn, run_id, term_text)
+            create_term(conn, term_text)
         conn.close()
 
         console.print(
@@ -468,33 +342,27 @@ def provisional() -> None:
 
 @provisional.command("list")
 @click.option(
-    "--run-id",
-    type=int,
-    required=True,
-    help="Run ID to filter by",
-)
-@click.option(
     "--db-path",
     type=click.Path(exists=True),
     default="./genglossary.db",
     help="Path to database file",
 )
-def provisional_list(run_id: int, db_path: str) -> None:
-    """指定されたrun_idの暫定用語集一覧を表示.
+def provisional_list(db_path: str) -> None:
+    """暫定用語集一覧を表示.
 
     Example:
-        genglossary db provisional list --run-id 1
+        genglossary db provisional list
     """
     try:
         conn = get_connection(db_path)
-        term_list = list_provisional_terms_by_run(conn, run_id)
+        term_list = list_all_provisional(conn)
         conn.close()
 
         if not term_list:
             console.print("[yellow]暫定用語がありません[/yellow]")
             return
 
-        table = _create_glossary_term_table(term_list, f"暫定用語集 (Run #{run_id})")
+        table = _create_glossary_term_table(term_list, "暫定用語集")
         console.print(table)
 
     except Exception as e:
@@ -578,33 +446,27 @@ def refined() -> None:
 
 @refined.command("list")
 @click.option(
-    "--run-id",
-    type=int,
-    required=True,
-    help="Run ID to filter by",
-)
-@click.option(
     "--db-path",
     type=click.Path(exists=True),
     default="./genglossary.db",
     help="Path to database file",
 )
-def refined_list(run_id: int, db_path: str) -> None:
-    """指定されたrun_idの最終用語集一覧を表示.
+def refined_list(db_path: str) -> None:
+    """最終用語集一覧を表示.
 
     Example:
-        genglossary db refined list --run-id 1
+        genglossary db refined list
     """
     try:
         conn = get_connection(db_path)
-        term_list = list_refined_terms_by_run(conn, run_id)
+        term_list = list_all_refined(conn)
         conn.close()
 
         if not term_list:
             console.print("[yellow]最終用語がありません[/yellow]")
             return
 
-        table = _create_glossary_term_table(term_list, f"最終用語集 (Run #{run_id})")
+        table = _create_glossary_term_table(term_list, "最終用語集")
         console.print(table)
 
     except Exception as e:
@@ -682,12 +544,6 @@ def refined_update(term_id: int, definition: str, confidence: float, db_path: st
 
 @refined.command("export-md")
 @click.option(
-    "--run-id",
-    type=int,
-    required=True,
-    help="Run ID to export",
-)
-@click.option(
     "--output",
     type=click.Path(),
     required=True,
@@ -699,15 +555,15 @@ def refined_update(term_id: int, definition: str, confidence: float, db_path: st
     default="./genglossary.db",
     help="Path to database file",
 )
-def refined_export_md(run_id: int, output: str, db_path: str) -> None:
+def refined_export_md(output: str, db_path: str) -> None:
     """最終用語集をMarkdown形式でエクスポート.
 
     Example:
-        genglossary db refined export-md --run-id 1 --output ./glossary.md
+        genglossary db refined export-md --output ./glossary.md
     """
     try:
         conn = get_connection(db_path)
-        term_list = list_refined_terms_by_run(conn, run_id)
+        term_list = list_all_refined(conn)
         conn.close()
 
         if not term_list:
