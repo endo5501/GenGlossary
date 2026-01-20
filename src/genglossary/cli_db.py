@@ -7,28 +7,42 @@ import sqlite3
 from rich.console import Console
 from rich.table import Table
 
+from genglossary.llm.factory import create_llm_client
 from genglossary.db.connection import get_connection
+from genglossary.db.document_repository import list_all_documents
+from genglossary.db.issue_repository import delete_all_issues, list_all_issues, create_issue
 from genglossary.db.models import GlossaryTermRow
 from genglossary.db.provisional_repository import (
+    create_provisional_term,
+    delete_all_provisional,
     get_provisional_term,
     list_all_provisional,
     update_provisional_term,
 )
 from genglossary.db.refined_repository import (
+    create_refined_term,
+    delete_all_refined,
     get_refined_term,
     list_all_refined,
     update_refined_term,
 )
 from genglossary.db.metadata_repository import get_metadata
-from genglossary.db.issue_repository import list_all_issues
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import (
     create_term,
+    delete_all_terms,
     delete_term,
     get_term,
     list_all_terms,
     update_term,
 )
+from genglossary.document_loader import DocumentLoader
+from genglossary.glossary_generator import GlossaryGenerator
+from genglossary.glossary_refiner import GlossaryRefiner
+from genglossary.glossary_reviewer import GlossaryReviewer
+from genglossary.models.document import Document
+from genglossary.models.glossary import Glossary
+from genglossary.term_extractor import TermExtractor
 
 console = Console()
 
@@ -334,6 +348,76 @@ def terms_import(file: str, db_path: str) -> None:
         raise click.Abort()
 
 
+@terms.command("regenerate")
+@click.option(
+    "--input",
+    type=click.Path(exists=True),
+    required=True,
+    help="Input directory containing documents",
+)
+@click.option(
+    "--llm-provider",
+    type=click.Choice(["ollama", "openai"], case_sensitive=False),
+    default="ollama",
+    help="LLM provider",
+)
+@click.option(
+    "--model",
+    default=None,
+    help="Model name (default: provider default)",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def terms_regenerate(input: str, llm_provider: str, model: str | None, db_path: str) -> None:
+    """用語を再生成（既存の用語を削除して新規抽出）.
+
+    Example:
+        genglossary db terms regenerate --input ./target_docs
+    """
+    try:
+        # Initialize LLM client
+        llm_client = create_llm_client(llm_provider, model)
+        if not llm_client.is_available():
+            console.print(f"[red]{llm_provider} が利用できません[/red]")
+            raise click.Abort()
+
+        # Load documents
+        loader = DocumentLoader()
+        documents = loader.load_directory(input)
+
+        if not documents:
+            console.print(f"[yellow]ドキュメントが見つかりません: {input}[/yellow]")
+            return
+
+        console.print(f"[dim]{len(documents)} 件のドキュメントを読み込みました[/dim]")
+
+        # Extract terms
+        extractor = TermExtractor(llm_client=llm_client)
+        console.print("[dim]用語を抽出中...[/dim]")
+        terms = extractor.extract_terms(documents)
+
+        console.print(f"[dim]{len(terms)} 個の用語を抽出しました[/dim]")
+
+        # Clear existing terms and save new ones
+        conn = get_connection(db_path)
+        delete_all_terms(conn)
+        for term in terms:
+            create_term(conn, term)
+        conn.close()
+
+        console.print(
+            f"[green]✓[/green] {len(terms)}件の用語を保存しました"
+        )
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
 @db.group()
 def provisional() -> None:
     """暫定用語集の管理コマンド."""
@@ -432,6 +516,101 @@ def provisional_update(term_id: int, definition: str, confidence: float, db_path
         conn.close()
 
         console.print(f"[green]✓[/green] Provisional Term #{term_id} を更新しました")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@provisional.command("regenerate")
+@click.option(
+    "--llm-provider",
+    type=click.Choice(["ollama", "openai"], case_sensitive=False),
+    default="ollama",
+    help="LLM provider",
+)
+@click.option(
+    "--model",
+    default=None,
+    help="Model name (default: provider default)",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def provisional_regenerate(llm_provider: str, model: str | None, db_path: str) -> None:
+    """暫定用語集を再生成（抽出用語とドキュメントから生成）.
+
+    Example:
+        genglossary db provisional regenerate
+    """
+    try:
+        # Initialize LLM client
+        llm_client = create_llm_client(llm_provider, model)
+        if not llm_client.is_available():
+            console.print(f"[red]{llm_provider} が利用できません[/red]")
+            raise click.Abort()
+
+        # Load terms and documents from database
+        conn = get_connection(db_path)
+        term_rows = list_all_terms(conn)
+        terms = [row["term_text"] for row in term_rows]
+
+        # Load documents from database and reconstruct Document objects
+        doc_rows = list_all_documents(conn)
+
+        if not doc_rows:
+            console.print("[yellow]ドキュメントがありません。先にterms regenerateを実行してください。[/yellow]")
+            conn.close()
+            return
+
+        if not terms:
+            console.print("[yellow]抽出用語がありません。先にterms regenerateを実行してください。[/yellow]")
+            conn.close()
+            return
+
+        # Reconstruct documents from file paths
+        documents: list[Document] = []
+        loader = DocumentLoader()
+        for doc_row in doc_rows:
+            try:
+                doc = loader.load_file(doc_row["file_path"])
+                documents.append(doc)
+            except FileNotFoundError:
+                console.print(f"[yellow]警告: ファイルが見つかりません: {doc_row['file_path']}[/yellow]")
+                continue
+
+        if not documents:
+            console.print("[yellow]ドキュメントが読み込めませんでした[/yellow]")
+            conn.close()
+            return
+
+        console.print(f"[dim]{len(terms)} 個の用語、{len(documents)} 件のドキュメントを読み込みました[/dim]")
+
+        # Generate provisional glossary
+        generator = GlossaryGenerator(llm_client=llm_client)
+        console.print("[dim]用語集を生成中...[/dim]")
+        glossary = generator.generate(terms, documents)
+
+        console.print(f"[dim]{len(glossary.terms)} 個の用語定義を生成しました[/dim]")
+
+        # Clear existing provisional terms and save new ones
+        delete_all_provisional(conn)
+        for term in glossary.terms.values():
+            create_provisional_term(
+                conn,
+                term.name,
+                term.definition,
+                term.confidence,
+                term.occurrences,
+            )
+        conn.close()
+
+        console.print(
+            f"[green]✓[/green] {len(glossary.terms)}件の暫定用語を保存しました"
+        )
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
@@ -590,6 +769,262 @@ def refined_export_md(output: str, db_path: str) -> None:
         output_path.write_text("".join(md_lines), encoding="utf-8")
 
         console.print(f"[green]✓[/green] {len(term_list)}件の用語を {output} にエクスポートしました")
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@refined.command("regenerate")
+@click.option(
+    "--llm-provider",
+    type=click.Choice(["ollama", "openai"], case_sensitive=False),
+    default="ollama",
+    help="LLM provider",
+)
+@click.option(
+    "--model",
+    default=None,
+    help="Model name (default: provider default)",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def refined_regenerate(llm_provider: str, model: str | None, db_path: str) -> None:
+    """最終用語集を再生成（暫定用語集と問題から改善）.
+
+    Example:
+        genglossary db refined regenerate
+    """
+    try:
+        # Initialize LLM client
+        llm_client = create_llm_client(llm_provider, model)
+        if not llm_client.is_available():
+            console.print(f"[red]{llm_provider} が利用できません[/red]")
+            raise click.Abort()
+
+        # Load provisional glossary, issues, and documents from database
+        conn = get_connection(db_path)
+        provisional_rows = list_all_provisional(conn)
+        issue_rows = list_all_issues(conn)
+        doc_rows = list_all_documents(conn)
+
+        if not provisional_rows:
+            console.print("[yellow]暫定用語がありません。先にprovisional regenerateを実行してください。[/yellow]")
+            conn.close()
+            return
+
+        if not issue_rows:
+            console.print("[yellow]精査結果がありません。先にissues regenerateを実行してください。[/yellow]")
+            conn.close()
+            return
+
+        if not doc_rows:
+            console.print("[yellow]ドキュメントがありません[/yellow]")
+            conn.close()
+            return
+
+        # Reconstruct Glossary object
+        from genglossary.models.term import Term
+        glossary = Glossary()
+        for prov_row in provisional_rows:
+            term = Term(
+                name=prov_row["term_name"],
+                definition=prov_row["definition"],
+                confidence=prov_row["confidence"],
+                occurrences=prov_row["occurrences"],
+            )
+            glossary.add_term(term)
+
+        # Reconstruct issues
+        from genglossary.models.glossary import GlossaryIssue
+        issues: list[GlossaryIssue] = []
+        for issue_row in issue_rows:
+            issue = GlossaryIssue(
+                term_name=issue_row["term_name"],
+                issue_type=issue_row["issue_type"],
+                description=issue_row["description"],
+                # should_exclude and exclusion_reason use default values (False, None)
+                # as they are not stored in the database
+            )
+            issues.append(issue)
+
+        # Reconstruct documents
+        documents: list[Document] = []
+        loader = DocumentLoader()
+        for doc_row in doc_rows:
+            try:
+                doc = loader.load_file(doc_row["file_path"])
+                documents.append(doc)
+            except FileNotFoundError:
+                console.print(f"[yellow]警告: ファイルが見つかりません: {doc_row['file_path']}[/yellow]")
+                continue
+
+        if not documents:
+            console.print("[yellow]ドキュメントが読み込めませんでした[/yellow]")
+            conn.close()
+            return
+
+        console.print(f"[dim]{len(glossary.terms)} 個の暫定用語、{len(issues)} 個の問題、{len(documents)} 件のドキュメントを読み込みました[/dim]")
+
+        # Refine glossary
+        refiner = GlossaryRefiner(llm_client=llm_client)
+        console.print("[dim]用語集を改善中...[/dim]")
+        refined_glossary = refiner.refine(glossary, issues, documents)
+
+        console.print(f"[dim]{len(refined_glossary.terms)} 個の最終用語を生成しました[/dim]")
+
+        # Clear existing refined terms and save new ones
+        delete_all_refined(conn)
+        for term in refined_glossary.terms.values():
+            create_refined_term(
+                conn,
+                term.name,
+                term.definition,
+                term.confidence,
+                term.occurrences,
+            )
+        conn.close()
+
+        console.print(
+            f"[green]✓[/green] {len(refined_glossary.terms)}件の最終用語を保存しました"
+        )
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@db.group()
+def issues() -> None:
+    """精査結果の管理コマンド."""
+    pass
+
+
+@issues.command("list")
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def issues_list(db_path: str) -> None:
+    """精査結果の一覧を表示.
+
+    Example:
+        genglossary db issues list
+    """
+    try:
+        conn = get_connection(db_path)
+        issue_list = list_all_issues(conn)
+        conn.close()
+
+        if not issue_list:
+            console.print("[yellow]精査結果がありません[/yellow]")
+            return
+
+        # Create table
+        table = Table(title="精査結果")
+        table.add_column("ID", style="cyan")
+        table.add_column("用語", style="magenta")
+        table.add_column("問題種別", style="yellow")
+        table.add_column("説明", style="white")
+
+        for issue in issue_list:
+            description = issue["description"]
+            truncated_desc = description[:50] + "..." if len(description) > 50 else description
+            table.add_row(
+                str(issue["id"]),
+                issue["term_name"],
+                issue["issue_type"],
+                truncated_desc,
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
+
+
+@issues.command("regenerate")
+@click.option(
+    "--llm-provider",
+    type=click.Choice(["ollama", "openai"], case_sensitive=False),
+    default="ollama",
+    help="LLM provider",
+)
+@click.option(
+    "--model",
+    default=None,
+    help="Model name (default: provider default)",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True),
+    default="./genglossary.db",
+    help="Path to database file",
+)
+def issues_regenerate(llm_provider: str, model: str | None, db_path: str) -> None:
+    """精査結果を再生成（暫定用語集を精査）.
+
+    Example:
+        genglossary db issues regenerate
+    """
+    try:
+        # Initialize LLM client
+        llm_client = create_llm_client(llm_provider, model)
+        if not llm_client.is_available():
+            console.print(f"[red]{llm_provider} が利用できません[/red]")
+            raise click.Abort()
+
+        # Load provisional glossary from database
+        conn = get_connection(db_path)
+        provisional_rows = list_all_provisional(conn)
+
+        if not provisional_rows:
+            console.print("[yellow]暫定用語がありません。先にprovisional regenerateを実行してください。[/yellow]")
+            conn.close()
+            return
+
+        # Reconstruct Glossary object
+        from genglossary.models.term import Term
+        glossary = Glossary()
+        for prov_row in provisional_rows:
+            term = Term(
+                name=prov_row["term_name"],
+                definition=prov_row["definition"],
+                confidence=prov_row["confidence"],
+                occurrences=prov_row["occurrences"],
+            )
+            glossary.add_term(term)
+
+        console.print(f"[dim]{len(glossary.terms)} 個の暫定用語を読み込みました[/dim]")
+
+        # Review glossary
+        reviewer = GlossaryReviewer(llm_client=llm_client)
+        console.print("[dim]用語集を精査中...[/dim]")
+        issues = reviewer.review(glossary)
+
+        console.print(f"[dim]{len(issues)} 個の問題を検出しました[/dim]")
+
+        # Clear existing issues and save new ones
+        delete_all_issues(conn)
+        for issue in issues:
+            create_issue(
+                conn,
+                issue.term_name,
+                issue.issue_type,
+                issue.description,
+            )
+        conn.close()
+
+        console.print(
+            f"[green]✓[/green] {len(issues)}件の問題を保存しました"
+        )
 
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")

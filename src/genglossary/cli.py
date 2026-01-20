@@ -10,7 +10,6 @@ from typing import Any, Callable
 import click
 from rich.console import Console
 
-from genglossary.cli_db import db
 from genglossary.config import Config
 from genglossary.db.connection import get_connection
 from genglossary.db.document_repository import create_document
@@ -25,8 +24,7 @@ from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.glossary_refiner import GlossaryRefiner
 from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.base import BaseLLMClient
-from genglossary.llm.ollama_client import OllamaClient
-from genglossary.llm.openai_compatible_client import OpenAICompatibleClient
+from genglossary.llm.factory import create_llm_client
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.progress import progress_task
@@ -34,45 +32,6 @@ from genglossary.output.markdown_writer import MarkdownWriter
 from genglossary.term_extractor import TermExtractor, TermExtractionAnalysis
 
 console = Console()
-
-
-def create_llm_client(
-    provider: str,
-    model: str | None = None,
-    openai_base_url: str | None = None,
-    timeout: float = 180.0,
-) -> BaseLLMClient:
-    """Create LLM client based on provider.
-
-    Args:
-        provider: LLM provider ("ollama" or "openai").
-        model: Model name (provider-specific default if None).
-        openai_base_url: Base URL for OpenAI-compatible API (optional).
-        timeout: Request timeout in seconds.
-
-    Returns:
-        Configured LLM client instance.
-
-    Raises:
-        ValueError: If provider is unknown.
-    """
-    if provider == "ollama":
-        return OllamaClient(
-            model=model or "dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
-            timeout=timeout,
-        )
-
-    if provider == "openai":
-        config = Config()
-        return OpenAICompatibleClient(
-            base_url=openai_base_url or config.openai_base_url,
-            api_key=config.openai_api_key,
-            model=model or config.openai_model,
-            timeout=timeout,
-            api_version=config.azure_openai_api_version,
-        )
-
-    raise ValueError(f"Unknown provider: {provider}. Must be 'ollama' or 'openai'.")
 
 
 def _get_actual_model_name(provider: str, model: str | None) -> str:
@@ -289,8 +248,6 @@ def _generate_glossary_with_db(
                 issue.term_name,
                 issue.issue_type,
                 issue.description,
-                issue.should_exclude,
-                issue.exclusion_reason,
             )
         if verbose:
             console.print(f"[dim]  → データベースに {len(issues)} 件の問題を保存[/dim]")
@@ -713,6 +670,8 @@ def analyze_terms(
 
 
 # Register db subcommand group
+from genglossary.cli_db import db
+
 main.add_command(db)
 
 
