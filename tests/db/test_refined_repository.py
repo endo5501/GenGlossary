@@ -6,11 +6,11 @@ import pytest
 
 from genglossary.db.refined_repository import (
     create_refined_term,
+    delete_all_refined,
     get_refined_term,
-    list_refined_terms_by_run,
+    list_all_refined,
     update_refined_term,
 )
-from genglossary.db.run_repository import create_run
 from genglossary.db.schema import initialize_db
 from genglossary.models.term import TermOccurrence
 
@@ -29,8 +29,6 @@ class TestCreateRefinedTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_refined_term returns an ID."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -39,7 +37,6 @@ class TestCreateRefinedTerm:
 
         term_id = create_refined_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="量子力学の原理を利用したコンピュータ",
             confidence=0.98,
@@ -53,8 +50,6 @@ class TestCreateRefinedTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_refined_term stores data correctly."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -63,7 +58,6 @@ class TestCreateRefinedTerm:
 
         term_id = create_refined_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="量子力学の原理を利用したコンピュータ",
             confidence=0.98,
@@ -75,7 +69,6 @@ class TestCreateRefinedTerm:
         row = cursor.fetchone()
 
         assert row is not None
-        assert row["run_id"] == run_id
         assert row["term_name"] == "量子コンピュータ"
         assert row["definition"] == "量子力学の原理を利用したコンピュータ"
         assert row["confidence"] == 0.98
@@ -84,9 +77,7 @@ class TestCreateRefinedTerm:
     def test_create_refined_term_unique_constraint(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that (run_id, term_name) must be unique."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
+        """Test that term_name must be unique."""
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -95,7 +86,6 @@ class TestCreateRefinedTerm:
 
         create_refined_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="定義1",
             confidence=0.98,
@@ -105,7 +95,6 @@ class TestCreateRefinedTerm:
         with pytest.raises(sqlite3.IntegrityError):
             create_refined_term(
                 db_with_schema,
-                run_id=run_id,
                 term_name="量子コンピュータ",
                 definition="定義2",
                 confidence=0.95,
@@ -120,8 +109,6 @@ class TestGetRefinedTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that get_refined_term returns data with deserialized occurrences."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -130,7 +117,6 @@ class TestGetRefinedTerm:
 
         term_id = create_refined_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="量子力学の原理を利用したコンピュータ",
             confidence=0.98,
@@ -154,25 +140,21 @@ class TestGetRefinedTerm:
         assert term is None
 
 
-class TestListRefinedTermsByRun:
-    """Test list_refined_terms_by_run function."""
+class TestListAllRefined:
+    """Test list_all_refined function."""
 
-    def test_list_refined_terms_by_run_returns_empty(
+    def test_list_all_refined_returns_empty(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that list returns empty list when no terms."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
-        terms = list_refined_terms_by_run(db_with_schema, run_id)
+        terms = list_all_refined(db_with_schema)
 
         assert terms == []
 
-    def test_list_refined_terms_by_run_returns_all_terms(
+    def test_list_all_refined_returns_all_terms(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that list returns all terms with deserialized occurrences."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences1 = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context1"
@@ -186,7 +168,6 @@ class TestListRefinedTermsByRun:
 
         create_refined_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="定義1",
             confidence=0.98,
@@ -194,14 +175,13 @@ class TestListRefinedTermsByRun:
         )
         create_refined_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子ビット",
             definition="定義2",
             confidence=0.95,
             occurrences=occurrences2,
         )
 
-        terms = list_refined_terms_by_run(db_with_schema, run_id)
+        terms = list_all_refined(db_with_schema)
 
         assert len(terms) == 2
         assert all(isinstance(term["occurrences"][0], TermOccurrence) for term in terms)
@@ -214,8 +194,6 @@ class TestUpdateRefinedTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that update_refined_term updates definition and confidence."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -224,7 +202,6 @@ class TestUpdateRefinedTerm:
 
         term_id = create_refined_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="古い定義",
             confidence=0.85,
@@ -257,3 +234,46 @@ class TestUpdateRefinedTerm:
 
         term = get_refined_term(db_with_schema, 999)
         assert term is None
+
+
+class TestDeleteAllRefined:
+    """Test delete_all_refined function."""
+
+    def test_delete_all_refined_removes_all_terms(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that delete_all_refined removes all terms."""
+        occurrences = [
+            TermOccurrence(
+                document_path="/path/to/doc.txt", line_number=1, context="Context"
+            )
+        ]
+
+        create_refined_term(
+            db_with_schema,
+            term_name="量子コンピュータ",
+            definition="定義1",
+            confidence=0.98,
+            occurrences=occurrences,
+        )
+        create_refined_term(
+            db_with_schema,
+            term_name="量子ビット",
+            definition="定義2",
+            confidence=0.95,
+            occurrences=occurrences,
+        )
+
+        delete_all_refined(db_with_schema)
+
+        terms = list_all_refined(db_with_schema)
+        assert terms == []
+
+    def test_delete_all_refined_on_empty_table_does_nothing(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that delete_all_refined does nothing on empty table."""
+        delete_all_refined(db_with_schema)
+
+        terms = list_all_refined(db_with_schema)
+        assert terms == []
