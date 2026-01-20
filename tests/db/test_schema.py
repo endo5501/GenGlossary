@@ -29,7 +29,7 @@ class TestSchemaInitialization:
             "glossary_issues",
             "glossary_provisional",
             "glossary_refined",
-            "runs",
+            "metadata",
             "schema_version",
             "terms_extracted",
         ]
@@ -40,7 +40,7 @@ class TestSchemaInitialization:
         initialize_db(in_memory_db)
 
         version = get_schema_version(in_memory_db)
-        assert version == 1
+        assert version == 2
 
     def test_initialize_db_is_idempotent(self, in_memory_db: sqlite3.Connection) -> None:
         """Test that initialize_db can be called multiple times safely."""
@@ -62,140 +62,198 @@ class TestSchemaInitialization:
             "glossary_issues",
             "glossary_provisional",
             "glossary_refined",
-            "runs",
+            "metadata",
             "schema_version",
             "terms_extracted",
         ]
         assert tables == expected_tables
 
 
-class TestRunsTable:
-    """Test runs table schema."""
+class TestMetadataTable:
+    """Test metadata table schema."""
 
-    def test_runs_table_has_correct_columns(self, in_memory_db: sqlite3.Connection) -> None:
-        """Test that runs table has all required columns."""
+    def test_metadata_table_has_correct_columns(self, in_memory_db: sqlite3.Connection) -> None:
+        """Test that metadata table has all required columns."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
-        cursor.execute("PRAGMA table_info(runs)")
+        cursor.execute("PRAGMA table_info(metadata)")
         columns = {row[1]: row[2] for row in cursor.fetchall()}
 
         assert "id" in columns
-        assert "input_path" in columns
         assert "llm_provider" in columns
         assert "llm_model" in columns
-        assert "status" in columns
-        assert "started_at" in columns
-        assert "completed_at" in columns
-        assert "error_message" in columns
+        assert "created_at" in columns
 
-    def test_runs_table_default_status(self, in_memory_db: sqlite3.Connection) -> None:
-        """Test that runs table has default status 'running'."""
+    def test_metadata_table_only_one_row(self, in_memory_db: sqlite3.Connection) -> None:
+        """Test that metadata table can only have id=1."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+
+        # Insert with id=1 should succeed
+        cursor.execute(
+            "INSERT INTO metadata (id, llm_provider, llm_model) VALUES (?, ?, ?)",
+            (1, "ollama", "llama3.2"),
+        )
+        in_memory_db.commit()
+
+        # Try to insert with id=2 should fail (CHECK constraint)
+        with pytest.raises(sqlite3.IntegrityError):
+            cursor.execute(
+                "INSERT INTO metadata (id, llm_provider, llm_model) VALUES (?, ?, ?)",
+                (2, "openai", "gpt-4"),
+            )
+
+    def test_metadata_table_default_created_at(self, in_memory_db: sqlite3.Connection) -> None:
+        """Test that metadata table has default created_at."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
         cursor.execute(
-            "INSERT INTO runs (input_path, llm_provider, llm_model) VALUES (?, ?, ?)",
-            ("/path/to/doc.txt", "ollama", "llama3.2"),
+            "INSERT INTO metadata (id, llm_provider, llm_model) VALUES (?, ?, ?)",
+            (1, "ollama", "llama3.2"),
         )
-        cursor.execute("SELECT status FROM runs WHERE id = 1")
-        status = cursor.fetchone()[0]
+        cursor.execute("SELECT created_at FROM metadata WHERE id = 1")
+        created_at = cursor.fetchone()[0]
 
-        assert status == "running"
+        assert created_at is not None
 
 
 class TestDocumentsTable:
     """Test documents table schema."""
 
-    def test_documents_table_has_foreign_key_to_runs(
+    def test_documents_table_has_required_columns(
         self, in_memory_db: sqlite3.Connection
     ) -> None:
-        """Test that documents table references runs table."""
+        """Test that documents table has all required columns including created_at."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute("PRAGMA table_info(documents)")
+        columns = {row[1]: row[2] for row in cursor.fetchall()}
+
+        assert "id" in columns
+        assert "file_path" in columns
+        assert "content_hash" in columns
+        assert "created_at" in columns
+        assert "run_id" not in columns  # v2: run_id should be removed
+
+    def test_documents_table_unique_constraint(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that file_path is unique in v2."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
 
-        # Insert a run
+        # Insert first document
         cursor.execute(
-            "INSERT INTO runs (input_path, llm_provider, llm_model) VALUES (?, ?, ?)",
-            ("/path/to/doc.txt", "ollama", "llama3.2"),
-        )
-        run_id = cursor.lastrowid
-
-        # Insert a document
-        cursor.execute(
-            "INSERT INTO documents (run_id, file_path, content_hash) VALUES (?, ?, ?)",
-            (run_id, "/path/to/doc.txt", "abc123"),
+            "INSERT INTO documents (file_path, content_hash) VALUES (?, ?)",
+            ("/path/to/doc.txt", "abc123"),
         )
 
-        cursor.execute("SELECT COUNT(*) FROM documents WHERE run_id = ?", (run_id,))
-        count = cursor.fetchone()[0]
-        assert count == 1
+        # Try to insert duplicate file_path
+        with pytest.raises(sqlite3.IntegrityError):
+            cursor.execute(
+                "INSERT INTO documents (file_path, content_hash) VALUES (?, ?)",
+                ("/path/to/doc.txt", "def456"),
+            )
 
-    def test_documents_table_cascade_delete(
+    def test_documents_table_default_created_at(
         self, in_memory_db: sqlite3.Connection
     ) -> None:
-        """Test that deleting a run deletes associated documents."""
+        """Test that created_at has default value."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
-
-        # Insert a run
         cursor.execute(
-            "INSERT INTO runs (input_path, llm_provider, llm_model) VALUES (?, ?, ?)",
-            ("/path/to/doc.txt", "ollama", "llama3.2"),
+            "INSERT INTO documents (file_path, content_hash) VALUES (?, ?)",
+            ("/path/to/doc.txt", "abc123"),
         )
-        run_id = cursor.lastrowid
+        cursor.execute("SELECT created_at FROM documents WHERE id = 1")
+        created_at = cursor.fetchone()[0]
 
-        # Insert a document
-        cursor.execute(
-            "INSERT INTO documents (run_id, file_path, content_hash) VALUES (?, ?, ?)",
-            (run_id, "/path/to/doc.txt", "abc123"),
-        )
-
-        # Delete the run
-        cursor.execute("DELETE FROM runs WHERE id = ?", (run_id,))
-
-        # Check that document was deleted
-        cursor.execute("SELECT COUNT(*) FROM documents WHERE run_id = ?", (run_id,))
-        count = cursor.fetchone()[0]
-        assert count == 0
+        assert created_at is not None
 
 
 class TestTermsExtractedTable:
     """Test terms_extracted table schema."""
 
+    def test_terms_extracted_has_required_columns(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that terms_extracted table has all required columns including created_at."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute("PRAGMA table_info(terms_extracted)")
+        columns = {row[1]: row[2] for row in cursor.fetchall()}
+
+        assert "id" in columns
+        assert "term_text" in columns
+        assert "category" in columns
+        assert "created_at" in columns
+        assert "run_id" not in columns  # v2: run_id should be removed
+
     def test_terms_extracted_unique_constraint(
         self, in_memory_db: sqlite3.Connection
     ) -> None:
-        """Test that (run_id, term_text) is unique."""
+        """Test that term_text is unique in v2."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
 
-        # Insert a run
-        cursor.execute(
-            "INSERT INTO runs (input_path, llm_provider, llm_model) VALUES (?, ?, ?)",
-            ("/path/to/doc.txt", "ollama", "llama3.2"),
-        )
-        run_id = cursor.lastrowid
-
         # Insert first term
         cursor.execute(
-            "INSERT INTO terms_extracted (run_id, term_text, category) VALUES (?, ?, ?)",
-            (run_id, "量子コンピュータ", "技術用語"),
+            "INSERT INTO terms_extracted (term_text, category) VALUES (?, ?)",
+            ("量子コンピュータ", "技術用語"),
         )
 
         # Try to insert duplicate
         with pytest.raises(sqlite3.IntegrityError):
             cursor.execute(
-                "INSERT INTO terms_extracted (run_id, term_text, category) VALUES (?, ?, ?)",
-                (run_id, "量子コンピュータ", "技術用語"),
+                "INSERT INTO terms_extracted (term_text, category) VALUES (?, ?)",
+                ("量子コンピュータ", "技術用語"),
             )
+
+    def test_terms_extracted_default_created_at(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that created_at has default value."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute(
+            "INSERT INTO terms_extracted (term_text, category) VALUES (?, ?)",
+            ("量子コンピュータ", "技術用語"),
+        )
+        cursor.execute("SELECT created_at FROM terms_extracted WHERE id = 1")
+        created_at = cursor.fetchone()[0]
+
+        assert created_at is not None
 
 
 class TestGlossaryProvisionalTable:
     """Test glossary_provisional table schema."""
+
+    def test_glossary_provisional_has_required_columns(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that glossary_provisional table has all required columns."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute("PRAGMA table_info(glossary_provisional)")
+        columns = {row[1]: row[2] for row in cursor.fetchall()}
+
+        assert "id" in columns
+        assert "term_name" in columns
+        assert "definition" in columns
+        assert "confidence" in columns
+        assert "occurrences" in columns
+        assert "created_at" in columns
+        assert "run_id" not in columns  # v2: run_id should be removed
 
     def test_glossary_provisional_stores_json_occurrences(
         self, in_memory_db: sqlite3.Connection
@@ -205,23 +263,15 @@ class TestGlossaryProvisionalTable:
 
         cursor = in_memory_db.cursor()
 
-        # Insert a run
-        cursor.execute(
-            "INSERT INTO runs (input_path, llm_provider, llm_model) VALUES (?, ?, ?)",
-            ("/path/to/doc.txt", "ollama", "llama3.2"),
-        )
-        run_id = cursor.lastrowid
-
         # Insert provisional glossary entry
         occurrences_json = '[{"line_number": 1, "context": "量子コンピュータは..."}]'
         cursor.execute(
             """
             INSERT INTO glossary_provisional
-            (run_id, term_name, definition, confidence, occurrences)
-            VALUES (?, ?, ?, ?, ?)
+            (term_name, definition, confidence, occurrences)
+            VALUES (?, ?, ?, ?)
             """,
             (
-                run_id,
                 "量子コンピュータ",
                 "量子力学の原理を利用したコンピュータ",
                 0.95,
@@ -236,68 +286,146 @@ class TestGlossaryProvisionalTable:
         stored_json = cursor.fetchone()[0]
         assert stored_json == occurrences_json
 
-
-class TestGlossaryIssuesTable:
-    """Test glossary_issues table schema."""
-
-    def test_glossary_issues_default_should_exclude(
+    def test_glossary_provisional_default_occurrences(
         self, in_memory_db: sqlite3.Connection
     ) -> None:
-        """Test that should_exclude defaults to 0."""
+        """Test that occurrences has default value '[]' in v2."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute(
+            """
+            INSERT INTO glossary_provisional (term_name, definition, confidence)
+            VALUES (?, ?, ?)
+            """,
+            ("量子コンピュータ", "量子力学の原理を利用したコンピュータ", 0.95),
+        )
+        cursor.execute("SELECT occurrences FROM glossary_provisional WHERE id = 1")
+        occurrences = cursor.fetchone()[0]
+
+        assert occurrences == "[]"
+
+    def test_glossary_provisional_unique_constraint(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that term_name is unique in v2."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
 
-        # Insert a run
+        # Insert first entry
         cursor.execute(
-            "INSERT INTO runs (input_path, llm_provider, llm_model) VALUES (?, ?, ?)",
-            ("/path/to/doc.txt", "ollama", "llama3.2"),
+            "INSERT INTO glossary_provisional (term_name, definition, confidence) VALUES (?, ?, ?)",
+            ("量子コンピュータ", "定義1", 0.95),
         )
-        run_id = cursor.lastrowid
 
-        # Insert issue without should_exclude
+        # Try to insert duplicate
+        with pytest.raises(sqlite3.IntegrityError):
+            cursor.execute(
+                "INSERT INTO glossary_provisional (term_name, definition, confidence) VALUES (?, ?, ?)",
+                ("量子コンピュータ", "定義2", 0.90),
+            )
+
+
+class TestGlossaryIssuesTable:
+    """Test glossary_issues table schema."""
+
+    def test_glossary_issues_has_required_columns(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that glossary_issues table has all required columns."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute("PRAGMA table_info(glossary_issues)")
+        columns = {row[1]: row[2] for row in cursor.fetchall()}
+
+        assert "id" in columns
+        assert "term_name" in columns
+        assert "issue_type" in columns
+        assert "description" in columns
+        assert "created_at" in columns
+        assert "run_id" not in columns  # v2: run_id should be removed
+        assert "should_exclude" not in columns  # v2: should_exclude should be removed
+        assert "exclusion_reason" not in columns  # v2: exclusion_reason should be removed
+
+    def test_glossary_issues_insert(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that issues can be inserted without run_id."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+
+        # Insert issue
         cursor.execute(
             """
             INSERT INTO glossary_issues
-            (run_id, term_name, issue_type, description)
-            VALUES (?, ?, ?, ?)
+            (term_name, issue_type, description)
+            VALUES (?, ?, ?)
             """,
-            (run_id, "量子コンピュータ", "unclear", "定義が曖昧"),
+            ("量子コンピュータ", "unclear", "定義が曖昧"),
         )
 
-        cursor.execute("SELECT should_exclude FROM glossary_issues WHERE id = 1")
-        should_exclude = cursor.fetchone()[0]
-        assert should_exclude == 0
+        cursor.execute("SELECT COUNT(*) FROM glossary_issues")
+        count = cursor.fetchone()[0]
+        assert count == 1
+
+    def test_glossary_issues_default_created_at(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that created_at has default value."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute(
+            "INSERT INTO glossary_issues (term_name, issue_type, description) VALUES (?, ?, ?)",
+            ("量子コンピュータ", "unclear", "定義が曖昧"),
+        )
+        cursor.execute("SELECT created_at FROM glossary_issues WHERE id = 1")
+        created_at = cursor.fetchone()[0]
+
+        assert created_at is not None
 
 
 class TestGlossaryRefinedTable:
     """Test glossary_refined table schema."""
 
-    def test_glossary_refined_unique_constraint(
+    def test_glossary_refined_has_required_columns(
         self, in_memory_db: sqlite3.Connection
     ) -> None:
-        """Test that (run_id, term_name) is unique."""
+        """Test that glossary_refined table has all required columns."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
+        cursor.execute("PRAGMA table_info(glossary_refined)")
+        columns = {row[1]: row[2] for row in cursor.fetchall()}
 
-        # Insert a run
-        cursor.execute(
-            "INSERT INTO runs (input_path, llm_provider, llm_model) VALUES (?, ?, ?)",
-            ("/path/to/doc.txt", "ollama", "llama3.2"),
-        )
-        run_id = cursor.lastrowid
+        assert "id" in columns
+        assert "term_name" in columns
+        assert "definition" in columns
+        assert "confidence" in columns
+        assert "occurrences" in columns
+        assert "created_at" in columns
+        assert "run_id" not in columns  # v2: run_id should be removed
+
+    def test_glossary_refined_unique_constraint(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that term_name is unique in v2."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
 
         # Insert first refined entry
         occurrences_json = '[{"line_number": 1, "context": "量子コンピュータは..."}]'
         cursor.execute(
             """
             INSERT INTO glossary_refined
-            (run_id, term_name, definition, confidence, occurrences)
-            VALUES (?, ?, ?, ?, ?)
+            (term_name, definition, confidence, occurrences)
+            VALUES (?, ?, ?, ?)
             """,
             (
-                run_id,
                 "量子コンピュータ",
                 "量子力学の原理を利用したコンピュータ",
                 0.95,
@@ -310,14 +438,48 @@ class TestGlossaryRefinedTable:
             cursor.execute(
                 """
                 INSERT INTO glossary_refined
-                (run_id, term_name, definition, confidence, occurrences)
-                VALUES (?, ?, ?, ?, ?)
+                (term_name, definition, confidence, occurrences)
+                VALUES (?, ?, ?, ?)
                 """,
                 (
-                    run_id,
                     "量子コンピュータ",
                     "別の定義",
                     0.90,
                     occurrences_json,
                 ),
             )
+
+    def test_glossary_refined_default_occurrences(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that occurrences has default value '[]' in v2."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute(
+            """
+            INSERT INTO glossary_refined (term_name, definition, confidence)
+            VALUES (?, ?, ?)
+            """,
+            ("量子コンピュータ", "量子力学の原理を利用したコンピュータ", 0.95),
+        )
+        cursor.execute("SELECT occurrences FROM glossary_refined WHERE id = 1")
+        occurrences = cursor.fetchone()[0]
+
+        assert occurrences == "[]"
+
+    def test_glossary_refined_default_created_at(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that created_at has default value."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute(
+            "INSERT INTO glossary_refined (term_name, definition, confidence) VALUES (?, ?, ?)",
+            ("量子コンピュータ", "量子力学の原理を利用したコンピュータ", 0.95),
+        )
+        cursor.execute("SELECT created_at FROM glossary_refined WHERE id = 1")
+        created_at = cursor.fetchone()[0]
+
+        assert created_at is not None
