@@ -20,7 +20,6 @@ class GlossaryTermRow(TypedDict):
     """
 
     id: int
-    run_id: int
     term_name: str
     definition: str
     confidence: float
