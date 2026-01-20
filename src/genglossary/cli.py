@@ -17,7 +17,7 @@ from genglossary.db.document_repository import create_document
 from genglossary.db.issue_repository import create_issue
 from genglossary.db.provisional_repository import create_provisional_term
 from genglossary.db.refined_repository import create_refined_term
-from genglossary.db.run_repository import complete_run, create_run, fail_run
+from genglossary.db.metadata_repository import upsert_metadata
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import create_term
 from genglossary.document_loader import DocumentLoader
@@ -127,7 +127,6 @@ def generate_glossary(
     """
     # Initialize database connection if db_path is provided
     conn = None
-    run_id = None
     if db_path is not None:
         conn = get_connection(db_path)
         initialize_db(conn)
@@ -164,11 +163,11 @@ def generate_glossary(
         console.print(f"[dim]出力ファイル: {output_file}[/dim]")
         console.print(f"[dim]モデル: {actual_model}[/dim]")
 
-    # Create run if database is enabled
+    # Save metadata if database is enabled
     if conn is not None:
-        run_id = create_run(conn, input_dir, provider, actual_model)
+        upsert_metadata(conn, provider, actual_model)
         if verbose:
-            console.print(f"[dim]Run ID: {run_id}[/dim]")
+            console.print(f"[dim]メタデータを保存しました[/dim]")
 
     try:
         # Process glossary generation with error handling
@@ -180,12 +179,8 @@ def generate_glossary(
             documents=None,  # Will be loaded inside
             verbose=verbose,
             conn=conn,
-            run_id=run_id,
         )
     except Exception as e:
-        # Mark run as failed if database is enabled
-        if conn is not None and run_id is not None:
-            fail_run(conn, run_id, str(e))
         # Close connection before re-raising
         if conn is not None:
             conn.close()
@@ -200,7 +195,6 @@ def _generate_glossary_with_db(
     documents: list[Document] | None,
     verbose: bool,
     conn: Any | None,
-    run_id: int | None,
 ) -> None:
     """Internal function for glossary generation with database support.
 
@@ -212,7 +206,6 @@ def _generate_glossary_with_db(
         documents: Pre-loaded documents (None to load from input_dir).
         verbose: Whether to show verbose output.
         conn: Database connection (None if database is disabled).
-        run_id: Run ID (None if database is disabled).
     """
     # 1. Load documents
     if verbose:
@@ -227,11 +220,11 @@ def _generate_glossary_with_db(
         console.print(f"[dim]  → {len(documents)} ファイルを読み込みました[/dim]")
 
     # Save documents to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for document in documents:
             # Calculate content hash for deduplication
             content_hash = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
-            create_document(conn, run_id, document.file_path, content_hash)
+            create_document(conn, document.file_path, content_hash)
         if verbose:
             console.print(f"[dim]  → データベースに {len(documents)} 件のドキュメントを保存[/dim]")
 
@@ -245,10 +238,10 @@ def _generate_glossary_with_db(
         terms = extractor.extract_terms(documents)
 
     # Save extracted terms to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for term in terms:
             # Category is not provided by current TermExtractor, set to NULL
-            create_term(conn, run_id, term, category=None)
+            create_term(conn, term, category=None)
         if verbose:
             console.print(f"[dim]  → データベースに {len(terms)} 件の抽出語を保存[/dim]")
 
@@ -261,11 +254,10 @@ def _generate_glossary_with_db(
         glossary = generator.generate(terms, documents)
 
     # Save provisional glossary to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for term in glossary.terms.values():
             create_provisional_term(
                 conn,
-                run_id,
                 term.name,
                 term.definition,
                 term.confidence,
@@ -290,11 +282,10 @@ def _generate_glossary_with_db(
             console.print(f"[dim]  → {exclude_count} 個の用語を除外予定[/dim]")
 
     # Save issues to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for issue in issues:
             create_issue(
                 conn,
-                run_id,
                 issue.term_name,
                 issue.issue_type,
                 issue.description,
@@ -323,11 +314,10 @@ def _generate_glossary_with_db(
                     console.print(f"[dim]    - {excluded['term_name']}: {reason}[/dim]")
 
     # Save refined glossary to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for term in glossary.terms.values():
             create_refined_term(
                 conn,
-                run_id,
                 term.name,
                 term.definition,
                 term.confidence,
@@ -348,11 +338,8 @@ def _generate_glossary_with_db(
     if verbose:
         console.print(f"[dim]  → {glossary.term_count} 個の用語を出力しました[/dim]")
 
-    # Mark run as completed if database is enabled
-    if conn is not None and run_id is not None:
-        complete_run(conn, run_id)
-        if verbose:
-            console.print(f"[dim]  → Run #{run_id} を完了としてマーク[/dim]")
+    # Close database connection if enabled
+    if conn is not None:
         conn.close()
 
 
