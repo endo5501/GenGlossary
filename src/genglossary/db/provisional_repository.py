@@ -13,7 +13,6 @@ from genglossary.models.term import TermOccurrence
 
 def create_provisional_term(
     conn: sqlite3.Connection,
-    run_id: int,
     term_name: str,
     definition: str,
     confidence: float,
@@ -23,7 +22,6 @@ def create_provisional_term(
 
     Args:
         conn: Database connection.
-        run_id: The run ID this term belongs to.
         term_name: The term name.
         definition: The term definition.
         confidence: Confidence score (0.0 to 1.0).
@@ -33,7 +31,7 @@ def create_provisional_term(
         int: The ID of the created term.
 
     Raises:
-        sqlite3.IntegrityError: If (run_id, term_name) already exists.
+        sqlite3.IntegrityError: If term_name already exists.
     """
     cursor = conn.cursor()
     occurrences_json = serialize_occurrences(occurrences)
@@ -41,10 +39,10 @@ def create_provisional_term(
     cursor.execute(
         """
         INSERT INTO glossary_provisional
-        (run_id, term_name, definition, confidence, occurrences)
-        VALUES (?, ?, ?, ?, ?)
+        (term_name, definition, confidence, occurrences)
+        VALUES (?, ?, ?, ?)
         """,
-        (run_id, term_name, definition, confidence, occurrences_json),
+        (term_name, definition, confidence, occurrences_json),
     )
     conn.commit()
     return cast(int, cursor.lastrowid)
@@ -73,7 +71,6 @@ def get_provisional_term(
     # Deserialize occurrences from JSON
     return GlossaryTermRow(
         id=row["id"],
-        run_id=row["run_id"],
         term_name=row["term_name"],
         definition=row["definition"],
         confidence=row["confidence"],
@@ -81,30 +78,23 @@ def get_provisional_term(
     )
 
 
-def list_provisional_terms_by_run(
-    conn: sqlite3.Connection, run_id: int
-) -> list[GlossaryTermRow]:
-    """List all provisional terms for a specific run.
+def list_all_provisional(conn: sqlite3.Connection) -> list[GlossaryTermRow]:
+    """List all provisional terms.
 
     Args:
         conn: Database connection.
-        run_id: The run ID to filter by.
 
     Returns:
         list[GlossaryTermRow]: List of term records with deserialized occurrences.
     """
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM glossary_provisional WHERE run_id = ? ORDER BY id",
-        (run_id,),
-    )
+    cursor.execute("SELECT * FROM glossary_provisional ORDER BY id")
     rows = cursor.fetchall()
 
     # Deserialize occurrences for each row
     return [
         GlossaryTermRow(
             id=row["id"],
-            run_id=row["run_id"],
             term_name=row["term_name"],
             definition=row["definition"],
             confidence=row["confidence"],
@@ -137,4 +127,15 @@ def update_provisional_term(
         """,
         (definition, confidence, term_id),
     )
+    conn.commit()
+
+
+def delete_all_provisional(conn: sqlite3.Connection) -> None:
+    """Delete all provisional terms.
+
+    Args:
+        conn: Database connection.
+    """
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM glossary_provisional")
     conn.commit()
