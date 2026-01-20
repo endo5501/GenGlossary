@@ -3,8 +3,8 @@ priority: 2
 tags: [db, schema, repository]
 description: "Phase 1-2: スキーマ変更とRepository層更新（runsテーブル廃止）"
 created_at: "2026-01-20T02:05:50Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-20T02:27:06Z # Do not modify manually
+closed_at: 2026-01-20T12:13:31Z # Do not modify manually
 ---
 
 # Phase 1-2: スキーマ変更とRepository層更新
@@ -246,39 +246,40 @@ __all__ = [
 
 ### Phase 1タスク
 
-- [ ] test_schema.py: v2スキーマのテスト作成（TDD）
-- [ ] schema.py: v2スキーマ実装
-- [ ] テスト実行して成功を確認
-- [ ] Phase 1をコミット
+- [x] test_schema.py: v2スキーマのテスト作成（TDD）
+- [x] schema.py: v2スキーマ実装
+- [x] テスト実行して成功を確認
+- [x] Phase 1をコミット
 
 ### Phase 2タスク
 
-- [ ] test_metadata_repository.py: メタデータRepositoryテスト作成（TDD）
-- [ ] metadata_repository.py: 実装
-- [ ] test_document_repository.py: run_id削除、list_all追加のテスト
-- [ ] document_repository.py: run_id削除、list_all実装
-- [ ] test_term_repository.py: run_id削除、delete_all追加のテスト
-- [ ] term_repository.py: run_id削除、delete_all実装
-- [ ] test_provisional_repository.py: run_id削除、delete_all追加のテスト
-- [ ] provisional_repository.py: run_id削除、delete_all実装
-- [ ] test_issue_repository.py: run_id削除、delete_all追加のテスト
-- [ ] issue_repository.py: run_id削除、delete_all実装
-- [ ] test_refined_repository.py: run_id削除、delete_all追加のテスト
-- [ ] refined_repository.py: run_id削除、delete_all実装
-- [ ] test_run_repository.py: 削除
-- [ ] run_repository.py: 削除
-- [ ] __init__.py: export更新
-- [ ] tests/db/conftest.py: fixture更新（run_id削除）
-- [ ] 全テスト実行して成功を確認
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Update .claude/rules/03-architecture.md
-- [ ] Phase 2をコミット
+- [x] test_metadata_repository.py: メタデータRepositoryテスト作成（TDD）
+- [x] metadata_repository.py: 実装
+- [x] test_document_repository.py: run_id削除、list_all追加のテスト
+- [x] document_repository.py: run_id削除、list_all実装
+- [x] test_term_repository.py: run_id削除、delete_all追加のテスト
+- [x] term_repository.py: run_id削除、delete_all実装
+- [x] test_provisional_repository.py: run_id削除、delete_all追加のテスト
+- [x] provisional_repository.py: run_id削除、delete_all実装
+- [x] test_issue_repository.py: run_id削除、delete_all追加のテスト
+- [x] issue_repository.py: run_id削除、delete_all実装
+- [x] test_refined_repository.py: run_id削除、delete_all追加のテスト
+- [x] refined_repository.py: run_id削除、delete_all実装
+- [x] test_run_repository.py: 削除
+- [x] run_repository.py: 削除
+- [x] __init__.py: export更新
+- [x] tests/db/conftest.py: fixture更新（run_id削除） ※不要（各テストファイルで対応済み）
+- [x] 全テスト実行して成功を確認 ✅ 100件すべてパス
+- [x] Code simplification review using code-simplifier agent ✅ 4つの改善完了（3コミット）
+- [x] Update .claude/rules/03-architecture.md ✅ Schema v2対応、関数名修正完了（1コミット）
+- [x] Phase 2をコミット ✅ 合計13コミット完了（Phase 2: 9コミット、Code simplification: 3コミット、Documentation: 1コミット）
 
 ### 最終確認
 
-- [ ] Run static analysis (`pyright`)
-- [ ] Run tests (`uv run pytest`)
-- [ ] Get developer approval
+- [x] Run static analysis (`pyright`) ✅ エラーなし
+- [x] Run tests (`uv run pytest`) ✅ 100/100 passed
+- [x] All improvements completed ✅ コード簡素化、エラーハンドリング、ドキュメント更新完了
+- [x] Get developer approval
 
 ## 検証方法
 

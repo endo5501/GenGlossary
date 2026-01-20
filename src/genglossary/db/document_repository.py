@@ -5,13 +5,12 @@ from typing import cast
 
 
 def create_document(
-    conn: sqlite3.Connection, run_id: int, file_path: str, content_hash: str
+    conn: sqlite3.Connection, file_path: str, content_hash: str
 ) -> int:
     """Create a new document record.
 
     Args:
         conn: Database connection.
-        run_id: The run ID this document belongs to.
         file_path: Path to the document file.
         content_hash: Hash of the document content (for change detection).
 
@@ -19,15 +18,15 @@ def create_document(
         int: The ID of the created document.
 
     Raises:
-        sqlite3.IntegrityError: If (run_id, file_path) already exists.
+        sqlite3.IntegrityError: If file_path already exists.
     """
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO documents (run_id, file_path, content_hash)
-        VALUES (?, ?, ?)
+        INSERT INTO documents (file_path, content_hash)
+        VALUES (?, ?)
         """,
-        (run_id, file_path, content_hash),
+        (file_path, content_hash),
     )
     conn.commit()
     # lastrowid is guaranteed to be non-None after INSERT
@@ -49,32 +48,27 @@ def get_document(conn: sqlite3.Connection, document_id: int) -> sqlite3.Row | No
     return cursor.fetchone()
 
 
-def list_documents_by_run(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
-    """List all documents for a specific run.
+def list_all_documents(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """List all documents.
 
     Args:
         conn: Database connection.
-        run_id: The run ID to filter by.
 
     Returns:
-        list[sqlite3.Row]: List of document records for the specified run.
+        list[sqlite3.Row]: List of all document records ordered by id.
     """
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM documents WHERE run_id = ? ORDER BY id",
-        (run_id,),
-    )
+    cursor.execute("SELECT * FROM documents ORDER BY id")
     return cursor.fetchall()
 
 
 def get_document_by_path(
-    conn: sqlite3.Connection, run_id: int, file_path: str
+    conn: sqlite3.Connection, file_path: str
 ) -> sqlite3.Row | None:
-    """Get a document by run_id and file_path.
+    """Get a document by file_path.
 
     Args:
         conn: Database connection.
-        run_id: The run ID.
         file_path: The file path.
 
     Returns:
@@ -82,7 +76,7 @@ def get_document_by_path(
     """
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT * FROM documents WHERE run_id = ? AND file_path = ?",
-        (run_id, file_path),
+        "SELECT * FROM documents WHERE file_path = ?",
+        (file_path,),
     )
     return cursor.fetchone()

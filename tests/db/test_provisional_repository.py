@@ -6,11 +6,11 @@ import pytest
 
 from genglossary.db.provisional_repository import (
     create_provisional_term,
+    delete_all_provisional,
     get_provisional_term,
-    list_provisional_terms_by_run,
+    list_all_provisional,
     update_provisional_term,
 )
-from genglossary.db.run_repository import create_run
 from genglossary.db.schema import initialize_db
 from genglossary.models.term import TermOccurrence
 
@@ -29,8 +29,6 @@ class TestCreateProvisionalTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_provisional_term returns an ID."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -39,7 +37,6 @@ class TestCreateProvisionalTerm:
 
         term_id = create_provisional_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="量子力学の原理を利用したコンピュータ",
             confidence=0.95,
@@ -53,8 +50,6 @@ class TestCreateProvisionalTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_provisional_term stores data correctly."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -63,7 +58,6 @@ class TestCreateProvisionalTerm:
 
         term_id = create_provisional_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="量子力学の原理を利用したコンピュータ",
             confidence=0.95,
@@ -75,7 +69,6 @@ class TestCreateProvisionalTerm:
         row = cursor.fetchone()
 
         assert row is not None
-        assert row["run_id"] == run_id
         assert row["term_name"] == "量子コンピュータ"
         assert row["definition"] == "量子力学の原理を利用したコンピュータ"
         assert row["confidence"] == 0.95
@@ -84,9 +77,7 @@ class TestCreateProvisionalTerm:
     def test_create_provisional_term_unique_constraint(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that (run_id, term_name) must be unique."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
+        """Test that term_name must be unique."""
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -95,7 +86,6 @@ class TestCreateProvisionalTerm:
 
         create_provisional_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="定義1",
             confidence=0.95,
@@ -105,7 +95,6 @@ class TestCreateProvisionalTerm:
         with pytest.raises(sqlite3.IntegrityError):
             create_provisional_term(
                 db_with_schema,
-                run_id=run_id,
                 term_name="量子コンピュータ",
                 definition="定義2",
                 confidence=0.90,
@@ -120,8 +109,6 @@ class TestGetProvisionalTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that get_provisional_term returns data with deserialized occurrences."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -130,7 +117,6 @@ class TestGetProvisionalTerm:
 
         term_id = create_provisional_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="量子力学の原理を利用したコンピュータ",
             confidence=0.95,
@@ -154,25 +140,21 @@ class TestGetProvisionalTerm:
         assert term is None
 
 
-class TestListProvisionalTermsByRun:
-    """Test list_provisional_terms_by_run function."""
+class TestListAllProvisional:
+    """Test list_all_provisional function."""
 
-    def test_list_provisional_terms_by_run_returns_empty(
+    def test_list_all_provisional_returns_empty(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that list returns empty list when no terms."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
-        terms = list_provisional_terms_by_run(db_with_schema, run_id)
+        terms = list_all_provisional(db_with_schema)
 
         assert terms == []
 
-    def test_list_provisional_terms_by_run_returns_all_terms(
+    def test_list_all_provisional_returns_all_terms(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that list returns all terms with deserialized occurrences."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences1 = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context1"
@@ -186,7 +168,6 @@ class TestListProvisionalTermsByRun:
 
         create_provisional_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="定義1",
             confidence=0.95,
@@ -194,14 +175,13 @@ class TestListProvisionalTermsByRun:
         )
         create_provisional_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子ビット",
             definition="定義2",
             confidence=0.90,
             occurrences=occurrences2,
         )
 
-        terms = list_provisional_terms_by_run(db_with_schema, run_id)
+        terms = list_all_provisional(db_with_schema)
 
         assert len(terms) == 2
         assert all(isinstance(term["occurrences"][0], TermOccurrence) for term in terms)
@@ -214,8 +194,6 @@ class TestUpdateProvisionalTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that update_provisional_term updates definition and confidence."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         occurrences = [
             TermOccurrence(
                 document_path="/path/to/doc.txt", line_number=1, context="Context"
@@ -224,7 +202,6 @@ class TestUpdateProvisionalTerm:
 
         term_id = create_provisional_term(
             db_with_schema,
-            run_id=run_id,
             term_name="量子コンピュータ",
             definition="古い定義",
             confidence=0.80,
@@ -244,16 +221,62 @@ class TestUpdateProvisionalTerm:
         assert term["confidence"] == 0.95
         assert term["term_name"] == "量子コンピュータ"
 
-    def test_update_provisional_term_with_nonexistent_id_does_nothing(
+    def test_update_provisional_term_with_nonexistent_id_raises_error(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that update_provisional_term does nothing for non-existent ID."""
-        update_provisional_term(
+        """Test that update_provisional_term raises ValueError for non-existent ID."""
+        with pytest.raises(
+            ValueError, match="Term with id 999 not found in glossary_provisional"
+        ):
+            update_provisional_term(
+                db_with_schema,
+                term_id=999,
+                definition="存在しない定義",
+                confidence=0.5,
+            )
+
+
+class TestDeleteAllProvisional:
+    """Test delete_all_provisional function."""
+
+    def test_delete_all_provisional_removes_all_terms(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that delete_all_provisional removes all terms."""
+        occurrences = [
+            TermOccurrence(
+                document_path="/path/to/doc.txt", line_number=1, context="Context"
+            )
+        ]
+
+        create_provisional_term(
             db_with_schema,
-            term_id=999,
-            definition="存在しない定義",
-            confidence=0.5,
+            term_name="量子コンピュータ",
+            definition="定義1",
+            confidence=0.95,
+            occurrences=occurrences,
+        )
+        create_provisional_term(
+            db_with_schema,
+            term_name="量子ビット",
+            definition="定義2",
+            confidence=0.90,
+            occurrences=occurrences,
         )
 
-        term = get_provisional_term(db_with_schema, 999)
-        assert term is None
+        terms = list_all_provisional(db_with_schema)
+        assert len(terms) == 2
+
+        delete_all_provisional(db_with_schema)
+
+        terms = list_all_provisional(db_with_schema)
+        assert terms == []
+
+    def test_delete_all_provisional_on_empty_table(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that delete_all_provisional works on empty table."""
+        delete_all_provisional(db_with_schema)
+
+        terms = list_all_provisional(db_with_schema)
+        assert terms == []

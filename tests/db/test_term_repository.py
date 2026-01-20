@@ -4,13 +4,13 @@ import sqlite3
 
 import pytest
 
-from genglossary.db.run_repository import create_run
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import (
     create_term,
+    delete_all_terms,
     delete_term,
     get_term,
-    list_terms_by_run,
+    list_all_terms,
     update_term,
 )
 
@@ -29,11 +29,8 @@ class TestCreateTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_term returns a term ID."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         term_id = create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
@@ -45,11 +42,8 @@ class TestCreateTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_term stores data correctly."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         term_id = create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
@@ -59,19 +53,15 @@ class TestCreateTerm:
         row = cursor.fetchone()
 
         assert row is not None
-        assert row["run_id"] == run_id
         assert row["term_text"] == "量子コンピュータ"
         assert row["category"] == "technical_term"
 
     def test_create_term_unique_constraint(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that (run_id, term_text) must be unique."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
+        """Test that term_text must be unique."""
         create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
@@ -79,7 +69,6 @@ class TestCreateTerm:
         with pytest.raises(sqlite3.IntegrityError):
             create_term(
                 db_with_schema,
-                run_id=run_id,
                 term_text="量子コンピュータ",
                 category="technical_term",
             )
@@ -92,10 +81,8 @@ class TestGetTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that get_term returns term data."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
         term_id = create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
@@ -115,39 +102,33 @@ class TestGetTerm:
         assert term is None
 
 
-class TestListTermsByRun:
-    """Test list_terms_by_run function."""
+class TestListAllTerms:
+    """Test list_all_terms function."""
 
-    def test_list_terms_by_run_returns_empty(
+    def test_list_all_terms_returns_empty(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that list_terms_by_run returns empty list when no terms."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
-        terms = list_terms_by_run(db_with_schema, run_id)
+        """Test that list_all_terms returns empty list when no terms."""
+        terms = list_all_terms(db_with_schema)
 
         assert terms == []
 
-    def test_list_terms_by_run_returns_all_terms(
+    def test_list_all_terms_returns_all_terms(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that list_terms_by_run returns all terms for a run."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
+        """Test that list_all_terms returns all terms."""
         create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
         create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子ビット",
             category="technical_term",
         )
 
-        terms = list_terms_by_run(db_with_schema, run_id)
+        terms = list_all_terms(db_with_schema)
 
         assert len(terms) == 2
 
@@ -159,10 +140,8 @@ class TestUpdateTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that update_term updates term_text and category."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
         term_id = create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
@@ -183,10 +162,8 @@ class TestUpdateTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that update_term sets category to NULL when None is provided."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
         term_id = create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
@@ -202,19 +179,17 @@ class TestUpdateTerm:
         assert term is not None
         assert term["category"] is None
 
-    def test_update_term_with_nonexistent_id_does_nothing(
+    def test_update_term_with_nonexistent_id_raises_error(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that update_term does nothing for non-existent term ID."""
-        update_term(
-            db_with_schema,
-            term_id=999,
-            term_text="存在しない用語",
-            category="category",
-        )
-
-        term = get_term(db_with_schema, 999)
-        assert term is None
+        """Test that update_term raises ValueError for non-existent term ID."""
+        with pytest.raises(ValueError, match="Term with id 999 not found"):
+            update_term(
+                db_with_schema,
+                term_id=999,
+                term_text="存在しない用語",
+                category="category",
+            )
 
 
 class TestDeleteTerm:
@@ -224,10 +199,8 @@ class TestDeleteTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that delete_term removes the term."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
         term_id = create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
@@ -249,23 +222,53 @@ class TestDeleteTerm:
     def test_delete_term_removes_from_list(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that deleted term is removed from list_terms_by_run."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
+        """Test that deleted term is removed from list_all_terms."""
         term_id_1 = create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子コンピュータ",
             category="technical_term",
         )
         term_id_2 = create_term(
             db_with_schema,
-            run_id=run_id,
             term_text="量子ビット",
             category="technical_term",
         )
 
         delete_term(db_with_schema, term_id_1)
 
-        terms = list_terms_by_run(db_with_schema, run_id)
+        terms = list_all_terms(db_with_schema)
         assert len(terms) == 1
         assert terms[0]["id"] == term_id_2
+
+
+class TestDeleteAllTerms:
+    """Test delete_all_terms function."""
+
+    def test_delete_all_terms_removes_all_terms(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that delete_all_terms removes all terms."""
+        create_term(
+            db_with_schema,
+            term_text="量子コンピュータ",
+            category="technical_term",
+        )
+        create_term(
+            db_with_schema,
+            term_text="量子ビット",
+            category="technical_term",
+        )
+
+        assert len(list_all_terms(db_with_schema)) == 2
+
+        delete_all_terms(db_with_schema)
+
+        assert len(list_all_terms(db_with_schema)) == 0
+
+    def test_delete_all_terms_does_not_fail_when_empty(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that delete_all_terms does not fail when table is empty."""
+        delete_all_terms(db_with_schema)  # Should not raise
+
+        assert len(list_all_terms(db_with_schema)) == 0

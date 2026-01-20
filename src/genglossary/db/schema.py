@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -11,67 +11,57 @@ CREATE TABLE IF NOT EXISTS schema_version (
     applied_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Execution history
-CREATE TABLE IF NOT EXISTS runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    input_path TEXT NOT NULL,
+-- Global metadata (single row, id=1 only)
+CREATE TABLE IF NOT EXISTS metadata (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
     llm_provider TEXT NOT NULL,
     llm_model TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'running',
-    started_at TEXT NOT NULL DEFAULT (datetime('now')),
-    completed_at TEXT,
-    error_message TEXT
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Input documents
 CREATE TABLE IF NOT EXISTS documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    file_path TEXT NOT NULL,
+    file_path TEXT NOT NULL UNIQUE,
     content_hash TEXT NOT NULL,
-    UNIQUE(run_id, file_path)
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Extracted terms
 CREATE TABLE IF NOT EXISTS terms_extracted (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    term_text TEXT NOT NULL,
+    term_text TEXT NOT NULL UNIQUE,
     category TEXT,
-    UNIQUE(run_id, term_text)
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Provisional glossary
 CREATE TABLE IF NOT EXISTS glossary_provisional (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    term_name TEXT NOT NULL,
+    term_name TEXT NOT NULL UNIQUE,
     definition TEXT NOT NULL,
     confidence REAL DEFAULT 0.0,
-    occurrences TEXT NOT NULL,
-    UNIQUE(run_id, term_name)
+    occurrences TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Review issues
 CREATE TABLE IF NOT EXISTS glossary_issues (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
     term_name TEXT NOT NULL,
     issue_type TEXT NOT NULL,
     description TEXT NOT NULL,
-    should_exclude INTEGER DEFAULT 0,
-    exclusion_reason TEXT
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Refined glossary
 CREATE TABLE IF NOT EXISTS glossary_refined (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    term_name TEXT NOT NULL,
+    term_name TEXT NOT NULL UNIQUE,
     definition TEXT NOT NULL,
     confidence REAL DEFAULT 0.0,
-    occurrences TEXT NOT NULL,
-    UNIQUE(run_id, term_name)
+    occurrences TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 

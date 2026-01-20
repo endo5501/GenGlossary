@@ -6,7 +6,6 @@ from typing import cast
 
 def create_term(
     conn: sqlite3.Connection,
-    run_id: int,
     term_text: str,
     category: str | None = None,
 ) -> int:
@@ -14,7 +13,6 @@ def create_term(
 
     Args:
         conn: Database connection.
-        run_id: The run ID this term belongs to.
         term_text: The extracted term text.
         category: Optional category of the term.
 
@@ -22,15 +20,15 @@ def create_term(
         int: The ID of the created term.
 
     Raises:
-        sqlite3.IntegrityError: If (run_id, term_text) already exists.
+        sqlite3.IntegrityError: If term_text already exists.
     """
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO terms_extracted (run_id, term_text, category)
-        VALUES (?, ?, ?)
+        INSERT INTO terms_extracted (term_text, category)
+        VALUES (?, ?)
         """,
-        (run_id, term_text, category),
+        (term_text, category),
     )
     conn.commit()
     return cast(int, cursor.lastrowid)
@@ -51,21 +49,17 @@ def get_term(conn: sqlite3.Connection, term_id: int) -> sqlite3.Row | None:
     return cursor.fetchone()
 
 
-def list_terms_by_run(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
-    """List all extracted terms for a specific run.
+def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """List all extracted terms.
 
     Args:
         conn: Database connection.
-        run_id: The run ID to filter by.
 
     Returns:
-        list[sqlite3.Row]: List of term records for the specified run.
+        list[sqlite3.Row]: List of all term records ordered by id.
     """
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM terms_extracted WHERE run_id = ? ORDER BY id",
-        (run_id,),
-    )
+    cursor.execute("SELECT * FROM terms_extracted ORDER BY id")
     return cursor.fetchall()
 
 
@@ -82,6 +76,9 @@ def update_term(
         term_id: The term ID to update.
         term_text: The new term text.
         category: The new category (or None to set NULL).
+
+    Raises:
+        ValueError: If no term with the given ID exists.
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -92,6 +89,8 @@ def update_term(
         """,
         (term_text, category, term_id),
     )
+    if cursor.rowcount == 0:
+        raise ValueError(f"Term with id {term_id} not found")
     conn.commit()
 
 
@@ -104,4 +103,15 @@ def delete_term(conn: sqlite3.Connection, term_id: int) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM terms_extracted WHERE id = ?", (term_id,))
+    conn.commit()
+
+
+def delete_all_terms(conn: sqlite3.Connection) -> None:
+    """Delete all term records.
+
+    Args:
+        conn: Database connection.
+    """
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM terms_extracted")
     conn.commit()
