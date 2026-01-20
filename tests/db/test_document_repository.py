@@ -8,9 +8,8 @@ from genglossary.db.document_repository import (
     create_document,
     get_document,
     get_document_by_path,
-    list_documents_by_run,
+    list_all_documents,
 )
-from genglossary.db.run_repository import create_run
 from genglossary.db.schema import initialize_db
 
 
@@ -35,11 +34,8 @@ class TestCreateDocument:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_document returns a document ID."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         doc_id = create_document(
             db_with_schema,
-            run_id=run_id,
             file_path="/path/to/doc.txt",
             content_hash="abc123",
         )
@@ -51,11 +47,8 @@ class TestCreateDocument:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_document stores data correctly."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
         doc_id = create_document(
             db_with_schema,
-            run_id=run_id,
             file_path="/path/to/doc.txt",
             content_hash="abc123",
         )
@@ -65,20 +58,16 @@ class TestCreateDocument:
         row = cursor.fetchone()
 
         assert row is not None
-        assert row["run_id"] == run_id
         assert row["file_path"] == "/path/to/doc.txt"
         assert row["content_hash"] == "abc123"
 
     def test_create_document_unique_constraint(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that (run_id, file_path) must be unique."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
+        """Test that file_path must be unique."""
         # Create first document
         create_document(
             db_with_schema,
-            run_id=run_id,
             file_path="/path/to/doc.txt",
             content_hash="abc123",
         )
@@ -87,7 +76,6 @@ class TestCreateDocument:
         with pytest.raises(sqlite3.IntegrityError):
             create_document(
                 db_with_schema,
-                run_id=run_id,
                 file_path="/path/to/doc.txt",
                 content_hash="def456",
             )
@@ -100,10 +88,8 @@ class TestGetDocument:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that get_document returns document data."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
         doc_id = create_document(
             db_with_schema,
-            run_id=run_id,
             file_path="/path/to/doc.txt",
             content_hash="abc123",
         )
@@ -112,7 +98,6 @@ class TestGetDocument:
 
         assert doc is not None
         assert doc["id"] == doc_id
-        assert doc["run_id"] == run_id
         assert doc["file_path"] == "/path/to/doc.txt"
         assert doc["content_hash"] == "abc123"
 
@@ -125,68 +110,56 @@ class TestGetDocument:
         assert doc is None
 
 
-class TestListDocumentsByRun:
-    """Test list_documents_by_run function."""
+class TestListAllDocuments:
+    """Test list_all_documents function."""
 
-    def test_list_documents_by_run_returns_empty_for_no_documents(
+    def test_list_all_documents_returns_empty_for_no_documents(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that list_documents_by_run returns empty list when no documents."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
-        docs = list_documents_by_run(db_with_schema, run_id)
+        """Test that list_all_documents returns empty list when no documents."""
+        docs = list_all_documents(db_with_schema)
 
         assert docs == []
 
-    def test_list_documents_by_run_returns_all_documents(
+    def test_list_all_documents_returns_all_documents(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that list_documents_by_run returns all documents for a run."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
+        """Test that list_all_documents returns all documents."""
         doc_id1 = create_document(
             db_with_schema,
-            run_id=run_id,
             file_path="/path/to/doc1.txt",
             content_hash="abc123",
         )
         doc_id2 = create_document(
             db_with_schema,
-            run_id=run_id,
             file_path="/path/to/doc2.txt",
             content_hash="def456",
         )
 
-        docs = list_documents_by_run(db_with_schema, run_id)
+        docs = list_all_documents(db_with_schema)
 
         assert len(docs) == 2
         assert docs[0]["id"] == doc_id1
         assert docs[1]["id"] == doc_id2
 
-    def test_list_documents_by_run_filters_by_run_id(
+    def test_list_all_documents_ordered_by_id(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that list_documents_by_run filters by run_id."""
-        run_id1 = create_run(db_with_schema, "/path/to/doc1.txt", "ollama", "llama3.2")
-        run_id2 = create_run(db_with_schema, "/path/to/doc2.txt", "openai", "gpt-4")
-
+        """Test that list_all_documents returns documents ordered by id."""
         create_document(
             db_with_schema,
-            run_id=run_id1,
             file_path="/path/to/doc1.txt",
             content_hash="abc123",
         )
         create_document(
             db_with_schema,
-            run_id=run_id2,
             file_path="/path/to/doc2.txt",
             content_hash="def456",
         )
 
-        docs = list_documents_by_run(db_with_schema, run_id1)
+        docs = list_all_documents(db_with_schema)
 
-        assert len(docs) == 1
-        assert docs[0]["run_id"] == run_id1
+        assert docs[0]["id"] < docs[1]["id"]
 
 
 class TestGetDocumentByPath:
@@ -196,15 +169,13 @@ class TestGetDocumentByPath:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that get_document_by_path returns the correct document."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
         doc_id = create_document(
             db_with_schema,
-            run_id=run_id,
             file_path="/path/to/doc.txt",
             content_hash="abc123",
         )
 
-        doc = get_document_by_path(db_with_schema, run_id, "/path/to/doc.txt")
+        doc = get_document_by_path(db_with_schema, "/path/to/doc.txt")
 
         assert doc is not None
         assert doc["id"] == doc_id
@@ -214,34 +185,6 @@ class TestGetDocumentByPath:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that get_document_by_path returns None for non-existent path."""
-        run_id = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-
-        doc = get_document_by_path(db_with_schema, run_id, "/nonexistent.txt")
+        doc = get_document_by_path(db_with_schema, "/nonexistent.txt")
 
         assert doc is None
-
-    def test_get_document_by_path_filters_by_run_id(
-        self, db_with_schema: sqlite3.Connection
-    ) -> None:
-        """Test that get_document_by_path filters by run_id."""
-        run_id1 = create_run(db_with_schema, "/path/to/doc.txt", "ollama", "llama3.2")
-        run_id2 = create_run(db_with_schema, "/path/to/doc.txt", "openai", "gpt-4")
-
-        create_document(
-            db_with_schema,
-            run_id=run_id1,
-            file_path="/path/to/doc.txt",
-            content_hash="abc123",
-        )
-        create_document(
-            db_with_schema,
-            run_id=run_id2,
-            file_path="/path/to/doc.txt",
-            content_hash="def456",
-        )
-
-        doc = get_document_by_path(db_with_schema, run_id1, "/path/to/doc.txt")
-
-        assert doc is not None
-        assert doc["run_id"] == run_id1
-        assert doc["content_hash"] == "abc123"
