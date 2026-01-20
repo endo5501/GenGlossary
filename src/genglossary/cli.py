@@ -1,14 +1,25 @@
 """Command-line interface for GenGlossary."""
 
+import hashlib
+import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import click
 from rich.console import Console
 
+from genglossary.cli_db import db
 from genglossary.config import Config
+from genglossary.db.connection import get_connection
+from genglossary.db.document_repository import create_document
+from genglossary.db.issue_repository import create_issue
+from genglossary.db.provisional_repository import create_provisional_term
+from genglossary.db.refined_repository import create_refined_term
+from genglossary.db.run_repository import complete_run, create_run, fail_run
+from genglossary.db.schema import initialize_db
+from genglossary.db.term_repository import create_term
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.glossary_refiner import GlossaryRefiner
@@ -64,6 +75,23 @@ def create_llm_client(
     raise ValueError(f"Unknown provider: {provider}. Must be 'ollama' or 'openai'.")
 
 
+def _get_actual_model_name(provider: str, model: str | None) -> str:
+    """Get the actual model name to use.
+
+    Args:
+        provider: LLM provider name.
+        model: User-specified model name (None for default).
+
+    Returns:
+        str: Actual model name to use.
+    """
+    if model is not None:
+        return model
+
+    config = Config()
+    return config.ollama_model if provider == "ollama" else config.openai_model
+
+
 def _add_glossary_metadata(glossary: Glossary, model: str, document_count: int) -> None:
     """Add metadata to glossary.
 
@@ -83,7 +111,8 @@ def generate_glossary(
     provider: str,
     model: str | None,
     openai_base_url: str | None,
-    verbose: bool
+    verbose: bool,
+    db_path: str | None = None,
 ) -> None:
     """Generate glossary from documents.
 
@@ -94,7 +123,17 @@ def generate_glossary(
         model: Model name to use (None for provider default).
         openai_base_url: Base URL for OpenAI-compatible API (optional).
         verbose: Whether to show verbose output.
+        db_path: Path to SQLite database for persistence (optional).
     """
+    # Initialize database connection if db_path is provided
+    conn = None
+    run_id = None
+    if db_path is not None:
+        conn = get_connection(db_path)
+        initialize_db(conn)
+        if verbose:
+            console.print(f"[dim]データベース: {db_path}[/dim]")
+
     # Initialize LLM client
     # Use longer timeout for large glossaries (reviews can take time)
     llm_client = create_llm_client(
@@ -118,19 +157,63 @@ def generate_glossary(
             )
 
     # Determine actual model name for logging and metadata
-    if model is None:
-        config = Config()
-        actual_model = (
-            config.ollama_model if provider == "ollama" else config.openai_model
-        )
-    else:
-        actual_model = model
+    actual_model = _get_actual_model_name(provider, model)
 
     if verbose:
         console.print(f"[dim]入力ディレクトリ: {input_dir}[/dim]")
         console.print(f"[dim]出力ファイル: {output_file}[/dim]")
         console.print(f"[dim]モデル: {actual_model}[/dim]")
 
+    # Create run if database is enabled
+    if conn is not None:
+        run_id = create_run(conn, input_dir, provider, actual_model)
+        if verbose:
+            console.print(f"[dim]Run ID: {run_id}[/dim]")
+
+    try:
+        # Process glossary generation with error handling
+        _generate_glossary_with_db(
+            input_dir=input_dir,
+            output_file=output_file,
+            llm_client=llm_client,
+            actual_model=actual_model,
+            documents=None,  # Will be loaded inside
+            verbose=verbose,
+            conn=conn,
+            run_id=run_id,
+        )
+    except Exception as e:
+        # Mark run as failed if database is enabled
+        if conn is not None and run_id is not None:
+            fail_run(conn, run_id, str(e))
+        # Close connection before re-raising
+        if conn is not None:
+            conn.close()
+        raise
+
+
+def _generate_glossary_with_db(
+    input_dir: str,
+    output_file: str,
+    llm_client: BaseLLMClient,
+    actual_model: str,
+    documents: list[Document] | None,
+    verbose: bool,
+    conn: Any | None,
+    run_id: int | None,
+) -> None:
+    """Internal function for glossary generation with database support.
+
+    Args:
+        input_dir: Input directory path.
+        output_file: Output file path.
+        llm_client: LLM client instance.
+        actual_model: Actual model name being used.
+        documents: Pre-loaded documents (None to load from input_dir).
+        verbose: Whether to show verbose output.
+        conn: Database connection (None if database is disabled).
+        run_id: Run ID (None if database is disabled).
+    """
     # 1. Load documents
     if verbose:
         console.print("[dim]ドキュメントを読み込み中...[/dim]")
@@ -143,6 +226,15 @@ def generate_glossary(
     if verbose:
         console.print(f"[dim]  → {len(documents)} ファイルを読み込みました[/dim]")
 
+    # Save documents to database if enabled
+    if conn is not None and run_id is not None:
+        for document in documents:
+            # Calculate content hash for deduplication
+            content_hash = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
+            create_document(conn, run_id, document.file_path, content_hash)
+        if verbose:
+            console.print(f"[dim]  → データベースに {len(documents)} 件のドキュメントを保存[/dim]")
+
     # 2. Extract terms
     extractor = TermExtractor(llm_client=llm_client)
     if verbose:
@@ -152,6 +244,14 @@ def generate_glossary(
     else:
         terms = extractor.extract_terms(documents)
 
+    # Save extracted terms to database if enabled
+    if conn is not None and run_id is not None:
+        for term in terms:
+            # Category is not provided by current TermExtractor, set to NULL
+            create_term(conn, run_id, term, category=None)
+        if verbose:
+            console.print(f"[dim]  → データベースに {len(terms)} 件の抽出語を保存[/dim]")
+
     # 3. Generate glossary
     generator = GlossaryGenerator(llm_client=llm_client)
     if verbose:
@@ -159,6 +259,20 @@ def generate_glossary(
             glossary = generator.generate(terms, documents, progress_callback=update)
     else:
         glossary = generator.generate(terms, documents)
+
+    # Save provisional glossary to database if enabled
+    if conn is not None and run_id is not None:
+        for term in glossary.terms.values():
+            create_provisional_term(
+                conn,
+                run_id,
+                term.name,
+                term.definition,
+                term.confidence,
+                term.occurrences,
+            )
+        if verbose:
+            console.print(f"[dim]  → データベースに {len(glossary.terms)} 件の暫定用語を保存[/dim]")
 
     # 4. Review glossary
     reviewer = GlossaryReviewer(llm_client=llm_client)
@@ -174,6 +288,21 @@ def generate_glossary(
         exclude_count = sum(1 for issue in issues if issue.should_exclude)
         if exclude_count > 0:
             console.print(f"[dim]  → {exclude_count} 個の用語を除外予定[/dim]")
+
+    # Save issues to database if enabled
+    if conn is not None and run_id is not None:
+        for issue in issues:
+            create_issue(
+                conn,
+                run_id,
+                issue.term_name,
+                issue.issue_type,
+                issue.description,
+                issue.should_exclude,
+                issue.exclusion_reason,
+            )
+        if verbose:
+            console.print(f"[dim]  → データベースに {len(issues)} 件の問題を保存[/dim]")
 
     # 5. Refine glossary
     if issues:
@@ -193,6 +322,20 @@ def generate_glossary(
                     reason = excluded.get("reason", "理由不明")
                     console.print(f"[dim]    - {excluded['term_name']}: {reason}[/dim]")
 
+    # Save refined glossary to database if enabled
+    if conn is not None and run_id is not None:
+        for term in glossary.terms.values():
+            create_refined_term(
+                conn,
+                run_id,
+                term.name,
+                term.definition,
+                term.confidence,
+                term.occurrences,
+            )
+        if verbose:
+            console.print(f"[dim]  → データベースに {len(glossary.terms)} 件の最終用語を保存[/dim]")
+
     # Add metadata
     _add_glossary_metadata(glossary, actual_model, len(documents))
 
@@ -204,6 +347,13 @@ def generate_glossary(
 
     if verbose:
         console.print(f"[dim]  → {glossary.term_count} 個の用語を出力しました[/dim]")
+
+    # Mark run as completed if database is enabled
+    if conn is not None and run_id is not None:
+        complete_run(conn, run_id)
+        if verbose:
+            console.print(f"[dim]  → Run #{run_id} を完了としてマーク[/dim]")
+        conn.close()
 
 
 @click.group()
@@ -251,6 +401,12 @@ def main() -> None:
     help="OpenAI互換APIのベースURL（--llm-provider=openai時のみ有効）",
 )
 @click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="SQLiteデータベースのパス（省略時はDB保存なし）",
+)
+@click.option(
     "--verbose",
     "-v",
     is_flag=True,
@@ -262,6 +418,7 @@ def generate(
     llm_provider: str,
     model: str | None,
     openai_base_url: str | None,
+    db_path: Path | None,
     verbose: bool
 ) -> None:
     """ドキュメントから用語集を生成します。
@@ -278,19 +435,16 @@ def generate(
             sys.exit(1)
 
         # Determine model name for display
-        if model is None:
-            config = Config()
-            display_model = (
-                config.ollama_model if llm_provider == "ollama" else config.openai_model
-            )
-        else:
-            display_model = model
+        display_model = _get_actual_model_name(llm_provider, model)
 
         console.print("[bold green]GenGlossary[/bold green]")
         console.print(f"入力: {input_dir}")
         console.print(f"出力: {output_file}")
         console.print(f"プロバイダー: {llm_provider}")
-        console.print(f"モデル: {display_model}\n")
+        console.print(f"モデル: {display_model}")
+        if db_path is not None:
+            console.print(f"データベース: {db_path}")
+        console.print()
 
         with progress_task(console, "用語集を生成中...", use_spinner_only=True):
             # Call the main generation function
@@ -300,7 +454,8 @@ def generate(
                 llm_provider,
                 model,
                 openai_base_url,
-                verbose
+                verbose,
+                db_path=str(db_path) if db_path else None,
             )
 
         console.print("\n[bold green]✓ 用語集の生成が完了しました[/bold green]")
@@ -535,13 +690,7 @@ def analyze_terms(
             sys.exit(1)
 
         # Determine model name for display
-        if model is None:
-            config = Config()
-            display_model = (
-                config.ollama_model if llm_provider == "ollama" else config.openai_model
-            )
-        else:
-            display_model = model
+        display_model = _get_actual_model_name(llm_provider, model)
 
         # Load documents
         console.print(f"[dim]入力: {input_dir}[/dim]")
@@ -574,6 +723,10 @@ def analyze_terms(
         console.print(f"\n[red]エラーが発生しました: {e}[/red]")
         console.print_exception()
         sys.exit(1)
+
+
+# Register db subcommand group
+main.add_command(db)
 
 
 if __name__ == "__main__":
