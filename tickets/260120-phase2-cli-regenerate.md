@@ -3,7 +3,7 @@ priority: 2
 tags: [cli, regenerate]
 description: "Phase 3-4: CLI更新とregenerateコマンド実装"
 created_at: "2026-01-20T02:05:50Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-20T12:15:56Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -193,40 +193,42 @@ def provisional_regenerate(
 ### 影響ファイル
 
 - `src/genglossary/cli_db.py`: regenerateコマンド追加
+- `src/genglossary/cli.py`: 循環インポート修正
+- `src/genglossary/llm/factory.py`: create_llm_client関数を抽出
 
 ## Tasks
 
 ### Phase 3タスク
 
-- [ ] test_cli_db.py: db runs削除、--run-id削除のテスト更新
-- [ ] test_cli_db.py: db info コマンドのテスト追加（TDD）
-- [ ] test_cli_db.py: db issues list コマンドのテスト追加（TDD）
-- [ ] cli_db.py: db runs グループ削除
-- [ ] cli_db.py: 全コマンドから --run-id オプション削除
-- [ ] cli_db.py: db info コマンド実装
-- [ ] cli_db.py: db issues list コマンド実装
-- [ ] テスト実行して成功を確認
+- [x] test_cli_db.py: db runs削除、--run-id削除のテスト更新
+- [x] test_cli_db.py: db info コマンドのテスト追加（TDD）
+- [x] test_cli_db.py: db issues list コマンドのテスト追加（TDD）
+- [x] cli_db.py: db runs グループ削除
+- [x] cli_db.py: 全コマンドから --run-id オプション削除
+- [x] cli_db.py: db info コマンド実装
+- [x] cli_db.py: db issues list コマンド実装
+- [x] テスト実行して成功を確認
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Update .claude/rules/03-architecture.md
-- [ ] Phase 3をコミット
+- [x] Phase 3をコミット
 
 ### Phase 4タスク
 
-- [ ] test_cli_db.py: terms regenerate のテスト追加（TDD）
-- [ ] cli_db.py: terms regenerate 実装
-- [ ] test_cli_db.py: provisional regenerate のテスト追加（TDD）
-- [ ] cli_db.py: provisional regenerate 実装
-- [ ] test_cli_db.py: issues regenerate のテスト追加（TDD）
-- [ ] cli_db.py: issues regenerate 実装
-- [ ] test_cli_db.py: refined regenerate のテスト追加（TDD）
-- [ ] cli_db.py: refined regenerate 実装
-- [ ] 全テスト実行して成功を確認
-- [ ] Phase 4をコミット
+- [x] test_cli_db_regenerate.py: terms regenerate のテスト追加（TDD）
+- [x] cli_db.py: terms regenerate 実装
+- [x] test_cli_db_regenerate.py: provisional regenerate のテスト追加（TDD）
+- [x] cli_db.py: provisional regenerate 実装
+- [x] test_cli_db_regenerate.py: issues regenerate のテスト追加（TDD）
+- [x] cli_db.py: issues regenerate 実装
+- [x] test_cli_db_regenerate.py: refined regenerate のテスト追加（TDD）
+- [x] cli_db.py: refined regenerate 実装
+- [x] 全テスト実行して成功を確認
+- [x] Phase 4をコミット
 
 ### 最終確認
 
 - [ ] Run static analysis (`pyright`)
-- [ ] Run tests (`uv run pytest`)
+- [x] Run tests (`uv run pytest`)
 - [ ] Get developer approval
 
 ## 検証方法
@@ -296,3 +298,5 @@ uv run pyright src/genglossary/cli_db.py
 - LLMプロバイダは ollama / openai をサポート
 - OpenAI互換APIの場合は --openai-base-url でベースURLを指定
 - エラーハンドリングを適切に実装（DBが存在しない、テーブルが空など）
+- 循環インポートの問題を解決するため、create_llm_client関数をllm/factory.pyに抽出
+- should_exclude/exclusion_reasonはDBに保存せず、デフォルト値を使用
