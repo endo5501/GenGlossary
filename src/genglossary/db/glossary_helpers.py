@@ -161,7 +161,7 @@ def update_glossary_term(
         confidence: The new confidence score (0.0 to 1.0).
 
     Raises:
-        ValueError: If table_name is not allowed.
+        ValueError: If table_name is not allowed or if no term with the given ID exists.
     """
     _validate_table_name(table_name)
 
@@ -174,6 +174,8 @@ def update_glossary_term(
         """,
         (definition, confidence, term_id),
     )
+    if cursor.rowcount == 0:
+        raise ValueError(f"Term with id {term_id} not found in {table_name}")
     conn.commit()
 
 

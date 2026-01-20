@@ -179,19 +179,17 @@ class TestUpdateTerm:
         assert term is not None
         assert term["category"] is None
 
-    def test_update_term_with_nonexistent_id_does_nothing(
+    def test_update_term_with_nonexistent_id_raises_error(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that update_term does nothing for non-existent term ID."""
-        update_term(
-            db_with_schema,
-            term_id=999,
-            term_text="存在しない用語",
-            category="category",
-        )
-
-        term = get_term(db_with_schema, 999)
-        assert term is None
+        """Test that update_term raises ValueError for non-existent term ID."""
+        with pytest.raises(ValueError, match="Term with id 999 not found"):
+            update_term(
+                db_with_schema,
+                term_id=999,
+                term_text="存在しない用語",
+                category="category",
+            )
 
 
 class TestDeleteTerm:

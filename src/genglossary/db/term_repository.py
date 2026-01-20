@@ -76,6 +76,9 @@ def update_term(
         term_id: The term ID to update.
         term_text: The new term text.
         category: The new category (or None to set NULL).
+
+    Raises:
+        ValueError: If no term with the given ID exists.
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -86,6 +89,8 @@ def update_term(
         """,
         (term_text, category, term_id),
     )
+    if cursor.rowcount == 0:
+        raise ValueError(f"Term with id {term_id} not found")
     conn.commit()
 
 

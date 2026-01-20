@@ -221,19 +221,19 @@ class TestUpdateRefinedTerm:
         assert term["confidence"] == 0.98
         assert term["term_name"] == "量子コンピュータ"
 
-    def test_update_refined_term_with_nonexistent_id_does_nothing(
+    def test_update_refined_term_with_nonexistent_id_raises_error(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that update_refined_term does nothing for non-existent ID."""
-        update_refined_term(
-            db_with_schema,
-            term_id=999,
-            definition="存在しない定義",
-            confidence=0.5,
-        )
-
-        term = get_refined_term(db_with_schema, 999)
-        assert term is None
+        """Test that update_refined_term raises ValueError for non-existent ID."""
+        with pytest.raises(
+            ValueError, match="Term with id 999 not found in glossary_refined"
+        ):
+            update_refined_term(
+                db_with_schema,
+                term_id=999,
+                definition="存在しない定義",
+                confidence=0.5,
+            )
 
 
 class TestDeleteAllRefined:
