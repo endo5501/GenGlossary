@@ -4,7 +4,7 @@ tags: [db, schema, repository]
 description: "Phase 1-2: スキーマ変更とRepository層更新（runsテーブル廃止）"
 created_at: "2026-01-20T02:05:50Z"
 started_at: 2026-01-20T02:27:06Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-20T12:13:31Z # Do not modify manually
 ---
 
 # Phase 1-2: スキーマ変更とRepository層更新
