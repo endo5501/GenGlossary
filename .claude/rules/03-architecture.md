@@ -17,14 +17,15 @@ GenGlossary/
 │   │   ├── __init__.py
 │   │   ├── base.py              # BaseLLMClient
 │   │   └── ollama_client.py     # OllamaClient
-│   ├── db/                       # データベース層
+│   ├── db/                       # データベース層 (Schema v2)
 │   │   ├── __init__.py
 │   │   ├── connection.py        # SQLite接続管理
 │   │   ├── schema.py            # スキーマ定義・初期化
 │   │   ├── models.py            # DB用TypedDict・シリアライズ
-│   │   ├── run_repository.py    # 実行履歴CRUD
+│   │   ├── metadata_repository.py    # メタデータCRUD
 │   │   ├── document_repository.py    # ドキュメントCRUD
 │   │   ├── term_repository.py   # 抽出用語CRUD
+│   │   ├── glossary_helpers.py  # 用語集共通処理
 │   │   ├── provisional_repository.py # 暫定用語集CRUD
 │   │   ├── issue_repository.py  # 精査結果CRUD
 │   │   └── refined_repository.py     # 最終用語集CRUD
@@ -52,7 +53,7 @@ GenGlossary/
 │   │   ├── test_connection.py
 │   │   ├── test_schema.py
 │   │   ├── test_models.py
-│   │   ├── test_run_repository.py
+│   │   ├── test_metadata_repository.py
 │   │   ├── test_document_repository.py
 │   │   ├── test_term_repository.py
 │   │   ├── test_provisional_repository.py
@@ -167,9 +168,14 @@ class OllamaClient(BaseLLMClient):
         ...
 ```
 
-### 3. db/ - データベース層
+### 3. db/ - データベース層 (Schema v2)
 
 **役割**: SQLiteへのデータ永続化とCRUD操作
+
+**Schema v2の主な変更点**:
+- `runs`テーブルを廃止し、`metadata`テーブル（単一行）に変更
+- 全てのrepository関数から`run_id`パラメータを削除
+- `glossary_helpers.py`で用語集関連の共通処理を集約
 
 #### connection.py
 ```python
@@ -196,9 +202,10 @@ def database_connection(db_path: str):
 #### schema.py
 ```python
 def initialize_db(conn: sqlite3.Connection) -> None:
-    """データベーススキーマを初期化"""
-    # テーブル作成: runs, documents, terms_extracted,
+    """データベーススキーマを初期化 (Schema v2)"""
+    # テーブル作成: metadata, documents, terms_extracted,
     # glossary_provisional, glossary_issues, glossary_refined
+    # metadataテーブルは単一行（id=1固定）でLLM設定や入力パスを保存
     ...
 
 def get_schema_version(conn: sqlite3.Connection) -> int:
@@ -212,13 +219,12 @@ from typing import TypedDict
 from genglossary.models.term import TermOccurrence
 
 class GlossaryTermRow(TypedDict):
-    """用語集テーブル共通型 (provisional/refined)"""
+    """用語集テーブル共通型 (provisional/refined) - Schema v2"""
     id: int
-    run_id: int
     term_name: str
     definition: str
     confidence: float
-    occurrences: list[TermOccurrence]
+    occurrences: list[TermOccurrence]  # JSON文字列から復元
 
 def serialize_occurrences(occurrences: list[TermOccurrence]) -> str:
     """TermOccurrenceをJSON文字列に変換"""
@@ -229,19 +235,26 @@ def deserialize_occurrences(json_str: str) -> list[TermOccurrence]:
     ...
 ```
 
-#### run_repository.py
+#### metadata_repository.py
 ```python
-def create_run(
-    conn: sqlite3.Connection,
-    input_path: str,
-    llm_provider: str,
-    llm_model: str
-) -> int:
-    """実行履歴を作成し、run_idを返す"""
+def get_metadata(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """メタデータを取得（単一行、id=1固定）"""
     ...
 
-def list_runs(conn: sqlite3.Connection, limit: int = 20) -> list[sqlite3.Row]:
-    """実行履歴一覧を取得"""
+def upsert_metadata(
+    conn: sqlite3.Connection,
+    llm_provider: str,
+    llm_model: str
+) -> None:
+    """メタデータを保存（UPSERT: id=1固定）
+
+    SQLiteのON CONFLICT句を使用してUPSERTを実現。
+    created_atは初回INSERT時にのみ設定され、更新時は保持される。
+    """
+    ...
+
+def clear_metadata(conn: sqlite3.Connection) -> None:
+    """メタデータを削除"""
     ...
 ```
 
@@ -249,11 +262,18 @@ def list_runs(conn: sqlite3.Connection, limit: int = 20) -> list[sqlite3.Row]:
 ```python
 def create_term(
     conn: sqlite3.Connection,
-    run_id: int,
     term_text: str,
     category: str | None = None
 ) -> int:
-    """抽出用語を作成"""
+    """抽出用語を作成（run_id不要）"""
+    ...
+
+def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """全ての抽出用語を取得（run_id削除により、run_idフィルタ不要）"""
+    ...
+
+def get_term(conn: sqlite3.Connection, term_id: int) -> sqlite3.Row | None:
+    """指定IDの用語を取得"""
     ...
 
 def update_term(
@@ -262,26 +282,168 @@ def update_term(
     term_text: str,
     category: str | None = None
 ) -> None:
-    """用語を更新"""
+    """用語を更新
+
+    Raises:
+        ValueError: 指定されたIDの用語が存在しない場合
+    """
     ...
 
 def delete_term(conn: sqlite3.Connection, term_id: int) -> None:
     """用語を削除"""
     ...
+
+def delete_all_terms(conn: sqlite3.Connection) -> None:
+    """全ての用語を削除"""
+    ...
 ```
 
-#### provisional_repository.py / refined_repository.py
+#### glossary_helpers.py
 ```python
-def create_provisional_term(
+from typing import Literal
+from genglossary.models.term import TermOccurrence
+
+# Type for glossary table names
+GlossaryTable = Literal["glossary_provisional", "glossary_refined"]
+
+# Allowed table names for SQL injection prevention
+ALLOWED_TABLES: set[str] = {"glossary_provisional", "glossary_refined"}
+
+def _validate_table_name(table_name: str) -> None:
+    """テーブル名を検証（SQLインジェクション対策）
+
+    Args:
+        table_name: 検証するテーブル名
+
+    Raises:
+        ValueError: 許可されていないテーブル名の場合
+    """
+    if table_name not in ALLOWED_TABLES:
+        raise ValueError(f"Invalid table name: {table_name}")
+
+def create_glossary_term(
     conn: sqlite3.Connection,
-    run_id: int,
+    table_name: GlossaryTable,
     term_name: str,
     definition: str,
     confidence: float,
     occurrences: list[TermOccurrence]
 ) -> int:
-    """暫定用語集エントリを作成"""
+    """用語集エントリを作成（provisional/refined共通）
+
+    Args:
+        table_name: "glossary_provisional" または "glossary_refined"
+        term_name: 用語名
+        definition: 定義
+        confidence: 信頼度スコア (0.0 to 1.0)
+        occurrences: 用語出現箇所のリスト
+
+    Returns:
+        作成されたエントリのID
+
+    Raises:
+        ValueError: table_nameが許可されていない場合
+        sqlite3.IntegrityError: term_nameが既に存在する場合
+    """
     ...
+
+def get_glossary_term(
+    conn: sqlite3.Connection,
+    table_name: GlossaryTable,
+    term_id: int
+) -> GlossaryTermRow | None:
+    """用語集エントリを取得（provisional/refined共通）
+
+    Returns:
+        GlossaryTermRow | None: デシリアライズされたoccurrencesを含むレコード、
+            見つからない場合はNone
+    """
+    ...
+
+def list_all_glossary_terms(
+    conn: sqlite3.Connection,
+    table_name: GlossaryTable
+) -> list[GlossaryTermRow]:
+    """全ての用語集エントリを取得（provisional/refined共通）
+
+    Returns:
+        デシリアライズされたoccurrencesを含むレコードのリスト
+    """
+    ...
+
+def update_glossary_term(
+    conn: sqlite3.Connection,
+    table_name: GlossaryTable,
+    term_id: int,
+    definition: str,
+    confidence: float
+) -> None:
+    """用語集エントリを更新（provisional/refined共通）
+
+    Raises:
+        ValueError: table_nameが許可されていない場合、または指定されたIDのエントリが存在しない場合
+    """
+    ...
+
+def delete_all_glossary_terms(
+    conn: sqlite3.Connection,
+    table_name: GlossaryTable
+) -> None:
+    """全ての用語集エントリを削除（provisional/refined共通）
+
+    Raises:
+        ValueError: table_nameが許可されていない場合
+    """
+    ...
+```
+
+#### provisional_repository.py / refined_repository.py
+```python
+# provisional_repository.pyの例（refined_repository.pyも同様）
+from genglossary.db.glossary_helpers import (
+    create_glossary_term,
+    get_glossary_term,
+    list_all_glossary_terms,
+    update_glossary_term,
+    delete_all_glossary_terms,
+)
+from genglossary.db.models import GlossaryTermRow
+from genglossary.models.term import TermOccurrence
+
+def create_provisional_term(
+    conn: sqlite3.Connection,
+    term_name: str,
+    definition: str,
+    confidence: float,
+    occurrences: list[TermOccurrence]
+) -> int:
+    """暫定用語集エントリを作成（run_id不要）
+
+    Raises:
+        sqlite3.IntegrityError: term_nameが既に存在する場合
+    """
+    return create_glossary_term(
+        conn, "glossary_provisional", term_name, definition, confidence, occurrences
+    )
+
+def get_provisional_term(
+    conn: sqlite3.Connection, term_id: int
+) -> GlossaryTermRow | None:
+    """指定IDの暫定用語を取得
+
+    Returns:
+        GlossaryTermRow | None: デシリアライズされたoccurrencesを含むレコード、
+            見つからない場合はNone
+    """
+    return get_glossary_term(conn, "glossary_provisional", term_id)
+
+def list_all_provisional(conn: sqlite3.Connection) -> list[GlossaryTermRow]:
+    """全ての暫定用語集エントリを取得
+
+    Returns:
+        デシリアライズされたoccurrencesを含むレコードのリスト
+    """
+    return list_all_glossary_terms(conn, "glossary_provisional")
 
 def update_provisional_term(
     conn: sqlite3.Connection,
@@ -289,8 +451,16 @@ def update_provisional_term(
     definition: str,
     confidence: float
 ) -> None:
-    """暫定用語を更新"""
-    ...
+    """暫定用語を更新
+
+    Raises:
+        ValueError: 指定されたIDのエントリが存在しない場合
+    """
+    update_glossary_term(conn, "glossary_provisional", term_id, definition, confidence)
+
+def delete_all_provisional(conn: sqlite3.Connection) -> None:
+    """全ての暫定用語集エントリを削除"""
+    delete_all_glossary_terms(conn, "glossary_provisional")
 ```
 
 ### 4. 処理レイヤー
@@ -413,17 +583,12 @@ def db() -> None:
     """Database management commands."""
     pass
 
-@db.group()
-def runs() -> None:
-    """実行履歴の管理コマンド"""
-    pass
-
-@runs.command("list")
+@db.command("metadata")
 @click.option("--db-path", default="./genglossary.db")
-def runs_list(db_path: str) -> None:
-    """実行履歴一覧を表示"""
+def metadata_show(db_path: str) -> None:
+    """メタデータを表示"""
     conn = get_connection(db_path)
-    run_list = list_runs(conn)
+    metadata = get_metadata(conn)
     # Rich tableで表示
     ...
 
@@ -433,20 +598,23 @@ def terms() -> None:
     pass
 
 @terms.command("list")
-@click.option("--run-id", type=int, required=True)
-def terms_list(run_id: int, db_path: str) -> None:
-    """用語一覧を表示"""
+@click.option("--db-path", default="./genglossary.db")
+def terms_list(db_path: str) -> None:
+    """用語一覧を表示（run_id不要）"""
+    conn = get_connection(db_path)
+    term_list = list_all_terms(conn)
+    # Rich tableで表示
     ...
 
-# provisional, refined コマンド群も同様
+# provisional, refined コマンド群も同様（run_id削除）
 ```
 
-**利用可能なDBコマンド:**
+**利用可能なDBコマンド (Schema v2):**
 - `genglossary db init` - DB初期化
-- `genglossary db runs list/show/latest` - 実行履歴管理
-- `genglossary db terms list/show/update/delete/import` - 用語管理
-- `genglossary db provisional list/show/update` - 暫定用語集管理
-- `genglossary db refined list/show/update/export-md` - 最終用語集管理
+- `genglossary db metadata` - メタデータ表示（runs削除）
+- `genglossary db terms list/show/update/delete/import/clear` - 用語管理
+- `genglossary db provisional list/show/update/clear` - 暫定用語集管理
+- `genglossary db refined list/show/update/export-md/clear` - 最終用語集管理
 
 ## データフロー
 
@@ -492,42 +660,48 @@ def terms_list(run_id: int, db_path: str) -> None:
 └──────────────────┘
 ```
 
-### DB保存付きフロー (--db-path指定時)
+### DB保存付きフロー (--db-path指定時、Schema v2)
 
 ```
-┌──────────────────┐
-│  target_docs/    │ 入力ドキュメント
-│  sample.txt      │
-└────────┬─────────┘
+┌──────────────────┐     ┌──────────────────┐
+│  target_docs/    │────→│ DB: metadata     │
+│  sample.txt      │     │  (id=1, input_   │
+└────────┬─────────┘     │   path, llm_*)   │
+         │                └──────────────────┘
          │ load_document()
          ↓
 ┌──────────────────┐     ┌──────────────────┐
 │    Document      │────→│ DB: documents    │
-└────────┬─────────┘     └──────────────────┘
+└────────┬─────────┘     │  (run_id削除)    │
+         │                └──────────────────┘
          │ extract()
          ↓
 ┌──────────────────┐     ┌──────────────────┐
 │   List[str]      │────→│ DB: terms_       │
 │   用語リスト     │     │     extracted    │
-└────────┬─────────┘     └──────────────────┘
+└────────┬─────────┘     │  (run_id削除)    │
+         │                └──────────────────┘
          │ generate()
          ↓
 ┌──────────────────┐     ┌──────────────────┐
 │    Glossary      │────→│ DB: glossary_    │
 │  (provisional)   │     │     provisional  │
-└────────┬─────────┘     └──────────────────┘
+└────────┬─────────┘     │  (run_id削除)    │
+         │                └──────────────────┘
          │ review()
          ↓
 ┌──────────────────┐     ┌──────────────────┐
 │ List[Issue]      │────→│ DB: glossary_    │
 │  問題点リスト    │     │     issues       │
-└────────┬─────────┘     └──────────────────┘
+└────────┬─────────┘     │  (run_id削除)    │
+         │                └──────────────────┘
          │ refine()
          ↓
 ┌──────────────────┐     ┌──────────────────┐
 │    Glossary      │────→│ DB: glossary_    │
 │   (refined)      │     │     refined      │
-└────────┬─────────┘     └──────────────────┘
+└────────┬─────────┘     │  (run_id削除)    │
+         │                └──────────────────┘
          │ write_glossary()
          ↓
 ┌──────────────────┐
@@ -535,9 +709,10 @@ def terms_list(run_id: int, db_path: str) -> None:
 │   glossary.md    │
 └──────────────────┘
 
-         ↓ DB CLIで操作可能
+         ↓ DB CLIで操作可能（run_id不要）
 ┌──────────────────┐
 │ genglossary db   │
+│ - metadata       │
 │ - terms list     │
 │ - provisional    │
 │ - refined        │
@@ -568,11 +743,21 @@ from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.llm.base import BaseLLMClient
 from genglossary.llm.ollama_client import OllamaClient
 
-# DB層のimport
+# DB層のimport (Schema v2)
 from genglossary.db.connection import get_connection
 from genglossary.db.schema import initialize_db
-from genglossary.db.term_repository import create_term, list_terms_by_run
-from genglossary.db.provisional_repository import create_provisional_term
+from genglossary.db.metadata_repository import get_metadata, upsert_metadata
+from genglossary.db.term_repository import create_term, list_all_terms, delete_all_terms
+from genglossary.db.provisional_repository import (
+    create_provisional_term,
+    list_all_provisional,
+    delete_all_provisional,
+)
+from genglossary.db.refined_repository import (
+    create_refined_term,
+    list_all_refined,
+    delete_all_refined,
+)
 
 # 処理レイヤーのimport
 from genglossary.term_extractor import TermExtractor
