@@ -22,8 +22,8 @@ def upsert_metadata(
 ) -> None:
     """Insert or update global metadata.
 
-    This function uses INSERT OR REPLACE to maintain the same created_at
-    timestamp when updating.
+    Uses SQLite's ON CONFLICT clause to perform upsert operation.
+    The created_at timestamp is preserved when updating.
 
     Args:
         conn: Database connection.
@@ -31,30 +31,16 @@ def upsert_metadata(
         llm_model: LLM model name (e.g., "llama3.2", "gpt-4").
     """
     cursor = conn.cursor()
-
-    # Check if metadata already exists
-    existing = get_metadata(conn)
-
-    if existing is None:
-        # Insert new metadata
-        cursor.execute(
-            """
-            INSERT INTO metadata (id, llm_provider, llm_model)
-            VALUES (1, ?, ?)
-            """,
-            (llm_provider, llm_model),
-        )
-    else:
-        # Update existing metadata, preserving created_at
-        cursor.execute(
-            """
-            UPDATE metadata
-            SET llm_provider = ?, llm_model = ?
-            WHERE id = 1
-            """,
-            (llm_provider, llm_model),
-        )
-
+    cursor.execute(
+        """
+        INSERT INTO metadata (id, llm_provider, llm_model)
+        VALUES (1, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            llm_provider = excluded.llm_provider,
+            llm_model = excluded.llm_model
+        """,
+        (llm_provider, llm_model),
+    )
     conn.commit()
 
 
