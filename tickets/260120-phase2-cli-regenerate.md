@@ -4,7 +4,7 @@ tags: [cli, regenerate]
 description: "Phase 3-4: CLI更新とregenerateコマンド実装"
 created_at: "2026-01-20T02:05:50Z"
 started_at: 2026-01-20T12:15:56Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-21T14:32:08Z # Do not modify manually
 ---
 
 # Phase 3-4: CLI更新とregenerateコマンド実装
