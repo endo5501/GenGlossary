@@ -16,7 +16,9 @@ GenGlossary/
 │   ├── llm/                      # LLMクライアント
 │   │   ├── __init__.py
 │   │   ├── base.py              # BaseLLMClient
-│   │   └── ollama_client.py     # OllamaClient
+│   │   ├── ollama_client.py     # OllamaClient
+│   │   ├── openai_compatible_client.py  # OpenAICompatibleClient
+│   │   └── factory.py           # LLMクライアントファクトリ
 │   ├── db/                       # データベース層 (Schema v2)
 │   │   ├── __init__.py
 │   │   ├── connection.py        # SQLite接続管理
@@ -65,6 +67,7 @@ GenGlossary/
 │   ├── test_glossary_reviewer.py
 │   ├── test_glossary_refiner.py
 │   ├── test_cli_db.py           # DB CLI統合テスト
+│   ├── test_cli_db_regenerate.py # regenerateコマンドテスト
 │   └── output/
 │       └── test_markdown_writer.py
 ├── target_docs/                  # 入力ドキュメント
@@ -167,6 +170,45 @@ class OllamaClient(BaseLLMClient):
         """Ollama APIでテキスト生成"""
         ...
 ```
+
+#### factory.py
+```python
+from genglossary.llm.base import BaseLLMClient
+from genglossary.llm.ollama_client import OllamaClient
+from genglossary.llm.openai_compatible_client import OpenAICompatibleClient
+
+def create_llm_client(
+    provider: str,
+    model: str | None = None,
+    openai_base_url: str | None = None,
+    timeout: float = 180.0,
+) -> BaseLLMClient:
+    """LLMクライアントを生成するファクトリ関数
+
+    cli.pyとcli_db.pyの循環インポートを解決するために導入。
+    プロバイダに応じて適切なLLMクライアントインスタンスを返す。
+
+    Args:
+        provider: "ollama" または "openai"
+        model: モデル名（省略時はデフォルト値）
+        openai_base_url: OpenAI互換APIのベースURL
+        timeout: タイムアウト秒数
+
+    Returns:
+        初期化されたLLMクライアント
+
+    Raises:
+        ValueError: 未知のプロバイダが指定された場合
+    """
+    ...
+```
+
+**循環インポート解決の経緯:**
+- 以前は`create_llm_client`が`cli.py`に定義されていた
+- `cli_db.py`が`create_llm_client`を使用するため`cli.py`をimport
+- `cli.py`が`cli_db.py`の`db`コマンドグループをimport
+- この相互依存により循環インポートエラーが発生
+- `create_llm_client`を独立した`factory.py`に移動することで解決
 
 ### 3. db/ - データベース層 (Schema v2)
 
@@ -611,10 +653,126 @@ def terms_list(db_path: str) -> None:
 
 **利用可能なDBコマンド (Schema v2):**
 - `genglossary db init` - DB初期化
-- `genglossary db metadata` - メタデータ表示（runs削除）
-- `genglossary db terms list/show/update/delete/import/clear` - 用語管理
-- `genglossary db provisional list/show/update/clear` - 暫定用語集管理
-- `genglossary db refined list/show/update/export-md/clear` - 最終用語集管理
+- `genglossary db info` - メタデータ表示
+- `genglossary db terms list/show/update/delete/import/regenerate` - 用語管理
+- `genglossary db provisional list/show/update/regenerate` - 暫定用語集管理
+- `genglossary db issues list/regenerate` - 問題点管理
+- `genglossary db refined list/show/update/export-md/regenerate` - 最終用語集管理
+
+**regenerateコマンド群:**
+
+各ステップのデータを再生成するコマンド。既存データを削除してから新規生成する。
+
+```python
+# 1. 用語抽出の再生成
+@terms.command("regenerate")
+@click.option("--input", required=True, help="入力ディレクトリ")
+@click.option("--llm-provider", default="ollama")
+@click.option("--model", default=None)
+@click.option("--db-path", default="./genglossary.db")
+def terms_regenerate(input: str, llm_provider: str, model: str | None, db_path: str):
+    """ドキュメントから用語を再抽出
+
+    処理フロー:
+    1. 既存用語を全削除（delete_all_terms）
+    2. ドキュメント読み込み（DocumentLoader）
+    3. LLMで用語抽出（TermExtractor）
+    4. DBに保存（create_term）
+    """
+    ...
+
+# 2. 暫定用語集の再生成
+@provisional.command("regenerate")
+@click.option("--llm-provider", default="ollama")
+@click.option("--model", default=None)
+@click.option("--db-path", default="./genglossary.db")
+def provisional_regenerate(llm_provider: str, model: str | None, db_path: str):
+    """抽出済み用語から暫定用語集を再生成
+
+    処理フロー:
+    1. 既存暫定用語を全削除（delete_all_provisional）
+    2. DBから用語とドキュメントを取得
+    3. ドキュメントをファイルから再構築
+    4. LLMで用語集生成（GlossaryGenerator）
+    5. DBに保存（create_provisional_term）
+    """
+    ...
+
+# 3. 問題点の再生成
+@issues.command("regenerate")
+@click.option("--llm-provider", default="ollama")
+@click.option("--model", default=None)
+@click.option("--db-path", default="./genglossary.db")
+def issues_regenerate(llm_provider: str, model: str | None, db_path: str):
+    """暫定用語集を精査して問題点を再生成
+
+    処理フロー:
+    1. 既存問題を全削除（delete_all_issues）
+    2. DBから暫定用語集を取得
+    3. Glossaryオブジェクトを再構築
+    4. LLMで精査（GlossaryReviewer）
+    5. DBに保存（create_issue）
+    """
+    ...
+
+# 4. 最終用語集の再生成
+@refined.command("regenerate")
+@click.option("--llm-provider", default="ollama")
+@click.option("--model", default=None)
+@click.option("--db-path", default="./genglossary.db")
+def refined_regenerate(llm_provider: str, model: str | None, db_path: str):
+    """問題点に基づいて用語集を改善し最終版を再生成
+
+    処理フロー:
+    1. 既存最終用語を全削除（delete_all_refined）
+    2. DBから暫定用語集、問題点、ドキュメントを取得
+    3. Glossary、Issue、Documentオブジェクトを再構築
+    4. LLMで改善（GlossaryRefiner）
+    5. DBに保存（create_refined_term）
+    """
+    ...
+```
+
+**オブジェクト再構築パターン:**
+
+regenerateコマンドではDBから取得したデータを元のPydanticモデルに復元する必要がある。
+
+```python
+# Document再構築
+documents: list[Document] = []
+loader = DocumentLoader()
+for doc_row in doc_rows:
+    try:
+        doc = loader.load_file(doc_row["file_path"])
+        documents.append(doc)
+    except FileNotFoundError:
+        console.print(f"[yellow]警告: ファイルが見つかりません[/yellow]")
+        continue
+
+# Glossary再構築
+from genglossary.models.term import Term
+glossary = Glossary()
+for prov_row in provisional_rows:
+    term = Term(
+        name=prov_row["term_name"],
+        definition=prov_row["definition"],
+        confidence=prov_row["confidence"],
+        occurrences=prov_row["occurrences"],  # 既にdeserialize済み
+    )
+    glossary.add_term(term)
+
+# GlossaryIssue再構築
+from genglossary.models.glossary import GlossaryIssue
+issues: list[GlossaryIssue] = []
+for issue_row in issue_rows:
+    issue = GlossaryIssue(
+        term_name=issue_row["term_name"],
+        issue_type=issue_row["issue_type"],
+        description=issue_row["description"],
+        # should_exclude/exclusion_reasonはDBに保存されていないためデフォルト値
+    )
+    issues.append(issue)
+```
 
 ## データフロー
 

@@ -10,14 +10,13 @@ from typing import Any, Callable
 import click
 from rich.console import Console
 
-from genglossary.cli_db import db
 from genglossary.config import Config
 from genglossary.db.connection import get_connection
 from genglossary.db.document_repository import create_document
 from genglossary.db.issue_repository import create_issue
 from genglossary.db.provisional_repository import create_provisional_term
 from genglossary.db.refined_repository import create_refined_term
-from genglossary.db.run_repository import complete_run, create_run, fail_run
+from genglossary.db.metadata_repository import upsert_metadata
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import create_term
 from genglossary.document_loader import DocumentLoader
@@ -25,8 +24,7 @@ from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.glossary_refiner import GlossaryRefiner
 from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.base import BaseLLMClient
-from genglossary.llm.ollama_client import OllamaClient
-from genglossary.llm.openai_compatible_client import OpenAICompatibleClient
+from genglossary.llm.factory import create_llm_client
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.progress import progress_task
@@ -34,45 +32,6 @@ from genglossary.output.markdown_writer import MarkdownWriter
 from genglossary.term_extractor import TermExtractor, TermExtractionAnalysis
 
 console = Console()
-
-
-def create_llm_client(
-    provider: str,
-    model: str | None = None,
-    openai_base_url: str | None = None,
-    timeout: float = 180.0,
-) -> BaseLLMClient:
-    """Create LLM client based on provider.
-
-    Args:
-        provider: LLM provider ("ollama" or "openai").
-        model: Model name (provider-specific default if None).
-        openai_base_url: Base URL for OpenAI-compatible API (optional).
-        timeout: Request timeout in seconds.
-
-    Returns:
-        Configured LLM client instance.
-
-    Raises:
-        ValueError: If provider is unknown.
-    """
-    if provider == "ollama":
-        return OllamaClient(
-            model=model or "dengcao/Qwen3-30B-A3B-Instruct-2507:latest",
-            timeout=timeout,
-        )
-
-    if provider == "openai":
-        config = Config()
-        return OpenAICompatibleClient(
-            base_url=openai_base_url or config.openai_base_url,
-            api_key=config.openai_api_key,
-            model=model or config.openai_model,
-            timeout=timeout,
-            api_version=config.azure_openai_api_version,
-        )
-
-    raise ValueError(f"Unknown provider: {provider}. Must be 'ollama' or 'openai'.")
 
 
 def _get_actual_model_name(provider: str, model: str | None) -> str:
@@ -127,7 +86,6 @@ def generate_glossary(
     """
     # Initialize database connection if db_path is provided
     conn = None
-    run_id = None
     if db_path is not None:
         conn = get_connection(db_path)
         initialize_db(conn)
@@ -164,11 +122,11 @@ def generate_glossary(
         console.print(f"[dim]出力ファイル: {output_file}[/dim]")
         console.print(f"[dim]モデル: {actual_model}[/dim]")
 
-    # Create run if database is enabled
+    # Save metadata if database is enabled
     if conn is not None:
-        run_id = create_run(conn, input_dir, provider, actual_model)
+        upsert_metadata(conn, provider, actual_model)
         if verbose:
-            console.print(f"[dim]Run ID: {run_id}[/dim]")
+            console.print(f"[dim]メタデータを保存しました[/dim]")
 
     try:
         # Process glossary generation with error handling
@@ -180,12 +138,8 @@ def generate_glossary(
             documents=None,  # Will be loaded inside
             verbose=verbose,
             conn=conn,
-            run_id=run_id,
         )
     except Exception as e:
-        # Mark run as failed if database is enabled
-        if conn is not None and run_id is not None:
-            fail_run(conn, run_id, str(e))
         # Close connection before re-raising
         if conn is not None:
             conn.close()
@@ -200,7 +154,6 @@ def _generate_glossary_with_db(
     documents: list[Document] | None,
     verbose: bool,
     conn: Any | None,
-    run_id: int | None,
 ) -> None:
     """Internal function for glossary generation with database support.
 
@@ -212,7 +165,6 @@ def _generate_glossary_with_db(
         documents: Pre-loaded documents (None to load from input_dir).
         verbose: Whether to show verbose output.
         conn: Database connection (None if database is disabled).
-        run_id: Run ID (None if database is disabled).
     """
     # 1. Load documents
     if verbose:
@@ -227,11 +179,11 @@ def _generate_glossary_with_db(
         console.print(f"[dim]  → {len(documents)} ファイルを読み込みました[/dim]")
 
     # Save documents to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for document in documents:
             # Calculate content hash for deduplication
             content_hash = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
-            create_document(conn, run_id, document.file_path, content_hash)
+            create_document(conn, document.file_path, content_hash)
         if verbose:
             console.print(f"[dim]  → データベースに {len(documents)} 件のドキュメントを保存[/dim]")
 
@@ -245,10 +197,10 @@ def _generate_glossary_with_db(
         terms = extractor.extract_terms(documents)
 
     # Save extracted terms to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for term in terms:
             # Category is not provided by current TermExtractor, set to NULL
-            create_term(conn, run_id, term, category=None)
+            create_term(conn, term, category=None)
         if verbose:
             console.print(f"[dim]  → データベースに {len(terms)} 件の抽出語を保存[/dim]")
 
@@ -261,11 +213,10 @@ def _generate_glossary_with_db(
         glossary = generator.generate(terms, documents)
 
     # Save provisional glossary to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for term in glossary.terms.values():
             create_provisional_term(
                 conn,
-                run_id,
                 term.name,
                 term.definition,
                 term.confidence,
@@ -290,16 +241,13 @@ def _generate_glossary_with_db(
             console.print(f"[dim]  → {exclude_count} 個の用語を除外予定[/dim]")
 
     # Save issues to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for issue in issues:
             create_issue(
                 conn,
-                run_id,
                 issue.term_name,
                 issue.issue_type,
                 issue.description,
-                issue.should_exclude,
-                issue.exclusion_reason,
             )
         if verbose:
             console.print(f"[dim]  → データベースに {len(issues)} 件の問題を保存[/dim]")
@@ -323,11 +271,10 @@ def _generate_glossary_with_db(
                     console.print(f"[dim]    - {excluded['term_name']}: {reason}[/dim]")
 
     # Save refined glossary to database if enabled
-    if conn is not None and run_id is not None:
+    if conn is not None:
         for term in glossary.terms.values():
             create_refined_term(
                 conn,
-                run_id,
                 term.name,
                 term.definition,
                 term.confidence,
@@ -348,11 +295,8 @@ def _generate_glossary_with_db(
     if verbose:
         console.print(f"[dim]  → {glossary.term_count} 個の用語を出力しました[/dim]")
 
-    # Mark run as completed if database is enabled
-    if conn is not None and run_id is not None:
-        complete_run(conn, run_id)
-        if verbose:
-            console.print(f"[dim]  → Run #{run_id} を完了としてマーク[/dim]")
+    # Close database connection if enabled
+    if conn is not None:
         conn.close()
 
 
@@ -403,8 +347,8 @@ def main() -> None:
 @click.option(
     "--db-path",
     type=click.Path(path_type=Path),
-    default=None,
-    help="SQLiteデータベースのパス（省略時はDB保存なし）",
+    default="./genglossary.db",
+    help="SQLiteデータベースのパス（デフォルト: genglossary.db）",
 )
 @click.option(
     "--verbose",
@@ -726,6 +670,8 @@ def analyze_terms(
 
 
 # Register db subcommand group
+from genglossary.cli_db import db
+
 main.add_command(db)
 
 
