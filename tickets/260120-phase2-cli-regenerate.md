@@ -227,7 +227,7 @@ def provisional_regenerate(
 
 ### 最終確認
 
-- [ ] Run static analysis (`pyright`)
+- [x] Run static analysis (`pyright`)
 - [x] Run tests (`uv run pytest`)
 - [ ] Get developer approval
 
