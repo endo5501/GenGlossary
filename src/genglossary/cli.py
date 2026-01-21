@@ -347,8 +347,8 @@ def main() -> None:
 @click.option(
     "--db-path",
     type=click.Path(path_type=Path),
-    default=None,
-    help="SQLiteデータベースのパス（省略時はDB保存なし）",
+    default="./genglossary.db",
+    help="SQLiteデータベースのパス（デフォルト: genglossary.db）",
 )
 @click.option(
     "--verbose",

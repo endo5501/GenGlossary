@@ -230,3 +230,56 @@ class TestCLI:
             assert result.exit_code == 0
             # Output should contain some progress information
             assert len(result.output) > 0
+
+    def test_generate_with_default_db_path(self, tmp_path: Path):
+        """Test that generate command uses default db_path when not specified."""
+        runner = CliRunner()
+        input_dir = tmp_path / "docs"
+        input_dir.mkdir()
+        output_file = tmp_path / "out.md"
+
+        with patch("genglossary.cli.generate_glossary") as mock_generate:
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_file),
+                ],
+            )
+
+            assert result.exit_code == 0
+            # Verify that generate_glossary was called with default db_path
+            mock_generate.assert_called_once()
+            call_args = mock_generate.call_args
+            assert call_args.kwargs["db_path"] == "genglossary.db"
+
+    def test_generate_with_custom_db_path(self, tmp_path: Path):
+        """Test that generate command uses custom db_path when specified."""
+        runner = CliRunner()
+        input_dir = tmp_path / "docs"
+        input_dir.mkdir()
+        output_file = tmp_path / "out.md"
+        custom_db = tmp_path / "custom.db"
+
+        with patch("genglossary.cli.generate_glossary") as mock_generate:
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_file),
+                    "--db-path",
+                    str(custom_db),
+                ],
+            )
+
+            assert result.exit_code == 0
+            # Verify that generate_glossary was called with custom db_path
+            mock_generate.assert_called_once()
+            call_args = mock_generate.call_args
+            assert call_args.kwargs["db_path"] == str(custom_db)
