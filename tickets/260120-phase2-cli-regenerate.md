@@ -300,3 +300,4 @@ uv run pyright src/genglossary/cli_db.py
 - エラーハンドリングを適切に実装（DBが存在しない、テーブルが空など）
 - 循環インポートの問題を解決するため、create_llm_client関数をllm/factory.pyに抽出
 - should_exclude/exclusion_reasonはDBに保存せず、デフォルト値を使用
+- **仕様変更**: `genglossary generate`コマンドは`--db-path`未指定時もデフォルトで`./genglossary.db`に保存（以前はDB保存なし）
