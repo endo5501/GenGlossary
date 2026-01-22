@@ -32,8 +32,8 @@ bash scripts/ticket.sh close
 ### 必須ドキュメント
 - [プロジェクト概要](@.claude/rules/00-overview.md) - 4ステップフロー、技術スタック
 
-### 推奨ドキュメント
-- [アーキテクチャ](@.claude/rules/03-architecture.md) - ディレクトリ構成、データフロー
+### 詳細ドキュメント（必要時に参照）
+- `docs/architecture.md` - ディレクトリ構成、モジュール設計、データフロー
 
 ## 困ったときは
 

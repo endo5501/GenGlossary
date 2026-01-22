@@ -167,6 +167,6 @@ MarkdownWriter → output/glossary.md
 
 ## 関連ドキュメント
 
-- [アーキテクチャ詳細](@.claude/rules/03-architecture.md) - ディレクトリ構成、モジュール設計
+- `docs/architecture.md` - ディレクトリ構成、モジュール設計
 - LLM統合パターン → `/llm-integration` スキルを使用
 - [プロジェクト仕様](/Users/endo5501/Work/GenGlossary/plan.md) - 詳細な設計書

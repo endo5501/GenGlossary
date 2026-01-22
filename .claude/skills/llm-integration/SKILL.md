@@ -627,4 +627,4 @@ def test_openai_generate_returns_response_text():
 ## 関連ドキュメント
 
 - [プロンプト例集](references/prompt-examples.md) - 4ステップごとの実際のプロンプト設計例
-- [アーキテクチャ](@.claude/rules/03-architecture.md) - LLM層の位置づけ
+- `docs/architecture.md` - LLM層の位置づけ
