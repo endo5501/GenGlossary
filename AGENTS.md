@@ -2,9 +2,14 @@
 
 ## Project Structure & Module Organization
 - `src/genglossary/`: core package (LLM clients, extraction, generation, review, CLI).
-- `tests/`: pytest suite; `test_ollama_integration.py` covers integration behavior.
+- `src/genglossary/db/`: SQLite storage and CLI helpers.
+- `src/genglossary/llm/`, `src/genglossary/models/`, `src/genglossary/output/`, `src/genglossary/utils/`: submodules for providers, schemas, formatters, utilities.
+- `tests/`: pytest suite; integration tests live in `tests/test_ollama_integration.py`.
+- `test_ollama_integration.py`: legacy top-level integration test (run with pytest).
 - `examples/`: sample input documents for manual runs.
+- `target_docs/`: default input documents for CLI runs.
 - `output/`: generated glossaries (kept out of tests).
+- `docs/`: project documentation (see `docs/architecture.md`).
 - `scripts/`: helper scripts for local workflows.
 - `tickets/` and `plan.md`: work tracking.
 
@@ -12,6 +17,7 @@
 - `uv sync`: install dependencies from `pyproject.toml`/`uv.lock`.
 - `uv run genglossary generate --input ./target_docs --output ./output/glossary.md`: run the CLI locally.
 - `uv run genglossary analyze-terms --input ./target_docs`: inspect term extraction.
+- `uv run genglossary db init --path ./genglossary.db`: initialize the SQLite database.
 - `uv run pytest`: run the full test suite.
 - `uv run pytest --cov=genglossary --cov-report=term-missing`: run tests with coverage.
 - `uv run pyright`: run static type checks.
