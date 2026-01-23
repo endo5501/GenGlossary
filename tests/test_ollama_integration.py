@@ -70,7 +70,10 @@ PostgreSQLを使用してデータを永続化します。
 class TestOllamaTermExtraction:
     """Test term extraction with real Ollama."""
 
-    @pytest.mark.xfail(reason="LLM output format may vary")
+    @pytest.mark.xfail(
+        strict=True,
+        reason="LLM output may be nondeterministic; treat XPASS as signal to tighten expectations",
+    )
     def test_extract_terms_from_document(
         self,
         ollama_client: OllamaClient,
@@ -98,7 +101,10 @@ class TestOllamaTermExtraction:
 class TestOllamaGlossaryGeneration:
     """Test glossary generation with real Ollama."""
 
-    @pytest.mark.xfail(reason="LLM output format may vary")
+    @pytest.mark.xfail(
+        strict=True,
+        reason="LLM output may be nondeterministic; treat XPASS as signal to tighten expectations",
+    )
     def test_generate_glossary(
         self,
         ollama_client: OllamaClient,
@@ -127,7 +133,10 @@ class TestOllamaGlossaryGeneration:
 class TestOllamaReviewAndRefine:
     """Test review and refinement with real Ollama."""
 
-    @pytest.mark.xfail(reason="LLM output format may vary")
+    @pytest.mark.xfail(
+        strict=True,
+        reason="LLM output may be nondeterministic; treat XPASS as signal to tighten expectations",
+    )
     def test_review_glossary(
         self,
         ollama_client: OllamaClient,
@@ -149,7 +158,10 @@ class TestOllamaReviewAndRefine:
 class TestOllamaFullPipeline:
     """Test complete pipeline with real Ollama."""
 
-    @pytest.mark.xfail(reason="LLM output format may vary")
+    @pytest.mark.xfail(
+        strict=True,
+        reason="LLM output may be nondeterministic; treat XPASS as signal to tighten expectations",
+    )
     def test_full_pipeline(
         self,
         ollama_client: OllamaClient,
