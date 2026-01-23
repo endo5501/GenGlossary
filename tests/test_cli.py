@@ -66,7 +66,15 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
-            mock_generate.assert_called_once()
+            mock_generate.assert_called_once_with(
+                str(input_dir),
+                str(output_file),
+                "ollama",
+                None,
+                None,
+                False,
+                db_path="genglossary.db",
+            )
 
     def test_generate_with_input_option(self, tmp_path: Path):
         """Test generate command with --input option."""
@@ -74,7 +82,7 @@ class TestCLI:
         input_dir = tmp_path / "custom_docs"
         input_dir.mkdir()
 
-        with patch("genglossary.cli.generate_glossary"):
+        with patch("genglossary.cli.generate_glossary") as mock_generate:
             result = runner.invoke(
                 main,
                 [
@@ -87,6 +95,15 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
+            mock_generate.assert_called_once_with(
+                str(input_dir),
+                str(tmp_path / "out.md"),
+                "ollama",
+                None,
+                None,
+                False,
+                db_path="genglossary.db",
+            )
 
     def test_generate_with_output_option(self, tmp_path: Path):
         """Test generate command with --output option."""
@@ -95,13 +112,22 @@ class TestCLI:
         input_dir.mkdir()
         output_file = tmp_path / "custom_output.md"
 
-        with patch("genglossary.cli.generate_glossary"):
+        with patch("genglossary.cli.generate_glossary") as mock_generate:
             result = runner.invoke(
                 main,
                 ["generate", "--input", str(input_dir), "--output", str(output_file)],
             )
 
             assert result.exit_code == 0
+            mock_generate.assert_called_once_with(
+                str(input_dir),
+                str(output_file),
+                "ollama",
+                None,
+                None,
+                False,
+                db_path="genglossary.db",
+            )
 
     def test_generate_with_model_option(self, tmp_path: Path):
         """Test generate command with --model option."""
@@ -124,8 +150,15 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
-            # Verify model was passed to config or function
-            assert mock_generate.called
+            mock_generate.assert_called_once_with(
+                str(input_dir),
+                str(tmp_path / "out.md"),
+                "ollama",
+                "llama3.2",
+                None,
+                False,
+                db_path="genglossary.db",
+            )
 
     def test_generate_with_verbose_option(self, tmp_path: Path):
         """Test generate command with --verbose option."""
@@ -133,7 +166,7 @@ class TestCLI:
         input_dir = tmp_path / "docs"
         input_dir.mkdir()
 
-        with patch("genglossary.cli.generate_glossary"):
+        with patch("genglossary.cli.generate_glossary") as mock_generate:
             result = runner.invoke(
                 main,
                 [
@@ -147,6 +180,15 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
+            mock_generate.assert_called_once_with(
+                str(input_dir),
+                str(tmp_path / "out.md"),
+                "ollama",
+                None,
+                None,
+                True,
+                db_path="genglossary.db",
+            )
 
     def test_generate_missing_input_directory(self, tmp_path: Path):
         """Test generate command with non-existent input directory."""
@@ -253,10 +295,15 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
-            # Verify that generate_glossary was called with default db_path
-            mock_generate.assert_called_once()
-            call_args = mock_generate.call_args
-            assert call_args.kwargs["db_path"] == "genglossary.db"
+            mock_generate.assert_called_once_with(
+                str(input_dir),
+                str(output_file),
+                "ollama",
+                None,
+                None,
+                False,
+                db_path="genglossary.db",
+            )
 
     def test_generate_with_custom_db_path(self, tmp_path: Path):
         """Test that generate command uses custom db_path when specified."""
@@ -281,7 +328,12 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
-            # Verify that generate_glossary was called with custom db_path
-            mock_generate.assert_called_once()
-            call_args = mock_generate.call_args
-            assert call_args.kwargs["db_path"] == str(custom_db)
+            mock_generate.assert_called_once_with(
+                str(input_dir),
+                str(output_file),
+                "ollama",
+                None,
+                None,
+                False,
+                db_path=str(custom_db),
+            )
