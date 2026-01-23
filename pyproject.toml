@@ -36,6 +36,10 @@ packages = ["src/genglossary"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: tests that require external services (e.g., Ollama)",
+]
 
 [tool.pyright]
 include = ["src"]

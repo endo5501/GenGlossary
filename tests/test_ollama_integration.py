@@ -1,7 +1,6 @@
 """Integration tests using real Ollama server.
 
-These tests are skipped when Ollama is not available.
-Run with: uv run pytest tests/test_ollama_integration.py -v
+Run with: uv run pytest -m integration tests/test_ollama_integration.py -v
 """
 
 from pathlib import Path
@@ -18,7 +17,7 @@ from genglossary.output.markdown_writer import MarkdownWriter
 from genglossary.term_extractor import TermExtractor
 
 
-def ollama_available() -> bool:
+def _ollama_available() -> bool:
     """Check if Ollama server is running and available."""
     try:
         client = OllamaClient()
@@ -27,15 +26,18 @@ def ollama_available() -> bool:
         return False
 
 
-# Skip all tests in this module if Ollama is not available
-pytestmark = pytest.mark.skipif(
-    not ollama_available(),
-    reason="Ollama server is not running"
-)
+pytestmark = pytest.mark.integration
+
+
+@pytest.fixture(scope="session")
+def require_ollama() -> None:
+    """Skip integration tests when Ollama is not available."""
+    if not _ollama_available():
+        pytest.skip("Ollama server is not running")
 
 
 @pytest.fixture
-def ollama_client() -> OllamaClient:
+def ollama_client(require_ollama: None) -> OllamaClient:
     """Create a real Ollama client."""
     return OllamaClient(
         model="llama2",  # Use available model
