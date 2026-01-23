@@ -30,7 +30,9 @@ class TestCLI:
         result = runner.invoke(main, ["--version"])
 
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        from importlib.metadata import version
+
+        assert version("genglossary") in result.output
 
     def test_generate_command_help(self):
         """Test that generate command help works."""
