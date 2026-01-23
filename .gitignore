@@ -28,3 +28,5 @@ current-ticket.md
 target_docs/
 tmp/
 output/evaluation_glossary.md
+genglossary.db
+output/glossary.md
