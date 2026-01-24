@@ -87,13 +87,13 @@ db (group)
 
 - [x] サブチケット260120-phase1-schema-repositoryの完了
 - [x] サブチケット260120-phase2-cli-regenerateの完了
-- [ ] サブチケット260120-phase3-generate-docsの完了
-- [ ] 全体の統合テスト実施
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Update docs/architecture.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] サブチケット260120-phase3-generate-docsの完了
+- [x] 全体の統合テスト実施
+- [x] Code simplification review using code-simplifier agent
+- [x] Update docs/architecture.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## 検証方法
 

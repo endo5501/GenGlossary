@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 -- Global metadata (single row, id=1 only)
 CREATE TABLE IF NOT EXISTS metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),
+    input_path TEXT NOT NULL DEFAULT '',
     llm_provider TEXT NOT NULL,
     llm_model TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -81,6 +82,8 @@ def initialize_db(conn: sqlite3.Connection) -> None:
     # Execute schema creation
     conn.executescript(SCHEMA_SQL)
 
+    _ensure_metadata_input_path(conn)
+
     # Set schema version if not already set
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM schema_version WHERE version = ?", (SCHEMA_VERSION,))
@@ -88,6 +91,17 @@ def initialize_db(conn: sqlite3.Connection) -> None:
         cursor.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
 
     conn.commit()
+
+
+def _ensure_metadata_input_path(conn: sqlite3.Connection) -> None:
+    """Ensure metadata table has input_path column."""
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(metadata)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "input_path" not in columns:
+        cursor.execute(
+            "ALTER TABLE metadata ADD COLUMN input_path TEXT NOT NULL DEFAULT ''"
+        )
 
 
 def get_schema_version(conn: sqlite3.Connection) -> int:

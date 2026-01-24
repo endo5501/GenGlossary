@@ -1,11 +1,10 @@
 """Command-line interface for GenGlossary."""
 
 import hashlib
-import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import click
 from rich.console import Console
@@ -124,7 +123,7 @@ def generate_glossary(
 
     # Save metadata if database is enabled
     if conn is not None:
-        upsert_metadata(conn, provider, actual_model)
+        upsert_metadata(conn, input_dir, provider, actual_model)
         if verbose:
             console.print(f"[dim]メタデータを保存しました[/dim]")
 
@@ -351,6 +350,11 @@ def main() -> None:
     help="SQLiteデータベースのパス（デフォルト: genglossary.db）",
 )
 @click.option(
+    "--no-db",
+    is_flag=True,
+    help="データベース保存をスキップ",
+)
+@click.option(
     "--verbose",
     "-v",
     is_flag=True,
@@ -363,6 +367,7 @@ def generate(
     model: str | None,
     openai_base_url: str | None,
     db_path: Path | None,
+    no_db: bool,
     verbose: bool
 ) -> None:
     """ドキュメントから用語集を生成します。
@@ -386,8 +391,10 @@ def generate(
         console.print(f"出力: {output_file}")
         console.print(f"プロバイダー: {llm_provider}")
         console.print(f"モデル: {display_model}")
-        if db_path is not None:
-            console.print(f"データベース: {db_path}")
+        effective_db_path = None if no_db else db_path
+
+        if effective_db_path is not None:
+            console.print(f"データベース: {effective_db_path}")
         console.print()
 
         with progress_task(console, "用語集を生成中...", use_spinner_only=True):
@@ -399,7 +406,7 @@ def generate(
                 model,
                 openai_base_url,
                 verbose,
-                db_path=str(db_path) if db_path else None,
+                db_path=str(effective_db_path) if effective_db_path else None,
             )
 
         console.print("\n[bold green]✓ 用語集の生成が完了しました[/bold green]")

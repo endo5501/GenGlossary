@@ -56,6 +56,8 @@ Options:
   --llm-provider [ollama|openai]  LLMプロバイダー (デフォルト: ollama)
   -m, --model TEXT              使用するモデル名（プロバイダーごとのデフォルトあり）
   --openai-base-url TEXT        OpenAI互換APIのベースURL
+  --db-path PATH                SQLiteデータベースのパス (デフォルト: ./genglossary.db)
+  --no-db                       データベース保存をスキップ
   -v, --verbose                 詳細ログを表示
   --help                        ヘルプを表示
 ```
@@ -354,11 +356,24 @@ MIT License
 
 GenGlossaryは、生成した用語集をSQLiteデータベースに保存し、管理する機能を提供します。
 
-### DB保存付きで用語集生成
+### DB保存がデフォルト
 
 ```bash
 # データベースに保存しながら用語集を生成
-uv run genglossary generate -i ./docs -o ./glossary.md --db-path ./genglossary.db
+uv run genglossary generate -i ./docs -o ./glossary.md
+# ./genglossary.db に自動保存されます
+```
+
+### DB保存をスキップ
+
+```bash
+uv run genglossary generate -i ./docs -o ./glossary.md --no-db
+```
+
+### カスタムDBパス指定
+
+```bash
+uv run genglossary generate -i ./docs -o ./glossary.md --db-path ./custom.db
 ```
 
 ### データベースコマンド
@@ -370,24 +385,17 @@ uv run genglossary generate -i ./docs -o ./glossary.md --db-path ./genglossary.d
 uv run genglossary db init --path ./genglossary.db
 ```
 
-#### 実行履歴の管理
+#### メタデータ表示
 
 ```bash
-# 実行履歴の一覧を表示
-uv run genglossary db runs list
-
-# 最新の実行履歴を表示
-uv run genglossary db runs latest
-
-# 特定のRunの詳細を表示
-uv run genglossary db runs show 1
+uv run genglossary db info
 ```
 
 #### 抽出用語の管理
 
 ```bash
 # 用語一覧を表示
-uv run genglossary db terms list --run-id 1
+uv run genglossary db terms list
 
 # 用語詳細を表示
 uv run genglossary db terms show 1
@@ -399,14 +407,30 @@ uv run genglossary db terms update 1 --text "量子計算機" --category "techni
 uv run genglossary db terms delete 1
 
 # テキストファイルから用語をインポート（1行1用語）
-uv run genglossary db terms import --run-id 1 --file terms.txt
+uv run genglossary db terms import --file terms.txt
+```
+
+#### 再生成コマンド
+
+```bash
+# 抽出用語の再生成
+uv run genglossary db terms regenerate --input ./target_docs
+
+# 暫定用語集を再生成
+uv run genglossary db provisional regenerate
+
+# 精査を再実行
+uv run genglossary db issues regenerate
+
+# 最終用語集を再生成
+uv run genglossary db refined regenerate
 ```
 
 #### 暫定用語集の管理
 
 ```bash
 # 暫定用語集の一覧を表示
-uv run genglossary db provisional list --run-id 1
+uv run genglossary db provisional list
 
 # 暫定用語の詳細を表示
 uv run genglossary db provisional show 1
@@ -419,7 +443,7 @@ uv run genglossary db provisional update 1 --definition "新しい定義" --conf
 
 ```bash
 # 最終用語集の一覧を表示
-uv run genglossary db refined list --run-id 1
+uv run genglossary db refined list
 
 # 最終用語の詳細を表示
 uv run genglossary db refined show 1
@@ -428,17 +452,16 @@ uv run genglossary db refined show 1
 uv run genglossary db refined update 1 --definition "新しい定義" --confidence 0.98
 
 # 最終用語集をMarkdown形式でエクスポート
-uv run genglossary db refined export-md --run-id 1 --output ./exported.md
+uv run genglossary db refined export-md --output ./exported.md
 ```
 
 ### データベーススキーマ
 
 GenGlossaryは以下のテーブルを使用します：
 
-- `runs`: 実行履歴
+- `metadata`: 入力パスやLLM設定
 - `documents`: 処理したドキュメント
 - `terms_extracted`: 抽出された用語
 - `glossary_provisional`: 暫定用語集
 - `glossary_refined`: 最終用語集
 - `glossary_issues`: 用語集の問題点
-

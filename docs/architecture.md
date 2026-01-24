@@ -285,6 +285,7 @@ def get_metadata(conn: sqlite3.Connection) -> sqlite3.Row | None:
 
 def upsert_metadata(
     conn: sqlite3.Connection,
+    input_path: str,
     llm_provider: str,
     llm_model: str
 ) -> None:
@@ -625,9 +626,9 @@ def db() -> None:
     """Database management commands."""
     pass
 
-@db.command("metadata")
+@db.command("info")
 @click.option("--db-path", default="./genglossary.db")
-def metadata_show(db_path: str) -> None:
+def info(db_path: str) -> None:
     """メタデータを表示"""
     conn = get_connection(db_path)
     metadata = get_metadata(conn)
@@ -818,7 +819,7 @@ for issue_row in issue_rows:
 └──────────────────┘
 ```
 
-### DB保存付きフロー (--db-path指定時、Schema v2)
+### DB保存付きフロー (デフォルト、Schema v2)
 
 ```
 ┌──────────────────┐     ┌──────────────────┐
@@ -870,7 +871,7 @@ for issue_row in issue_rows:
          ↓ DB CLIで操作可能（run_id不要）
 ┌──────────────────┐
 │ genglossary db   │
-│ - metadata       │
+│ - info           │
 │ - terms list     │
 │ - provisional    │
 │ - refined        │

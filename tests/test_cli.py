@@ -337,3 +337,34 @@ class TestCLI:
                 False,
                 db_path=str(custom_db),
             )
+
+    def test_generate_with_no_db_flag(self, tmp_path: Path):
+        """Test that generate command skips DB when --no-db is set."""
+        runner = CliRunner()
+        input_dir = tmp_path / "docs"
+        input_dir.mkdir()
+        output_file = tmp_path / "out.md"
+
+        with patch("genglossary.cli.generate_glossary") as mock_generate:
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_file),
+                    "--no-db",
+                ],
+            )
+
+            assert result.exit_code == 0
+            mock_generate.assert_called_once_with(
+                str(input_dir),
+                str(output_file),
+                "ollama",
+                None,
+                None,
+                False,
+                db_path=None,
+            )
