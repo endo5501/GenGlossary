@@ -4,7 +4,7 @@ tags: [cli, generate, docs]
 description: "Phase 5-6: generateコマンドのDB保存必須化とドキュメント更新"
 created_at: "2026-01-20T02:05:50Z"
 started_at: 2026-01-24T00:38:49Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-24T05:01:45Z # Do not modify manually
 ---
 
 # Phase 5-6: generateコマンドのDB保存必須化とドキュメント更新
