@@ -248,31 +248,31 @@ genglossary db terms regenerate  # 用語を再抽出
 - [x] test_cli.py: --no-db フラグのテスト（TDD）
 - [x] cli.py: --db-path デフォルト値を ./genglossary.db に変更
 - [x] cli.py: --no-db フラグ追加
-- [ ] cli.py: run_id 関連コード削除
+- [x] cli.py: run_id 関連コード削除
 - [x] cli.py: metadata 更新コード追加
 - [x] テスト実行して成功を確認
-- [ ] Phase 5をコミット
+- [x] Phase 5をコミット
 
 ### Phase 6タスク
 
 #### テスト更新
 
-- [ ] tests/db/conftest.py: fixture更新（run_id削除）
-- [ ] tests/db/test_document_repository.py: run_id削除
-- [ ] tests/db/test_term_repository.py: run_id削除、delete_all追加
-- [ ] tests/db/test_provisional_repository.py: run_id削除、delete_all追加
-- [ ] tests/db/test_issue_repository.py: run_id削除、delete_all追加
-- [ ] tests/db/test_refined_repository.py: run_id削除、delete_all追加
-- [ ] tests/db/test_run_repository.py: 削除
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Update docs/architecture.md
+- [x] tests/db/conftest.py: fixture更新（run_id削除）
+- [x] tests/db/test_document_repository.py: run_id削除
+- [x] tests/db/test_term_repository.py: run_id削除、delete_all追加
+- [x] tests/db/test_provisional_repository.py: run_id削除、delete_all追加
+- [x] tests/db/test_issue_repository.py: run_id削除、delete_all追加
+- [x] tests/db/test_refined_repository.py: run_id削除、delete_all追加
+- [x] tests/db/test_run_repository.py: 削除
+- [x] Code simplification review using code-simplifier agent
+- [x] Update docs/architecture.md
 - [x] 全テスト実行して成功を確認
 
 #### ドキュメント更新
 
 - [x] README.md: DB保存デフォルト化、regenerateコマンド追加
 - [x] docs/architecture.md: スキーマv2、CLI構造更新
-- [ ] ドキュメント更新をコミット
+- [x] ドキュメント更新をコミット
 
 ### 最終確認
 
@@ -280,12 +280,13 @@ genglossary db terms regenerate  # 用語を再抽出
 - [x] Run all tests (`uv run pytest`)
 - [ ] 親チケットのタスクを完了としてマーク
 - [ ] Get developer approval
-- [x] Note: .claude/rules/03-architecture.md not found in repo
+- [x] Note: .claude/rules/03-architecture.md は docs/architecture.md に移動済み
 
 ## 作業メモ
 
 - `uv run pytest` 実行結果: 448 passed, 6 deselected (約49秒)
 - `uv run pyright` はユーザー側で実行確認済み
+- コミット: Update generate DB defaults and docs
 
 ## 検証方法
 
@@ -336,7 +337,7 @@ uv run pyright
 
 # ドキュメントの確認
 cat README.md | grep -A 10 "regenerate"
-cat .claude/rules/03-architecture.md | grep -A 10 "metadata"
+cat docs/architecture.md | grep -A 10 "metadata"
 ```
 
 ### 統合テスト
