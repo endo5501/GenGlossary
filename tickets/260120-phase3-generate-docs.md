@@ -271,7 +271,7 @@ genglossary db terms regenerate  # 用語を再抽出
 #### ドキュメント更新
 
 - [ ] README.md: DB保存デフォルト化、regenerateコマンド追加
-- [ ] .claude/rules/03-architecture.md: スキーマv2、CLI構造更新
+- [ ] docs/architecture.md: スキーマv2、CLI構造更新
 - [ ] ドキュメント更新をコミット
 
 ### 最終確認

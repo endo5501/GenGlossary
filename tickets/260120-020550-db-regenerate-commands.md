@@ -85,12 +85,12 @@ db (group)
 
 ## Tasks
 
-- [ ] サブチケット260120-phase1-schema-repositoryの完了
-- [ ] サブチケット260120-phase2-cli-regenerateの完了
+- [x] サブチケット260120-phase1-schema-repositoryの完了
+- [x] サブチケット260120-phase2-cli-regenerateの完了
 - [ ] サブチケット260120-phase3-generate-docsの完了
 - [ ] 全体の統合テスト実施
 - [ ] Code simplification review using code-simplifier agent
-- [ ] Update .claude/rules/03-architecture.md
+- [ ] Update docs/architecture.md
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
