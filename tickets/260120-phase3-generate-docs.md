@@ -278,8 +278,8 @@ genglossary db terms regenerate  # 用語を再抽出
 
 - [x] Run static analysis (`pyright`)
 - [x] Run all tests (`uv run pytest`)
-- [ ] 親チケットのタスクを完了としてマーク
-- [ ] Get developer approval
+- [x] 親チケットのタスクを完了としてマーク
+- [x] Get developer approval
 - [x] Note: .claude/rules/03-architecture.md は docs/architecture.md に移動済み
 
 ## 作業メモ
