@@ -3,7 +3,7 @@ priority: 2
 tags: [cli, generate, docs]
 description: "Phase 5-6: generateコマンドのDB保存必須化とドキュメント更新"
 created_at: "2026-01-20T02:05:50Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-24T00:38:49Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -244,13 +244,13 @@ genglossary db terms regenerate  # 用語を再抽出
 
 ### Phase 5タスク
 
-- [ ] test_cli.py: generateコマンドのDB保存デフォルト化テスト（TDD）
-- [ ] test_cli.py: --no-db フラグのテスト（TDD）
-- [ ] cli.py: --db-path デフォルト値を ./genglossary.db に変更
-- [ ] cli.py: --no-db フラグ追加
+- [x] test_cli.py: generateコマンドのDB保存デフォルト化テスト（TDD）
+- [x] test_cli.py: --no-db フラグのテスト（TDD）
+- [x] cli.py: --db-path デフォルト値を ./genglossary.db に変更
+- [x] cli.py: --no-db フラグ追加
 - [ ] cli.py: run_id 関連コード削除
-- [ ] cli.py: metadata 更新コード追加
-- [ ] テスト実行して成功を確認
+- [x] cli.py: metadata 更新コード追加
+- [x] テスト実行して成功を確認
 - [ ] Phase 5をコミット
 
 ### Phase 6タスク
@@ -265,21 +265,27 @@ genglossary db terms regenerate  # 用語を再抽出
 - [ ] tests/db/test_refined_repository.py: run_id削除、delete_all追加
 - [ ] tests/db/test_run_repository.py: 削除
 - [ ] Code simplification review using code-simplifier agent
-- [ ] Update .claude/rules/03-architecture.md
-- [ ] 全テスト実行して成功を確認
+- [ ] Update docs/architecture.md
+- [x] 全テスト実行して成功を確認
 
 #### ドキュメント更新
 
-- [ ] README.md: DB保存デフォルト化、regenerateコマンド追加
-- [ ] docs/architecture.md: スキーマv2、CLI構造更新
+- [x] README.md: DB保存デフォルト化、regenerateコマンド追加
+- [x] docs/architecture.md: スキーマv2、CLI構造更新
 - [ ] ドキュメント更新をコミット
 
 ### 最終確認
 
-- [ ] Run static analysis (`pyright`)
-- [ ] Run all tests (`uv run pytest`)
+- [x] Run static analysis (`pyright`)
+- [x] Run all tests (`uv run pytest`)
 - [ ] 親チケットのタスクを完了としてマーク
 - [ ] Get developer approval
+- [x] Note: .claude/rules/03-architecture.md not found in repo
+
+## 作業メモ
+
+- `uv run pytest` 実行結果: 448 passed, 6 deselected (約49秒)
+- `uv run pyright` はユーザー側で実行確認済み
 
 ## 検証方法
 

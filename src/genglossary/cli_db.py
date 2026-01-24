@@ -352,6 +352,8 @@ def info(db_path: str) -> None:
 
         # Display metadata
         console.print("\n[bold]メタデータ[/bold]")
+        if metadata["input_path"]:
+            console.print(f"入力パス: {metadata['input_path']}")
         console.print(f"LLMプロバイダー: {metadata['llm_provider']}")
         console.print(f"LLMモデル: {metadata['llm_model']}")
         console.print(f"作成日時: {metadata['created_at']}")

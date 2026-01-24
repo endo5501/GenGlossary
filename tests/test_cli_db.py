@@ -109,12 +109,13 @@ class TestDbInfo:
         initialize_db(conn)
         from genglossary.db.metadata_repository import upsert_metadata
 
-        upsert_metadata(conn, "ollama", "llama3.2")
+        upsert_metadata(conn, "./docs", "ollama", "llama3.2")
         conn.close()
 
         result = runner.invoke(db, ["info", "--db-path", str(db_path)])
 
         assert result.exit_code == 0
+        assert "./docs" in result.output
         assert "ollama" in result.output
         assert "llama3.2" in result.output
 

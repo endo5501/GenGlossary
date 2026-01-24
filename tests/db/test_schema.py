@@ -81,6 +81,7 @@ class TestMetadataTable:
         columns = {row[1]: row[2] for row in cursor.fetchall()}
 
         assert "id" in columns
+        assert "input_path" in columns
         assert "llm_provider" in columns
         assert "llm_model" in columns
         assert "created_at" in columns
@@ -93,16 +94,16 @@ class TestMetadataTable:
 
         # Insert with id=1 should succeed
         cursor.execute(
-            "INSERT INTO metadata (id, llm_provider, llm_model) VALUES (?, ?, ?)",
-            (1, "ollama", "llama3.2"),
+            "INSERT INTO metadata (id, input_path, llm_provider, llm_model) VALUES (?, ?, ?, ?)",
+            (1, "./docs", "ollama", "llama3.2"),
         )
         in_memory_db.commit()
 
         # Try to insert with id=2 should fail (CHECK constraint)
         with pytest.raises(sqlite3.IntegrityError):
             cursor.execute(
-                "INSERT INTO metadata (id, llm_provider, llm_model) VALUES (?, ?, ?)",
-                (2, "openai", "gpt-4"),
+                "INSERT INTO metadata (id, input_path, llm_provider, llm_model) VALUES (?, ?, ?, ?)",
+                (2, "./docs", "openai", "gpt-4"),
             )
 
     def test_metadata_table_default_created_at(self, in_memory_db: sqlite3.Connection) -> None:
@@ -111,8 +112,8 @@ class TestMetadataTable:
 
         cursor = in_memory_db.cursor()
         cursor.execute(
-            "INSERT INTO metadata (id, llm_provider, llm_model) VALUES (?, ?, ?)",
-            (1, "ollama", "llama3.2"),
+            "INSERT INTO metadata (id, input_path, llm_provider, llm_model) VALUES (?, ?, ?, ?)",
+            (1, "./docs", "ollama", "llama3.2"),
         )
         cursor.execute("SELECT created_at FROM metadata WHERE id = 1")
         created_at = cursor.fetchone()[0]

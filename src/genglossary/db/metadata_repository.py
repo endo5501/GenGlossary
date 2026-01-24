@@ -18,7 +18,7 @@ def get_metadata(conn: sqlite3.Connection) -> sqlite3.Row | None:
 
 
 def upsert_metadata(
-    conn: sqlite3.Connection, llm_provider: str, llm_model: str
+    conn: sqlite3.Connection, input_path: str, llm_provider: str, llm_model: str
 ) -> None:
     """Insert or update global metadata.
 
@@ -27,19 +27,21 @@ def upsert_metadata(
 
     Args:
         conn: Database connection.
+        input_path: Input directory path used for generation.
         llm_provider: LLM provider name (e.g., "ollama", "openai").
         llm_model: LLM model name (e.g., "llama3.2", "gpt-4").
     """
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO metadata (id, llm_provider, llm_model)
-        VALUES (1, ?, ?)
+        INSERT INTO metadata (id, input_path, llm_provider, llm_model)
+        VALUES (1, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
+            input_path = excluded.input_path,
             llm_provider = excluded.llm_provider,
             llm_model = excluded.llm_model
         """,
-        (llm_provider, llm_model),
+        (input_path, llm_provider, llm_model),
     )
     conn.commit()
 
