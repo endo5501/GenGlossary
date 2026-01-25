@@ -4,7 +4,7 @@ tags: [api, crud, gui]
 description: "Expose Terms/Provisional/Issues/Refined/Files data as REST endpoints for GUI consumption."
 created_at: "2026-01-25T00:00:00Z"
 started_at: 2026-01-25T11:56:17Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-25T13:02:05Z # Do not modify manually
 ---
 
 # Ticket Overview
