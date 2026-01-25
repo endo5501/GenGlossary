@@ -23,7 +23,16 @@ def create_app() -> FastAPI:
         version=__version__,
     )
 
-    # CORS middleware - allow localhost:3000, 5173 (Vite default), 127.0.0.1:3000, 5173
+    # Middleware stack (applied in reverse order: last added = first executed)
+    # Order: CORS -> RequestID -> StructuredLogging -> routes
+
+    # Structured logging middleware (last executed, can access request_id)
+    app.add_middleware(StructuredLoggingMiddleware)
+
+    # Request ID middleware (sets request_id before logging)
+    app.add_middleware(RequestIDMiddleware)
+
+    # CORS middleware (first executed, expose X-Request-ID for JS)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -35,13 +44,8 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
     )
-
-    # Request ID middleware
-    app.add_middleware(RequestIDMiddleware)
-
-    # Structured logging middleware
-    app.add_middleware(StructuredLoggingMiddleware)
 
     # Include routers
     app.include_router(health_router)

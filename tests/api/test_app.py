@@ -10,7 +10,7 @@ def test_health_endpoint_returns_200_and_json(client):
     """Test /health endpoint returns 200 and JSON response."""
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.headers["content-type"] == "application/json"
+    assert response.headers["content-type"].startswith("application/json")
     data = response.json()
     assert data["status"] == "ok"
     assert "timestamp" in data
@@ -52,6 +52,19 @@ def test_cors_headers_attached_for_localhost_5173(client):
     )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_cors_exposes_request_id_header(client):
+    """Test CORS exposes X-Request-ID header for JavaScript access."""
+    response = client.get(
+        "/health",
+        headers={"Origin": "http://localhost:3000"},
+    )
+    assert response.status_code == 200
+    # X-Request-ID should be in expose-headers for JS to read
+    assert "access-control-expose-headers" in response.headers
+    exposed = response.headers["access-control-expose-headers"].lower()
+    assert "x-request-id" in exposed
 
 
 def test_request_id_header_attached_as_uuid(client):

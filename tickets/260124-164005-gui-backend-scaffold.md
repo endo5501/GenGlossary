@@ -34,3 +34,10 @@ Reference: `plan-gui.md` （画面全体のベースとなるAPI層を担当）
 ## Notes
 
 Keep the server optional so CLI-only users are unaffected; fail fast if required env vars are missing. Favor dependency-injection-friendly structure for future services (projects, runs, files).
+
+## Code Review (2026-01-25)
+
+- **Structured logging**: `StructuredLoggingMiddleware` reads `request_id` before `call_next`, so logs may miss request IDs (and CORS can short-circuit). Consider reading after `call_next` or ensuring RequestID middleware is outermost. (src/genglossary/api/middleware/logging.py, src/genglossary/api/app.py)
+- **CORS expose headers**: `X-Request-ID` is not in `expose_headers`, so browser JS cannot read it. Consider adding `expose_headers=["X-Request-ID"]` for GUI logging use. (src/genglossary/api/app.py)
+- **Test robustness**: `content-type` equality check can be brittle if charset is added. Consider `startswith("application/json")` or `in`. (tests/api/test_app.py)
+- **Open question**: `get_db_connection()` remains a `None` placeholder; confirm whether this is acceptable until the next ticket. (src/genglossary/api/dependencies.py)
