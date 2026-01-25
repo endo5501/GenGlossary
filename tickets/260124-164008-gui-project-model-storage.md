@@ -35,6 +35,23 @@ Reference: `plan-gui.md` 「プロジェクト一覧」「プロジェクト詳�
 
 Projects should isolate their DB/storage to avoid cross-contamination of runs. Decide on default location (e.g., `./projects/<name>/project.db`) and normalize relative paths.
 
+## Code Review (2026-01-25)
+
+**Findings:**
+
+1. **Registry insert is committed before project DB init**  
+   - `create_project()` commits the registry row before `initialize_db()` runs. If project DB creation fails, the registry keeps a stale project record and blocks re-create due to UNIQUE constraints.  
+   - **Suggestion**: wrap registry insert + project DB init in a transaction and rollback on failure, or create the project DB first and insert only after success.  
+   - **Refs**: `src/genglossary/db/project_repository.py`
+
+2. **Relative registry path leads to relative project DB path**  
+   - When `--registry` is relative, `_get_project_db_path()` returns a relative `db_path`, which becomes CWD-dependent in the registry and may break future usage.  
+   - **Suggestion**: resolve registry/project paths to absolute before storing.  
+   - **Refs**: `src/genglossary/cli_project.py`
+
+**Open question:**  
+`project clone` should copy settings only (current behavior) or also duplicate the project DB contents?
+
 ### Code Simplification Review Results (2026-01-25)
 
 **改善実施内容:**
