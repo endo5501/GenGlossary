@@ -233,3 +233,58 @@ def test_get_files_returns_404_for_missing_project(client: TestClient):
     response = client.get("/api/projects/999/files")
 
     assert response.status_code == 404
+
+
+def test_create_file_rejects_path_traversal_attack(
+    test_project_setup, client: TestClient
+):
+    """Test POST /api/projects/{id}/files rejects path traversal attempts."""
+    project_id = test_project_setup["project_id"]
+
+    # Test relative path traversal
+    payload = {"file_path": "../secret.txt"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 400
+
+    # Test absolute path
+    payload = {"file_path": "/etc/passwd"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 400
+
+    # Test path with multiple traversals
+    payload = {"file_path": "../../etc/passwd"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 400
+
+
+def test_create_file_returns_409_for_duplicate_file(
+    test_project_setup, client: TestClient
+):
+    """Test POST /api/projects/{id}/files returns 409 for duplicate file."""
+    project_id = test_project_setup["project_id"]
+    doc_root = test_project_setup["doc_root"]
+
+    # Create actual file in doc_root
+    test_file = Path(doc_root) / "duplicate.txt"
+    test_file.write_text("テストコンテンツ", encoding="utf-8")
+
+    # First creation should succeed
+    payload = {"file_path": "duplicate.txt"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 201
+
+    # Second creation should return 409 Conflict
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 409
+
+
+def test_delete_file_returns_404_for_missing_file(
+    test_project_setup, client: TestClient
+):
+    """Test DELETE /api/projects/{id}/files/{file_id} returns 404 for missing file."""
+    project_id = test_project_setup["project_id"]
+
+    # Attempt to delete non-existent file
+    response = client.delete(f"/api/projects/{project_id}/files/999")
+
+    assert response.status_code == 404

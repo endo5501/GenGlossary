@@ -170,3 +170,31 @@ def test_get_terms_returns_404_for_missing_project(client: TestClient):
     response = client.get("/api/projects/999/terms")
 
     assert response.status_code == 404
+
+
+def test_create_term_returns_409_for_duplicate_term(
+    test_project_setup, client: TestClient
+):
+    """Test POST /api/projects/{id}/terms returns 409 for duplicate term."""
+    project_id = test_project_setup["project_id"]
+
+    # First creation should succeed
+    payload = {"term_text": "重複用語", "category": "技術"}
+    response = client.post(f"/api/projects/{project_id}/terms", json=payload)
+    assert response.status_code == 201
+
+    # Second creation should return 409 Conflict
+    response = client.post(f"/api/projects/{project_id}/terms", json=payload)
+    assert response.status_code == 409
+
+
+def test_delete_term_returns_404_for_missing_term(
+    test_project_setup, client: TestClient
+):
+    """Test DELETE /api/projects/{id}/terms/{term_id} returns 404 for missing term."""
+    project_id = test_project_setup["project_id"]
+
+    # Attempt to delete non-existent term
+    response = client.delete(f"/api/projects/{project_id}/terms/999")
+
+    assert response.status_code == 404
