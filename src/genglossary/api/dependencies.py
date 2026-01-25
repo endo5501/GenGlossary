@@ -124,28 +124,23 @@ def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager
     with _registry_lock:
         existing = _run_manager_registry.get(project.db_path)
 
+        # Return existing manager if settings match or if there's an active run
         if existing is not None:
-            # Check if settings have changed
             settings_match = (
                 existing.doc_root == project.doc_root
                 and existing.llm_provider == project.llm_provider
                 and existing.llm_model == project.llm_model
             )
 
-            if settings_match:
-                # Settings unchanged, return existing instance
+            if settings_match or existing.get_active_run() is not None:
                 return existing
 
-            # Settings changed - check if there's an active run
-            if existing.get_active_run() is not None:
-                # Active run exists, keep existing instance to avoid interruption
-                return existing
-
-        # Create new RunManager (either first time or settings changed with no active run)
-        _run_manager_registry[project.db_path] = RunManager(
+        # Create new RunManager (first time or settings changed with no active run)
+        manager = RunManager(
             db_path=project.db_path,
             doc_root=project.doc_root,
             llm_provider=project.llm_provider,
             llm_model=project.llm_model,
         )
-        return _run_manager_registry[project.db_path]
+        _run_manager_registry[project.db_path] = manager
+        return manager

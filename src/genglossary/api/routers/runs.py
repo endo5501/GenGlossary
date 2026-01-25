@@ -182,30 +182,26 @@ async def stream_run_logs(
         log_queue = manager.get_log_queue()
 
         while True:
-            # Get log message from queue (with timeout)
             try:
                 log_msg = log_queue.get(timeout=1)
 
-                # Check if this is a message for a different run
-                if log_msg is not None:
-                    msg_run_id = log_msg.get("run_id")
+                # Filter messages by run_id
+                msg_run_id = log_msg.get("run_id")
+                if msg_run_id is not None and msg_run_id != run_id:
+                    # Message for different run - put back and skip
+                    try:
+                        log_queue.put_nowait(log_msg)
+                    except:
+                        pass  # Queue full, drop message
+                    continue
 
-                    # Filter out messages from other runs
-                    if msg_run_id is not None and msg_run_id != run_id:
-                        # Put the message back for other consumers
-                        try:
-                            log_queue.put_nowait(log_msg)
-                        except:
-                            pass  # Queue full, drop message
-                        continue
+                # Check for completion signal
+                if log_msg.get("complete"):
+                    yield "event: complete\ndata: {}\n\n"
+                    break
 
-                    # Check for completion signal
-                    if log_msg.get("complete"):
-                        yield "event: complete\ndata: {}\n\n"
-                        break
-
-                    # Send log message as SSE event
-                    yield f"data: {json.dumps(log_msg)}\n\n"
+                # Send log message as SSE event
+                yield f"data: {json.dumps(log_msg)}\n\n"
 
             except Empty:
                 # Timeout - send keepalive
