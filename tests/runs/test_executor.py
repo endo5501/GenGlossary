@@ -148,11 +148,18 @@ class TestPipelineExecutorFromTerms:
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB data loading
+            mock_list_docs.return_value = [{"file_path": "test.txt"}]
+            mock_loader.return_value.load_file.return_value = MagicMock(file_path="test.txt", content="test")
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # Mock glossary generation
             mock_glossary = Glossary(terms={})
@@ -161,8 +168,9 @@ class TestPipelineExecutorFromTerms:
 
             executor.execute(project_db, "from_terms", cancel_event, log_queue)
 
-            # DocumentLoader and TermExtractor should not be called
+            # DocumentLoader.load_directory should not be called (we load from DB instead)
             mock_loader.return_value.load_directory.assert_not_called()
+            # TermExtractor should not be called
             mock_extractor.return_value.extract_terms.assert_not_called()
 
 
@@ -181,11 +189,26 @@ class TestPipelineExecutorProvisionalToRefined:
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_provisional, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB data loading
+            from genglossary.models.term import TermOccurrence
+            mock_list_provisional.return_value = [
+                {
+                    "term_name": "term1",
+                    "definition": "def1",
+                    "confidence": 0.9,
+                    "occurrences": [TermOccurrence(document_path="test.txt", line_number=1, context="ctx")]
+                }
+            ]
+            mock_list_docs.return_value = [{"file_path": "test.txt"}]
+            mock_loader.return_value.load_file.return_value = MagicMock(file_path="test.txt", content="test")
 
             # Mock review
             mock_reviewer.return_value.review.return_value = []

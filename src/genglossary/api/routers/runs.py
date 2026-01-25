@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from queue import Empty
 from typing import AsyncIterator
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
@@ -54,7 +55,11 @@ async def start_run(
         raise HTTPException(status_code=409, detail=str(e))
 
     row = get_run(project_db, run_id)
-    assert row is not None
+    if row is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Run {run_id} was created but could not be retrieved"
+        )
 
     return RunResponse.from_db_row(row)
 
@@ -199,7 +204,7 @@ async def stream_run_logs(
 
                 # Send log message as SSE event
                 yield f"data: {json.dumps(log_msg)}\n\n"
-            except:
+            except Empty:
                 # Timeout - send keepalive
                 yield ": keepalive\n\n"
 

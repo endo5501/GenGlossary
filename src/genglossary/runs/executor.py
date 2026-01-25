@@ -20,6 +20,7 @@ from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.factory import create_llm_client
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
+from genglossary.models.term import Term
 from genglossary.term_extractor import TermExtractor
 
 
@@ -140,9 +141,28 @@ class PipelineExecutor:
                 return
 
             log_queue.put({"level": "info", "message": "Loading documents from database..."})
-            # TODO: Reconstruct Document objects from DB
-            # For now, skip
+            doc_rows = list_all_documents(conn)
+            if not doc_rows:
+                log_queue.put({"level": "error", "message": "No documents found in database"})
+                raise RuntimeError("Cannot execute pipeline without documents")
+
+            # Reconstruct Document objects by re-reading files
+            loader = DocumentLoader()
             documents = []
+            for row in doc_rows:
+                try:
+                    # Re-read document from file system
+                    doc = loader.load_file(row["file_path"])
+                    documents.append(doc)
+                except Exception as e:
+                    log_queue.put({
+                        "level": "warning",
+                        "message": f"Failed to load document {row['file_path']}: {str(e)}"
+                    })
+
+            if not documents:
+                log_queue.put({"level": "error", "message": "No documents could be loaded from file system"})
+                raise RuntimeError("Cannot execute pipeline without documents")
 
         # Load terms from DB if not provided
         if extracted_terms is None:
@@ -200,9 +220,23 @@ class PipelineExecutor:
                 return
 
             log_queue.put({"level": "info", "message": "Loading provisional glossary from database..."})
-            # TODO: Reconstruct Glossary from DB
-            # For now, create empty glossary
+            provisional_rows = list_all_provisional(conn)
+            if not provisional_rows:
+                log_queue.put({"level": "error", "message": "No provisional terms found in database"})
+                raise RuntimeError("Cannot execute provisional_to_refined without provisional glossary")
+
+            # Reconstruct Glossary from DB rows
             glossary = Glossary()
+            for row in provisional_rows:
+                term = Term(
+                    name=row["term_name"],
+                    definition=row["definition"],
+                    confidence=row["confidence"],
+                    occurrences=row["occurrences"],
+                )
+                glossary.add_term(term)
+
+            log_queue.put({"level": "info", "message": f"Loaded {len(provisional_rows)} provisional terms"})
 
         # Load documents from DB if not provided
         if documents is None:
@@ -210,9 +244,28 @@ class PipelineExecutor:
                 return
 
             log_queue.put({"level": "info", "message": "Loading documents from database..."})
-            # TODO: Reconstruct Document objects from DB
-            # For now, skip
+            doc_rows = list_all_documents(conn)
+            if not doc_rows:
+                log_queue.put({"level": "error", "message": "No documents found in database"})
+                raise RuntimeError("Cannot execute pipeline without documents")
+
+            # Reconstruct Document objects by re-reading files
+            loader = DocumentLoader()
             documents = []
+            for row in doc_rows:
+                try:
+                    # Re-read document from file system
+                    doc = loader.load_file(row["file_path"])
+                    documents.append(doc)
+                except Exception as e:
+                    log_queue.put({
+                        "level": "warning",
+                        "message": f"Failed to load document {row['file_path']}: {str(e)}"
+                    })
+
+            if not documents:
+                log_queue.put({"level": "error", "message": "No documents could be loaded from file system"})
+                raise RuntimeError("Cannot execute pipeline without documents")
 
         # Step 4: Review glossary
         if cancel_event.is_set():

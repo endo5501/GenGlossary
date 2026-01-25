@@ -31,7 +31,8 @@ def create_run(
     conn.commit()
 
     run_id = cursor.lastrowid
-    assert run_id is not None
+    if run_id is None:
+        raise RuntimeError("Failed to create run: lastrowid is None")
 
     return run_id
 
