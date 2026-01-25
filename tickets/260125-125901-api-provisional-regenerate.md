@@ -36,7 +36,7 @@ This is a follow-up from ticket #260124-164009-gui-api-data-endpoints code revie
 - [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [x] Code simplification review using code-simplifier agent
 - [x] Update docs/architecture.md (API エンドポイントの説明を更新)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 
 ## Notes
@@ -131,5 +131,19 @@ code-simplifier agentによるリファクタリングを実施
 - **全体テスト**: 581 passed, 6 deselected
 - **コミット数**: 5 (tests, implementation, ticket update, docs, refactor)
 
-### 残タスク
-- [ ] 開発者承認
+### コードレビュー結果 (2026-01-25)
+
+#### 指摘事項
+1. **[High]** `test_regenerate_provisional_updates_definition` が実 LLM 呼び出しになっており、CI/開発環境に Ollama が無い場合に失敗・ハングの可能性がある。  
+   - **該当箇所**: `tests/api/routers/test_provisional.py:183`  
+   - **提案**: `GlossaryGenerator` か `create_llm_client` をモックする、または Ollama 可用性で skip する。
+2. **[Medium]** `doc_root` が欠損・不正パスのとき `DocumentLoader.load_directory` が例外を投げ 500 になり得る。  
+   - **該当箇所**: `src/genglossary/api/routers/provisional.py:80`  
+   - **提案**: 400/404 へ変換し、テスト追加を検討。
+3. **[Low]** `create_llm_client` の `ValueError`（不正 `llm_provider` 等）が未捕捉のため 500 になり得る。  
+   - **該当箇所**: `src/genglossary/api/routers/provisional.py:79`  
+   - **提案**: 400 変換か、DB/入力バリデーションで防御。
+
+#### 質問・確認事項
+- `doc_root` 不正時は API で 400/404 を返す想定ですか？  
+- ユニットテストは Ollama 常駐前提にしない方針でよいですか？（その場合 `test_regenerate_provisional_updates_definition` のモック化/skip 化を推奨）
