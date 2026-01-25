@@ -33,16 +33,7 @@ async def list_provisional(
         list[ProvisionalResponse]: List of all provisional terms.
     """
     rows = list_all_provisional(project_db)
-    return [
-        ProvisionalResponse(
-            id=row["id"],
-            term_name=row["term_name"],
-            definition=row["definition"],
-            confidence=row["confidence"],
-            occurrences=row["occurrences"],
-        )
-        for row in rows
-    ]
+    return ProvisionalResponse.from_db_rows(rows)
 
 
 @router.get("/{entry_id}", response_model=ProvisionalResponse)
@@ -68,13 +59,7 @@ async def get_provisional_by_id(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Entry {entry_id} not found")
 
-    return ProvisionalResponse(
-        id=row["id"],
-        term_name=row["term_name"],
-        definition=row["definition"],
-        confidence=row["confidence"],
-        occurrences=row["occurrences"],
-    )
+    return ProvisionalResponse.from_db_row(row)
 
 
 @router.patch("/{entry_id}", response_model=ProvisionalResponse)
@@ -110,13 +95,7 @@ async def update_provisional(
     updated_row = get_provisional_term(project_db, entry_id)
     assert updated_row is not None
 
-    return ProvisionalResponse(
-        id=updated_row["id"],
-        term_name=updated_row["term_name"],
-        definition=updated_row["definition"],
-        confidence=updated_row["confidence"],
-        occurrences=updated_row["occurrences"],
-    )
+    return ProvisionalResponse.from_db_row(updated_row)
 
 
 @router.post("/{entry_id}/regenerate", response_model=ProvisionalResponse)
@@ -146,10 +125,4 @@ async def regenerate_provisional(
     # TODO: Implement LLM-based regeneration
     # For now, just return the existing term
     # This will be implemented in a future enhancement
-    return ProvisionalResponse(
-        id=row["id"],
-        term_name=row["term_name"],
-        definition=row["definition"],
-        confidence=row["confidence"],
-        occurrences=row["occurrences"],
-    )
+    return ProvisionalResponse.from_db_row(row)

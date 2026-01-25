@@ -55,14 +55,7 @@ async def list_files(
         list[FileResponse]: List of all documents.
     """
     rows = list_all_documents(project_db)
-    return [
-        FileResponse(
-            id=row["id"],
-            file_path=row["file_path"],
-            content_hash=row["content_hash"],
-        )
-        for row in rows
-    ]
+    return FileResponse.from_db_rows(rows)
 
 
 @router.get("/{file_id}", response_model=FileResponse)
@@ -88,11 +81,7 @@ async def get_file_by_id(
     if row is None:
         raise HTTPException(status_code=404, detail=f"File {file_id} not found")
 
-    return FileResponse(
-        id=row["id"],
-        file_path=row["file_path"],
-        content_hash=row["content_hash"],
-    )
+    return FileResponse.from_db_row(row)
 
 
 @router.post("", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
@@ -136,11 +125,7 @@ async def create_file(
     row = get_document(project_db, doc_id)
     assert row is not None
 
-    return FileResponse(
-        id=row["id"],
-        file_path=row["file_path"],
-        content_hash=row["content_hash"],
-    )
+    return FileResponse.from_db_row(row)
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)

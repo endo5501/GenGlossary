@@ -36,12 +36,7 @@ async def list_terms(
         list[TermResponse]: List of all terms.
     """
     rows = list_all_terms(project_db)
-    return [
-        TermResponse(
-            id=row["id"], term_text=row["term_text"], category=row["category"]
-        )
-        for row in rows
-    ]
+    return TermResponse.from_db_rows(rows)
 
 
 @router.get("/{term_id}", response_model=TermResponse)
@@ -67,7 +62,7 @@ async def get_term_by_id(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
 
-    return TermResponse(id=row["id"], term_text=row["term_text"], category=row["category"])
+    return TermResponse.from_db_row(row)
 
 
 @router.post("", response_model=TermResponse, status_code=status.HTTP_201_CREATED)
@@ -90,7 +85,7 @@ async def create_new_term(
     row = get_term(project_db, term_id)
     assert row is not None
 
-    return TermResponse(id=row["id"], term_text=row["term_text"], category=row["category"])
+    return TermResponse.from_db_row(row)
 
 
 @router.patch("/{term_id}", response_model=TermResponse)
@@ -122,7 +117,7 @@ async def update_existing_term(
     row = get_term(project_db, term_id)
     assert row is not None
 
-    return TermResponse(id=row["id"], term_text=row["term_text"], category=row["category"])
+    return TermResponse.from_db_row(row)
 
 
 @router.delete("/{term_id}", status_code=status.HTTP_204_NO_CONTENT)

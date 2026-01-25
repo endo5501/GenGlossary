@@ -88,16 +88,3 @@ def get_project_db(
         yield conn
     finally:
         conn.close()
-
-
-def get_db_connection():
-    """Get database connection (placeholder).
-
-    This will be implemented in a future ticket when
-    database integration is added.
-
-    Returns:
-        None: Placeholder for database connection
-    """
-    # TODO: Implement database connection
-    return None

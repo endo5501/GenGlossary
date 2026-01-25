@@ -33,15 +33,7 @@ async def list_issues(
     if issue_type is not None:
         rows = [row for row in rows if row["issue_type"] == issue_type]
 
-    return [
-        IssueResponse(
-            id=row["id"],
-            term_name=row["term_name"],
-            issue_type=row["issue_type"],
-            description=row["description"],
-        )
-        for row in rows
-    ]
+    return IssueResponse.from_db_rows(rows)
 
 
 @router.get("/{issue_id}", response_model=IssueResponse)
@@ -67,9 +59,4 @@ async def get_issue_by_id(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Issue {issue_id} not found")
 
-    return IssueResponse(
-        id=row["id"],
-        term_name=row["term_name"],
-        issue_type=row["issue_type"],
-        description=row["description"],
-    )
+    return IssueResponse.from_db_row(row)

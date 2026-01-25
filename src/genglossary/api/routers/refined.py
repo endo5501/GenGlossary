@@ -27,16 +27,7 @@ async def list_refined(
         list[RefinedResponse]: List of all refined terms.
     """
     rows = list_all_refined(project_db)
-    return [
-        RefinedResponse(
-            id=row["id"],
-            term_name=row["term_name"],
-            definition=row["definition"],
-            confidence=row["confidence"],
-            occurrences=row["occurrences"],
-        )
-        for row in rows
-    ]
+    return RefinedResponse.from_db_rows(rows)
 
 
 @router.get("/export-md", response_class=PlainTextResponse)
@@ -101,10 +92,4 @@ async def get_refined_by_id(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
 
-    return RefinedResponse(
-        id=row["id"],
-        term_name=row["term_name"],
-        definition=row["definition"],
-        confidence=row["confidence"],
-        occurrences=row["occurrences"],
-    )
+    return RefinedResponse.from_db_row(row)
