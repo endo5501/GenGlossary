@@ -1154,6 +1154,76 @@ router = APIRouter(prefix="/api/projects/{project_id}/provisional", tags=["provi
 # POST /api/projects/{project_id}/provisional/{entry_id}/regenerate - 単一エントリの再生成（LLM）
 ```
 
+**regenerate エンドポイントの実装詳細:**
+
+```python
+@router.post("/{entry_id}/regenerate", response_model=ProvisionalResponse)
+async def regenerate_provisional(
+    project_id: int = Path(..., description="Project ID"),
+    entry_id: int = Path(..., description="Entry ID"),
+    project: Project = Depends(get_project_by_id),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> ProvisionalResponse:
+    """Regenerate definition for a provisional term using LLM.
+
+    処理フロー:
+    1. 用語の存在確認（get_provisional_term）
+    2. プロジェクトのLLM設定からLLMクライアント作成
+    3. DocumentLoaderでドキュメントロード
+    4. GlossaryGeneratorで用語の出現箇所検索と定義再生成
+    5. 新しい定義とconfidenceでDB更新
+    6. 更新後の用語を返却
+
+    エラーハンドリング:
+    - 404: 用語が見つからない場合
+    - 503: LLMタイムアウト (httpx.TimeoutException)
+    - 503: LLM接続エラー (httpx.HTTPError)
+
+    Returns:
+        ProvisionalResponse: 再生成された用語（新しい定義とconfidence）
+    """
+    # 用語の存在確認
+    row = get_provisional_term(project_db, entry_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Entry {entry_id} not found")
+
+    try:
+        # LLMクライアント作成
+        llm_client = create_llm_client(project.llm_provider, project.llm_model or None)
+
+        # ドキュメントロード
+        loader = DocumentLoader()
+        documents = loader.load_directory(project.doc_root)
+
+        # 定義再生成
+        generator = GlossaryGenerator(llm_client=llm_client)
+        occurrences = generator._find_term_occurrences(row["term_name"], documents)
+        if not occurrences:
+            occurrences = row["occurrences"]  # 既存のoccurrencesを使用
+
+        definition, confidence = generator._generate_definition(
+            row["term_name"], occurrences
+        )
+
+        # DB更新
+        update_provisional_term(project_db, entry_id, definition, confidence)
+
+        # 更新後の用語を返却
+        updated_row = get_provisional_term(project_db, entry_id)
+        return ProvisionalResponse.from_db_row(updated_row)
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=503, detail="LLM service timeout")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=503, detail=f"LLM service unavailable: {e}")
+```
+
+**LLM統合のポイント:**
+- プロジェクトの `llm_provider` と `llm_model` 設定を使用
+- `GlossaryGenerator._find_term_occurrences()` でドキュメント内の用語出現箇所を検索
+- `GlossaryGenerator._generate_definition()` でLLMを使用して定義と信頼度を生成
+- 既存のoccurrencesが見つからない場合は、DBに保存されているoccurrencesを使用
+
 ##### issues.py (Issues API - 精査結果)
 ```python
 router = APIRouter(prefix="/api/projects/{project_id}/issues", tags=["issues"])
