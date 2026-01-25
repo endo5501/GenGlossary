@@ -188,28 +188,58 @@ def _generate_glossary_with_db(
 
     # 2. Extract terms
     extractor = TermExtractor(llm_client=llm_client)
+
+    # Determine whether to use categories based on database availability
+    use_categories = conn is not None
+
     if verbose:
         with progress_task(console, "用語を分類中...", total=None) as update:
-            terms = extractor.extract_terms(documents, progress_callback=update)
-        console.print(f"[dim]  → {len(terms)} 個の用語を抽出しました[/dim]")
+            if use_categories:
+                extracted_terms = extractor.extract_terms(
+                    documents, progress_callback=update, return_categories=True
+                )
+                console.print(
+                    f"[dim]  → {len(extracted_terms)} 個の用語を抽出しました（カテゴリ付き）[/dim]"
+                )
+            else:
+                extracted_terms = extractor.extract_terms(
+                    documents, progress_callback=update, return_categories=False
+                )
+                console.print(f"[dim]  → {len(extracted_terms)} 個の用語を抽出しました[/dim]")
     else:
-        terms = extractor.extract_terms(documents)
+        if use_categories:
+            extracted_terms = extractor.extract_terms(
+                documents, return_categories=True
+            )
+        else:
+            extracted_terms = extractor.extract_terms(
+                documents, return_categories=False
+            )
 
     # Save extracted terms to database if enabled
     if conn is not None:
-        for term in terms:
-            # Category is not provided by current TermExtractor, set to NULL
-            create_term(conn, term, category=None)
+        # At this point, extracted_terms is list[ClassifiedTerm] when conn is not None
+        assert use_categories, "use_categories must be True when conn is not None"
+        for classified_term in extracted_terms:  # type: ignore[union-attr]
+            create_term(
+                conn, classified_term.term, category=classified_term.category.value  # type: ignore[union-attr]
+            )
         if verbose:
-            console.print(f"[dim]  → データベースに {len(terms)} 件の抽出語を保存[/dim]")
+            console.print(
+                f"[dim]  → データベースに {len(extracted_terms)} 件の抽出語を保存（カテゴリ付き）[/dim]"
+            )
 
     # 3. Generate glossary
     generator = GlossaryGenerator(llm_client=llm_client)
     if verbose:
-        with progress_task(console, "定義を生成中...", total=len(terms)) as update:
-            glossary = generator.generate(terms, documents, progress_callback=update)
+        with progress_task(
+            console, "定義を生成中...", total=len(extracted_terms)
+        ) as update:
+            glossary = generator.generate(
+                extracted_terms, documents, progress_callback=update
+            )
     else:
-        glossary = generator.generate(terms, documents)
+        glossary = generator.generate(extracted_terms, documents)
 
     # Save provisional glossary to database if enabled
     if conn is not None:
