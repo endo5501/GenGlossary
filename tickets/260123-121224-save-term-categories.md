@@ -4,7 +4,7 @@ tags: [db, extractor, cli]
 description: "Extend term extraction to optionally return categories and save them to terms_extracted."
 created_at: "2026-01-23T12:12:24Z"
 started_at: 2026-01-25T08:05:59Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-25T09:43:32Z # Do not modify manually
 ---
 
 # Ticket Overview
