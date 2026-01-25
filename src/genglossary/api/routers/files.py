@@ -4,7 +4,7 @@ import hashlib
 import sqlite3
 from pathlib import Path as FilePath
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
 from genglossary.api.dependencies import get_project_by_id, get_project_db
 from genglossary.api.schemas.file_schemas import (
@@ -98,7 +98,7 @@ async def get_file_by_id(
 @router.post("", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
 async def create_file(
     project_id: int = Path(..., description="Project ID"),
-    request: FileCreateRequest = ...,
+    request: FileCreateRequest = Body(...),
     project: Project = Depends(get_project_by_id),
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> FileResponse:

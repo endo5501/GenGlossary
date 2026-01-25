@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
 from genglossary.api.dependencies import get_project_db
 from genglossary.api.schemas.provisional_schemas import (
@@ -81,7 +81,7 @@ async def get_provisional_by_id(
 async def update_provisional(
     project_id: int = Path(..., description="Project ID"),
     entry_id: int = Path(..., description="Entry ID"),
-    request: ProvisionalUpdateRequest = ...,
+    request: ProvisionalUpdateRequest = Body(...),
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> ProvisionalResponse:
     """Update a provisional term's definition and confidence.

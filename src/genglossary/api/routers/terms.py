@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
 from genglossary.api.dependencies import get_project_db
 from genglossary.api.schemas.term_schemas import (
@@ -73,7 +73,7 @@ async def get_term_by_id(
 @router.post("", response_model=TermResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_term(
     project_id: int = Path(..., description="Project ID"),
-    request: TermCreateRequest = ...,
+    request: TermCreateRequest = Body(...),
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> TermResponse:
     """Create a new term.
@@ -97,7 +97,7 @@ async def create_new_term(
 async def update_existing_term(
     project_id: int = Path(..., description="Project ID"),
     term_id: int = Path(..., description="Term ID"),
-    request: TermUpdateRequest = ...,
+    request: TermUpdateRequest = Body(...),
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> TermResponse:
     """Update an existing term.
