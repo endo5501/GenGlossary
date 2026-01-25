@@ -46,15 +46,27 @@ GenGlossary/
 │   ├── api/                       # FastAPI バックエンド
 │   │   ├── __init__.py
 │   │   ├── app.py                # アプリファクトリ
-│   │   ├── dependencies.py       # DI (設定、DB接続)
-│   │   ├── schemas.py            # レスポンススキーマ
+│   │   ├── dependencies.py       # DI (設定、DB接続、プロジェクト取得)
+│   │   ├── schemas/              # APIスキーマ
+│   │   │   ├── __init__.py
+│   │   │   ├── common.py         # 共通スキーマ (Health, Version, GlossaryTermResponse)
+│   │   │   ├── term_schemas.py   # Terms用スキーマ
+│   │   │   ├── provisional_schemas.py  # Provisional用スキーマ
+│   │   │   ├── issue_schemas.py  # Issues用スキーマ
+│   │   │   ├── refined_schemas.py      # Refined用スキーマ
+│   │   │   └── file_schemas.py   # Files用スキーマ
 │   │   ├── middleware/
 │   │   │   ├── __init__.py
 │   │   │   ├── request_id.py    # リクエストIDミドルウェア
 │   │   │   └── logging.py       # 構造化ログミドルウェア
 │   │   └── routers/
 │   │       ├── __init__.py
-│   │       └── health.py        # /health, /version
+│   │       ├── health.py        # /health, /version
+│   │       ├── terms.py         # /api/projects/{project_id}/terms
+│   │       ├── provisional.py   # /api/projects/{project_id}/provisional
+│   │       ├── issues.py        # /api/projects/{project_id}/issues
+│   │       ├── refined.py       # /api/projects/{project_id}/refined
+│   │       └── files.py         # /api/projects/{project_id}/files
 │   ├── config.py                 # 設定管理
 │   ├── cli.py                    # CLIエントリーポイント (generate)
 │   ├── cli_db.py                 # DB管理CLI (db サブコマンド)
@@ -64,7 +76,14 @@ GenGlossary/
 │   ├── api/                       # API層テスト
 │   │   ├── __init__.py
 │   │   ├── conftest.py          # APIテスト用fixture
-│   │   └── test_app.py          # FastAPIアプリテスト
+│   │   ├── test_app.py          # FastAPIアプリテスト
+│   │   ├── test_dependencies.py # 依存性注入テスト
+│   │   └── routers/             # Routerテスト
+│   │       ├── test_terms.py    # Terms APIテスト (8 tests)
+│   │       ├── test_provisional.py  # Provisional APIテスト (9 tests)
+│   │       ├── test_issues.py   # Issues APIテスト (6 tests)
+│   │       ├── test_refined.py  # Refined APIテスト (7 tests)
+│   │       └── test_files.py    # Files APIテスト (11 tests)
 │   ├── models/
 │   │   ├── test_document.py
 │   │   ├── test_term.py
@@ -867,22 +886,185 @@ def create_app() -> FastAPI:
     return app
 ```
 
-#### schemas.py (APIスキーマ)
+#### schemas/ (APIスキーマ)
+
+スキーマはエンティティごとにモジュール化されています。
+
+##### common.py (共通スキーマ)
 ```python
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+from genglossary.models.term import TermOccurrence
+
 
 class HealthResponse(BaseModel):
-    """ヘルスチェックレスポンス"""
-    status: str
-    timestamp: datetime
+    """Health check response."""
+    status: str = Field(..., description="Health status")
+    timestamp: datetime = Field(..., description="Current timestamp")
+
 
 class VersionResponse(BaseModel):
-    """バージョン情報レスポンス"""
-    name: str
-    version: str
+    """Version information response."""
+    name: str = Field(..., description="Application name")
+    version: str = Field(..., description="Application version")
+
+
+class GlossaryTermResponse(BaseModel):
+    """Common schema for glossary terms (provisional and refined)."""
+    id: int = Field(..., description="Term ID")
+    term_name: str = Field(..., description="Term name")
+    definition: str = Field(..., description="Term definition")
+    confidence: float = Field(..., description="Confidence score (0.0 to 1.0)")
+    occurrences: list[TermOccurrence] = Field(
+        ..., description="List of term occurrences"
+    )
+
+    @classmethod
+    def from_db_row(cls, row: Any) -> "GlossaryTermResponse":
+        """Create from database row.
+
+        Args:
+            row: Database row (GlossaryTermRow or dict-like) with deserialized occurrences.
+
+        Returns:
+            GlossaryTermResponse: Response instance.
+        """
+        return cls(
+            id=row["id"],
+            term_name=row["term_name"],
+            definition=row["definition"],
+            confidence=row["confidence"],
+            occurrences=row["occurrences"],
+        )
+
+    @classmethod
+    def from_db_rows(cls, rows: list[Any]) -> list["GlossaryTermResponse"]:
+        """Create list from database rows.
+
+        Args:
+            rows: List of database rows (GlossaryTermRow or dict-like).
+
+        Returns:
+            list[GlossaryTermResponse]: List of response instances.
+        """
+        return [cls.from_db_row(row) for row in rows]
 ```
 
-#### routers/health.py (ヘルスチェックエンドポイント)
+##### term_schemas.py (Terms用スキーマ)
+```python
+class TermResponse(BaseModel):
+    """Response schema for a term."""
+    id: int = Field(..., description="Term ID")
+    term_text: str = Field(..., description="Term text")
+    category: str | None = Field(None, description="Term category")
+
+    @classmethod
+    def from_db_row(cls, row: Any) -> "TermResponse":
+        """Create from database row."""
+        return cls(
+            id=row["id"],
+            term_text=row["term_text"],
+            category=row["category"],
+        )
+
+    @classmethod
+    def from_db_rows(cls, rows: list[Any]) -> list["TermResponse"]:
+        """Create list from database rows."""
+        return [cls.from_db_row(row) for row in rows]
+
+
+class TermMutationRequest(BaseModel):
+    """Request schema for creating or updating a term."""
+    term_text: str = Field(..., description="Term text")
+    category: str | None = Field(None, description="Term category")
+
+
+# Aliases for clarity
+TermCreateRequest = TermMutationRequest
+TermUpdateRequest = TermMutationRequest
+```
+
+##### provisional_schemas.py / refined_schemas.py
+```python
+# GlossaryTermResponseを継承またはエイリアス
+from genglossary.api.schemas.common import GlossaryTermResponse
+
+ProvisionalResponse = GlossaryTermResponse  # Provisional用
+RefinedResponse = GlossaryTermResponse      # Refined用
+```
+
+##### issue_schemas.py (Issues用スキーマ)
+```python
+class IssueResponse(BaseModel):
+    """Response schema for a glossary issue."""
+    id: int = Field(..., description="Issue ID")
+    term_name: str = Field(..., description="Term name this issue relates to")
+    issue_type: str = Field(..., description="Type of issue")
+    description: str = Field(..., description="Description of the issue")
+
+    @classmethod
+    def from_db_row(cls, row: Any) -> "IssueResponse":
+        """Create from database row."""
+        return cls(
+            id=row["id"],
+            term_name=row["term_name"],
+            issue_type=row["issue_type"],
+            description=row["description"],
+        )
+
+    @classmethod
+    def from_db_rows(cls, rows: list[Any]) -> list["IssueResponse"]:
+        """Create list from database rows."""
+        return [cls.from_db_row(row) for row in rows]
+```
+
+##### file_schemas.py (Files用スキーマ)
+```python
+class FileResponse(BaseModel):
+    """Response schema for a document file."""
+    id: int = Field(..., description="Document ID")
+    file_path: str = Field(..., description="File path")
+    content_hash: str = Field(..., description="Content hash")
+
+    @classmethod
+    def from_db_row(cls, row: Any) -> "FileResponse":
+        """Create from database row."""
+        return cls(
+            id=row["id"],
+            file_path=row["file_path"],
+            content_hash=row["content_hash"],
+        )
+
+    @classmethod
+    def from_db_rows(cls, rows: list[Any]) -> list["FileResponse"]:
+        """Create list from database rows."""
+        return [cls.from_db_row(row) for row in rows]
+
+
+class FileCreateRequest(BaseModel):
+    """Request schema for creating a document file."""
+    file_path: str = Field(..., description="File path relative to doc_root")
+
+
+class DiffScanResponse(BaseModel):
+    """Response schema for diff scan operation."""
+    added: list[str] = Field(..., description="List of newly added file paths")
+    modified: list[str] = Field(..., description="List of modified file paths")
+    deleted: list[str] = Field(..., description="List of deleted file paths")
+```
+
+**スキーマ設計のポイント:**
+- `from_db_row()` / `from_db_rows()` クラスメソッドでDB行からモデルへの変換を統一
+- `GlossaryTermResponse` を基底クラスとしてProvisionalとRefinedで共有
+- `TermMutationRequest` をCreateとUpdateで共有（DRY原則）
+- `Field()` でOpenAPIドキュメントに説明を追加
+
+#### routers/ (APIエンドポイント)
+
+##### health.py (ヘルスチェックエンドポイント)
 ```python
 from fastapi import APIRouter
 
@@ -898,6 +1080,172 @@ async def version_info() -> VersionResponse:
     """バージョン情報"""
     return VersionResponse(name="genglossary", version=__version__)
 ```
+
+##### terms.py (Terms API - 抽出用語の管理)
+```python
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
+
+router = APIRouter(prefix="/api/projects/{project_id}/terms", tags=["terms"])
+
+@router.get("", response_model=list[TermResponse])
+async def list_all_terms_endpoint(
+    project_id: int = Path(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> list[TermResponse]:
+    """抽出用語の一覧を取得"""
+    rows = list_all_terms(project_db)
+    return TermResponse.from_db_rows(rows)
+
+@router.get("/{term_id}", response_model=TermResponse)
+async def get_term_endpoint(
+    project_id: int = Path(...),
+    term_id: int = Path(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> TermResponse:
+    """指定IDの用語を取得"""
+    row = get_term(project_db, term_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Term not found")
+    return TermResponse.from_db_row(row)
+
+@router.post("", response_model=TermResponse, status_code=status.HTTP_201_CREATED)
+async def create_new_term(
+    project_id: int = Path(...),
+    request: TermCreateRequest = Body(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> TermResponse:
+    """新しい用語を作成"""
+    term_id = create_term(project_db, request.term_text, request.category)
+    row = get_term(project_db, term_id)
+    assert row is not None
+    return TermResponse.from_db_row(row)
+
+@router.patch("/{term_id}", response_model=TermResponse)
+async def update_term_endpoint(
+    project_id: int = Path(...),
+    term_id: int = Path(...),
+    request: TermUpdateRequest = Body(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> TermResponse:
+    """用語を更新"""
+    update_term(project_db, term_id, request.term_text, request.category)
+    row = get_term(project_db, term_id)
+    assert row is not None
+    return TermResponse.from_db_row(row)
+
+@router.delete("/{term_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_term_endpoint(
+    project_id: int = Path(...),
+    term_id: int = Path(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> None:
+    """用語を削除"""
+    delete_term(project_db, term_id)
+```
+
+##### provisional.py (Provisional API - 暫定用語集)
+```python
+router = APIRouter(prefix="/api/projects/{project_id}/provisional", tags=["provisional"])
+
+# GET /api/projects/{project_id}/provisional - 一覧取得
+# GET /api/projects/{project_id}/provisional/{entry_id} - 詳細取得
+# PATCH /api/projects/{project_id}/provisional/{entry_id} - 更新
+# DELETE /api/projects/{project_id}/provisional/{entry_id} - 削除
+# POST /api/projects/{project_id}/provisional/{entry_id}/regenerate - 単一エントリの再生成（LLM）
+```
+
+##### issues.py (Issues API - 精査結果)
+```python
+router = APIRouter(prefix="/api/projects/{project_id}/issues", tags=["issues"])
+
+@router.get("", response_model=list[IssueResponse])
+async def list_all_issues_endpoint(
+    project_id: int = Path(...),
+    issue_type: str | None = Query(None, description="Filter by issue type"),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> list[IssueResponse]:
+    """精査結果の一覧を取得（issue_typeフィルタ対応）"""
+    if issue_type:
+        rows = list_issues_by_type(project_db, issue_type)
+    else:
+        rows = list_all_issues(project_db)
+    return IssueResponse.from_db_rows(rows)
+
+# GET /api/projects/{project_id}/issues/{issue_id} - 詳細取得
+```
+
+##### refined.py (Refined API - 最終用語集)
+```python
+router = APIRouter(prefix="/api/projects/{project_id}/refined", tags=["refined"])
+
+# GET /api/projects/{project_id}/refined - 一覧取得
+# GET /api/projects/{project_id}/refined/{term_id} - 詳細取得
+# GET /api/projects/{project_id}/refined/export-md - Markdownエクスポート
+# PATCH /api/projects/{project_id}/refined/{term_id} - 更新
+# DELETE /api/projects/{project_id}/refined/{term_id} - 削除
+
+@router.get("/export-md", response_class=PlainTextResponse)
+async def export_markdown(
+    project_id: int = Path(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> PlainTextResponse:
+    """最終用語集をMarkdown形式でエクスポート"""
+    rows = list_all_refined(project_db)
+    lines = ["# 用語集\n"]
+    for row in rows:
+        lines.append(f"## {row['term_name']}\n")
+        lines.append(f"{row['definition']}\n\n")
+        # ... 出現箇所の追加
+    return PlainTextResponse(
+        content="".join(lines),
+        media_type="text/markdown; charset=utf-8"
+    )
+```
+
+**重要な実装ポイント:**
+- `export-md` のような固定パスは `/{term_id}` より先に定義する（FastAPIのルーティング順序）
+- `Body(...)` アノテーションでリクエストボディを明示
+- プロジェクトIDの検証は `get_project_by_id` が自動的に404を返す
+
+##### files.py (Files API - ドキュメント管理)
+```python
+router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
+
+# GET /api/projects/{project_id}/files - ファイル一覧取得
+# GET /api/projects/{project_id}/files/{file_id} - ファイル詳細取得
+# POST /api/projects/{project_id}/files - ファイル追加
+# DELETE /api/projects/{project_id}/files/{file_id} - ファイル削除
+
+@router.post("/diff-scan", response_model=DiffScanResponse)
+async def scan_file_diff(
+    project_id: int = Path(...),
+    project: Project = Depends(get_project_by_id),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> DiffScanResponse:
+    """ファイルシステムとDBの差分をスキャン"""
+    db_files = {row["file_path"]: row for row in list_all_documents(project_db)}
+    fs_files = {}
+
+    doc_root = Path(project.doc_root)
+    if doc_root.exists():
+        for file_path in doc_root.rglob("*.txt"):
+            rel_path = str(file_path.relative_to(doc_root))
+            fs_files[rel_path] = _compute_file_hash(file_path)
+
+    added = [path for path in fs_files if path not in db_files]
+    deleted = [path for path in db_files if path not in fs_files]
+    modified = [
+        path for path in fs_files
+        if path in db_files and fs_files[path] != db_files[path]["content_hash"]
+    ]
+
+    return DiffScanResponse(added=added, modified=modified, deleted=deleted)
+```
+
+**diff-scanのロジック:**
+- ファイルシステム上の `.txt` ファイルをスキャン
+- SHA256ハッシュで変更を検出
+- added / modified / deleted を返却
 
 #### middleware/request_id.py (リクエストIDミドルウェア)
 ```python
@@ -934,14 +1282,110 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
 
 #### dependencies.py (依存性注入)
 ```python
+import os
+import sqlite3
+from pathlib import Path
+from typing import Generator
+
+from fastapi import Depends, HTTPException
+
+from genglossary.config import Config
+from genglossary.db.connection import get_connection
+from genglossary.db.project_repository import get_project
+from genglossary.db.registry_schema import initialize_registry
+from genglossary.models.project import Project
+
+
 def get_config() -> Config:
-    """設定を取得（DI用）"""
+    """Get application configuration.
+
+    Returns:
+        Config: Application configuration instance
+    """
     return Config()
 
-def get_db_connection():
-    """DB接続を取得（将来実装）"""
-    # TODO: 実装予定
-    return None
+
+def get_registry_db(
+    registry_path: str | None = None,
+) -> Generator[sqlite3.Connection, None, None]:
+    """Get registry database connection.
+
+    Args:
+        registry_path: Optional path to registry database.
+            If None, uses GENGLOSSARY_REGISTRY_PATH env var or default.
+
+    Yields:
+        sqlite3.Connection: Registry database connection.
+    """
+    if registry_path is None:
+        registry_path = os.getenv(
+            "GENGLOSSARY_REGISTRY_PATH",
+            str(Path.home() / ".genglossary" / "registry.db"),
+        )
+
+    conn = get_connection(registry_path)
+    initialize_registry(conn)
+
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def get_project_by_id(
+    project_id: int,
+    registry_conn: sqlite3.Connection = Depends(get_registry_db),
+) -> Project:
+    """Get project by ID or raise 404.
+
+    Args:
+        project_id: Project ID to retrieve.
+        registry_conn: Registry database connection.
+
+    Returns:
+        Project: The requested project.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    project = get_project(registry_conn, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    return project
+
+
+def get_project_db(
+    project: Project = Depends(get_project_by_id),
+) -> Generator[sqlite3.Connection, None, None]:
+    """Get project-specific database connection.
+
+    Args:
+        project: Project instance from get_project_by_id.
+
+    Yields:
+        sqlite3.Connection: Project database connection.
+    """
+    conn = get_connection(project.db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()
+```
+
+**依存性注入のパターン:**
+- `get_registry_db()` - レジストリDB接続をyieldするジェネレーター
+- `get_project_by_id()` - プロジェクトIDからProjectを取得、存在しない場合は404
+- `get_project_db()` - プロジェクト固有のDB接続を取得（`get_project_by_id`に依存）
+
+**使用例:**
+```python
+@router.get("/{project_id}/terms")
+async def list_terms(
+    project_id: int = Path(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> list[TermResponse]:
+    rows = list_all_terms(project_db)
+    return TermResponse.from_db_rows(rows)
 ```
 
 ### 7. CLI層
@@ -1055,10 +1499,136 @@ def serve(host: str, port: int, reload: bool) -> None:
 - `genglossary api serve --host 0.0.0.0 --port 3000` - カスタムホスト/ポート
 
 **APIエンドポイント:**
+
+**システムエンドポイント:**
 - `GET /health` - ヘルスチェック
 - `GET /version` - バージョン情報
 - `GET /docs` - OpenAPI ドキュメント（Swagger UI）
 - `GET /redoc` - ReDoc ドキュメント
+
+**Terms API (抽出用語の管理) - 5エンドポイント:**
+- `GET /api/projects/{project_id}/terms` - 用語一覧取得
+- `GET /api/projects/{project_id}/terms/{term_id}` - 用語詳細取得
+- `POST /api/projects/{project_id}/terms` - 用語作成
+- `PATCH /api/projects/{project_id}/terms/{term_id}` - 用語更新
+- `DELETE /api/projects/{project_id}/terms/{term_id}` - 用語削除
+
+**Provisional API (暫定用語集) - 5エンドポイント:**
+- `GET /api/projects/{project_id}/provisional` - 暫定用語集一覧取得
+- `GET /api/projects/{project_id}/provisional/{entry_id}` - 暫定用語詳細取得
+- `PATCH /api/projects/{project_id}/provisional/{entry_id}` - 暫定用語更新（定義・confidence編集）
+- `DELETE /api/projects/{project_id}/provisional/{entry_id}` - 暫定用語削除
+- `POST /api/projects/{project_id}/provisional/{entry_id}/regenerate` - 単一エントリの再生成（LLM）
+
+**Issues API (精査結果) - 2エンドポイント:**
+- `GET /api/projects/{project_id}/issues` - 精査結果一覧取得（`issue_type` クエリパラメータでフィルタ可能）
+- `GET /api/projects/{project_id}/issues/{issue_id}` - 精査結果詳細取得
+
+**Refined API (最終用語集) - 5エンドポイント:**
+- `GET /api/projects/{project_id}/refined` - 最終用語集一覧取得
+- `GET /api/projects/{project_id}/refined/{term_id}` - 最終用語詳細取得
+- `GET /api/projects/{project_id}/refined/export-md` - Markdownエクスポート
+- `PATCH /api/projects/{project_id}/refined/{term_id}` - 最終用語更新
+- `DELETE /api/projects/{project_id}/refined/{term_id}` - 最終用語削除
+
+**Files API (ドキュメント管理) - 5エンドポイント:**
+- `GET /api/projects/{project_id}/files` - ファイル一覧取得
+- `GET /api/projects/{project_id}/files/{file_id}` - ファイル詳細取得
+- `POST /api/projects/{project_id}/files` - ファイル追加
+- `DELETE /api/projects/{project_id}/files/{file_id}` - ファイル削除
+- `POST /api/projects/{project_id}/files/diff-scan` - ファイルシステムとDBの差分スキャン
+
+**合計: 27エンドポイント** (システム4 + データAPI 22 + Projects API 1)
+
+#### API実装のポイント
+
+**1. SQLiteスレッド安全性**
+
+FastAPIは非同期処理で複数のスレッドを使用するため、SQLite接続時に `check_same_thread=False` を指定しています。
+
+```python
+# db/connection.py
+def get_connection(db_path: str) -> sqlite3.Connection:
+    """Get database connection."""
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+```
+
+**2. 依存性注入の階層化**
+
+プロジェクト固有のDB接続は、レジストリDB接続とプロジェクト取得に依存する3段階の依存関係を構成しています。
+
+```
+get_registry_db()
+    ↓ Depends
+get_project_by_id(registry_conn)
+    ↓ Depends
+get_project_db(project)
+```
+
+**3. スキーマのファクトリーメソッド**
+
+全てのレスポンススキーマに `from_db_row()` / `from_db_rows()` クラスメソッドを実装し、DB行からモデルへの変換ロジックを統一しています。
+
+```python
+class TermResponse(BaseModel):
+    @classmethod
+    def from_db_row(cls, row: Any) -> "TermResponse":
+        """Create from database row."""
+        return cls(
+            id=row["id"],
+            term_text=row["term_text"],
+            category=row["category"],
+        )
+
+    @classmethod
+    def from_db_rows(cls, rows: list[Any]) -> list["TermResponse"]:
+        """Create list from database rows."""
+        return [cls.from_db_row(row) for row in rows]
+```
+
+**4. 型注釈の工夫**
+
+DB行の型は `sqlite3.Row` と `TypedDict` (GlossaryTermRow) の両方があるため、`from_db_row()` のパラメータ型には `Any` を使用しています。
+
+**5. ルーティング順序**
+
+FastAPIは定義順にルートをマッチングするため、`/export-md` のような固定パスは `/{term_id}` のようなパス パラメータより先に定義する必要があります。
+
+```python
+# refined.py
+@router.get("/export-md", ...)  # 先に定義
+async def export_markdown(...):
+    ...
+
+@router.get("/{term_id}", ...)  # 後に定義
+async def get_refined_by_id(...):
+    ...
+```
+
+**6. リクエストボディのアノテーション**
+
+FastAPIでは、パスパラメータとリクエストボディを組み合わせる場合、明示的に `Body()` アノテーションが必要です。
+
+```python
+async def create_new_term(
+    project_id: int = Path(...),           # パスパラメータ
+    request: TermCreateRequest = Body(...), # リクエストボディ（明示的）
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> TermResponse:
+    ...
+```
+
+**7. HTTPステータスコード**
+
+RESTful APIの慣習に従ったステータスコードを返却しています。
+
+- `200 OK` - GETリクエストの成功、PATCH/PUTの成功
+- `201 Created` - POSTでリソース作成成功
+- `204 No Content` - DELETEでリソース削除成功
+- `404 Not Found` - リソースが見つからない（`get_project_by_id` が自動的に返却）
 
 **regenerateコマンド群:**
 

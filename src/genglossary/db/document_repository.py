@@ -80,3 +80,15 @@ def get_document_by_path(
         (file_path,),
     )
     return cursor.fetchone()
+
+
+def delete_document(conn: sqlite3.Connection, document_id: int) -> None:
+    """Delete a document record.
+
+    Args:
+        conn: Database connection.
+        document_id: The document ID to delete.
+    """
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+    conn.commit()

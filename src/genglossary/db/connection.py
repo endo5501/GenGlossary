@@ -24,8 +24,8 @@ def get_connection(db_path: str) -> sqlite3.Connection:
         db_file = Path(db_path)
         db_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Create connection
-    conn = sqlite3.connect(db_path)
+    # Create connection (check_same_thread=False for FastAPI async support)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
 
     # Enable foreign key constraints
     conn.execute("PRAGMA foreign_keys = ON")
