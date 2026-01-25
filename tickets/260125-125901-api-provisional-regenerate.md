@@ -3,7 +3,7 @@ priority: 4.7
 tags: [api, llm, provisional]
 description: "Implement provisional glossary entry regeneration endpoint with LLM integration"
 created_at: "2026-01-25T12:59:01Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-25T13:03:13Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -18,21 +18,24 @@ This is a follow-up from ticket #260124-164009-gui-api-data-endpoints code revie
 
 ## Tasks
 
-- [ ] **Red**: テスト追加
-  - [ ] regenerate が実際に定義を変更することを検証するテスト
-  - [ ] regenerate が confidence を更新することを検証するテスト
-  - [ ] LLM呼び出しのモックを使用したテスト
-- [ ] テスト失敗確認（Red完了）
-- [ ] **Implementation**: regenerate endpoint実装
-  - [ ] LLM client (GlossaryGenerator) を使用して定義を再生成
-  - [ ] プロジェクトのLLM設定を取得して使用
-  - [ ] ドキュメントコンテキストを読み込んで渡す
-  - [ ] 再生成結果をDBに保存
-- [ ] **Green**: テスト通過確認
+- [x] **Red**: テスト追加
+  - [x] regenerate が実際に定義を変更することを検証するテスト
+  - [x] regenerate が confidence を更新することを検証するテスト
+  - [x] LLM呼び出しのモックを使用したテスト
+  - [x] LLM timeout/error ハンドリングのテスト (503 返却)
+  - [x] DB永続化の検証テスト
+- [x] テスト失敗確認（Red完了）
+- [x] **Implementation**: regenerate endpoint実装
+  - [x] LLM client (GlossaryGenerator) を使用して定義を再生成
+  - [x] プロジェクトのLLM設定を取得して使用
+  - [x] ドキュメントコンテキストを読み込んで渡す
+  - [x] 再生成結果をDBに保存
+  - [x] LLMエラーハンドリング（timeout, HTTPError → 503）
+- [x] **Green**: テスト通過確認
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Update docs/architecture.md (API エンドポイントの説明を更新)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 
@@ -51,3 +54,57 @@ This is a follow-up from ticket #260124-164009-gui-api-data-endpoints code revie
 ### Dependencies
 - Ticket #260124-164009-gui-api-data-endpoints (完了済み)
 - LLM設定がプロジェクトに保存されていること
+
+
+## 作業結果
+
+### 実装内容
+
+#### Phase 1: Red (コミット: 529a0de)
+**テスト追加**: 5つの新しいテストケースを追加
+1. `test_regenerate_provisional_changes_definition_with_mock` - LLMをモックして新しい定義を返すことを検証
+2. `test_regenerate_provisional_updates_confidence_with_mock` - confidenceが更新されることを検証
+3. `test_regenerate_provisional_persists_to_db` - GETで取得して永続化を検証
+4. `test_regenerate_provisional_llm_timeout_returns_503` - LLMタイムアウト時に503を返す
+5. `test_regenerate_provisional_llm_unavailable_returns_503` - LLM接続エラー時に503を返す
+
+**失敗確認**: 全ての新しいテストが期待通り失敗（`AttributeError: GlossaryGenerator`）
+
+#### Phase 2: Green (コミット: 58b569e)
+**実装**: `src/genglossary/api/routers/provisional.py` の `regenerate_provisional` エンドポイント
+- 必要なインポート追加（`httpx`, `GlossaryGenerator`, `DocumentLoader`, `create_llm_client`, etc.）
+- プロジェクトからLLM設定を取得（`llm_provider`, `llm_model`）
+- `DocumentLoader` でドキュメントを読み込み
+- `GlossaryGenerator` を使用して用語の出現箇所を検索し、定義を再生成
+- 新しい定義とconfidenceでDBを更新
+- LLMエラーハンドリング実装（`httpx.TimeoutException`, `httpx.HTTPError` → 503）
+
+**成功確認**: 全てのテストが通過
+- `tests/api/routers/test_provisional.py`: 14 passed
+- 全体: 581 passed, 6 deselected
+- 静的解析: 0 errors, 0 warnings
+
+### 変更ファイル
+- `tests/api/routers/test_provisional.py` - テスト追加（+154行）
+- `src/genglossary/api/routers/provisional.py` - 実装（TODO削除、LLM統合実装）
+
+### エンドポイント仕様
+**URL**: `POST /api/projects/{project_id}/provisional/{entry_id}/regenerate`
+
+**レスポンス**:
+- 200: 再生成された用語エントリ（ProvisionalResponse）
+- 404: 用語が見つからない場合
+- 503: LLMタイムアウトまたは接続エラー
+
+**処理フロー**:
+1. 用語の存在確認
+2. LLMクライアント作成（プロジェクト設定から）
+3. ドキュメントロード
+4. GlossaryGeneratorで出現箇所検索と定義生成
+5. DB更新
+6. 更新後の値を返す
+
+### 残タスク
+- [ ] `docs/architecture.md` の更新
+- [ ] コード簡素化レビュー（必要に応じて）
+- [ ] 開発者承認
