@@ -118,20 +118,19 @@ class GlossaryGenerator:
         Returns:
             Filtered list of terms.
         """
-        # If terms is list[str], return as-is
-        if not terms or isinstance(terms[0], str):
+        # Early returns for simple cases
+        if not terms:
             return terms
 
-        # If skip_common_nouns is False, return all terms
-        if not skip_common_nouns:
+        # If str list or not filtering, return as-is
+        if isinstance(terms[0], str) or not skip_common_nouns:
             return terms
 
-        # Filter out common_noun category
+        # Filter ClassifiedTerm list (type guaranteed by above check)
         return [
-            term
+            term  # type: ignore[misc]
             for term in terms
-            if isinstance(term, ClassifiedTerm)
-            and term.category != TermCategory.COMMON_NOUN
+            if term.category != TermCategory.COMMON_NOUN  # type: ignore[union-attr]
         ]
 
     def _build_search_pattern(self, term: str) -> re.Pattern:

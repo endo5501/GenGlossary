@@ -598,11 +598,12 @@ def terms_regenerate(input: str, llm_provider: str, model: str | None, db_path: 
     # Save to database with categories
     with _db_operation(db_path) as conn:
         delete_all_terms(conn)
-        for classified_term in classified_terms:  # type: ignore[union-attr]
+        # Type is list[ClassifiedTerm] when return_categories=True
+        for term in classified_terms:  # type: ignore[union-attr]
             create_term(
                 conn,
-                classified_term.term,  # type: ignore[union-attr]
-                category=classified_term.category.value,  # type: ignore[union-attr]
+                term.term,  # type: ignore[union-attr]
+                category=term.category.value,  # type: ignore[union-attr]
             )
         console.print(f"[green]✓[/green] {len(classified_terms)}件の用語を保存しました（カテゴリ付き）")
 
@@ -752,15 +753,14 @@ def provisional_regenerate(llm_provider: str, model: str | None, db_path: str) -
         # Reconstruct ClassifiedTerm objects from database
         from genglossary.models.term import ClassifiedTerm, TermCategory
 
-        classified_terms = []
-        for row in term_rows:
-            # If category is NULL, treat as common_noun (will be skipped)
-            category_str = row["category"] if row["category"] else "common_noun"
-            classified_terms.append(
-                ClassifiedTerm(
-                    term=row["term_text"], category=TermCategory(category_str)
-                )
+        # If category is NULL, treat as common_noun (will be skipped)
+        classified_terms = [
+            ClassifiedTerm(
+                term=row["term_text"],
+                category=TermCategory(row["category"] or "common_noun"),
             )
+            for row in term_rows
+        ]
 
         documents = _reconstruct_documents_from_db(doc_rows)
 

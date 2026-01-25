@@ -189,40 +189,32 @@ def _generate_glossary_with_db(
     # 2. Extract terms
     extractor = TermExtractor(llm_client=llm_client)
 
-    # Determine whether to use categories based on database availability
-    use_categories = conn is not None
+    # Extract terms with categories if DB is enabled
+    return_categories = conn is not None
 
+    # Extract terms with progress display if verbose
     if verbose:
         with progress_task(console, "用語を分類中...", total=None) as update:
-            if use_categories:
-                extracted_terms = extractor.extract_terms(
-                    documents, progress_callback=update, return_categories=True
-                )
-                console.print(
-                    f"[dim]  → {len(extracted_terms)} 個の用語を抽出しました（カテゴリ付き）[/dim]"
-                )
-            else:
-                extracted_terms = extractor.extract_terms(
-                    documents, progress_callback=update, return_categories=False
-                )
-                console.print(f"[dim]  → {len(extracted_terms)} 個の用語を抽出しました[/dim]")
+            extracted_terms = extractor.extract_terms(
+                documents, progress_callback=update, return_categories=return_categories
+            )
+        category_msg = "（カテゴリ付き）" if return_categories else ""
+        console.print(
+            f"[dim]  → {len(extracted_terms)} 個の用語を抽出しました{category_msg}[/dim]"
+        )
     else:
-        if use_categories:
-            extracted_terms = extractor.extract_terms(
-                documents, return_categories=True
-            )
-        else:
-            extracted_terms = extractor.extract_terms(
-                documents, return_categories=False
-            )
+        extracted_terms = extractor.extract_terms(
+            documents, return_categories=return_categories
+        )
 
     # Save extracted terms to database if enabled
     if conn is not None:
-        # At this point, extracted_terms is list[ClassifiedTerm] when conn is not None
-        assert use_categories, "use_categories must be True when conn is not None"
+        # Type is guaranteed to be list[ClassifiedTerm] when return_categories=True
         for classified_term in extracted_terms:  # type: ignore[union-attr]
             create_term(
-                conn, classified_term.term, category=classified_term.category.value  # type: ignore[union-attr]
+                conn,
+                classified_term.term,  # type: ignore[union-attr]
+                category=classified_term.category.value,  # type: ignore[union-attr]
             )
         if verbose:
             console.print(

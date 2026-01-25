@@ -3,7 +3,7 @@ priority: 2
 tags: [db, extractor, cli]
 description: "Extend term extraction to optionally return categories and save them to terms_extracted."
 created_at: "2026-01-23T12:12:24Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-25T08:05:59Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -14,16 +14,16 @@ Implement plan B with a behavior change: store all classified terms (including `
 
 ## Tasks
 
-- [ ] Define return type for category-enabled extraction (new model or typed dict)
-- [ ] Update `TermExtractor.extract_terms()` signature to support `return_categories` and include `common_noun` when requested
-- [ ] Adjust provisional glossary flow to skip `common_noun` at generation time (not at extraction time)
-- [ ] Wire category-aware returns into `src/genglossary/cli.py` (save all categories to DB)
-- [ ] Wire category-aware returns into `src/genglossary/cli_db.py` (save all categories to DB)
-- [ ] Add/adjust tests for category persistence and `common_noun` skipping behavior
+- [x] Define return type for category-enabled extraction (new model or typed dict)
+- [x] Update `TermExtractor.extract_terms()` signature to support `return_categories` and include `common_noun` when requested
+- [x] Adjust provisional glossary flow to skip `common_noun` at generation time (not at extraction time)
+- [x] Wire category-aware returns into `src/genglossary/cli.py` (save all categories to DB)
+- [x] Wire category-aware returns into `src/genglossary/cli_db.py` (save all categories to DB)
+- [x] Add/adjust tests for category persistence and `common_noun` skipping behavior
 - [ ] Code simplification review using code-simplifier agent
-- [ ] Update docs/architecture.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Update docs/architecture.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 

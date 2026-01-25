@@ -628,17 +628,12 @@ JSON形式で回答してください:
         Returns:
             List of ClassifiedTerm objects (includes all categories).
         """
-        classified_terms: list[ClassifiedTerm] = []
-        for category_str, terms in classification.classified_terms.items():
-            category = TermCategory(category_str)
-            for term in terms:
-                # Strip whitespace and skip empty terms
-                stripped = term.strip()
-                if stripped:
-                    classified_terms.append(
-                        ClassifiedTerm(term=stripped, category=category)
-                    )
-        return classified_terms
+        return [
+            ClassifiedTerm(term=term.strip(), category=TermCategory(category_str))
+            for category_str, terms in classification.classified_terms.items()
+            for term in terms
+            if term.strip()  # Skip empty terms
+        ]
 
     def _select_terms(
         self,
