@@ -1,7 +1,9 @@
 """Tests for Provisional API endpoints."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -20,6 +22,10 @@ def test_project_setup(tmp_path: Path, monkeypatch):
     doc_root = tmp_path / "docs"
     doc_root.mkdir()
 
+    # Create test document
+    test_doc = doc_root / "test.md"
+    test_doc.write_text("これは用語に関するテストドキュメントです。\n用語は重要な概念です。")
+
     # Set registry path for client fixture
     monkeypatch.setenv("GENGLOSSARY_REGISTRY_PATH", str(registry_path))
 
@@ -27,12 +33,13 @@ def test_project_setup(tmp_path: Path, monkeypatch):
     registry_conn = get_connection(str(registry_path))
     initialize_registry(registry_conn)
 
-    # Create project
+    # Create project with LLM provider
     project_id = create_project(
         registry_conn,
         name="Test Project",
         doc_root=str(doc_root),
         db_path=str(project_db_path),
+        llm_provider="ollama",
     )
 
     registry_conn.close()
@@ -41,6 +48,7 @@ def test_project_setup(tmp_path: Path, monkeypatch):
         "project_id": project_id,
         "registry_path": str(registry_path),
         "project_db_path": str(project_db_path),
+        "doc_root": str(doc_root),
     }
 
 
@@ -160,8 +168,9 @@ def test_update_provisional_returns_404_for_missing_term(
     assert response.status_code == 404
 
 
+@patch("genglossary.api.routers.provisional.GlossaryGenerator")
 def test_regenerate_provisional_updates_definition(
-    test_project_setup, client: TestClient
+    mock_generator_class, test_project_setup, client: TestClient
 ):
     """Test POST /api/projects/{id}/provisional/{entry_id}/regenerate regenerates definition."""
     project_id = test_project_setup["project_id"]
@@ -172,6 +181,12 @@ def test_regenerate_provisional_updates_definition(
     term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
     conn.close()
 
+    # Mock GlossaryGenerator
+    mock_generator = MagicMock()
+    mock_generator._generate_definition.return_value = ("再生成された定義", 0.85)
+    mock_generator._find_term_occurrences.return_value = [occ]
+    mock_generator_class.return_value = mock_generator
+
     response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
 
     assert response.status_code == 200
@@ -179,7 +194,9 @@ def test_regenerate_provisional_updates_definition(
     assert data["id"] == term_id
     assert data["term_name"] == "用語"
     # Definition should be regenerated (different from "旧定義")
+    assert data["definition"] != "旧定義"
     # Confidence should be updated
+    assert data["confidence"] == 0.85
 
 
 def test_regenerate_provisional_returns_404_for_missing_term(
@@ -198,3 +215,198 @@ def test_get_provisional_returns_404_for_missing_project(client: TestClient):
     response = client.get("/api/projects/999/provisional")
 
     assert response.status_code == 404
+
+
+@patch("genglossary.api.routers.provisional.GlossaryGenerator")
+def test_regenerate_provisional_changes_definition_with_mock(
+    mock_generator_class, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint changes definition using mocked LLM."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
+    conn.close()
+
+    # Mock GlossaryGenerator
+    mock_generator = MagicMock()
+    mock_generator._generate_definition.return_value = ("新しい定義", 0.85)
+    mock_generator._find_term_occurrences.return_value = [occ]
+    mock_generator_class.return_value = mock_generator
+
+    # Call regenerate endpoint
+    response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == term_id
+    assert data["term_name"] == "用語"
+    assert data["definition"] == "新しい定義"
+    assert data["definition"] != "旧定義"
+
+
+@patch("genglossary.api.routers.provisional.GlossaryGenerator")
+def test_regenerate_provisional_updates_confidence_with_mock(
+    mock_generator_class, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint updates confidence using mocked LLM."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    conn.close()
+
+    # Mock GlossaryGenerator
+    mock_generator = MagicMock()
+    mock_generator._generate_definition.return_value = ("更新された定義", 0.92)
+    mock_generator._find_term_occurrences.return_value = [occ]
+    mock_generator_class.return_value = mock_generator
+
+    # Call regenerate endpoint
+    response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["confidence"] == 0.92
+    assert data["confidence"] != 0.5
+
+
+@patch("genglossary.api.routers.provisional.GlossaryGenerator")
+def test_regenerate_provisional_persists_to_db(
+    mock_generator_class, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint persists changes to database."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
+    conn.close()
+
+    # Mock GlossaryGenerator
+    mock_generator = MagicMock()
+    mock_generator._generate_definition.return_value = ("永続化された定義", 0.88)
+    mock_generator._find_term_occurrences.return_value = [occ]
+    mock_generator_class.return_value = mock_generator
+
+    # Call regenerate endpoint
+    client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    # Verify persistence with GET
+    response = client.get(f"/api/projects/{project_id}/provisional/{term_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["definition"] == "永続化された定義"
+    assert data["confidence"] == 0.88
+
+
+@patch("genglossary.api.routers.provisional.GlossaryGenerator")
+def test_regenerate_provisional_llm_timeout_returns_503(
+    mock_generator_class, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint returns 503 when LLM times out."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    conn.close()
+
+    # Mock GlossaryGenerator to raise TimeoutException
+    mock_generator = MagicMock()
+    mock_generator._generate_definition.side_effect = httpx.TimeoutException("Timeout")
+    mock_generator._find_term_occurrences.return_value = [occ]
+    mock_generator_class.return_value = mock_generator
+
+    # Call regenerate endpoint
+    response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    assert response.status_code == 503
+    assert "timeout" in response.json()["detail"].lower()
+
+
+@patch("genglossary.api.routers.provisional.GlossaryGenerator")
+def test_regenerate_provisional_llm_unavailable_returns_503(
+    mock_generator_class, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint returns 503 when LLM is unavailable."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    conn.close()
+
+    # Mock GlossaryGenerator to raise HTTPError
+    mock_generator = MagicMock()
+    mock_generator._generate_definition.side_effect = httpx.HTTPError("Connection failed")
+    mock_generator._find_term_occurrences.return_value = [occ]
+    mock_generator_class.return_value = mock_generator
+
+    # Call regenerate endpoint
+    response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    assert response.status_code == 503
+    assert "unavailable" in response.json()["detail"].lower()
+
+
+@patch("genglossary.api.routers.provisional.DocumentLoader")
+def test_regenerate_provisional_invalid_doc_root_returns_400(
+    mock_loader_class, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint returns 400 when doc_root is invalid."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    conn.close()
+
+    # Mock DocumentLoader to raise FileNotFoundError
+    mock_loader = MagicMock()
+    mock_loader.load_directory.side_effect = FileNotFoundError("Directory not found")
+    mock_loader_class.return_value = mock_loader
+
+    # Call regenerate endpoint
+    response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    assert response.status_code == 400
+    assert "not found" in response.json()["detail"].lower()
+
+
+@patch("genglossary.api.routers.provisional.create_llm_client")
+def test_regenerate_provisional_invalid_llm_provider_returns_400(
+    mock_create_llm, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint returns 400 when llm_provider is invalid."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    conn.close()
+
+    # Mock create_llm_client to raise ValueError
+    mock_create_llm.side_effect = ValueError("Invalid LLM provider")
+
+    # Call regenerate endpoint
+    response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    assert response.status_code == 400
+    assert "provider" in response.json()["detail"].lower()
