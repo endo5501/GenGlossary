@@ -360,3 +360,29 @@ def test_regenerate_provisional_llm_unavailable_returns_503(
 
     assert response.status_code == 503
     assert "unavailable" in response.json()["detail"].lower()
+
+
+@patch("genglossary.api.routers.provisional.DocumentLoader")
+def test_regenerate_provisional_invalid_doc_root_returns_400(
+    mock_loader_class, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint returns 400 when doc_root is invalid."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    conn.close()
+
+    # Mock DocumentLoader to raise FileNotFoundError
+    mock_loader = MagicMock()
+    mock_loader.load_directory.side_effect = FileNotFoundError("Directory not found")
+    mock_loader_class.return_value = mock_loader
+
+    # Call regenerate endpoint
+    response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    assert response.status_code == 400
+    assert "not found" in response.json()["detail"].lower()
