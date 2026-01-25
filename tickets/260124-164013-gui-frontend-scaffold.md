@@ -19,7 +19,7 @@ Reference: `plan-gui.md` 全画面の共通レイアウト（グローバル操�
 - [ ] **Red**: 先にフロントテスト追加（`frontend/src/__tests__/app-shell.test.tsx` など）— ルーティング初期化、レイアウト枠の要素存在、APIクライアントのベースURL設定をRTL/Vitestで失敗させる
 - [ ] テスト失敗を確認（Red完了）
 - [ ] Initialize React + TypeScript project (Vite) under `frontend/` with pnpm and lint/prettier configs aligned to repo style
-- [ ] Choose and configure a design system/theme (e.g., Mantine/Chakra + custom tokens) avoiding default system stacks/purple bias; set typography/color primitives（`docs/architecture.md` にUIスタックを追記）— plan-guiの意図的なビジュアルを反映
+- [ ] Configure Mantine as design system with custom theme tokens, avoiding default purple bias; set typography/color primitives（`docs/architecture.md` にUIスタックを追記）— plan-guiの意図的なビジュアルを反映
 - [ ] Add routing (TanStack Router or React Router) and query/data layer (TanStack Query) with API base URL env
 - [ ] Implement shared layout shell: global top bar (project title/status slots), left nav rail, main content area, bottom log panel placeholder
 - [ ] Build API client wrapper with auth-less base headers, error handling, and type-safe responses
