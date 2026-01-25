@@ -708,6 +708,11 @@ from genglossary.cli_api import api
 
 main.add_command(api)
 
+# Register project subcommand group
+from genglossary.cli_project import project
+
+main.add_command(project)
+
 
 if __name__ == "__main__":
     main()

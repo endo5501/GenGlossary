@@ -3,8 +3,32 @@
 # Connection management
 from genglossary.db.connection import database_connection, get_connection
 
+# Registry connection management
+from genglossary.db.registry_connection import (
+    get_default_registry_path,
+    get_registry_connection,
+    registry_connection,
+)
+
 # Schema management
 from genglossary.db.schema import get_schema_version, initialize_db
+
+# Registry schema management
+from genglossary.db.registry_schema import (
+    get_registry_schema_version,
+    initialize_registry,
+)
+
+# Project repository
+from genglossary.db.project_repository import (
+    clone_project,
+    create_project,
+    delete_project,
+    get_project,
+    get_project_by_name,
+    list_projects,
+    update_project,
+)
 
 # Metadata repository
 from genglossary.db.metadata_repository import (
@@ -68,9 +92,24 @@ __all__ = [
     # Connection
     "get_connection",
     "database_connection",
+    # Registry connection
+    "get_registry_connection",
+    "registry_connection",
+    "get_default_registry_path",
     # Schema
     "initialize_db",
     "get_schema_version",
+    # Registry schema
+    "initialize_registry",
+    "get_registry_schema_version",
+    # Projects
+    "create_project",
+    "get_project",
+    "get_project_by_name",
+    "list_projects",
+    "update_project",
+    "delete_project",
+    "clone_project",
     # Metadata
     "get_metadata",
     "upsert_metadata",
