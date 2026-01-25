@@ -755,7 +755,7 @@ def provisional_regenerate(llm_provider: str, model: str | None, db_path: str) -
         classified_terms = []
         for row in term_rows:
             # If category is NULL, treat as common_noun (will be skipped)
-            category_str = row.get("category") or "common_noun"
+            category_str = row["category"] if row["category"] else "common_noun"
             classified_terms.append(
                 ClassifiedTerm(
                     term=row["term_text"], category=TermCategory(category_str)
