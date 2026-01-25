@@ -31,6 +31,18 @@ class TermCategory(str, Enum):
     """Common nouns - excluded from glossary"""
 
 
+class ClassifiedTerm(BaseModel):
+    """Represents a term with its category classification.
+
+    Attributes:
+        term: The term text.
+        category: The category of the term.
+    """
+
+    term: str
+    category: TermCategory
+
+
 class TermOccurrence(BaseModel):
     """Represents a single occurrence of a term in a document.
 
