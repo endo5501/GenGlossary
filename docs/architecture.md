@@ -39,10 +39,27 @@ GenGlossary/
 │   ├── output/
 │   │   ├── __init__.py
 │   │   └── markdown_writer.py    # Markdown出力
+│   ├── api/                       # FastAPI バックエンド
+│   │   ├── __init__.py
+│   │   ├── app.py                # アプリファクトリ
+│   │   ├── dependencies.py       # DI (設定、DB接続)
+│   │   ├── schemas.py            # レスポンススキーマ
+│   │   ├── middleware/
+│   │   │   ├── __init__.py
+│   │   │   ├── request_id.py    # リクエストIDミドルウェア
+│   │   │   └── logging.py       # 構造化ログミドルウェア
+│   │   └── routers/
+│   │       ├── __init__.py
+│   │       └── health.py        # /health, /version
 │   ├── config.py                 # 設定管理
 │   ├── cli.py                    # CLIエントリーポイント (generate)
-│   └── cli_db.py                 # DB管理CLI (db サブコマンド)
+│   ├── cli_db.py                 # DB管理CLI (db サブコマンド)
+│   └── cli_api.py                # API管理CLI (api サブコマンド)
 ├── tests/                        # テストコード
+│   ├── api/                       # API層テスト
+│   │   ├── __init__.py
+│   │   ├── conftest.py          # APIテスト用fixture
+│   │   └── test_app.py          # FastAPIアプリテスト
 │   ├── models/
 │   │   ├── test_document.py
 │   │   ├── test_term.py
@@ -652,7 +669,114 @@ def write_glossary(glossary: Glossary, output_path: str) -> None:
     ...
 ```
 
-### 6. CLI層
+### 6. api/ - API層（FastAPI バックエンド）
+
+**役割**: GUIアプリケーションのためのREST APIを提供
+
+#### app.py (アプリケーションファクトリ)
+```python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+def create_app() -> FastAPI:
+    """FastAPIアプリケーションを作成"""
+    app = FastAPI(
+        title="GenGlossary API",
+        description="API for GenGlossary",
+        version=__version__,
+    )
+
+    # CORS設定（localhost:3000, 5173など）
+    app.add_middleware(CORSMiddleware, ...)
+
+    # カスタムミドルウェア
+    app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(StructuredLoggingMiddleware)
+
+    # ルーター登録
+    app.include_router(health_router)
+
+    return app
+```
+
+#### schemas.py (APIスキーマ)
+```python
+from pydantic import BaseModel
+
+class HealthResponse(BaseModel):
+    """ヘルスチェックレスポンス"""
+    status: str
+    timestamp: datetime
+
+class VersionResponse(BaseModel):
+    """バージョン情報レスポンス"""
+    name: str
+    version: str
+```
+
+#### routers/health.py (ヘルスチェックエンドポイント)
+```python
+from fastapi import APIRouter
+
+router = APIRouter(tags=["health"])
+
+@router.get("/health", response_model=HealthResponse)
+async def health_check() -> HealthResponse:
+    """ヘルスチェック"""
+    return HealthResponse(status="ok", timestamp=datetime.now(timezone.utc))
+
+@router.get("/version", response_model=VersionResponse)
+async def version_info() -> VersionResponse:
+    """バージョン情報"""
+    return VersionResponse(name="genglossary", version=__version__)
+```
+
+#### middleware/request_id.py (リクエストIDミドルウェア)
+```python
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """すべてのレスポンスにX-Request-IDヘッダーを付与"""
+    async def dispatch(self, request: Request, call_next) -> Response:
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+```
+
+#### middleware/logging.py (構造化ログミドルウェア)
+```python
+class StructuredLoggingMiddleware(BaseHTTPMiddleware):
+    """リクエスト/レスポンスを構造化ログとして出力"""
+    async def dispatch(self, request: Request, call_next) -> Response:
+        start_time = time.time()
+        response = await call_next(request)
+        duration = time.time() - start_time
+
+        logger.info("HTTP request", extra={
+            "request_id": getattr(request.state, "request_id", None),
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration": duration,
+        })
+        return response
+```
+
+#### dependencies.py (依存性注入)
+```python
+def get_config() -> Config:
+    """設定を取得（DI用）"""
+    return Config()
+
+def get_db_connection():
+    """DB接続を取得（将来実装）"""
+    # TODO: 実装予定
+    return None
+```
+
+### 7. CLI層
 
 #### cli.py (メインコマンド)
 ```python
@@ -731,6 +855,42 @@ def terms_list(db_path: str) -> None:
 - `genglossary db provisional list/show/update/regenerate` - 暫定用語集管理
 - `genglossary db issues list/regenerate` - 問題点管理
 - `genglossary db refined list/show/update/export-md/regenerate` - 最終用語集管理
+
+#### cli_api.py (APIサブコマンド)
+```python
+import click
+import uvicorn
+
+@click.group()
+def api() -> None:
+    """API server commands."""
+    pass
+
+@api.command()
+@click.option("--host", default="127.0.0.1")
+@click.option("--port", default=8000)
+@click.option("--reload", is_flag=True)
+def serve(host: str, port: int, reload: bool) -> None:
+    """FastAPIサーバーを起動"""
+    uvicorn.run(
+        "genglossary.api.app:create_app",
+        host=host,
+        port=port,
+        reload=reload,
+        factory=True,
+    )
+```
+
+**利用可能なAPIコマンド:**
+- `genglossary api serve` - FastAPIサーバー起動
+- `genglossary api serve --reload` - 開発モード（自動リロード）
+- `genglossary api serve --host 0.0.0.0 --port 3000` - カスタムホスト/ポート
+
+**APIエンドポイント:**
+- `GET /health` - ヘルスチェック
+- `GET /version` - バージョン情報
+- `GET /docs` - OpenAPI ドキュメント（Swagger UI）
+- `GET /redoc` - ReDoc ドキュメント
 
 **regenerateコマンド群:**
 
@@ -1088,7 +1248,8 @@ class TermExtractor:
 
 ```
 ┌──────────────┐
-│   CLI層      │ (cli.py, cli_db.py)
+│   CLI層      │ (cli.py, cli_db.py, cli_api.py)
+│   API層      │ (api/app.py, routers/, middleware/)
 └────┬─────────┘
      │ depends on
      ├─────────────────────────┐
