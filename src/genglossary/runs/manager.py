@@ -124,6 +124,7 @@ class RunManager:
                 self._cancel_event,
                 self._log_queue,
                 doc_root=self.doc_root,
+                run_id=run_id,
             )
 
             # Check if cancelled
@@ -144,10 +145,10 @@ class RunManager:
                 finished_at=datetime.now(),
                 error_message=str(e),
             )
-            self._log_queue.put({"level": "error", "message": f"Run failed: {str(e)}"})
+            self._log_queue.put({"run_id": run_id, "level": "error", "message": f"Run failed: {str(e)}"})
         finally:
             # Send completion signal to close SSE stream
-            self._log_queue.put(None)
+            self._log_queue.put({"run_id": run_id, "complete": True})
             # Close the connection when thread completes
             conn.close()
 

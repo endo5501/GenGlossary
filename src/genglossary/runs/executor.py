@@ -52,6 +52,7 @@ class PipelineExecutor:
         cancel_event: Event,
         log_queue: Queue,
         doc_root: str = ".",
+        run_id: int | None = None,
     ) -> None:
         """Execute the pipeline for the given scope.
 
@@ -61,13 +62,14 @@ class PipelineExecutor:
             cancel_event: Event to signal cancellation.
             log_queue: Queue for log messages.
             doc_root: Root directory for documents (default: ".").
+            run_id: Run ID for log filtering (default: None).
         """
         # Log execution start
-        log_queue.put({"level": "info", "message": f"Starting pipeline execution: {scope}"})
+        log_queue.put({"run_id": run_id, "level": "info", "message": f"Starting pipeline execution: {scope}"})
 
         # Check cancellation before starting
         if cancel_event.is_set():
-            log_queue.put({"level": "info", "message": "Execution cancelled"})
+            log_queue.put({"run_id": run_id, "level": "info", "message": "Execution cancelled"})
             return
 
         # Clear tables before execution
@@ -75,16 +77,16 @@ class PipelineExecutor:
 
         # Execute based on scope
         if scope == "full":
-            self._execute_full(conn, cancel_event, log_queue, doc_root)
+            self._execute_full(conn, cancel_event, log_queue, doc_root, run_id)
         elif scope == "from_terms":
-            self._execute_from_terms(conn, cancel_event, log_queue, documents=None, extracted_terms=None)
+            self._execute_from_terms(conn, cancel_event, log_queue, documents=None, extracted_terms=None, run_id=run_id)
         elif scope == "provisional_to_refined":
-            self._execute_provisional_to_refined(conn, cancel_event, log_queue, glossary=None, documents=None)
+            self._execute_provisional_to_refined(conn, cancel_event, log_queue, glossary=None, documents=None, run_id=run_id)
         else:
-            log_queue.put({"level": "error", "message": f"Unknown scope: {scope}"})
+            log_queue.put({"run_id": run_id, "level": "error", "message": f"Unknown scope: {scope}"})
             return
 
-        log_queue.put({"level": "info", "message": "Pipeline execution completed"})
+        log_queue.put({"run_id": run_id, "level": "info", "message": "Pipeline execution completed"})
 
     def _execute_full(
         self,
@@ -92,6 +94,7 @@ class PipelineExecutor:
         cancel_event: Event,
         log_queue: Queue,
         doc_root: str = ".",
+        run_id: int | None = None,
     ) -> None:
         """Execute full pipeline (steps 1-5).
 
@@ -100,17 +103,18 @@ class PipelineExecutor:
             cancel_event: Event to signal cancellation.
             log_queue: Queue for log messages.
             doc_root: Root directory for documents (default: ".").
+            run_id: Run ID for log filtering (default: None).
         """
         # Step 1: Load documents
         if cancel_event.is_set():
             return
 
-        log_queue.put({"level": "info", "message": "Loading documents..."})
+        log_queue.put({"run_id": run_id, "level": "info", "message": "Loading documents..."})
         loader = DocumentLoader()
         documents = loader.load_directory(doc_root)
 
         if not documents:
-            log_queue.put({"level": "error", "message": "No documents found"})
+            log_queue.put({"run_id": run_id, "level": "error", "message": "No documents found"})
             raise RuntimeError("No documents found in doc_root")
 
         # Save documents to database
@@ -118,13 +122,13 @@ class PipelineExecutor:
             content_hash = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
             create_document(conn, document.file_path, content_hash)
 
-        log_queue.put({"level": "info", "message": f"Loaded {len(documents)} documents"})
+        log_queue.put({"run_id": run_id, "level": "info", "message": f"Loaded {len(documents)} documents"})
 
         # Step 2: Extract terms
         if cancel_event.is_set():
             return
 
-        log_queue.put({"level": "info", "message": "Extracting terms..."})
+        log_queue.put({"run_id": run_id, "level": "info", "message": "Extracting terms..."})
         extractor = TermExtractor(llm_client=self._llm_client)
         extracted_terms = extractor.extract_terms(documents, return_categories=True)
 
@@ -136,10 +140,10 @@ class PipelineExecutor:
                 category=classified_term.category.value,  # type: ignore[union-attr]
             )
 
-        log_queue.put({"level": "info", "message": f"Extracted {len(extracted_terms)} terms"})
+        log_queue.put({"run_id": run_id, "level": "info", "message": f"Extracted {len(extracted_terms)} terms"})
 
         # Continue with steps 3-5
-        self._execute_from_terms(conn, cancel_event, log_queue, documents, extracted_terms)
+        self._execute_from_terms(conn, cancel_event, log_queue, documents, extracted_terms, run_id=run_id)
 
     def _execute_from_terms(
         self,
@@ -148,6 +152,7 @@ class PipelineExecutor:
         log_queue: Queue,
         documents: list[Document] | None = None,
         extracted_terms: list | None = None,
+        run_id: int | None = None,
     ) -> None:
         """Execute from terms (steps 3-5).
 
@@ -157,16 +162,17 @@ class PipelineExecutor:
             log_queue: Queue for log messages.
             documents: Pre-loaded documents (None to load from DB).
             extracted_terms: Pre-extracted terms (None to load from DB).
+            run_id: Run ID for log filtering (default: None).
         """
         # Load documents from DB if not provided
         if documents is None:
             if cancel_event.is_set():
                 return
 
-            log_queue.put({"level": "info", "message": "Loading documents from database..."})
+            log_queue.put({"run_id": run_id, "level": "info", "message": "Loading documents from database..."})
             doc_rows = list_all_documents(conn)
             if not doc_rows:
-                log_queue.put({"level": "error", "message": "No documents found in database"})
+                log_queue.put({"run_id": run_id, "level": "error", "message": "No documents found in database"})
                 raise RuntimeError("Cannot execute pipeline without documents")
 
             # Reconstruct Document objects by re-reading files
@@ -179,12 +185,13 @@ class PipelineExecutor:
                     documents.append(doc)
                 except Exception as e:
                     log_queue.put({
+                        "run_id": run_id,
                         "level": "warning",
                         "message": f"Failed to load document {row['file_path']}: {str(e)}"
                     })
 
             if not documents:
-                log_queue.put({"level": "error", "message": "No documents could be loaded from file system"})
+                log_queue.put({"run_id": run_id, "level": "error", "message": "No documents could be loaded from file system"})
                 raise RuntimeError("Cannot execute pipeline without documents")
 
         # Load terms from DB if not provided
@@ -192,7 +199,7 @@ class PipelineExecutor:
             if cancel_event.is_set():
                 return
 
-            log_queue.put({"level": "info", "message": "Loading terms from database..."})
+            log_queue.put({"run_id": run_id, "level": "info", "message": "Loading terms from database..."})
             term_rows = list_all_terms(conn)
             extracted_terms = [row["term_text"] for row in term_rows]
 
@@ -200,7 +207,7 @@ class PipelineExecutor:
         if cancel_event.is_set():
             return
 
-        log_queue.put({"level": "info", "message": "Generating glossary..."})
+        log_queue.put({"run_id": run_id, "level": "info", "message": "Generating glossary..."})
         generator = GlossaryGenerator(llm_client=self._llm_client)
         glossary = generator.generate(extracted_terms, documents)
 
@@ -214,10 +221,10 @@ class PipelineExecutor:
                 term.occurrences,
             )
 
-        log_queue.put({"level": "info", "message": f"Generated {len(glossary.terms)} terms"})
+        log_queue.put({"run_id": run_id, "level": "info", "message": f"Generated {len(glossary.terms)} terms"})
 
         # Continue with steps 4-5
-        self._execute_provisional_to_refined(conn, cancel_event, log_queue, glossary, documents)
+        self._execute_provisional_to_refined(conn, cancel_event, log_queue, glossary, documents, run_id=run_id)
 
     def _execute_provisional_to_refined(
         self,
@@ -226,6 +233,7 @@ class PipelineExecutor:
         log_queue: Queue,
         glossary: Glossary | None = None,
         documents: list[Document] | None = None,
+        run_id: int | None = None,
     ) -> None:
         """Execute from provisional to refined (steps 4-5).
 
@@ -235,16 +243,17 @@ class PipelineExecutor:
             log_queue: Queue for log messages.
             glossary: Pre-generated provisional glossary (None to load from DB).
             documents: Pre-loaded documents (None to load from DB).
+            run_id: Run ID for log filtering (default: None).
         """
         # Load glossary from DB if not provided
         if glossary is None:
             if cancel_event.is_set():
                 return
 
-            log_queue.put({"level": "info", "message": "Loading provisional glossary from database..."})
+            log_queue.put({"run_id": run_id, "level": "info", "message": "Loading provisional glossary from database..."})
             provisional_rows = list_all_provisional(conn)
             if not provisional_rows:
-                log_queue.put({"level": "error", "message": "No provisional terms found in database"})
+                log_queue.put({"run_id": run_id, "level": "error", "message": "No provisional terms found in database"})
                 raise RuntimeError("Cannot execute provisional_to_refined without provisional glossary")
 
             # Reconstruct Glossary from DB rows
@@ -258,17 +267,17 @@ class PipelineExecutor:
                 )
                 glossary.add_term(term)
 
-            log_queue.put({"level": "info", "message": f"Loaded {len(provisional_rows)} provisional terms"})
+            log_queue.put({"run_id": run_id, "level": "info", "message": f"Loaded {len(provisional_rows)} provisional terms"})
 
         # Load documents from DB if not provided
         if documents is None:
             if cancel_event.is_set():
                 return
 
-            log_queue.put({"level": "info", "message": "Loading documents from database..."})
+            log_queue.put({"run_id": run_id, "level": "info", "message": "Loading documents from database..."})
             doc_rows = list_all_documents(conn)
             if not doc_rows:
-                log_queue.put({"level": "error", "message": "No documents found in database"})
+                log_queue.put({"run_id": run_id, "level": "error", "message": "No documents found in database"})
                 raise RuntimeError("Cannot execute pipeline without documents")
 
             # Reconstruct Document objects by re-reading files
@@ -281,19 +290,20 @@ class PipelineExecutor:
                     documents.append(doc)
                 except Exception as e:
                     log_queue.put({
+                        "run_id": run_id,
                         "level": "warning",
                         "message": f"Failed to load document {row['file_path']}: {str(e)}"
                     })
 
             if not documents:
-                log_queue.put({"level": "error", "message": "No documents could be loaded from file system"})
+                log_queue.put({"run_id": run_id, "level": "error", "message": "No documents could be loaded from file system"})
                 raise RuntimeError("Cannot execute pipeline without documents")
 
         # Step 4: Review glossary
         if cancel_event.is_set():
             return
 
-        log_queue.put({"level": "info", "message": "Reviewing glossary..."})
+        log_queue.put({"run_id": run_id, "level": "info", "message": "Reviewing glossary..."})
         reviewer = GlossaryReviewer(llm_client=self._llm_client)
         issues = reviewer.review(glossary)
 
@@ -306,14 +316,14 @@ class PipelineExecutor:
                 issue.description,
             )
 
-        log_queue.put({"level": "info", "message": f"Found {len(issues)} issues"})
+        log_queue.put({"run_id": run_id, "level": "info", "message": f"Found {len(issues)} issues"})
 
         # Step 5: Refine glossary (only if issues exist)
         if issues:
             if cancel_event.is_set():
                 return
 
-            log_queue.put({"level": "info", "message": "Refining glossary..."})
+            log_queue.put({"run_id": run_id, "level": "info", "message": "Refining glossary..."})
             refiner = GlossaryRefiner(llm_client=self._llm_client)
             glossary = refiner.refine(glossary, issues, documents)
 
@@ -327,7 +337,7 @@ class PipelineExecutor:
                     term.occurrences,
                 )
 
-            log_queue.put({"level": "info", "message": f"Refined {len(glossary.terms)} terms"})
+            log_queue.put({"run_id": run_id, "level": "info", "message": f"Refined {len(glossary.terms)} terms"})
 
     def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: str) -> None:
         """Clear relevant tables before execution.

@@ -251,25 +251,25 @@ class TestRunManagerLogStreaming:
         """実行中のログがキャプチャされる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_queue, doc_root="."):
-                log_queue.put({"level": "info", "message": "Starting execution"})
-                log_queue.put({"level": "info", "message": "Completed"})
+            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting execution"})
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Completed"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
 
             run_id = manager.start_run(scope="full")
             time.sleep(0.2)  # Allow execution to complete
 
-            # Retrieve logs from queue (filter out None completion signal)
+            # Retrieve logs from queue (filter out completion signal)
             log_queue = manager.get_log_queue()
             logs = []
             while not log_queue.empty():
                 log = log_queue.get_nowait()
-                if log is not None:
+                if log is not None and not log.get("complete"):
                     logs.append(log)
 
             assert len(logs) >= 2
-            assert any("Starting execution" in log["message"] for log in logs)
+            assert any("Starting execution" in log.get("message", "") for log in logs)
 
     def test_cancel_run_stops_execution(self, manager: RunManager) -> None:
         """キャンセルが実行中スレッドに届いて処理を停止することを確認"""
@@ -277,16 +277,16 @@ class TestRunManagerLogStreaming:
             # Mock executor that checks cancellation event
             cancel_detected = []
 
-            def mock_execute(conn, scope, cancel_event, log_queue, doc_root="."):
-                log_queue.put({"level": "info", "message": "Starting"})
+            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting"})
                 # Simulate some work, checking for cancellation
                 for i in range(10):
                     if cancel_event.is_set():
                         cancel_detected.append(True)
-                        log_queue.put({"level": "info", "message": "Cancelled"})
+                        log_queue.put({"run_id": run_id, "level": "info", "message": "Cancelled"})
                         return
                     time.sleep(0.1)
-                log_queue.put({"level": "info", "message": "Completed"})
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Completed"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
 
@@ -304,23 +304,80 @@ class TestRunManagerLogStreaming:
             assert len(cancel_detected) > 0
             assert cancel_detected[0] is True
 
-            # Check logs contain cancellation message (filter out None)
+            # Check logs contain cancellation message (filter out completion signal)
             log_queue = manager.get_log_queue()
             logs = []
             while not log_queue.empty():
                 log = log_queue.get_nowait()
-                if log is not None:
+                if log is not None and not log.get("complete"):
                     logs.append(log)
 
-            assert any("Cancelled" in log["message"] for log in logs)
+            assert any("Cancelled" in log.get("message", "") for log in logs)
 
-    def test_sse_receives_completion_signal(self, manager: RunManager) -> None:
-        """SSEストリームが完了シグナル (None) を受け取ることを確認"""
+    def test_logs_include_run_id(self, manager: RunManager) -> None:
+        """ログメッセージにrun_idが含まれることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_queue):
-                log_queue.put({"level": "info", "message": "Starting"})
-                log_queue.put({"level": "info", "message": "Completed"})
+            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting"})
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Completed"})
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that logs include run_id
+            log_queue = manager.get_log_queue()
+            logs = []
+            while not log_queue.empty():
+                log = log_queue.get_nowait()
+                if log is not None and not log.get("complete"):
+                    logs.append(log)
+
+            assert len(logs) >= 2
+            for log in logs:
+                assert log.get("run_id") == run_id, f"Log should have run_id={run_id}, got {log.get('run_id')}"
+
+    def test_completion_signal_includes_run_id(self, manager: RunManager) -> None:
+        """完了シグナルにrun_idが含まれることを確認"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+
+            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting"})
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that completion signal has run_id
+            log_queue = manager.get_log_queue()
+            completion_signal_found = False
+            completion_run_id = None
+
+            while not log_queue.empty():
+                log = log_queue.get_nowait()
+                if log is not None and log.get("complete"):
+                    completion_signal_found = True
+                    completion_run_id = log.get("run_id")
+
+            assert completion_signal_found, "Completion signal should be sent to log queue"
+            assert completion_run_id == run_id, f"Completion signal should have run_id={run_id}"
+
+    def test_sse_receives_completion_signal(self, manager: RunManager) -> None:
+        """SSEストリームが完了シグナルを受け取ることを確認"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+
+            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting"})
+                log_queue.put({"run_id": run_id, "level": "info", "message": "Completed"})
                 # Completion signal should be sent by manager, not executor
 
             mock_executor.return_value.execute.side_effect = mock_execute
@@ -331,16 +388,16 @@ class TestRunManagerLogStreaming:
             if manager._thread:
                 manager._thread.join(timeout=2)
 
-            # Check that completion signal (None) was sent to queue
+            # Check that completion signal was sent to queue
             log_queue = manager.get_log_queue()
             logs = []
             completion_signal_found = False
 
             while not log_queue.empty():
                 log = log_queue.get_nowait()
-                if log is None:
+                if log is not None and log.get("complete"):
                     completion_signal_found = True
                 else:
                     logs.append(log)
 
-            assert completion_signal_found, "Completion signal (None) should be sent to log queue"
+            assert completion_signal_found, "Completion signal should be sent to log queue"
