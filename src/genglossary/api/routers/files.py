@@ -103,13 +103,20 @@ async def create_file(
         FileResponse: The created document.
 
     Raises:
-        HTTPException: 400 if file doesn't exist in doc_root.
+        HTTPException: 400 if file doesn't exist in doc_root or path is invalid.
     """
-    # Resolve file path
-    file_full_path = FilePath(project.doc_root) / request.file_path
+    # Resolve and validate file path (prevent path traversal)
+    doc_root = FilePath(project.doc_root).resolve()
+    file_full_path = (doc_root / request.file_path).resolve()
 
-    # Check if file exists
-    if not file_full_path.exists():
+    # Security check: ensure path is within doc_root
+    try:
+        file_full_path.relative_to(doc_root)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    # Check if file exists and is a file
+    if not file_full_path.is_file():
         raise HTTPException(
             status_code=400,
             detail=f"File not found in doc_root: {request.file_path}",
@@ -119,7 +126,12 @@ async def create_file(
     content_hash = _compute_file_hash(file_full_path)
 
     # Create document
-    doc_id = create_document(project_db, request.file_path, content_hash)
+    try:
+        doc_id = create_document(project_db, request.file_path, content_hash)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409, detail=f"File already exists: {request.file_path}"
+        )
 
     # Return created document
     row = get_document(project_db, doc_id)
@@ -140,7 +152,15 @@ async def delete_file(
         project_id: Project ID (path parameter).
         file_id: File ID to delete.
         project_db: Project database connection.
+
+    Raises:
+        HTTPException: 404 if file not found.
     """
+    # Check if file exists
+    row = get_document(project_db, file_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"File {file_id} not found")
+
     delete_document(project_db, file_id)
 
 

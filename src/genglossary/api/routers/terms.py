@@ -80,8 +80,17 @@ async def create_new_term(
 
     Returns:
         TermResponse: The created term.
+
+    Raises:
+        HTTPException: 409 if term already exists.
     """
-    term_id = create_term(project_db, request.term_text, request.category)
+    try:
+        term_id = create_term(project_db, request.term_text, request.category)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409, detail=f"Term already exists: {request.term_text}"
+        )
+
     row = get_term(project_db, term_id)
     assert row is not None
 
@@ -132,5 +141,13 @@ async def delete_existing_term(
         project_id: Project ID (path parameter).
         term_id: Term ID to delete.
         project_db: Project database connection.
+
+    Raises:
+        HTTPException: 404 if term not found.
     """
+    # Check if term exists
+    row = get_term(project_db, term_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
+
     delete_term(project_db, term_id)
