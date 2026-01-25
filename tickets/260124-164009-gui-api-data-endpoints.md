@@ -50,7 +50,7 @@ Reference: `plan-gui.md` - Terms/Provisional/Issues/Refined/Files各画面のデ
 - [x] Update docs/architecture.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (0 errors)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests (571 passed)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 
 ## Notes
