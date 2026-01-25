@@ -162,3 +162,96 @@ def test_run_manager_singleton_per_project(tmp_path: Path):
     assert manager2.doc_root == str(tmp_path / "docs2")
     assert manager2.llm_provider == "ollama"
     assert manager2.llm_model == "llama3"
+
+
+def test_run_manager_recreates_when_settings_change_and_no_active_run(tmp_path: Path):
+    """設定変更時、実行中のRunがなければ新しいRunManagerを作成"""
+    from genglossary.api.dependencies import get_run_manager, _run_manager_registry
+    from genglossary.models.project import Project
+    from genglossary.db.schema import initialize_db
+    from unittest.mock import patch
+
+    # Create test project database
+    project_db = tmp_path / "project.db"
+    conn = get_connection(str(project_db))
+    initialize_db(conn)
+    conn.close()
+
+    # Create project with initial settings
+    project = Project(
+        id=1,
+        name="Test Project",
+        doc_root=str(tmp_path / "docs"),
+        db_path=str(project_db),
+        llm_provider="ollama",
+        llm_model="llama3.2",
+    )
+
+    # Clear registry
+    _run_manager_registry.clear()
+
+    # Get initial manager
+    manager1 = get_run_manager(project)
+    assert manager1.doc_root == str(tmp_path / "docs")
+    assert manager1.llm_provider == "ollama"
+    assert manager1.llm_model == "llama3.2"
+
+    # Mock get_active_run to return None (no active run)
+    with patch.object(manager1, "get_active_run", return_value=None):
+        # Update project settings
+        project.doc_root = str(tmp_path / "new_docs")
+        project.llm_provider = "openai"
+        project.llm_model = "gpt-4"
+
+        # Get manager again - should be recreated with new settings
+        manager2 = get_run_manager(project)
+
+        assert manager2.doc_root == str(tmp_path / "new_docs")
+        assert manager2.llm_provider == "openai"
+        assert manager2.llm_model == "gpt-4"
+
+
+def test_run_manager_keeps_old_instance_when_settings_change_and_run_active(tmp_path: Path):
+    """設定変更時、実行中のRunがあれば既存のRunManagerを返す"""
+    from genglossary.api.dependencies import get_run_manager, _run_manager_registry
+    from genglossary.models.project import Project
+    from genglossary.db.schema import initialize_db
+    from unittest.mock import MagicMock, patch
+
+    # Create test project database
+    project_db = tmp_path / "project.db"
+    conn = get_connection(str(project_db))
+    initialize_db(conn)
+    conn.close()
+
+    # Create project with initial settings
+    project = Project(
+        id=1,
+        name="Test Project",
+        doc_root=str(tmp_path / "docs"),
+        db_path=str(project_db),
+        llm_provider="ollama",
+        llm_model="llama3.2",
+    )
+
+    # Clear registry
+    _run_manager_registry.clear()
+
+    # Get initial manager
+    manager1 = get_run_manager(project)
+    assert manager1.doc_root == str(tmp_path / "docs")
+
+    # Mock get_active_run to return an active run
+    mock_active_run = MagicMock()
+    mock_active_run.__getitem__.side_effect = lambda key: {"id": 1, "status": "running"}[key]
+
+    with patch.object(manager1, "get_active_run", return_value=mock_active_run):
+        # Update project settings
+        project.doc_root = str(tmp_path / "new_docs")
+        project.llm_provider = "openai"
+
+        # Get manager again - should be same instance (no recreation)
+        manager2 = get_run_manager(project)
+
+        assert manager2 is manager1
+        assert manager2.doc_root == str(tmp_path / "docs")  # Old settings preserved

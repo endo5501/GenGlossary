@@ -111,6 +111,10 @@ def get_project_db_path(project: Project = Depends(get_project_by_id)) -> str:
 def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager:
     """Get or create RunManager instance for the project (singleton per project).
 
+    If project settings have changed, recreates the RunManager only if no run
+    is currently active. If a run is active, returns the existing instance to
+    avoid interrupting the running job.
+
     Args:
         project: Project instance from get_project_by_id.
 
@@ -118,11 +122,30 @@ def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager
         RunManager: RunManager instance for the project.
     """
     with _registry_lock:
-        if project.db_path not in _run_manager_registry:
-            _run_manager_registry[project.db_path] = RunManager(
-                db_path=project.db_path,
-                doc_root=project.doc_root,
-                llm_provider=project.llm_provider,
-                llm_model=project.llm_model,
+        existing = _run_manager_registry.get(project.db_path)
+
+        if existing is not None:
+            # Check if settings have changed
+            settings_match = (
+                existing.doc_root == project.doc_root
+                and existing.llm_provider == project.llm_provider
+                and existing.llm_model == project.llm_model
             )
+
+            if settings_match:
+                # Settings unchanged, return existing instance
+                return existing
+
+            # Settings changed - check if there's an active run
+            if existing.get_active_run() is not None:
+                # Active run exists, keep existing instance to avoid interruption
+                return existing
+
+        # Create new RunManager (either first time or settings changed with no active run)
+        _run_manager_registry[project.db_path] = RunManager(
+            db_path=project.db_path,
+            doc_root=project.doc_root,
+            llm_provider=project.llm_provider,
+            llm_model=project.llm_model,
+        )
         return _run_manager_registry[project.db_path]
