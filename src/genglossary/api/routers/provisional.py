@@ -10,6 +10,7 @@ from genglossary.api.schemas.provisional_schemas import (
     ProvisionalResponse,
     ProvisionalUpdateRequest,
 )
+from genglossary.db.models import GlossaryTermRow
 from genglossary.db.provisional_repository import (
     get_provisional_term,
     list_all_provisional,
@@ -21,6 +22,68 @@ from genglossary.llm.factory import create_llm_client
 from genglossary.models.project import Project
 
 router = APIRouter(prefix="/api/projects/{project_id}/provisional", tags=["provisional"])
+
+
+def _ensure_term_exists(conn: sqlite3.Connection, entry_id: int) -> GlossaryTermRow:
+    """Ensure term exists and return it.
+
+    Args:
+        conn: Database connection.
+        entry_id: Term entry ID.
+
+    Returns:
+        GlossaryTermRow: The term row.
+
+    Raises:
+        HTTPException: 404 if term not found.
+    """
+    row = get_provisional_term(conn, entry_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Entry {entry_id} not found")
+    return row
+
+
+def _get_term_response(conn: sqlite3.Connection, entry_id: int) -> ProvisionalResponse:
+    """Get term response after ensuring it exists.
+
+    Args:
+        conn: Database connection.
+        entry_id: Term entry ID.
+
+    Returns:
+        ProvisionalResponse: The term response.
+
+    Raises:
+        RuntimeError: If term not found (should never happen after update).
+    """
+    row = get_provisional_term(conn, entry_id)
+    if row is None:
+        raise RuntimeError(f"Entry {entry_id} disappeared after update")
+    return ProvisionalResponse.from_db_row(row)
+
+
+def _regenerate_definition(row: GlossaryTermRow, project: Project) -> tuple[str, float]:
+    """Regenerate definition for a term using LLM.
+
+    Args:
+        row: Term row from database.
+        project: Project instance.
+
+    Returns:
+        tuple[str, float]: Regenerated (definition, confidence).
+
+    Raises:
+        httpx.TimeoutException: If LLM service times out.
+        httpx.HTTPError: If LLM service is unavailable.
+    """
+    llm_client = create_llm_client(project.llm_provider, project.llm_model)
+    documents = DocumentLoader().load_directory(project.doc_root)
+    generator = GlossaryGenerator(llm_client=llm_client)
+
+    occurrences = generator._find_term_occurrences(row["term_name"], documents)
+    occurrences = occurrences or row["occurrences"]
+
+    return generator._generate_definition(row["term_name"], occurrences)
 
 
 @router.get("", response_model=list[ProvisionalResponse])
@@ -60,10 +123,7 @@ async def get_provisional_by_id(
     Raises:
         HTTPException: 404 if term not found.
     """
-    row = get_provisional_term(project_db, entry_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Entry {entry_id} not found")
-
+    row = _ensure_term_exists(project_db, entry_id)
     return ProvisionalResponse.from_db_row(row)
 
 
@@ -88,19 +148,9 @@ async def update_provisional(
     Raises:
         HTTPException: 404 if term not found.
     """
-    # Check if term exists
-    row = get_provisional_term(project_db, entry_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Entry {entry_id} not found")
-
-    # Update term
+    _ensure_term_exists(project_db, entry_id)
     update_provisional_term(project_db, entry_id, request.definition, request.confidence)
-
-    # Return updated term
-    updated_row = get_provisional_term(project_db, entry_id)
-    assert updated_row is not None
-
-    return ProvisionalResponse.from_db_row(updated_row)
+    return _get_term_response(project_db, entry_id)
 
 
 @router.post("/{entry_id}/regenerate", response_model=ProvisionalResponse)
@@ -125,39 +175,12 @@ async def regenerate_provisional(
         HTTPException: 404 if term not found.
         HTTPException: 503 if LLM service is unavailable or times out.
     """
-    # Check if term exists
-    row = get_provisional_term(project_db, entry_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Entry {entry_id} not found")
+    row = _ensure_term_exists(project_db, entry_id)
 
     try:
-        # Create LLM client
-        llm_client = create_llm_client(project.llm_provider, project.llm_model or None)
-
-        # Load documents
-        loader = DocumentLoader()
-        documents = loader.load_directory(project.doc_root)
-
-        # Regenerate definition using GlossaryGenerator
-        generator = GlossaryGenerator(llm_client=llm_client)
-        occurrences = generator._find_term_occurrences(row["term_name"], documents)
-        if not occurrences:
-            # Use existing occurrences if no new ones found
-            occurrences = row["occurrences"]
-
-        definition, confidence = generator._generate_definition(
-            row["term_name"], occurrences
-        )
-
-        # Update database
+        definition, confidence = _regenerate_definition(row, project)
         update_provisional_term(project_db, entry_id, definition, confidence)
-
-        # Return updated term
-        updated_row = get_provisional_term(project_db, entry_id)
-        assert updated_row is not None
-
-        return ProvisionalResponse.from_db_row(updated_row)
-
+        return _get_term_response(project_db, entry_id)
     except httpx.TimeoutException:
         raise HTTPException(status_code=503, detail="LLM service timeout")
     except httpx.HTTPError as e:
