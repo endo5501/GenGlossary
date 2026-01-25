@@ -4,7 +4,7 @@ tags: [api, backend, gui]
 description: "Introduce FastAPI backend service to expose GenGlossary functionality for the new GUI."
 created_at: "2026-01-24T16:40:05Z"
 started_at: 2026-01-25T10:15:29Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-25T10:52:16Z # Do not modify manually
 ---
 
 # Ticket Overview
