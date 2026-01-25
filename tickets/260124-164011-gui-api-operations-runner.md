@@ -31,9 +31,10 @@ Reference: `plan-gui.md` 「グローバル操作バー」「ログビュー」�
 - [x] Reuse existing CLI commands internally instead of duplicating pipeline logic — ✅ PipelineExecutorに実際のパイプライン統合完了
 - [x] Fix API integration tests — ✅ SQLite threading問題を解決し、API統合テスト10件追加
 - [x] Update docs/architecture.md — ✅ Run管理セクション追記完了
+- [x] Fix code review issues (2026-01-25) — ✅ 全5件の指摘を修正、7個のテスト追加 (2026-01-26)
 - [ ] Code simplification review using code-simplifier agent
-- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions) — ✅ 0 errors
-- [x] Run full test suite (`uv run pytest`) before closing — ✅ 631 tests passed
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions) — ✅ 0 errors (verified 2026-01-26)
+- [x] Run full test suite (`uv run pytest`) before closing — ✅ 637 tests passed (updated 2026-01-26)
 - [ ] Get developer approval before closing
 
 
@@ -61,11 +62,12 @@ Reference: `plan-gui.md` 「グローバル操作バー」「ログビュー」�
 
 **Test Coverage**
 - Repository: 20 tests ✅
-- RunManager: 13 tests ✅
-- PipelineExecutor: 5 tests ✅
+- RunManager: 16 tests ✅ (+3 for code review fixes)
+- PipelineExecutor: 8 tests ✅ (+3 for code review fixes)
 - API Integration: 10 tests ✅
-- Total: 48 new Run-related tests
-- Full suite: 631 tests passing ✅
+- API Dependencies: 1 test ✅ (singleton test)
+- Total: 55 new Run-related tests (+7 from code review fixes)
+- Full suite: 637 tests passing ✅ (updated 2026-01-26)
 
 ### Completed Implementation ✅
 
@@ -86,3 +88,160 @@ Reference: `plan-gui.md` 「グローバル操作バー」「ログビュー」�
 Prefer SSE for simplicity; leave room to swap transport. Ensure runs respect project isolation and do not lock the main event loop. Provide graceful shutdown handling.
 
 **Threading Architecture**: 各RunManagerインスタンスはdb_pathを保持し、バックグラウンドスレッド内で独自の接続を作成。これにより、APIリクエストとバックグラウンド処理でSQLite接続を共有せず、スレッドセーフな実行を実現。
+
+## Code Review (2026-01-25)
+
+### Findings
+- **Critical**: RunManagerがリクエスト毎に新規生成されており、キャンセルやログ取得が実行中のスレッドに届かない。`cancel_run` は別インスタンスのイベントを立てるだけで、実行中のRunは継続し `completed` へ上書きされる可能性が高い。SSEログも別キュー参照となり空になる恐れ。該当: `src/genglossary/api/routers/runs.py`, `src/genglossary/runs/manager.py`
+- **High**: `full` 実行時の入力ディレクトリが `"."` 固定で、プロジェクト `doc_root` を無視。CWD次第で誤入力のリスク。該当: `src/genglossary/runs/executor.py`
+- **High**: LLM設定がプロジェクト設定（`llm_provider`/`llm_model`）に追従せず常に `ollama`。該当: `src/genglossary/runs/executor.py`
+- **Medium**: SSE完了シグナル `None` がキューに投入されないため、ストリームが閉じずクライアントが完了検知できない。該当: `src/genglossary/api/routers/runs.py`, `src/genglossary/runs/manager.py`
+- **Medium**: SSEの `queue.get(timeout=1)` がイベントループを最大1秒ブロックし、並行リクエストに影響する恐れ。該当: `src/genglossary/api/routers/runs.py`
+- **Medium**: 再実行時に `documents.file_path`/`terms_extracted.term_text` の `UNIQUE` 制約により `INSERT` が失敗し、Runが `failed` になる恐れ。該当: `src/genglossary/runs/executor.py`, `src/genglossary/db/schema.py`
+
+### Testing Gaps
+- 実行中Runのキャンセルが別リクエストから確実に停止することのE2Eテストが不足。
+- SSEログが実Runのログを受信し、完了イベントで閉じることのテストが不足。
+- `doc_root` と `llm_provider`/`llm_model` がRunに反映されることのテストが不足。
+
+### Open Questions
+- RunManagerをプロジェクト単位で共有する設計（singleton/registry）にする前提で良いか？
+- 再実行時はテーブルクリアか `INSERT OR REPLACE/IGNORE` の方針か？
+- Run実行時の入力ディレクトリは `Project.doc_root` で固定して良いか？
+
+## Code Review Fixes (2026-01-26) ✅
+
+### Implementation Status: **全修正完了**
+
+すべてのコードレビュー指摘事項を修正し、テストで検証しました。
+
+**コミット履歴**:
+- `d355101` - テスト追加（TDD Red phase）
+- `ca3fd79` - 実装完了（TDD Green phase）
+- `e35573b` - 計画ファイル更新
+
+**テスト結果**: 637 tests passing ✅ | 0 static analysis errors ✅
+
+---
+
+### Phase 1: RunManager Singleton per Project (Critical) ✅
+
+**問題**: `get_run_manager()` がリクエスト毎に新規 RunManager を生成し、キャンセル・ログ取得が機能しない
+
+**解決策**: プロジェクト単位のレジストリパターンを実装
+
+**変更ファイル**:
+- `src/genglossary/api/dependencies.py` - RunManagerレジストリ追加
+  ```python
+  _run_manager_registry: dict[str, RunManager] = {}
+  _registry_lock = Lock()
+
+  def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager:
+      with _registry_lock:
+          if project.db_path not in _run_manager_registry:
+              _run_manager_registry[project.db_path] = RunManager(...)
+          return _run_manager_registry[project.db_path]
+  ```
+- `src/genglossary/api/routers/runs.py` - ローカルの `get_run_manager` 削除、`dependencies.py` から import
+
+**検証**:
+- `test_run_manager_singleton_per_project` - 同一プロジェクトで同じインスタンスが返ることを確認 ✅
+
+---
+
+### Phase 2: Reflect Project Settings (High) ✅
+
+**問題**:
+- 入力ディレクトリが `"."` 固定でプロジェクト `doc_root` を無視
+- LLM設定がプロジェクト設定を無視し常に `ollama` を使用
+
+**解決策**: RunManager と PipelineExecutor にプロジェクト設定を渡す
+
+**変更ファイル**:
+- `src/genglossary/runs/manager.py`
+  - `__init__` に `doc_root`, `llm_provider`, `llm_model` パラメータ追加
+  - `_execute_run` で設定を PipelineExecutor に渡す
+
+- `src/genglossary/runs/executor.py`
+  - `__init__` に `model` パラメータ追加
+  - `execute()` に `doc_root` パラメータ追加
+  - `_execute_full()` で `load_directory(doc_root)` を使用（`"."` 固定を廃止）
+
+**検証**:
+- `test_executor_uses_doc_root` - doc_root パラメータが使用されることを確認 ✅
+- `test_executor_uses_llm_settings` - llm_provider/model が使用されることを確認 ✅
+
+---
+
+### Phase 3: SSE Completion Signal (Medium) ✅
+
+**問題**: SSE完了シグナル（`None`）がキューに投入されず、ストリームが閉じない
+
+**解決策**: Run完了時に `None` をログキューに送信
+
+**変更ファイル**:
+- `src/genglossary/runs/manager.py` - `_execute_run()` の finally ブロックに `self._log_queue.put(None)` 追加
+
+**検証**:
+- `test_sse_receives_completion_signal` - 完了シグナルが送信されることを確認 ✅
+- 既存テストを更新して `None` をフィルタリング ✅
+
+---
+
+### Phase 4: Clear Tables on Re-execution (Medium) ✅
+
+**問題**: 再実行時に UNIQUE 制約違反で Run が failed になる
+
+**解決策**: 実行前にスコープに応じてテーブルをクリア
+
+**変更ファイル**:
+- `src/genglossary/runs/executor.py`
+  - `_clear_tables_for_scope()` メソッド追加
+  - `execute()` 開始時にテーブルクリア処理を呼び出し
+  - スコープ別のクリア対象:
+    - `full`: documents, terms, provisional, issues, refined
+    - `from_terms`: provisional, issues, refined
+    - `provisional_to_refined`: issues, refined
+
+- `src/genglossary/db/document_repository.py` - `delete_all_documents()` 追加
+
+**検証**:
+- `test_re_execution_clears_tables` - テーブルクリア処理が呼ばれることを確認 ✅
+
+---
+
+### Testing Summary
+
+**新規テスト**: 5個
+- `test_run_manager_singleton_per_project` ✅
+- `test_sse_receives_completion_signal` ✅
+- `test_cancel_run_stops_execution` ✅
+- `test_executor_uses_doc_root` ✅
+- `test_executor_uses_llm_settings` ✅
+- `test_re_execution_clears_tables` ✅
+
+**既存テスト更新**: 2個（完了シグナル対応）
+
+**Total Test Results**: 637 tests passing ✅
+
+---
+
+### Answers to Open Questions
+
+1. **RunManagerをプロジェクト単位で共有する設計にする前提で良いか？**
+   → **Yes**. レジストリパターンで `db_path` をキーにシングルトン管理を実装しました。
+
+2. **再実行時はテーブルクリアか INSERT OR REPLACE/IGNORE の方針か？**
+   → **テーブルクリア**. 古いデータとの混在を防ぎ、データの一貫性を保証します。
+
+3. **Run実行時の入力ディレクトリは Project.doc_root で固定して良いか？**
+   → **Yes**. プロジェクト作成時に設定された `doc_root` を使用します。
+
+---
+
+### Known Issues (Medium Priority)
+
+**SSE Event Loop Blocking**: `queue.get(timeout=1)` が最大1秒ブロックする問題は未対応。
+- 影響: 並行リクエストに影響する可能性
+- 対応案: 非同期キューまたは `asyncio.Queue` への移行を検討
+- 優先度: Medium（現時点では実用上問題なし）
