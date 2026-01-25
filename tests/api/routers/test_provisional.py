@@ -168,8 +168,9 @@ def test_update_provisional_returns_404_for_missing_term(
     assert response.status_code == 404
 
 
+@patch("genglossary.api.routers.provisional.GlossaryGenerator")
 def test_regenerate_provisional_updates_definition(
-    test_project_setup, client: TestClient
+    mock_generator_class, test_project_setup, client: TestClient
 ):
     """Test POST /api/projects/{id}/provisional/{entry_id}/regenerate regenerates definition."""
     project_id = test_project_setup["project_id"]
@@ -180,6 +181,12 @@ def test_regenerate_provisional_updates_definition(
     term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
     conn.close()
 
+    # Mock GlossaryGenerator
+    mock_generator = MagicMock()
+    mock_generator._generate_definition.return_value = ("再生成された定義", 0.85)
+    mock_generator._find_term_occurrences.return_value = [occ]
+    mock_generator_class.return_value = mock_generator
+
     response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
 
     assert response.status_code == 200
@@ -187,7 +194,9 @@ def test_regenerate_provisional_updates_definition(
     assert data["id"] == term_id
     assert data["term_name"] == "用語"
     # Definition should be regenerated (different from "旧定義")
+    assert data["definition"] != "旧定義"
     # Confidence should be updated
+    assert data["confidence"] == 0.85
 
 
 def test_regenerate_provisional_returns_404_for_missing_term(
