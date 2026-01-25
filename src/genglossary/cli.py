@@ -703,6 +703,11 @@ from genglossary.cli_db import db
 
 main.add_command(db)
 
+# Register api subcommand group
+from genglossary.cli_api import api
+
+main.add_command(api)
+
 
 if __name__ == "__main__":
     main()
