@@ -7,6 +7,17 @@
 * "画面構成"に記載しているように、抽出するファイル群とデータベース、LLMの設定を「プロジェクト」として管理し、CUIコマンド操作とその結果を各画面で表示できるようにする。
 * フロントエンドとしてはローカルWeb UI(FastAPI + React/Vue)を採用
 
+## 計画
+
+* [ ] tickets/260124-164005-gui-backend-scaffold.md
+* [ ] tickets/260124-164008-gui-project-model-storage.md
+* [ ] tickets/260124-164009-gui-api-data-endpoints.md
+* [ ] tickets/260124-164011-gui-api-operations-runner.md
+* [ ] tickets/260124-164013-gui-frontend-scaffold.md
+* [ ] tickets/260124-164016-gui-frontend-projects-files.md
+* [ ] tickets/260124-164017-gui-frontend-settings.md
+* [ ] tickets/260124-164019-gui-frontend-terms-review.md
+
 ## 画面構成
 
 ### プロジェクト一覧（ホーム）
