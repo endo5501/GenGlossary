@@ -8,7 +8,14 @@ from genglossary.api.middleware import (
     RequestIDMiddleware,
     StructuredLoggingMiddleware,
 )
-from genglossary.api.routers import health_router, terms_router
+from genglossary.api.routers import (
+    files_router,
+    health_router,
+    issues_router,
+    provisional_router,
+    refined_router,
+    terms_router,
+)
 
 
 def create_app() -> FastAPI:
@@ -50,5 +57,9 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(health_router)
     app.include_router(terms_router)
+    app.include_router(provisional_router)
+    app.include_router(issues_router)
+    app.include_router(refined_router)
+    app.include_router(files_router)
 
     return app
