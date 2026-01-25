@@ -420,18 +420,25 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
         self,
         response: BatchTermClassificationResponse,
         classified: dict[str, list[str]],
+        seen_terms: set[str],
     ) -> None:
         """Process and aggregate classifications from a batch response.
+
+        Deduplicates terms using "first wins" strategy - if a term appears
+        in multiple categories, only the first occurrence is kept.
 
         Args:
             response: Batch classification response from LLM.
             classified: Dictionary to accumulate classifications.
+            seen_terms: Set of terms already processed (for deduplication).
         """
         for item in response.classifications:
             term = item.get("term", "")
             category = item.get("category", "")
-            if category in classified and term:
-                classified[category].append(term)
+            stripped_term = term.strip()
+            if category in classified and stripped_term and stripped_term not in seen_terms:
+                classified[category].append(stripped_term)
+                seen_terms.add(stripped_term)
 
     def _classify_terms(
         self,
@@ -463,6 +470,8 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
         """
         # Initialize empty lists for each category
         classified: dict[str, list[str]] = {cat.value: [] for cat in TermCategory}
+        # Track seen terms for deduplication across batches
+        seen_terms: set[str] = set()
 
         # Calculate total batches
         total_batches = (len(candidates) + batch_size - 1) // batch_size if candidates else 0
@@ -477,8 +486,8 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
                 prompt, BatchTermClassificationResponse
             )
 
-            # Aggregate classifications from batch response
-            self._process_batch_response(response, classified)
+            # Aggregate classifications from batch response with deduplication
+            self._process_batch_response(response, classified, seen_terms)
 
             # Call progress callback if provided
             if progress_callback is not None:
@@ -621,6 +630,8 @@ JSON形式で回答してください:
         self, classification: TermClassificationResponse
     ) -> list[ClassifiedTerm]:
         """Convert classification results to list of ClassifiedTerm objects.
+
+        Terms are already deduplicated by _process_batch_response using "first wins" strategy.
 
         Args:
             classification: Classification results from classification phase.
