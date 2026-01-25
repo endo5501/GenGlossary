@@ -62,13 +62,15 @@ Dependencies: Tickets #1 (backend scaffold), #2 (project model) must be complete
 
 ## Code Review (2026-01-25)
 
-### Findings
-- [重大] `src/genglossary/api/routers/files.py:108-119` `file_path` の正規化/検証がなく、`../` や絶対パスで `doc_root` 外のファイルを参照可能。任意ファイルのハッシュ計算に繋がるため、`resolve()` して `doc_root` 配下のみ許可し、`is_file()` 以外は 400 にする。
-- [高] `src/genglossary/api/routers/files.py:121-122` / `src/genglossary/api/routers/terms.py:84-115` で UNIQUE 制約違反時の `sqlite3.IntegrityError` が未処理のため 500 になる。409/400 に変換して返す。
-- [中] `src/genglossary/api/routers/provisional.py:101-128` regenerate が TODO のままで既存値を返しており、チケットの「単一再生成」に未達。
-- [低] `tests/api/routers/test_terms.py:168-170` / `tests/api/routers/test_files.py:231-233` など missing project テストが `GENGLOSSARY_REGISTRY_PATH` 未設定で実行されるため、`~/.genglossary/registry.db` に触れ得る。autouse fixture 等でテスト用パス固定が安全。
-- [低] `tests/api/routers/test_provisional.py:172-182` regenerate テストが「再生成されたこと」を検証しておらず、現状のダミー実装でも通る。定義/信頼度が変化することをアサートすべき。
+### Findings (対応済み)
+- [✓ FIXED] [重大] `src/genglossary/api/routers/files.py:108-119` パストラバーサル脆弱性 → `resolve()` と `relative_to()` で検証実装 (commit: 5ebec69)
+- [✓ FIXED] [高] UNIQUE制約違反の未処理 → `sqlite3.IntegrityError` をキャッチして409を返すように実装 (commit: 5ebec69)
+- [✓ FIXED] [低] テストレジストリパス固定 → autouse fixture を追加 (commit: 4191166)
 
-### Questions
-- DELETE は「対象が存在しなくても 204」でよい方針ですか？UI 側で明確なエラーが必要なら 404 返却も検討。
-- PATCH は部分更新を許容しない前提ですか？UI が片方だけ送る場合は 422 になります。
+### Findings (別チケット対応)
+- [→ 別チケット] [中] `src/genglossary/api/routers/provisional.py:101-128` regenerate TODO → チケット #260125-125901-api-provisional-regenerate に切り出し
+- [→ 別チケット] [低] `tests/api/routers/test_provisional.py:172-182` regenerate テスト不足 → 同上
+
+### Questions (回答済み)
+- DELETE は「対象が存在しなくても 204」でよい方針ですか？ → **404を返すように実装** (commit: 5ebec69)
+- PATCH は部分更新を許容しない前提ですか？ → **現状維持（全フィールド必須）**
