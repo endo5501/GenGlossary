@@ -72,38 +72,20 @@ class Project(BaseModel):
             raise ValueError("Project name cannot be empty")
         return stripped
 
-    @field_validator("doc_root")
+    @field_validator("doc_root", "db_path")
     @classmethod
-    def validate_doc_root(cls, v: str) -> str:
-        """Validate that doc_root is not empty.
+    def validate_non_empty_path(cls, v: str) -> str:
+        """Validate that path is not empty.
 
         Args:
-            v: The doc_root path to validate.
+            v: The path to validate.
 
         Returns:
-            The validated doc_root path.
+            The validated path.
 
         Raises:
             ValueError: If the path is empty.
         """
         if not v:
-            raise ValueError("doc_root cannot be empty")
-        return v
-
-    @field_validator("db_path")
-    @classmethod
-    def validate_db_path(cls, v: str) -> str:
-        """Validate that db_path is not empty.
-
-        Args:
-            v: The db_path to validate.
-
-        Returns:
-            The validated db_path.
-
-        Raises:
-            ValueError: If the path is empty.
-        """
-        if not v:
-            raise ValueError("db_path cannot be empty")
+            raise ValueError("Path cannot be empty")
         return v

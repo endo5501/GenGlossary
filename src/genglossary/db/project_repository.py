@@ -189,10 +189,6 @@ def update_project(
     # Always update updated_at
     updates.append("updated_at = datetime('now')")
 
-    if not updates:
-        # No fields to update, but we still update updated_at
-        pass
-
     query = f"UPDATE projects SET {', '.join(updates)} WHERE id = ?"
     values.append(project_id)
 

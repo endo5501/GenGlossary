@@ -25,12 +25,35 @@ Reference: `plan-gui.md` 「プロジェクト一覧」「プロジェクト詳�
 - [x] Ensure backward compatibility for existing single-target workflow (sensible defaults when no project specified)
 - [x] **Green**: 追加テストが通るまで実装調整し、pytestフル実行（31/41テストがパス、残り10はテストコードの問題）
 - [x] Update docs/architecture.md
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 
 ## Notes
 
 Projects should isolate their DB/storage to avoid cross-contamination of runs. Decide on default location (e.g., `./projects/<name>/project.db`) and normalize relative paths.
+
+### Code Simplification Review Results (2026-01-25)
+
+**改善実施内容:**
+
+1. **project.py** - バリデータ重複排除
+   - `validate_doc_root`と`validate_db_path`を`validate_non_empty_path`に統合
+
+2. **project_repository.py** - デッドコード削除
+   - 192-194行目の到達不可能なコードを削除
+
+3. **cli_project.py** - 大幅なリファクタリング
+   - パス解決ロジック重複を排除（`_get_projects_dir`, `_get_project_db_path`ヘルパー関数）
+   - コンテキストマネージャ`_registry_connection`導入（リソース管理改善）
+   - `# type: ignore`をアサーションで置き換え（型安全性向上）
+
+4. **test_project_repository.py** - テスト修正
+   - 9件の`tmp_path`パラメータ欠落を修正
+   - タイムスタンプテストの問題を修正
+
+**検証結果:**
+- ✅ pyright: 0 errors, 0 warnings
+- ✅ pytest: 523 passed, 0 failed
