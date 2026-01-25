@@ -10,7 +10,7 @@ from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
-from genglossary.models.term import Term, TermOccurrence
+from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
 
 
 class MockDefinitionResponse(BaseModel):
@@ -385,3 +385,121 @@ API is an interface.
 
         # Should include few-shot examples section
         assert "Few-shot Examples" in prompt or "few-shot examples" in prompt or "定義の例" in prompt
+
+
+class TestGlossaryGeneratorClassifiedTerm:
+    """Test suite for GlossaryGenerator with ClassifiedTerm support."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = """量子コンピュータは計算機です。
+量子ビットは量子コンピュータの基本単位です。
+普通の計算機とは異なります。"""
+        return Document(file_path="/test/doc.txt", content=content)
+
+    def test_generate_accepts_list_of_str(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate() accepts list[str] (existing behavior)."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="量子力学を利用した計算機", confidence=0.9
+        )
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        glossary = generator.generate(["量子コンピュータ"], [sample_document])
+
+        # Should generate glossary with one term
+        assert len(glossary.terms) == 1
+        assert glossary.terms[0].name == "量子コンピュータ"
+
+    def test_generate_accepts_list_of_classified_term(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate() accepts list[ClassifiedTerm]."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="量子力学を利用した計算機", confidence=0.9
+        )
+
+        classified_terms = [
+            ClassifiedTerm(term="量子コンピュータ", category=TermCategory.TECHNICAL_TERM),
+            ClassifiedTerm(term="量子ビット", category=TermCategory.TECHNICAL_TERM),
+        ]
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        glossary = generator.generate(classified_terms, [sample_document])
+
+        # Should generate glossary with two terms
+        assert len(glossary.terms) == 2
+        assert glossary.terms[0].name == "量子コンピュータ"
+        assert glossary.terms[1].name == "量子ビット"
+
+    def test_generate_skip_common_nouns_true_by_default(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate() skips common_noun by default."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="量子力学を利用した計算機", confidence=0.9
+        )
+
+        classified_terms = [
+            ClassifiedTerm(term="量子コンピュータ", category=TermCategory.TECHNICAL_TERM),
+            ClassifiedTerm(term="計算機", category=TermCategory.COMMON_NOUN),
+        ]
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        glossary = generator.generate(classified_terms, [sample_document])
+
+        # Should skip common_noun by default
+        assert len(glossary.terms) == 1
+        assert glossary.terms[0].name == "量子コンピュータ"
+
+    def test_generate_skip_common_nouns_false_includes_all(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate() includes common_noun when skip_common_nouns=False."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="テスト定義", confidence=0.9
+        )
+
+        classified_terms = [
+            ClassifiedTerm(term="量子コンピュータ", category=TermCategory.TECHNICAL_TERM),
+            ClassifiedTerm(term="計算機", category=TermCategory.COMMON_NOUN),
+        ]
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        glossary = generator.generate(
+            classified_terms, [sample_document], skip_common_nouns=False
+        )
+
+        # Should include all terms when skip_common_nouns=False
+        assert len(glossary.terms) == 2
+        assert glossary.terms[0].name == "量子コンピュータ"
+        assert glossary.terms[1].name == "計算機"
+
+    def test_generate_skip_common_nouns_explicit_true(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate() skips common_noun when skip_common_nouns=True."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="量子力学を利用した計算機", confidence=0.9
+        )
+
+        classified_terms = [
+            ClassifiedTerm(term="量子コンピュータ", category=TermCategory.TECHNICAL_TERM),
+            ClassifiedTerm(term="計算機", category=TermCategory.COMMON_NOUN),
+        ]
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        glossary = generator.generate(
+            classified_terms, [sample_document], skip_common_nouns=True
+        )
+
+        # Should skip common_noun
+        assert len(glossary.terms) == 1
+        assert glossary.terms[0].name == "量子コンピュータ"
