@@ -12,6 +12,7 @@ from genglossary.db.term_repository import create_term, list_all_terms
 from genglossary.db.provisional_repository import list_all_provisional
 from genglossary.db.issue_repository import list_all_issues
 from genglossary.db.refined_repository import list_all_refined
+from genglossary.models.term import ClassifiedTerm, TermCategory
 
 
 class TestTermsRegenerate:
@@ -42,7 +43,10 @@ class TestTermsRegenerate:
         mock_create_client.return_value = mock_llm
 
         mock_extractor = MagicMock()
-        mock_extractor.extract_terms.return_value = ["量子コンピュータ", "量子力学"]
+        mock_extractor.extract_terms.return_value = [
+            ClassifiedTerm(term="量子コンピュータ", category=TermCategory.TECHNICAL_TERM),
+            ClassifiedTerm(term="量子力学", category=TermCategory.TECHNICAL_TERM),
+        ]
         mock_extractor_class.return_value = mock_extractor
 
         # Run regenerate
@@ -96,7 +100,9 @@ class TestTermsRegenerate:
         mock_create_client.return_value = mock_llm
 
         mock_extractor = MagicMock()
-        mock_extractor.extract_terms.return_value = ["新しい用語"]
+        mock_extractor.extract_terms.return_value = [
+            ClassifiedTerm(term="新しい用語", category=TermCategory.TECHNICAL_TERM),
+        ]
         mock_extractor_class.return_value = mock_extractor
 
         # Run regenerate
@@ -155,11 +161,11 @@ class TestProvisionalRegenerate:
         runner = CliRunner()
         db_path = tmp_path / "test.db"
 
-        # Initialize database with terms
+        # Initialize database with terms (with categories)
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        create_term(conn, "量子コンピュータ")
-        create_term(conn, "量子力学")
+        create_term(conn, "量子コンピュータ", category="technical_term")
+        create_term(conn, "量子力学", category="technical_term")
 
         # Note: Need to add documents for GlossaryGenerator
         from genglossary.db.document_repository import create_document
@@ -200,6 +206,14 @@ class TestProvisionalRegenerate:
             db,
             ["provisional", "regenerate", "--db-path", str(db_path)],
         )
+
+        if result.exit_code != 0:
+            print(f"Exit code: {result.exit_code}")
+            print(f"Output: {result.output}")
+            if result.exception:
+                import traceback
+                print(f"Exception: {result.exception}")
+                traceback.print_exception(type(result.exception), result.exception, result.exception.__traceback__)
 
         assert result.exit_code == 0
         assert "1件の暫定用語を保存しました" in result.output

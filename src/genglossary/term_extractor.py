@@ -1,10 +1,12 @@
 """Term extractor - SudachiPy morphological analysis + LLM judgment."""
 
+from typing import overload
+
 from pydantic import BaseModel
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
-from genglossary.models.term import TermCategory
+from genglossary.models.term import ClassifiedTerm, TermCategory
 from genglossary.morphological_analyzer import MorphologicalAnalyzer
 from genglossary.types import ProgressCallback
 
@@ -127,12 +129,34 @@ class TermExtractor:
         """
         return "\n\n---\n\n".join(doc.content for doc in documents)
 
+    @overload
     def extract_terms(
         self,
         documents: list[Document],
         progress_callback: ProgressCallback | None = None,
         batch_size: int = 10,
-    ) -> list[str]:
+        *,
+        return_categories: bool = False,
+    ) -> list[str]: ...
+
+    @overload
+    def extract_terms(
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
+        *,
+        return_categories: bool = True,
+    ) -> list[ClassifiedTerm]: ...
+
+    def extract_terms(
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
+        *,
+        return_categories: bool = False,
+    ) -> list[str] | list[ClassifiedTerm]:
         """Extract terms from the given documents.
 
         Uses a two-phase LLM process:
@@ -144,9 +168,12 @@ class TermExtractor:
             progress_callback: Optional callback called after each batch is classified.
                 Receives (current_batch, total_batches) where current is 1-indexed.
             batch_size: Number of terms to classify per LLM call (default: 10).
+            return_categories: If True, return list[ClassifiedTerm] with category info.
+                If False (default), return list[str] excluding common_noun.
 
         Returns:
-            A list of unique approved terms.
+            If return_categories=False: A list of unique approved term strings (excludes common_noun).
+            If return_categories=True: A list of ClassifiedTerm objects (includes all categories).
         """
         non_empty_docs = self._filter_empty_documents(documents)
         if not non_empty_docs:
@@ -165,8 +192,13 @@ class TermExtractor:
             progress_callback=progress_callback,
         )
 
-        # Step 3: Select terms, excluding common nouns (Phase 2 of LLM processing)
-        return self._select_terms(classification, non_empty_docs)
+        # Step 3: Return based on return_categories flag
+        if return_categories:
+            # Return all categories as ClassifiedTerm objects
+            return self._get_classified_terms(classification)
+        else:
+            # Return only non-common-noun terms as strings (existing behavior)
+            return self._select_terms(classification, non_empty_docs)
 
     def analyze_extraction(
         self,
@@ -388,18 +420,25 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
         self,
         response: BatchTermClassificationResponse,
         classified: dict[str, list[str]],
+        seen_terms: set[str],
     ) -> None:
         """Process and aggregate classifications from a batch response.
+
+        Deduplicates terms using "first wins" strategy - if a term appears
+        in multiple categories, only the first occurrence is kept.
 
         Args:
             response: Batch classification response from LLM.
             classified: Dictionary to accumulate classifications.
+            seen_terms: Set of terms already processed (for deduplication).
         """
         for item in response.classifications:
             term = item.get("term", "")
             category = item.get("category", "")
-            if category in classified and term:
-                classified[category].append(term)
+            stripped_term = term.strip()
+            if category in classified and stripped_term and stripped_term not in seen_terms:
+                classified[category].append(stripped_term)
+                seen_terms.add(stripped_term)
 
     def _classify_terms(
         self,
@@ -431,6 +470,8 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
         """
         # Initialize empty lists for each category
         classified: dict[str, list[str]] = {cat.value: [] for cat in TermCategory}
+        # Track seen terms for deduplication across batches
+        seen_terms: set[str] = set()
 
         # Calculate total batches
         total_batches = (len(candidates) + batch_size - 1) // batch_size if candidates else 0
@@ -445,8 +486,8 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
                 prompt, BatchTermClassificationResponse
             )
 
-            # Aggregate classifications from batch response
-            self._process_batch_response(response, classified)
+            # Aggregate classifications from batch response with deduplication
+            self._process_batch_response(response, classified, seen_terms)
 
             # Call progress callback if provided
             if progress_callback is not None:
@@ -584,6 +625,26 @@ JSON形式で回答してください:
 すべての用語を分類してください。"""
 
         return prompt
+
+    def _get_classified_terms(
+        self, classification: TermClassificationResponse
+    ) -> list[ClassifiedTerm]:
+        """Convert classification results to list of ClassifiedTerm objects.
+
+        Terms are already deduplicated by _process_batch_response using "first wins" strategy.
+
+        Args:
+            classification: Classification results from classification phase.
+
+        Returns:
+            List of ClassifiedTerm objects (includes all categories).
+        """
+        return [
+            ClassifiedTerm(term=term.strip(), category=TermCategory(category_str))
+            for category_str, terms in classification.classified_terms.items()
+            for term in terms
+            if term.strip()  # Skip empty terms
+        ]
 
     def _select_terms(
         self,

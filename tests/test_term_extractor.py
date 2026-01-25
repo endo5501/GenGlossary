@@ -6,7 +6,7 @@ import pytest
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
-from genglossary.models.term import TermCategory
+from genglossary.models.term import ClassifiedTerm, TermCategory
 from genglossary.term_extractor import (
     TermClassificationResponse,
     TermExtractor,
@@ -1419,3 +1419,158 @@ class TestTermExtractorTwoPhase:
 
         # Should include few-shot examples section
         assert "Few-shot Examples" in prompt or "few-shot examples" in prompt or "分類の例" in prompt
+
+
+class TestTermExtractorReturnCategories:
+    """Test suite for TermExtractor with return_categories parameter."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        client = MagicMock(spec=BaseLLMClient)
+        return client
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = """量子コンピュータは計算機です。
+量子ビットは量子コンピュータの基本単位です。"""
+        return Document(file_path="/test/doc.txt", content=content)
+
+    def test_extract_terms_return_categories_false_returns_list_of_str(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extract_terms with return_categories=False returns list[str]."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "量子コンピュータ", "category": "technical_term"},
+                {"term": "量子ビット", "category": "technical_term"},
+                {"term": "計算機", "category": "common_noun"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "量子コンピュータ",
+                "量子ビット",
+                "計算機",
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document], return_categories=False)
+
+            # Should return list[str] excluding common_noun
+            assert isinstance(result, list)
+            assert all(isinstance(term, str) for term in result)
+            assert "量子コンピュータ" in result
+            assert "量子ビット" in result
+            assert "計算機" not in result
+
+    def test_extract_terms_return_categories_true_returns_list_of_classified_term(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extract_terms with return_categories=True returns list[ClassifiedTerm]."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "量子コンピュータ", "category": "technical_term"},
+                {"term": "量子ビット", "category": "technical_term"},
+                {"term": "計算機", "category": "common_noun"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "量子コンピュータ",
+                "量子ビット",
+                "計算機",
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document], return_categories=True)
+
+            # Should return list[ClassifiedTerm] INCLUDING common_noun
+            assert isinstance(result, list)
+            assert all(isinstance(term, ClassifiedTerm) for term in result)
+            assert len(result) == 3
+
+            # Find each term
+            terms_dict = {ct.term: ct for ct in result}
+            assert "量子コンピュータ" in terms_dict
+            assert terms_dict["量子コンピュータ"].category == TermCategory.TECHNICAL_TERM
+            assert "量子ビット" in terms_dict
+            assert terms_dict["量子ビット"].category == TermCategory.TECHNICAL_TERM
+            assert "計算機" in terms_dict
+            assert terms_dict["計算機"].category == TermCategory.COMMON_NOUN
+
+    def test_extract_terms_return_categories_default_is_false(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extract_terms defaults to return_categories=False."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "量子コンピュータ", "category": "technical_term"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["量子コンピュータ"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document])
+
+            # Should return list[str] by default
+            assert isinstance(result, list)
+            assert all(isinstance(term, str) for term in result)
+
+    def test_get_classified_terms_deduplicates_same_term_in_multiple_categories(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that duplicate terms are deduplicated (first wins strategy)."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "量子コンピュータ", "category": "technical_term"},
+                {"term": "量子コンピュータ", "category": "person_name"},  # Duplicate
+                {"term": "量子ビット", "category": "technical_term"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "量子コンピュータ",
+                "量子ビット",
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document], return_categories=True)
+
+            # Should deduplicate and keep first occurrence (technical_term)
+            terms_dict = {ct.term: ct for ct in result}
+            assert len(result) == 2
+            assert "量子コンピュータ" in terms_dict
+            assert terms_dict["量子コンピュータ"].category == TermCategory.TECHNICAL_TERM
+            assert "量子ビット" in terms_dict
+            assert terms_dict["量子ビット"].category == TermCategory.TECHNICAL_TERM

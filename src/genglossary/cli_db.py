@@ -589,18 +589,23 @@ def terms_regenerate(input: str, llm_provider: str, model: str | None, db_path: 
 
     console.print(f"[dim]{len(documents)} 件のドキュメントを読み込みました[/dim]")
 
-    # Extract terms
+    # Extract terms with categories
     extractor = TermExtractor(llm_client=llm_client)
-    console.print("[dim]用語を抽出中...[/dim]")
-    terms = extractor.extract_terms(documents)
-    console.print(f"[dim]{len(terms)} 個の用語を抽出しました[/dim]")
+    console.print("[dim]用語を抽出中（カテゴリ付き）...[/dim]")
+    classified_terms = extractor.extract_terms(documents, return_categories=True)
+    console.print(f"[dim]{len(classified_terms)} 個の用語を抽出しました（カテゴリ付き）[/dim]")
 
-    # Save to database
+    # Save to database with categories
     with _db_operation(db_path) as conn:
         delete_all_terms(conn)
-        for term in terms:
-            create_term(conn, term)
-        console.print(f"[green]✓[/green] {len(terms)}件の用語を保存しました")
+        # Type is list[ClassifiedTerm] when return_categories=True
+        for term in classified_terms:  # type: ignore[union-attr]
+            create_term(
+                conn,
+                term.term,  # type: ignore[union-attr]
+                category=term.category.value,  # type: ignore[union-attr]
+            )
+        console.print(f"[green]✓[/green] {len(classified_terms)}件の用語を保存しました（カテゴリ付き）")
 
 
 @db.group()
@@ -745,20 +750,32 @@ def provisional_regenerate(llm_provider: str, model: str | None, db_path: str) -
         if not valid:
             return
 
-        # Extract term texts and reconstruct documents
-        terms = [row["term_text"] for row in term_rows]
+        # Reconstruct ClassifiedTerm objects from database
+        from genglossary.models.term import ClassifiedTerm, TermCategory
+
+        # If category is NULL, treat as common_noun (will be skipped)
+        classified_terms = [
+            ClassifiedTerm(
+                term=row["term_text"],
+                category=TermCategory(row["category"] or "common_noun"),
+            )
+            for row in term_rows
+        ]
+
         documents = _reconstruct_documents_from_db(doc_rows)
 
         if not documents:
             console.print("[yellow]ドキュメントが読み込めませんでした[/yellow]")
             return
 
-        console.print(f"[dim]{len(terms)} 個の用語、{len(documents)} 件のドキュメントを読み込みました[/dim]")
+        console.print(
+            f"[dim]{len(classified_terms)} 個の用語（カテゴリ付き）、{len(documents)} 件のドキュメントを読み込みました[/dim]"
+        )
 
         # Generate provisional glossary
         generator = GlossaryGenerator(llm_client=llm_client)
         console.print("[dim]用語集を生成中...[/dim]")
-        glossary = generator.generate(terms, documents)
+        glossary = generator.generate(classified_terms, documents)
         console.print(f"[dim]{len(glossary.terms)} 個の用語定義を生成しました[/dim]")
 
         # Save to database

@@ -107,14 +107,32 @@ class Document(BaseModel):
 
 #### term.py
 ```python
+from enum import Enum
+
+class TermCategory(str, Enum):
+    """用語のカテゴリ分類"""
+    PERSON_NAME = "person_name"       # 人名
+    PLACE_NAME = "place_name"         # 地名
+    ORGANIZATION = "organization"     # 組織・団体名
+    TITLE = "title"                   # 役職・称号
+    TECHNICAL_TERM = "technical_term" # 専門用語
+    COMMON_NOUN = "common_noun"       # 一般名詞（除外対象）
+
+class ClassifiedTerm(BaseModel):
+    """分類済みの用語（カテゴリ付き）"""
+    term: str
+    category: TermCategory
+
 class Term(BaseModel):
     """用語を表すモデル"""
-    text: str
+    name: str
     definition: str
     occurrences: list[TermOccurrence]
+    confidence: float  # 0.0-1.0
 
 class TermOccurrence(BaseModel):
     """用語の出現箇所"""
+    document_path: str
     line_number: int
     context: str
 ```
@@ -519,17 +537,55 @@ def load_document(file_path: str) -> Document:
 
 #### term_extractor.py (ステップ1)
 ```python
+from typing import overload
+
 class TermExtractor:
-    """用語抽出を行うクラス"""
+    """用語抽出を行うクラス（SudachiPy形態素解析 + LLM分類）"""
 
     def __init__(self, llm_client: BaseLLMClient):
         self.llm_client = llm_client
 
-    def extract(self, document: Document) -> list[str]:
-        """ドキュメントから用語を抽出"""
-        prompt = self._build_prompt(document)
-        response = self.llm_client.generate(prompt)
-        return self._parse_response(response)
+    @overload
+    def extract_terms(
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
+        *,
+        return_categories: bool = False,
+    ) -> list[str]: ...
+
+    @overload
+    def extract_terms(
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
+        *,
+        return_categories: bool = True,
+    ) -> list[ClassifiedTerm]: ...
+
+    def extract_terms(
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
+        *,
+        return_categories: bool = False,
+    ) -> list[str] | list[ClassifiedTerm]:
+        """ドキュメントから用語を抽出
+
+        Args:
+            documents: 処理対象のドキュメントリスト
+            progress_callback: 進捗コールバック（オプション）
+            batch_size: LLM分類のバッチサイズ（デフォルト: 10）
+            return_categories: Trueの場合、カテゴリ付きで返す
+
+        Returns:
+            return_categories=False: list[str] (common_noun除外)
+            return_categories=True: list[ClassifiedTerm] (全カテゴリ含む)
+        """
+        ...
 ```
 
 #### glossary_generator.py (ステップ2)
@@ -540,8 +596,24 @@ class GlossaryGenerator:
     def __init__(self, llm_client: BaseLLMClient):
         self.llm_client = llm_client
 
-    def generate(self, terms: list[str], document: Document) -> Glossary:
-        """用語集を生成"""
+    def generate(
+        self,
+        terms: list[str] | list[ClassifiedTerm],
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        skip_common_nouns: bool = True,
+    ) -> Glossary:
+        """用語集を生成
+
+        Args:
+            terms: 用語リスト（str または ClassifiedTerm）
+            documents: ドキュメントリスト
+            progress_callback: 進捗コールバック（オプション）
+            skip_common_nouns: ClassifiedTerm使用時にcommon_nounをスキップ
+
+        Returns:
+            生成された用語集
+        """
         ...
 ```
 
@@ -777,7 +849,7 @@ for issue_row in issue_rows:
 
 ## データフロー
 
-### 基本フロー (Markdown出力のみ)
+### 基本フロー (Markdown出力のみ、DBなし)
 
 ```
 ┌──────────────────┐
@@ -789,10 +861,10 @@ for issue_row in issue_rows:
 ┌──────────────────┐
 │    Document      │ ドキュメントモデル
 └────────┬─────────┘
-         │ extract()
+         │ extract_terms(return_categories=False)
          ↓
 ┌──────────────────┐
-│   List[str]      │ 用語リスト
+│   List[str]      │ 用語リスト (common_noun除外済み)
 └────────┬─────────┘
          │ generate()
          ↓
@@ -833,15 +905,16 @@ for issue_row in issue_rows:
 │    Document      │────→│ DB: documents    │
 └────────┬─────────┘     │  (run_id削除)    │
          │                └──────────────────┘
-         │ extract()
+         │ extract(return_categories=True)
          ↓
 ┌──────────────────┐     ┌──────────────────┐
-│   List[str]      │────→│ DB: terms_       │
-│   用語リスト     │     │     extracted    │
-└────────┬─────────┘     │  (run_id削除)    │
-         │                └──────────────────┘
-         │ generate()
-         ↓
+│List[Classified   │────→│ DB: terms_       │
+│    Term]         │     │     extracted    │
+│ (カテゴリ付き)   │     │  + category列    │
+│ ※common_noun含む │     │  (run_id削除)    │
+└────────┬─────────┘     └──────────────────┘
+         │ generate(skip_common_nouns=True)
+         ↓             ※common_nounをスキップ
 ┌──────────────────┐     ┌──────────────────┐
 │    Glossary      │────→│ DB: glossary_    │
 │  (provisional)   │     │     provisional  │
@@ -879,6 +952,39 @@ for issue_row in issue_rows:
 └──────────────────┘
 ```
 
+### カテゴリ分類フロー (TermExtractor内部処理)
+
+用語抽出は2段階のLLM処理で行われます：
+
+```
+1. SudachiPy形態素解析
+   ↓ 固有名詞・複合名詞を抽出
+
+2. LLM分類 (バッチ処理)
+   ↓ 6カテゴリに分類
+
+   - person_name (人名)
+   - place_name (地名)
+   - organization (組織・団体)
+   - title (役職・称号)
+   - technical_term (専門用語)
+   - common_noun (一般名詞) ← 除外対象
+
+3. 結果の返却
+   - return_categories=False: common_noun除外 → list[str]
+   - return_categories=True: 全カテゴリ含む → list[ClassifiedTerm]
+```
+
+**DB保存時の動作:**
+- `return_categories=True` でカテゴリ付き抽出
+- 全カテゴリ（common_noun含む）をDBの `terms_extracted` テーブルに保存
+- 用語集生成時に `skip_common_nouns=True` で common_noun をフィルタ
+- 既存データ（category=NULL）は common_noun として扱う
+
+**後方互換性:**
+- DBなしモード: `return_categories=False` で既存動作を維持
+- 既存の `list[str]` を期待するコードはそのまま動作
+
 ## import文の例
 
 ### ✅ 良いimport
@@ -895,7 +1001,12 @@ from pydantic import BaseModel
 # 自プロジェクトは最後
 # モデルのimport
 from genglossary.models.document import Document
-from genglossary.models.term import Term, TermOccurrence
+from genglossary.models.term import (
+    Term,
+    TermOccurrence,
+    ClassifiedTerm,
+    TermCategory,
+)
 from genglossary.models.glossary import Glossary, GlossaryIssue
 
 # LLMクライアントのimport
