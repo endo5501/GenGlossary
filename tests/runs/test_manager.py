@@ -21,13 +21,20 @@ def project_db(tmp_path: Path) -> sqlite3.Connection:
     connection = get_connection(str(db_path))
     initialize_db(connection)
     yield connection
+    # Wait a bit for any background threads to complete before closing
+    time.sleep(0.2)
     connection.close()
 
 
 @pytest.fixture
 def manager(project_db: sqlite3.Connection) -> RunManager:
     """Create a RunManager instance for testing."""
-    return RunManager(project_db)
+    mgr = RunManager(project_db)
+    yield mgr
+    # Ensure thread is stopped before fixture cleanup
+    if mgr._thread and mgr._thread.is_alive():
+        mgr._cancel_event.set()
+        mgr._thread.join(timeout=2)
 
 
 class TestRunManagerStart:
@@ -52,7 +59,11 @@ class TestRunManagerStart:
     ) -> None:
         """start_runはバックグラウンドスレッドを起動する"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            mock_executor.return_value.execute.return_value = None
+            # Mock executor to simulate long-running task
+            def slow_execute(*args, **kwargs):
+                time.sleep(0.5)
+
+            mock_executor.return_value.execute.side_effect = slow_execute
 
             run_id = manager.start_run(scope="full")
 
@@ -62,10 +73,6 @@ class TestRunManagerStart:
             # Thread should be running
             assert manager._thread is not None
             assert manager._thread.is_alive()
-
-            # Cleanup
-            manager.cancel_run(run_id)
-            manager._thread.join(timeout=1)
 
     def test_start_run_rejects_when_already_running(
         self, manager: RunManager, project_db: sqlite3.Connection
@@ -83,11 +90,6 @@ class TestRunManagerStart:
             with pytest.raises(RuntimeError, match="already running"):
                 manager.start_run(scope="from_terms")
 
-            # Cleanup
-            manager.cancel_run(run_id1)
-            if manager._thread:
-                manager._thread.join(timeout=1)
-
     def test_start_run_with_different_scopes(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
@@ -100,10 +102,6 @@ class TestRunManagerStart:
             run = get_run(project_db, run_id)
             assert run is not None
             assert run["scope"] == "from_terms"
-
-            # Cleanup
-            if manager._thread:
-                manager._thread.join(timeout=1)
 
 
 class TestRunManagerCancel:
@@ -125,9 +123,8 @@ class TestRunManagerCancel:
 
             manager.cancel_run(run_id)
 
-            # Wait for cancellation to complete
-            if manager._thread:
-                manager._thread.join(timeout=1)
+            # Wait for thread to complete
+            time.sleep(0.3)
 
             run = get_run(project_db, run_id)
             assert run is not None
@@ -148,10 +145,6 @@ class TestRunManagerCancel:
             # Cancellation event should be set
             assert manager._cancel_event.is_set()
 
-            # Cleanup
-            if manager._thread:
-                manager._thread.join(timeout=1)
-
     def test_cancel_nonexistent_run_does_not_fail(
         self, manager: RunManager
     ) -> None:
@@ -167,7 +160,11 @@ class TestRunManagerGetActiveRun:
     ) -> None:
         """get_active_runは現在アクティブなRunを返す"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            mock_executor.return_value.execute.return_value = None
+            # Mock executor to simulate long-running task
+            def slow_execute(*args, **kwargs):
+                time.sleep(0.5)
+
+            mock_executor.return_value.execute.side_effect = slow_execute
 
             run_id = manager.start_run(scope="full")
             time.sleep(0.1)
@@ -175,11 +172,6 @@ class TestRunManagerGetActiveRun:
             active_run = manager.get_active_run()
             assert active_run is not None
             assert active_run["id"] == run_id
-
-            # Cleanup
-            manager.cancel_run(run_id)
-            if manager._thread:
-                manager._thread.join(timeout=1)
 
     def test_get_active_run_returns_none_when_no_active(
         self, manager: RunManager
@@ -249,7 +241,3 @@ class TestRunManagerLogStreaming:
 
             assert len(logs) >= 2
             assert any("Starting execution" in log["message"] for log in logs)
-
-            # Cleanup
-            if manager._thread:
-                manager._thread.join(timeout=1)

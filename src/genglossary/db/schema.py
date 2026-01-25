@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -62,6 +62,21 @@ CREATE TABLE IF NOT EXISTS glossary_refined (
     definition TEXT NOT NULL,
     confidence REAL DEFAULT 0.0,
     occurrences TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Run history
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    started_at TEXT,
+    finished_at TEXT,
+    triggered_by TEXT NOT NULL DEFAULT 'api',
+    error_message TEXT,
+    progress_current INTEGER DEFAULT 0,
+    progress_total INTEGER DEFAULT 0,
+    current_step TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """

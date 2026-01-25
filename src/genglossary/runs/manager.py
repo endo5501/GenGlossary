@@ -1,0 +1,144 @@
+"""Run manager for background pipeline execution."""
+
+import sqlite3
+from datetime import datetime
+from queue import Queue
+from threading import Event, Thread
+
+from genglossary.db.runs_repository import (
+    cancel_run,
+    create_run,
+    get_active_run,
+    get_run,
+    update_run_status,
+)
+from genglossary.runs.executor import PipelineExecutor
+
+
+class RunManager:
+    """Manages background execution of glossary generation pipeline.
+
+    Ensures only one active run per project and provides log streaming.
+    """
+
+    def __init__(self, project_db: sqlite3.Connection):
+        """Initialize the RunManager.
+
+        Args:
+            project_db: Project database connection.
+        """
+        self.project_db = project_db
+        self._thread: Thread | None = None
+        self._cancel_event = Event()
+        self._log_queue: Queue = Queue()
+        self._current_run_id: int | None = None
+
+    def start_run(self, scope: str, triggered_by: str = "api") -> int:
+        """Start a new run in the background.
+
+        Args:
+            scope: Run scope ('full', 'from_terms', 'provisional_to_refined').
+            triggered_by: Source that triggered the run (default: 'api').
+
+        Returns:
+            int: The ID of the newly created run.
+
+        Raises:
+            RuntimeError: If a run is already running.
+        """
+        # Check if a run is already active
+        active_run = get_active_run(self.project_db)
+        if active_run is not None:
+            raise RuntimeError(f"Run already running: {active_run['id']}")
+
+        # Create run record
+        run_id = create_run(self.project_db, scope=scope, triggered_by=triggered_by)
+        self._current_run_id = run_id
+
+        # Clear previous cancel event
+        self._cancel_event.clear()
+
+        # Start background thread
+        self._thread = Thread(target=self._execute_run, args=(run_id, scope))
+        self._thread.daemon = True
+        self._thread.start()
+
+        return run_id
+
+    def _execute_run(self, run_id: int, scope: str) -> None:
+        """Execute run in background thread.
+
+        Args:
+            run_id: Run ID.
+            scope: Run scope.
+        """
+        try:
+            # Update status to running
+            update_run_status(
+                self.project_db, run_id, "running", started_at=datetime.now()
+            )
+
+            # Execute pipeline
+            executor = PipelineExecutor()
+            executor.execute(
+                self.project_db, scope, self._cancel_event, self._log_queue
+            )
+
+            # Check if cancelled
+            if self._cancel_event.is_set():
+                cancel_run(self.project_db, run_id)
+            else:
+                # Update status to completed
+                update_run_status(
+                    self.project_db, run_id, "completed", finished_at=datetime.now()
+                )
+
+        except Exception as e:
+            # Update status to failed
+            update_run_status(
+                self.project_db,
+                run_id,
+                "failed",
+                finished_at=datetime.now(),
+                error_message=str(e),
+            )
+            self._log_queue.put({"level": "error", "message": f"Run failed: {str(e)}"})
+
+    def cancel_run(self, run_id: int) -> None:
+        """Cancel a running run.
+
+        Args:
+            run_id: Run ID to cancel.
+        """
+        # Set cancellation event
+        self._cancel_event.set()
+
+        # Update database status
+        cancel_run(self.project_db, run_id)
+
+    def get_active_run(self) -> sqlite3.Row | None:
+        """Get the currently active run.
+
+        Returns:
+            sqlite3.Row if found, None otherwise.
+        """
+        return get_active_run(self.project_db)
+
+    def get_run(self, run_id: int) -> sqlite3.Row | None:
+        """Get run details by ID.
+
+        Args:
+            run_id: Run ID.
+
+        Returns:
+            sqlite3.Row if found, None otherwise.
+        """
+        return get_run(self.project_db, run_id)
+
+    def get_log_queue(self) -> Queue:
+        """Get the log queue for streaming logs.
+
+        Returns:
+            Queue: The log queue.
+        """
+        return self._log_queue

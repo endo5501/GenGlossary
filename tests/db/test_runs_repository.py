@@ -135,8 +135,13 @@ class TestGetActiveRun:
         self, project_db: sqlite3.Connection
     ) -> None:
         """複数のアクティブなRunがある場合は最新のものを返す"""
+        import time
+
         run_id1 = create_run(project_db, scope="full")
         update_run_status(project_db, run_id1, "running", started_at=datetime.now())
+
+        # Ensure different created_at timestamp
+        time.sleep(1.1)
 
         run_id2 = create_run(project_db, scope="from_terms")
         update_run_status(project_db, run_id2, "running", started_at=datetime.now())
@@ -173,9 +178,9 @@ class TestListRuns:
         import time
 
         id1 = create_run(project_db, "full")
-        time.sleep(0.1)
+        time.sleep(1.1)  # SQLite datetime('now') is second-precision
         id2 = create_run(project_db, "from_terms")
-        time.sleep(0.1)
+        time.sleep(1.1)
         id3 = create_run(project_db, "provisional_to_refined")
 
         runs = list_runs(project_db)
