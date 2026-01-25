@@ -416,7 +416,8 @@ class TestGlossaryGeneratorClassifiedTerm:
 
         # Should generate glossary with one term
         assert len(glossary.terms) == 1
-        assert glossary.terms[0].name == "量子コンピュータ"
+        assert "量子コンピュータ" in glossary.terms
+        assert glossary.terms["量子コンピュータ"].name == "量子コンピュータ"
 
     def test_generate_accepts_list_of_classified_term(
         self, mock_llm_client: MagicMock, sample_document: Document
@@ -436,8 +437,10 @@ class TestGlossaryGeneratorClassifiedTerm:
 
         # Should generate glossary with two terms
         assert len(glossary.terms) == 2
-        assert glossary.terms[0].name == "量子コンピュータ"
-        assert glossary.terms[1].name == "量子ビット"
+        assert "量子コンピュータ" in glossary.terms
+        assert "量子ビット" in glossary.terms
+        assert glossary.terms["量子コンピュータ"].name == "量子コンピュータ"
+        assert glossary.terms["量子ビット"].name == "量子ビット"
 
     def test_generate_skip_common_nouns_true_by_default(
         self, mock_llm_client: MagicMock, sample_document: Document
@@ -457,7 +460,9 @@ class TestGlossaryGeneratorClassifiedTerm:
 
         # Should skip common_noun by default
         assert len(glossary.terms) == 1
-        assert glossary.terms[0].name == "量子コンピュータ"
+        assert "量子コンピュータ" in glossary.terms
+        assert "計算機" not in glossary.terms
+        assert glossary.terms["量子コンピュータ"].name == "量子コンピュータ"
 
     def test_generate_skip_common_nouns_false_includes_all(
         self, mock_llm_client: MagicMock, sample_document: Document
@@ -479,8 +484,10 @@ class TestGlossaryGeneratorClassifiedTerm:
 
         # Should include all terms when skip_common_nouns=False
         assert len(glossary.terms) == 2
-        assert glossary.terms[0].name == "量子コンピュータ"
-        assert glossary.terms[1].name == "計算機"
+        assert "量子コンピュータ" in glossary.terms
+        assert "計算機" in glossary.terms
+        assert glossary.terms["量子コンピュータ"].name == "量子コンピュータ"
+        assert glossary.terms["計算機"].name == "計算機"
 
     def test_generate_skip_common_nouns_explicit_true(
         self, mock_llm_client: MagicMock, sample_document: Document
@@ -502,4 +509,6 @@ class TestGlossaryGeneratorClassifiedTerm:
 
         # Should skip common_noun
         assert len(glossary.terms) == 1
-        assert glossary.terms[0].name == "量子コンピュータ"
+        assert "量子コンピュータ" in glossary.terms
+        assert "計算機" not in glossary.terms
+        assert glossary.terms["量子コンピュータ"].name == "量子コンピュータ"

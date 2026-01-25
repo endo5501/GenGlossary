@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
-from genglossary.models.term import Term, TermOccurrence
+from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
 from genglossary.types import ProgressCallback
 
 
@@ -43,17 +43,21 @@ class GlossaryGenerator:
 
     def generate(
         self,
-        terms: list[str],
+        terms: list[str] | list[ClassifiedTerm],
         documents: list[Document],
         progress_callback: ProgressCallback | None = None,
+        skip_common_nouns: bool = True,
     ) -> Glossary:
         """Generate a provisional glossary.
 
         Args:
             terms: List of terms to generate definitions for.
+                Can be either list[str] or list[ClassifiedTerm].
             documents: List of documents containing the terms.
             progress_callback: Optional callback called after each term is processed.
                 Receives (current, total) where current is 1-indexed.
+            skip_common_nouns: If True (default), skip terms categorized as common_noun
+                when terms is list[ClassifiedTerm]. Has no effect when terms is list[str].
 
         Returns:
             A Glossary object with terms and their definitions.
@@ -63,8 +67,16 @@ class GlossaryGenerator:
         if not terms:
             return glossary
 
-        total_terms = len(terms)
-        for idx, term_name in enumerate(terms, start=1):
+        # Filter terms if ClassifiedTerm list and skip_common_nouns is True
+        filtered_terms = self._filter_terms(terms, skip_common_nouns)
+        if not filtered_terms:
+            return glossary
+
+        total_terms = len(filtered_terms)
+        for idx, term_item in enumerate(filtered_terms, start=1):
+            # Extract term name (support both str and ClassifiedTerm)
+            term_name = term_item if isinstance(term_item, str) else term_item.term
+
             try:
                 # Find occurrences
                 occurrences = self._find_term_occurrences(term_name, documents)
@@ -93,6 +105,34 @@ class GlossaryGenerator:
                     progress_callback(idx, total_terms)
 
         return glossary
+
+    def _filter_terms(
+        self, terms: list[str] | list[ClassifiedTerm], skip_common_nouns: bool
+    ) -> list[str] | list[ClassifiedTerm]:
+        """Filter terms based on skip_common_nouns flag.
+
+        Args:
+            terms: List of terms (str or ClassifiedTerm).
+            skip_common_nouns: Whether to skip common_noun category.
+
+        Returns:
+            Filtered list of terms.
+        """
+        # If terms is list[str], return as-is
+        if not terms or isinstance(terms[0], str):
+            return terms
+
+        # If skip_common_nouns is False, return all terms
+        if not skip_common_nouns:
+            return terms
+
+        # Filter out common_noun category
+        return [
+            term
+            for term in terms
+            if isinstance(term, ClassifiedTerm)
+            and term.category != TermCategory.COMMON_NOUN
+        ]
 
     def _build_search_pattern(self, term: str) -> re.Pattern:
         """Build a regex pattern for searching a term.
