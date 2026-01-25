@@ -20,7 +20,7 @@ Implement plan B with a behavior change: store all classified terms (including `
 - [x] Wire category-aware returns into `src/genglossary/cli.py` (save all categories to DB)
 - [x] Wire category-aware returns into `src/genglossary/cli_db.py` (save all categories to DB)
 - [x] Add/adjust tests for category persistence and `common_noun` skipping behavior
-- [ ] Code simplification review using code-simplifier agent
+- [x] Code simplification review using code-simplifier agent
 - [x] Update docs/architecture.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
@@ -31,3 +31,14 @@ Implement plan B with a behavior change: store all classified terms (including `
 
 Keep backward compatibility for callers that expect `list[str]`.
 Avoid duplicate LLM calls; reuse the classification results already produced in extraction.
+
+## Review Notes (2026-01-25)
+
+### Findings
+
+- **High**: `return_categories=True` path no longer deduplicates terms before DB insert. Duplicate terms from LLM classification can trigger `sqlite3.IntegrityError` due to `terms_extracted.term_text` UNIQUE, aborting the run and leaving partial data. Consider deduping in `_get_classified_terms` or handling duplicates on insert.
+- **Low**: CLI progress total can be inaccurate with categories because `GlossaryGenerator` filters `common_noun` by default; progress may not reach 100%.
+
+### Questions
+
+- Should duplicate classifications be resolved by “first wins”, “last wins”, or should category conflicts be reported?
