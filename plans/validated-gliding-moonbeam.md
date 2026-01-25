@@ -144,3 +144,179 @@ common_noun をスキップして定義生成
 ## 決定事項
 
 - 既存DBの `category=NULL` データ → `common_noun` として扱い、用語集生成時にスキップ
+
+---
+
+# バグ修正計画: 重複用語によるIntegrityError
+
+## 概要
+
+`return_categories=True` パスで用語の重複排除が行われていないため、LLMが同じ用語を複数カテゴリに分類した場合、DB挿入時に `sqlite3.IntegrityError` が発生する。
+
+## 問題の詳細
+
+### 現状
+
+| パス | 重複排除 | 状態 |
+|------|----------|------|
+| `return_categories=False` | `_process_terms()` で実施 | ✅ 安全 |
+| `return_categories=True` | なし | ❌ **IntegrityError リスク** |
+
+### 発生シナリオ
+
+1. LLMが同じ用語を `person_name` と `technical_term` の両方に分類
+2. `_get_classified_terms()` で2つの `ClassifiedTerm` オブジェクトが生成
+3. CLI で DB 挿入時に `terms_extracted.term_text` の UNIQUE 制約違反
+
+---
+
+## 修正計画
+
+### Phase 1: テスト作成（Red）
+
+**ファイル**: `tests/test_term_extractor.py`
+
+**追加するテスト**:
+
+```python
+def test_get_classified_terms_deduplicates_same_term_in_multiple_categories(
+    self, mock_llm_client: MagicMock, sample_document: Document
+) -> None:
+    """重複用語がある場合、最初に出現したカテゴリを採用（first wins）"""
+    mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+        classifications=[
+            {"term": "量子コンピュータ", "category": "technical_term"},
+            {"term": "量子コンピュータ", "category": "person_name"},  # 重複
+            {"term": "量子ビット", "category": "technical_term"},
+        ]
+    )
+    # ... setup ...
+    result = extractor.extract_terms([sample_document], return_categories=True)
+
+    # 重複が排除され、最初のカテゴリ（technical_term）が採用される
+    terms_dict = {t.term: t for t in result}
+    assert len(result) == 2
+    assert terms_dict["量子コンピュータ"].category == TermCategory.TECHNICAL_TERM
+```
+
+### Phase 2: 実装（Green）
+
+**ファイル**: `src/genglossary/term_extractor.py`
+
+**変更**: `_get_classified_terms()` メソッドに重複排除ロジックを追加
+
+```python
+def _get_classified_terms(
+    self, classification: TermClassificationResponse
+) -> list[ClassifiedTerm]:
+    """Convert classification results to list of ClassifiedTerm objects.
+
+    Deduplicates terms using "first wins" strategy.
+    """
+    seen: set[str] = set()
+    result: list[ClassifiedTerm] = []
+    for category_str, terms in classification.classified_terms.items():
+        for term in terms:
+            stripped = term.strip()
+            if stripped and stripped not in seen:
+                seen.add(stripped)
+                result.append(
+                    ClassifiedTerm(term=stripped, category=TermCategory(category_str))
+                )
+    return result
+```
+
+---
+
+## 変更対象ファイル
+
+| ファイル | 変更内容 |
+|----------|----------|
+| `src/genglossary/term_extractor.py` | `_get_classified_terms()` に重複排除追加 |
+| `tests/test_term_extractor.py` | 重複排除のテスト追加 |
+
+---
+
+## 検証方法
+
+1. **単体テスト**: `uv run pytest tests/test_term_extractor.py -v -k deduplicate`
+2. **全テスト**: `uv run pytest`
+3. **静的解析**: `uv run pyright`
+
+---
+
+## 採用した解決策
+
+- **First wins 戦略**: 同じ用語が複数カテゴリに分類された場合、最初に出現したカテゴリを採用
+- 理由: シンプルで予測可能、`_process_terms()` の動作と一貫性がある
+
+---
+
+## 対応しない項目（Low Priority）
+
+- **プログレス表示の不正確さ**: `common_noun` フィルタにより100%に達しない場合があるが、機能に影響しないため今回は対応しない
+
+---
+
+# 実装完了記録
+
+## 実装日時
+
+2026-01-25
+
+## 実装内容
+
+### 完了したフェーズ
+
+1. ✅ **Phase 1: ClassifiedTermモデル追加** - 既に実装済み
+2. ✅ **Phase 2: TermExtractorの拡張とバグ修正**
+   - `return_categories`パラメータ: 既に実装済み
+   - 重複用語の排除ロジック: `_process_batch_response`に実装 (first wins戦略)
+   - テスト追加: `test_get_classified_terms_deduplicates_same_term_in_multiple_categories`
+3. ✅ **Phase 3: GlossaryGeneratorの拡張** - 既に実装済み
+   - `ClassifiedTerm`対応、`skip_common_nouns`パラメータ実装済み
+4. ✅ **Phase 4: CLIの更新** - 既に実装済み
+   - `cli.py`: `_generate_glossary_with_db`でカテゴリ付き抽出・保存
+   - `cli_db.py`: `terms_regenerate`と`provisional_regenerate`でカテゴリ対応
+5. ✅ **Phase 5: 検証と仕上げ**
+   - 全テスト (461 passed): ✅
+   - Pyright静的解析: ✅ (0 errors, 0 warnings)
+
+### 実装の詳細
+
+#### バグ修正: 重複用語のIntegrityError
+
+**問題**: LLMが同じ用語を複数カテゴリに分類した場合、DB挿入時にUNIQUE制約違反
+
+**解決策**: `_process_batch_response`で"first wins"戦略による重複排除を実装
+
+```python
+def _process_batch_response(
+    self,
+    response: BatchTermClassificationResponse,
+    classified: dict[str, list[str]],
+    seen_terms: set[str],  # ← 追加
+) -> None:
+    for item in response.classifications:
+        term = item.get("term", "")
+        category = item.get("category", "")
+        stripped_term = term.strip()
+        if category in classified and stripped_term and stripped_term not in seen_terms:
+            classified[category].append(stripped_term)
+            seen_terms.add(stripped_term)  # ← 重複防止
+```
+
+**コミット**:
+- テスト: `71297d7` - "Add test for duplicate term deduplication in return_categories mode"
+- 実装: `d7deabc` - "Implement duplicate term deduplication in batch classification"
+
+## 検証結果
+
+- ✅ 全テスト (461件) パス
+- ✅ Pyright静的解析エラーなし
+- ✅ 既存機能の後方互換性維持
+- ✅ DB保存時のIntegrityError解消
+
+## 残作業
+
+なし。全ての計画項目が実装完了。
