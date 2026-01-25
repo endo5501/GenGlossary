@@ -386,3 +386,27 @@ def test_regenerate_provisional_invalid_doc_root_returns_400(
 
     assert response.status_code == 400
     assert "not found" in response.json()["detail"].lower()
+
+
+@patch("genglossary.api.routers.provisional.create_llm_client")
+def test_regenerate_provisional_invalid_llm_provider_returns_400(
+    mock_create_llm, test_project_setup, client: TestClient
+):
+    """Test regenerate endpoint returns 400 when llm_provider is invalid."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    # Setup provisional term
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    conn.close()
+
+    # Mock create_llm_client to raise ValueError
+    mock_create_llm.side_effect = ValueError("Invalid LLM provider")
+
+    # Call regenerate endpoint
+    response = client.post(f"/api/projects/{project_id}/provisional/{term_id}/regenerate")
+
+    assert response.status_code == 400
+    assert "provider" in response.json()["detail"].lower()

@@ -181,6 +181,8 @@ async def regenerate_provisional(
         definition, confidence = _regenerate_definition(row, project)
         update_provisional_term(project_db, entry_id, definition, confidence)
         return _get_term_response(project_db, entry_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid LLM provider: {e}")
     except (FileNotFoundError, NotADirectoryError) as e:
         raise HTTPException(status_code=400, detail=f"Document root not found: {e}")
     except httpx.TimeoutException:
