@@ -30,6 +30,7 @@ class TestSchemaInitialization:
             "glossary_provisional",
             "glossary_refined",
             "metadata",
+            "runs",
             "schema_version",
             "terms_extracted",
         ]
@@ -40,7 +41,7 @@ class TestSchemaInitialization:
         initialize_db(in_memory_db)
 
         version = get_schema_version(in_memory_db)
-        assert version == 2
+        assert version == 3
 
     def test_initialize_db_is_idempotent(self, in_memory_db: sqlite3.Connection) -> None:
         """Test that initialize_db can be called multiple times safely."""
@@ -63,6 +64,7 @@ class TestSchemaInitialization:
             "glossary_provisional",
             "glossary_refined",
             "metadata",
+            "runs",
             "schema_version",
             "terms_extracted",
         ]

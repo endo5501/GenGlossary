@@ -75,6 +75,7 @@ class TestDbInit:
             "glossary_provisional",
             "glossary_refined",
             "metadata",
+            "runs",
             "schema_version",
             "terms_extracted",
         ]
