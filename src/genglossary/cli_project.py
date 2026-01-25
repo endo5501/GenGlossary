@@ -69,12 +69,12 @@ def _get_project_db_path(registry: Path | None, project_name: str) -> Path:
         project_name: Name of the project.
 
     Returns:
-        Path to project database file.
+        Path to project database file (absolute path).
     """
     projects_dir = _get_projects_dir(registry)
     db_path = projects_dir / project_name / "project.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    return db_path
+    return db_path.resolve()
 
 
 @contextmanager

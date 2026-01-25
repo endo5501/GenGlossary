@@ -3,6 +3,7 @@
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -121,6 +122,27 @@ class TestCreateProject:
                 doc_root=str(tmp_path / "docs2"),
                 db_path=str(tmp_path / "project.db"),
             )
+
+    def test_create_project_db_init_failure_does_not_pollute_registry(
+        self, registry_conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """プロジェクトDB初期化が失敗した場合、レジストリが汚染されない"""
+        # Mock initialize_db to raise an exception
+        with patch("genglossary.db.project_repository.initialize_db") as mock_init:
+            mock_init.side_effect = RuntimeError("DB initialization failed")
+
+            # Attempt to create project should fail
+            with pytest.raises(RuntimeError, match="DB initialization failed"):
+                create_project(
+                    registry_conn,
+                    name="test-project",
+                    doc_root=str(tmp_path / "docs"),
+                    db_path=str(tmp_path / "project.db"),
+                )
+
+        # Registry should not have any projects
+        projects = list_projects(registry_conn)
+        assert len(projects) == 0
 
 
 class TestGetProject:
@@ -464,3 +486,45 @@ class TestCloneProject:
                 new_name="existing",
                 new_db_path=str(tmp_path / "clone.db"),
             )
+
+    def test_clone_copies_database_content(
+        self, registry_conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """複製時にソースDBの内容が新DBにコピーされる"""
+        from genglossary.db.connection import get_connection
+
+        # Create original project
+        original_id = create_project(
+            registry_conn,
+            name="original",
+            doc_root=str(tmp_path / "docs"),
+            db_path=str(tmp_path / "original.db"),
+        )
+
+        # Insert test data into source DB
+        source_conn = get_connection(str(tmp_path / "original.db"))
+        source_conn.execute(
+            "INSERT INTO documents (file_path, content_hash) VALUES (?, ?)",
+            ("/path/to/doc.txt", "hash123"),
+        )
+        source_conn.commit()
+        source_conn.close()
+
+        # Clone project
+        clone_id = clone_project(
+            registry_conn,
+            original_id,
+            new_name="clone",
+            new_db_path=str(tmp_path / "clone.db"),
+        )
+
+        # Verify cloned DB has the same data
+        clone_conn = get_connection(str(tmp_path / "clone.db"))
+        cursor = clone_conn.cursor()
+        cursor.execute("SELECT file_path, content_hash FROM documents")
+        rows = cursor.fetchall()
+        clone_conn.close()
+
+        assert len(rows) == 1
+        assert rows[0]["file_path"] == "/path/to/doc.txt"
+        assert rows[0]["content_hash"] == "hash123"

@@ -137,6 +137,52 @@ class TestProjectInit:
         project_db_path = Path(proj.db_path)
         assert project_db_path.exists()
 
+    def test_init_with_relative_registry_stores_absolute_db_path(
+        self, tmp_path: Path
+    ) -> None:
+        """相対パスのregistryを使用した場合でも絶対パスが保存される"""
+        import os
+
+        runner = CliRunner()
+        doc_root = tmp_path / "docs"
+        doc_root.mkdir()
+
+        # Use relative path for registry
+        registry_dir = tmp_path / "registry_dir"
+        registry_dir.mkdir()
+        registry_path = registry_dir / "registry.db"
+
+        # Change to tmp_path and use relative path
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            relative_registry = Path("registry_dir") / "registry.db"
+
+            result = runner.invoke(
+                project,
+                [
+                    "init",
+                    "test-project",
+                    "--doc-root",
+                    str(doc_root.absolute()),
+                    "--registry",
+                    str(relative_registry),
+                ],
+            )
+
+            assert result.exit_code == 0
+
+            # Verify db_path is absolute
+            conn = get_registry_connection(str(registry_path))
+            proj = get_project_by_name(conn, "test-project")
+            conn.close()
+
+            assert proj is not None
+            db_path = Path(proj.db_path)
+            assert db_path.is_absolute()
+        finally:
+            os.chdir(original_cwd)
+
 
 class TestProjectList:
     """Test project list command."""

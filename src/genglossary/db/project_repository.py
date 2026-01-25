@@ -1,5 +1,6 @@
 """Repository for projects table operations."""
 
+import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -62,6 +63,13 @@ def create_project(
     Raises:
         sqlite3.IntegrityError: If name or db_path already exists.
     """
+    # Initialize the project database first
+    # This ensures that if DB initialization fails, the registry is not polluted
+    project_conn = get_connection(db_path)
+    initialize_db(project_conn)
+    project_conn.close()
+
+    # After successful DB initialization, insert into registry
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -75,11 +83,6 @@ def create_project(
 
     project_id = cursor.lastrowid
     assert project_id is not None
-
-    # Initialize the project database
-    project_conn = get_connection(db_path)
-    initialize_db(project_conn)
-    project_conn.close()
 
     return project_id
 
@@ -222,6 +225,7 @@ def clone_project(
 
     Creates a copy of the project with a new name and db_path.
     Resets status to CREATED and last_run_at to None.
+    Copies the source database to the new location.
 
     Args:
         conn: Registry database connection.
@@ -241,17 +245,27 @@ def clone_project(
     if source is None:
         raise ValueError(f"Project with id {source_id} not found")
 
-    # Create new project with copied settings
-    new_id = create_project(
-        conn,
-        name=new_name,
-        doc_root=source.doc_root,
-        db_path=new_db_path,
-        llm_provider=source.llm_provider,
-        llm_model=source.llm_model,
-        status=ProjectStatus.CREATED,  # Reset status
+    # Copy source database to new location
+    source_db_path = Path(source.db_path)
+    new_db_path_obj = Path(new_db_path)
+    new_db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_db_path, new_db_path_obj)
+
+    # Insert new project into registry
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO projects (
+            name, doc_root, db_path, llm_provider, llm_model, status
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (new_name, source.doc_root, new_db_path, source.llm_provider, source.llm_model, ProjectStatus.CREATED.value),
     )
+    conn.commit()
+
+    project_id = cursor.lastrowid
+    assert project_id is not None
 
     # Note: last_run_at is automatically None for new projects
 
-    return new_id
+    return project_id
