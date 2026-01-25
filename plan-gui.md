@@ -10,7 +10,7 @@
 ## 計画
 
 * [x] tickets/done/260124-164005-gui-backend-scaffold.md
-* [ ] tickets/260124-164008-gui-project-model-storage.md
+* [x] tickets/done/260124-164008-gui-project-model-storage.md
 * [ ] tickets/260124-164009-gui-api-data-endpoints.md
 * [ ] tickets/260124-164011-gui-api-operations-runner.md
 * [ ] tickets/260124-164013-gui-frontend-scaffold.md

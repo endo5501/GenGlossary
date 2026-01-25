@@ -12,7 +12,8 @@ GenGlossary/
 │   │   ├── __init__.py
 │   │   ├── document.py          # Document, Line管理
 │   │   ├── term.py              # Term, TermOccurrence
-│   │   └── glossary.py          # Glossary, GlossaryIssue
+│   │   ├── glossary.py          # Glossary, GlossaryIssue
+│   │   └── project.py           # Project, ProjectStatus
 │   ├── llm/                      # LLMクライアント
 │   │   ├── __init__.py
 │   │   ├── base.py              # BaseLLMClient
@@ -30,7 +31,10 @@ GenGlossary/
 │   │   ├── glossary_helpers.py  # 用語集共通処理
 │   │   ├── provisional_repository.py # 暫定用語集CRUD
 │   │   ├── issue_repository.py  # 精査結果CRUD
-│   │   └── refined_repository.py     # 最終用語集CRUD
+│   │   ├── refined_repository.py     # 最終用語集CRUD
+│   │   ├── registry_connection.py    # レジストリDB接続管理
+│   │   ├── registry_schema.py   # レジストリスキーマ定義
+│   │   └── project_repository.py     # プロジェクトCRUD
 │   ├── document_loader.py        # ドキュメント読み込み
 │   ├── term_extractor.py         # ステップ1: 用語抽出
 │   ├── glossary_generator.py     # ステップ2: 用語集生成
@@ -54,6 +58,7 @@ GenGlossary/
 │   ├── config.py                 # 設定管理
 │   ├── cli.py                    # CLIエントリーポイント (generate)
 │   ├── cli_db.py                 # DB管理CLI (db サブコマンド)
+│   ├── cli_project.py            # プロジェクト管理CLI (project サブコマンド)
 │   └── cli_api.py                # API管理CLI (api サブコマンド)
 ├── tests/                        # テストコード
 │   ├── api/                       # API層テスト
@@ -63,7 +68,8 @@ GenGlossary/
 │   ├── models/
 │   │   ├── test_document.py
 │   │   ├── test_term.py
-│   │   └── test_glossary.py
+│   │   ├── test_glossary.py
+│   │   └── test_project.py
 │   ├── llm/
 │   │   ├── test_base.py
 │   │   └── test_ollama_client.py
@@ -77,7 +83,9 @@ GenGlossary/
 │   │   ├── test_term_repository.py
 │   │   ├── test_provisional_repository.py
 │   │   ├── test_issue_repository.py
-│   │   └── test_refined_repository.py
+│   │   ├── test_refined_repository.py
+│   │   ├── test_registry_schema.py
+│   │   └── test_project_repository.py
 │   ├── test_document_loader.py
 │   ├── test_term_extractor.py
 │   ├── test_glossary_generator.py
@@ -85,6 +93,7 @@ GenGlossary/
 │   ├── test_glossary_refiner.py
 │   ├── test_cli_db.py           # DB CLI統合テスト
 │   ├── test_cli_db_regenerate.py # regenerateコマンドテスト
+│   ├── test_cli_project.py      # プロジェクトCLI統合テスト
 │   └── output/
 │       └── test_markdown_writer.py
 ├── target_docs/                  # 入力ドキュメント
@@ -165,6 +174,32 @@ class GlossaryIssue(BaseModel):
     term: str
     issue_type: str  # "unclear", "contradiction", "missing"
     description: str
+```
+
+#### project.py
+```python
+from enum import Enum
+from datetime import datetime
+
+class ProjectStatus(str, Enum):
+    """プロジェクトのステータス"""
+    CREATED = "created"       # 作成済み（未実行）
+    RUNNING = "running"       # 処理中
+    COMPLETED = "completed"   # 完了
+    ERROR = "error"          # エラー
+
+class Project(BaseModel):
+    """用語集生成プロジェクト"""
+    id: int | None
+    name: str                 # プロジェクト名（一意）
+    doc_root: str            # ドキュメントディレクトリパス
+    db_path: str             # プロジェクトDBパス（一意）
+    llm_provider: str        # LLMプロバイダー
+    llm_model: str           # LLMモデル名
+    created_at: datetime
+    updated_at: datetime
+    last_run_at: datetime | None
+    status: ProjectStatus
 ```
 
 ### 2. llm/ - LLMクライアント層
@@ -539,6 +574,139 @@ def update_provisional_term(
 def delete_all_provisional(conn: sqlite3.Connection) -> None:
     """全ての暫定用語集エントリを削除"""
     delete_all_glossary_terms(conn, "glossary_provisional")
+```
+
+#### プロジェクト管理システム
+
+GUIアプリケーションで複数の用語集プロジェクトを管理するための機能を提供します。
+
+##### registry_connection.py
+```python
+from pathlib import Path
+
+def get_default_registry_path() -> Path:
+    """デフォルトのレジストリDBパスを取得
+
+    Returns:
+        ~/.genglossary/registry.db
+    """
+    return Path.home() / ".genglossary" / "registry.db"
+
+def get_registry_connection(db_path: str) -> sqlite3.Connection:
+    """レジストリデータベース接続を取得"""
+    ...
+```
+
+##### registry_schema.py
+```python
+REGISTRY_SCHEMA_VERSION = 1
+
+def initialize_registry(conn: sqlite3.Connection) -> None:
+    """レジストリDBスキーマを初期化
+
+    Creates:
+        - schema_version テーブル
+        - projects テーブル（name, doc_root, db_path, llm_*, created_at, status）
+    """
+    ...
+
+def get_registry_schema_version(conn: sqlite3.Connection) -> int:
+    """レジストリスキーマバージョンを取得"""
+    ...
+```
+
+##### project_repository.py
+```python
+from genglossary.models.project import Project, ProjectStatus
+
+def create_project(
+    conn: sqlite3.Connection,
+    name: str,
+    doc_root: str,
+    db_path: str,
+    llm_provider: str = "ollama",
+    llm_model: str = "",
+    status: ProjectStatus = ProjectStatus.CREATED
+) -> int:
+    """プロジェクトを作成
+
+    プロジェクトのメタデータをレジストリDBに登録し、
+    プロジェクト固有のDBを初期化します。
+
+    Returns:
+        作成されたプロジェクトのID
+
+    Raises:
+        sqlite3.IntegrityError: nameまたはdb_pathが重複している場合
+    """
+    ...
+
+def get_project(conn: sqlite3.Connection, project_id: int) -> Project | None:
+    """IDでプロジェクトを取得"""
+    ...
+
+def get_project_by_name(conn: sqlite3.Connection, name: str) -> Project | None:
+    """名前でプロジェクトを取得"""
+    ...
+
+def list_projects(conn: sqlite3.Connection) -> list[Project]:
+    """全プロジェクトをリスト（created_at降順）"""
+    ...
+
+def update_project(
+    conn: sqlite3.Connection,
+    project_id: int,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    status: ProjectStatus | None = None,
+    last_run_at: datetime | None = None
+) -> None:
+    """プロジェクト情報を更新
+
+    updated_atは自動的に更新されます。
+
+    Raises:
+        ValueError: 指定されたIDのプロジェクトが存在しない場合
+    """
+    ...
+
+def delete_project(conn: sqlite3.Connection, project_id: int) -> None:
+    """プロジェクトを削除
+
+    Note: プロジェクトDBファイルは削除されません。
+    """
+    ...
+
+def clone_project(
+    conn: sqlite3.Connection,
+    source_id: int,
+    new_name: str,
+    new_db_path: str
+) -> int:
+    """プロジェクトを複製
+
+    設定（doc_root, llm_*）を継承し、statusはCREATED、
+    last_run_atはNoneにリセットされます。
+
+    Returns:
+        複製されたプロジェクトのID
+
+    Raises:
+        ValueError: source_idのプロジェクトが存在しない場合
+        sqlite3.IntegrityError: new_nameまたはnew_db_pathが重複している場合
+    """
+    ...
+```
+
+**ストレージ構造**:
+```
+~/.genglossary/
+├── registry.db           # 中央プロジェクトレジストリ
+└── projects/             # プロジェクトDBのデフォルト保存場所
+    ├── my-novel/
+    │   └── project.db    # プロジェクト固有のDB
+    └── tech-docs/
+        └── project.db
 ```
 
 ### 4. 処理レイヤー
