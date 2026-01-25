@@ -88,3 +88,15 @@ def get_project_db(
         yield conn
     finally:
         conn.close()
+
+
+def get_project_db_path(project: Project = Depends(get_project_by_id)) -> str:
+    """Get project database path.
+
+    Args:
+        project: Project instance from get_project_by_id.
+
+    Returns:
+        str: Path to project database.
+    """
+    return project.db_path

@@ -4,6 +4,7 @@ import sqlite3
 import time
 from pathlib import Path
 from threading import Event
+from typing import Iterator
 from unittest.mock import Mock, patch
 
 import pytest
@@ -15,21 +16,27 @@ from genglossary.runs.manager import RunManager
 
 
 @pytest.fixture
-def project_db(tmp_path: Path) -> sqlite3.Connection:
-    """Create a test project database with runs table."""
+def project_db_path(tmp_path: Path) -> str:
+    """Create a test project database with runs table and return its path."""
     db_path = tmp_path / "test_project.db"
     connection = get_connection(str(db_path))
     initialize_db(connection)
+    connection.close()
+    return str(db_path)
+
+
+@pytest.fixture
+def project_db(project_db_path: str) -> Iterator[sqlite3.Connection]:
+    """Get a connection to the test project database."""
+    connection = get_connection(project_db_path)
     yield connection
-    # Wait a bit for any background threads to complete before closing
-    time.sleep(0.2)
     connection.close()
 
 
 @pytest.fixture
-def manager(project_db: sqlite3.Connection) -> RunManager:
+def manager(project_db_path: str) -> RunManager:
     """Create a RunManager instance for testing."""
-    mgr = RunManager(project_db)
+    mgr = RunManager(project_db_path)
     yield mgr
     # Ensure thread is stopped before fixture cleanup
     if mgr._thread and mgr._thread.is_alive():

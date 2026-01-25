@@ -7,7 +7,7 @@ from typing import AsyncIterator
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 from fastapi.responses import StreamingResponse
 
-from genglossary.api.dependencies import get_project_db
+from genglossary.api.dependencies import get_project_db, get_project_db_path
 from genglossary.api.schemas.run_schemas import RunResponse, RunStartRequest
 from genglossary.db.runs_repository import get_run, list_runs
 from genglossary.runs.manager import RunManager
@@ -15,16 +15,16 @@ from genglossary.runs.manager import RunManager
 router = APIRouter(prefix="/api/projects/{project_id}/runs", tags=["runs"])
 
 
-def get_run_manager(project_db: sqlite3.Connection = Depends(get_project_db)) -> RunManager:
+def get_run_manager(db_path: str = Depends(get_project_db_path)) -> RunManager:
     """Get RunManager instance for the project.
 
     Args:
-        project_db: Project database connection.
+        db_path: Path to project database.
 
     Returns:
         RunManager: RunManager instance.
     """
-    return RunManager(project_db)
+    return RunManager(db_path)
 
 
 @router.post("", response_model=RunResponse, status_code=status.HTTP_201_CREATED)
