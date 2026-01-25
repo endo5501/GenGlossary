@@ -105,3 +105,60 @@ def test_get_project_db_returns_connection(tmp_path: Path):
         next(gen)
     except StopIteration:
         pass
+
+
+def test_run_manager_singleton_per_project(tmp_path: Path):
+    """Test that get_run_manager returns the same instance for the same project."""
+    from genglossary.api.dependencies import get_run_manager
+    from genglossary.models.project import Project
+    from genglossary.db.schema import initialize_db
+
+    # Create test projects
+    project1_db = tmp_path / "project1.db"
+    project2_db = tmp_path / "project2.db"
+
+    # Initialize databases
+    for db_path in [project1_db, project2_db]:
+        conn = get_connection(str(db_path))
+        initialize_db(conn)
+        conn.close()
+
+    # Create project instances
+    project1 = Project(
+        id=1,
+        name="Project 1",
+        doc_root=str(tmp_path / "docs1"),
+        db_path=str(project1_db),
+        llm_provider="ollama",
+        llm_model="llama2",
+    )
+    project2 = Project(
+        id=2,
+        name="Project 2",
+        doc_root=str(tmp_path / "docs2"),
+        db_path=str(project2_db),
+        llm_provider="ollama",
+        llm_model="llama3",
+    )
+
+    # Get RunManager instances
+    manager1_first = get_run_manager(project1)
+    manager1_second = get_run_manager(project1)
+    manager2 = get_run_manager(project2)
+
+    # Verify same instance for same project
+    assert manager1_first is manager1_second, "Should return same instance for same project"
+
+    # Verify different instance for different project
+    assert manager1_first is not manager2, "Should return different instance for different project"
+
+    # Verify instances have correct configuration
+    assert manager1_first.db_path == str(project1_db)
+    assert manager1_first.doc_root == str(tmp_path / "docs1")
+    assert manager1_first.llm_provider == "ollama"
+    assert manager1_first.llm_model == "llama2"
+
+    assert manager2.db_path == str(project2_db)
+    assert manager2.doc_root == str(tmp_path / "docs2")
+    assert manager2.llm_provider == "ollama"
+    assert manager2.llm_model == "llama3"

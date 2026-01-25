@@ -264,3 +264,122 @@ class TestPipelineExecutorProgress:
             assert len(logs) >= 2
             assert any("Starting pipeline execution" in log.get("message", "") for log in logs)
             assert any("completed" in log.get("message", "").lower() for log in logs)
+
+
+class TestPipelineExecutorConfiguration:
+    """Tests for executor configuration (doc_root, LLM settings)."""
+
+    def test_executor_uses_doc_root(
+        self,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_queue: Queue,
+    ) -> None:
+        """executorがdoc_rootパラメータを使用することを確認"""
+        executor = PipelineExecutor(provider="ollama")
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock components
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="test.txt", content="test")
+            ]
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute with custom doc_root
+            executor.execute(project_db, "full", cancel_event, log_queue, doc_root="/custom/path")
+
+            # Verify load_directory was called with the custom doc_root
+            mock_loader.return_value.load_directory.assert_called_once_with("/custom/path")
+
+    def test_executor_uses_llm_settings(
+        self,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_queue: Queue,
+    ) -> None:
+        """executorがllm_provider/llm_modelを使用することを確認"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Create executor with custom provider and model
+            executor = PipelineExecutor(provider="openai", model="gpt-4")
+
+            # Mock components
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="test.txt", content="test")
+            ]
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute
+            executor.execute(project_db, "full", cancel_event, log_queue)
+
+            # Verify LLM client was created with custom settings
+            mock_llm_factory.assert_called_once_with(provider="openai", model="gpt-4")
+
+    def test_re_execution_clears_tables(
+        self,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_queue: Queue,
+    ) -> None:
+        """再実行時にテーブルがクリアされることを確認"""
+        executor = PipelineExecutor(provider="ollama")
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.delete_all_documents") as mock_delete_docs, \
+             patch("genglossary.runs.executor.delete_all_terms") as mock_delete_terms, \
+             patch("genglossary.runs.executor.delete_all_provisional") as mock_delete_prov, \
+             patch("genglossary.runs.executor.delete_all_issues") as mock_delete_issues, \
+             patch("genglossary.runs.executor.delete_all_refined") as mock_delete_refined:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock components
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="test.txt", content="test")
+            ]
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute with full scope
+            executor.execute(project_db, "full", cancel_event, log_queue)
+
+            # Verify all tables were cleared before execution
+            mock_delete_docs.assert_called_once()
+            mock_delete_terms.assert_called_once()
+            mock_delete_prov.assert_called_once()
+            mock_delete_issues.assert_called_once()
+            mock_delete_refined.assert_called_once()
