@@ -31,6 +31,14 @@ class PipelineExecutor:
     with support for cancellation and progress reporting.
     """
 
+    def __init__(self, provider: str = "ollama"):
+        """Initialize the PipelineExecutor.
+
+        Args:
+            provider: LLM provider name (default: 'ollama').
+        """
+        self._llm_client = create_llm_client(provider=provider)
+
     def execute(
         self,
         conn: sqlite3.Connection,
@@ -101,8 +109,7 @@ class PipelineExecutor:
             return
 
         log_queue.put({"level": "info", "message": "Extracting terms..."})
-        llm_client = create_llm_client(provider="ollama")
-        extractor = TermExtractor(llm_client=llm_client)
+        extractor = TermExtractor(llm_client=self._llm_client)
         extracted_terms = extractor.extract_terms(documents, return_categories=True)
 
         # Save extracted terms
@@ -178,8 +185,7 @@ class PipelineExecutor:
             return
 
         log_queue.put({"level": "info", "message": "Generating glossary..."})
-        llm_client = create_llm_client(provider="ollama")
-        generator = GlossaryGenerator(llm_client=llm_client)
+        generator = GlossaryGenerator(llm_client=self._llm_client)
         glossary = generator.generate(extracted_terms, documents)
 
         # Save provisional glossary
@@ -272,8 +278,7 @@ class PipelineExecutor:
             return
 
         log_queue.put({"level": "info", "message": "Reviewing glossary..."})
-        llm_client = create_llm_client(provider="ollama")
-        reviewer = GlossaryReviewer(llm_client=llm_client)
+        reviewer = GlossaryReviewer(llm_client=self._llm_client)
         issues = reviewer.review(glossary)
 
         # Save issues
@@ -293,8 +298,7 @@ class PipelineExecutor:
                 return
 
             log_queue.put({"level": "info", "message": "Refining glossary..."})
-            llm_client = create_llm_client(provider="ollama")
-            refiner = GlossaryRefiner(llm_client=llm_client)
+            refiner = GlossaryRefiner(llm_client=self._llm_client)
             glossary = refiner.refine(glossary, issues, documents)
 
             # Save refined glossary

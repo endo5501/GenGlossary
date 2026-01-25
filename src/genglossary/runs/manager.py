@@ -1,6 +1,7 @@
 """Run manager for background pipeline execution."""
 
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from queue import Queue
 from threading import Event, Thread
@@ -22,6 +23,9 @@ class RunManager:
     Ensures only one active run per project and provides log streaming.
     """
 
+    # Maximum log queue size to prevent unbounded memory growth
+    MAX_LOG_QUEUE_SIZE = 1000
+
     def __init__(self, db_path: str):
         """Initialize the RunManager.
 
@@ -31,8 +35,21 @@ class RunManager:
         self.db_path = db_path
         self._thread: Thread | None = None
         self._cancel_event = Event()
-        self._log_queue: Queue = Queue()
+        self._log_queue: Queue = Queue(maxsize=self.MAX_LOG_QUEUE_SIZE)
         self._current_run_id: int | None = None
+
+    @contextmanager
+    def _db_connection(self):
+        """Provide a database connection with automatic cleanup.
+
+        Yields:
+            sqlite3.Connection: Database connection.
+        """
+        conn = get_connection(self.db_path)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def start_run(self, scope: str, triggered_by: str = "api") -> int:
         """Start a new run in the background.
@@ -48,16 +65,13 @@ class RunManager:
             RuntimeError: If a run is already running.
         """
         # Check if a run is already active
-        conn = get_connection(self.db_path)
-        try:
+        with self._db_connection() as conn:
             active_run = get_active_run(conn)
             if active_run is not None:
                 raise RuntimeError(f"Run already running: {active_run['id']}")
 
             # Create run record
             run_id = create_run(conn, scope=scope, triggered_by=triggered_by)
-        finally:
-            conn.close()
 
         self._current_run_id = run_id
 
@@ -126,11 +140,8 @@ class RunManager:
         self._cancel_event.set()
 
         # Update database status
-        conn = get_connection(self.db_path)
-        try:
+        with self._db_connection() as conn:
             cancel_run(conn, run_id)
-        finally:
-            conn.close()
 
     def get_active_run(self) -> sqlite3.Row | None:
         """Get the currently active run.
@@ -138,11 +149,8 @@ class RunManager:
         Returns:
             sqlite3.Row if found, None otherwise.
         """
-        conn = get_connection(self.db_path)
-        try:
+        with self._db_connection() as conn:
             return get_active_run(conn)
-        finally:
-            conn.close()
 
     def get_run(self, run_id: int) -> sqlite3.Row | None:
         """Get run details by ID.
@@ -153,11 +161,8 @@ class RunManager:
         Returns:
             sqlite3.Row if found, None otherwise.
         """
-        conn = get_connection(self.db_path)
-        try:
+        with self._db_connection() as conn:
             return get_run(conn, run_id)
-        finally:
-            conn.close()
 
     def get_log_queue(self) -> Queue:
         """Get the log queue for streaming logs.
