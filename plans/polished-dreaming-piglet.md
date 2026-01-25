@@ -1,187 +1,280 @@
-# GUI API Operations Runner 残りタスク実装計画
+# コードレビュー指摘事項の修正計画
+
+## ステータス: ✅ 実装完了 (2026-01-26)
+
+すべての問題が修正され、テストが追加されました。
+- テストコミット: d355101
+- 実装コミット: ca3fd79
+- すべてのテスト（637個）がパス
 
 ## 概要
 
-`tickets/260124-164011-gui-api-operations-runner.md` の残りタスクを完了させる計画。
-
-## 残りタスク一覧
-
-1. PipelineExecutorに実際のパイプラインロジック統合
-2. API統合テストの修正（SQLite threading問題解決）
-3. docs/architecture.md更新
-4. code-simplifier agentによるレビュー
-5. 静的解析（pyright）とフルテストスイート実行
+`tickets/260124-164011-gui-api-operations-runner.md` の Code Review (2026-01-25) で指摘された問題を修正する計画。
 
 ---
 
-## フェーズ1: RunManager接続管理改善
+## 問題一覧と優先度
 
-### 問題
-- `RunManager` が `sqlite3.Connection` をコンストラクタで受け取り、バックグラウンドスレッドで共有
-- APIリクエスト終了時に `get_project_db()` が接続を閉じるが、スレッドはまだ動作中
-- 結果: Segmentation Fault
+| 優先度 | 問題 | 影響 |
+|--------|------|------|
+| **Critical** | RunManagerがリクエスト毎に新規生成 | キャンセル・ログ取得が機能しない |
+| **High** | 入力ディレクトリが `"."` 固定 | 誤ったドキュメントを処理 |
+| **High** | LLM設定がプロジェクト設定を無視 | 常にollamaを使用 |
+| **Medium** | SSE完了シグナルがない | ストリームが閉じない |
+| **Medium** | 再実行時にUNIQUE制約違反 | Runがfailedになる |
 
-### 解決策
-`db_path` を渡し、バックグラウンドスレッド内で独自の接続を作成
+---
+
+## フェーズ1: RunManagerシングルトン化 (Critical)
+
+### 問題の詳細
+- `get_run_manager()` が毎回新しい `RunManager` インスタンスを生成
+- キャンセル時: 別インスタンスの `_cancel_event.set()` を呼ぶため、実行中スレッドには届かない
+- ログ取得時: 別インスタンスの `_log_queue` を参照するため、空のまま
+
+### 解決策: プロジェクト単位のレジストリパターン
+
+**`src/genglossary/api/dependencies.py`**
+```python
+from threading import Lock
+from genglossary.runs.manager import RunManager
+
+_run_manager_registry: dict[str, RunManager] = {}
+_registry_lock = Lock()
+
+def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager:
+    """Get or create RunManager instance for the project (singleton per project)."""
+    with _registry_lock:
+        if project.db_path not in _run_manager_registry:
+            _run_manager_registry[project.db_path] = RunManager(
+                db_path=project.db_path,
+                doc_root=project.doc_root,
+                llm_provider=project.llm_provider,
+                llm_model=project.llm_model,
+            )
+        return _run_manager_registry[project.db_path]
+```
+
+**`src/genglossary/api/routers/runs.py`**
+- `get_run_manager` を `dependencies.py` から import に変更
+- ローカルの `get_run_manager` 関数を削除
 
 ### 変更ファイル
+- `src/genglossary/api/dependencies.py` - レジストリ追加
+- `src/genglossary/api/routers/runs.py` - import変更
+
+---
+
+## フェーズ2: プロジェクト設定の反映 (High)
+
+### 問題の詳細
+- `executor.py` の `load_directory(".")` がハードコード
+- `PipelineExecutor(provider="ollama")` が固定
+
+### 解決策: RunManager経由でプロジェクト設定を渡す
 
 **`src/genglossary/runs/manager.py`**
 ```python
 class RunManager:
-    def __init__(self, db_path: str):  # 接続→パスに変更
+    def __init__(
+        self,
+        db_path: str,
+        doc_root: str = ".",
+        llm_provider: str = "ollama",
+        llm_model: str = "",
+    ):
         self.db_path = db_path
+        self.doc_root = doc_root
+        self.llm_provider = llm_provider
+        self.llm_model = llm_model
         # ...
 
     def _execute_run(self, run_id: int, scope: str) -> None:
-        conn = get_connection(self.db_path)  # スレッド内で新規接続
-        try:
-            # ... パイプライン実行
-        finally:
-            conn.close()  # スレッド内で閉じる
+        # ...
+        executor = PipelineExecutor(
+            provider=self.llm_provider,
+            model=self.llm_model,
+        )
+        executor.execute(
+            conn, scope, self._cancel_event, self._log_queue,
+            doc_root=self.doc_root,
+        )
 ```
-
-**`src/genglossary/api/dependencies.py`**
-```python
-def get_project_db_path(project: Project = Depends(get_project_by_id)) -> str:
-    return project.db_path
-```
-
-**`src/genglossary/api/routers/runs.py`**
-```python
-def get_run_manager(db_path: str = Depends(get_project_db_path)) -> RunManager:
-    return RunManager(db_path)
-```
-
-### テスト修正
-- `tests/runs/test_manager.py` のfixtureを `db_path` を渡す方式に変更
-
----
-
-## フェーズ2: PipelineExecutor実装（TDD）
-
-### ステップ2.1: テスト作成（Red）
-
-**`tests/runs/test_executor.py`** を新規作成
-
-```python
-class TestPipelineExecutorFull:
-    def test_full_scope_executes_all_steps(self):
-        """full scopeは全ステップを実行"""
-
-    def test_full_scope_respects_cancellation(self):
-        """キャンセル時は途中で停止"""
-
-class TestPipelineExecutorFromTerms:
-    def test_from_terms_skips_document_loading(self):
-        """from_termsはドキュメント読み込みをスキップ"""
-
-class TestPipelineExecutorProvisionalToRefined:
-    def test_provisional_to_refined_starts_from_review(self):
-        """provisional_to_refinedは精査から開始"""
-
-class TestPipelineExecutorProgress:
-    def test_progress_updates_are_logged(self):
-        """進捗がlog_queueに送信される"""
-```
-
-### ステップ2.2: 実装（Green）
 
 **`src/genglossary/runs/executor.py`**
-
-CLIの `_generate_glossary_with_db()` (cli.py:148-321) のロジックを再利用:
-
-| Scope | 実行ステップ |
-|-------|------------|
-| `full` | 1→2→3→4→5 (全パイプライン) |
-| `from_terms` | 3→4→5 (既存termsを使用) |
-| `provisional_to_refined` | 4→5 (既存provisionalを使用) |
-
 ```python
 class PipelineExecutor:
-    def execute(self, conn, scope, cancel_event, log_queue, run_id=None):
-        if scope == "full":
-            self._execute_full(...)
-        elif scope == "from_terms":
-            self._execute_from_terms(...)
-        elif scope == "provisional_to_refined":
-            self._execute_provisional_to_refined(...)
+    def __init__(self, provider: str = "ollama", model: str = ""):
+        self._llm_client = create_llm_client(provider=provider, model=model)
 
-    def _execute_full(self, cancel_event, log_queue):
-        # Step 1: DocumentLoader
-        # Step 2: TermExtractor
-        # Step 3-5: _execute_from_terms()
+    def execute(self, conn, scope, cancel_event, log_queue, doc_root: str = "."):
+        # doc_rootを各メソッドに渡す
 
-    def _execute_from_terms(self, cancel_event, log_queue):
-        # Step 3: GlossaryGenerator
-        # Step 4-5: _execute_provisional_to_refined()
-
-    def _execute_provisional_to_refined(self, cancel_event, log_queue):
-        # Step 4: GlossaryReviewer
-        # Step 5: GlossaryRefiner
+    def _execute_full(self, ..., doc_root: str):
+        documents = loader.load_directory(doc_root)  # "." → doc_root
 ```
 
-### モック戦略
-- LLMクライアントをモック（`@patch("genglossary.llm.factory.create_llm_client")`）
-- 各コンポーネント（TermExtractor等）の出力をモック
+### 変更ファイル
+- `src/genglossary/runs/manager.py` - コンストラクタ拡張、executor呼び出し変更
+- `src/genglossary/runs/executor.py` - doc_root/modelパラメータ追加
+- `src/genglossary/llm/factory.py` - model引数対応（必要に応じて）
 
 ---
 
-## フェーズ3: API統合テスト再実装
+## フェーズ3: SSE完了シグナル追加 (Medium)
 
-**`tests/api/routers/test_runs.py`** を新規作成
+### 問題の詳細
+- Run完了後に `log_queue.put(None)` が呼ばれない
+- SSEクライアントはkeepaliveを受け続け、完了を検知できない
 
-### テストケース
+### 解決策
 
+**`src/genglossary/runs/manager.py`**
 ```python
-class TestStartRun:
-    def test_start_run_creates_run_record(self):
-    def test_start_run_returns_409_when_already_running(self):
-    def test_start_run_with_different_scopes(self):
-
-class TestCancelRun:
-    def test_cancel_run_updates_status(self):
-    def test_cancel_nonexistent_run_returns_404(self):
-
-class TestListRuns:
-    def test_list_runs_returns_history(self):
-
-class TestGetRun:
-    def test_get_run_returns_details(self):
-    def test_get_run_returns_404_for_missing(self):
-
-class TestGetCurrentRun:
-    def test_get_current_run_returns_active(self):
-    def test_get_current_run_returns_404_when_none(self):
+def _execute_run(self, run_id: int, scope: str) -> None:
+    conn = get_connection(self.db_path)
+    try:
+        # ... パイプライン実行
+    except Exception as e:
+        # ... エラー処理
+    finally:
+        # Send completion signal to close SSE stream
+        self._log_queue.put(None)
+        conn.close()
 ```
 
-### テストの同期戦略
-- `PipelineExecutor.execute` をモックして即座に完了
-- `time.sleep()` + `thread.join()` でスレッド完了を待機
+### 変更ファイル
+- `src/genglossary/runs/manager.py` - finallyブロックに追加
 
 ---
 
-## フェーズ4: docs/architecture.md更新
+## フェーズ4: 再実行時のUNIQUE制約対応 (Medium)
 
-### 追加セクション
+### 問題の詳細
+- 2回目のRun実行時、既存データでINSERTが失敗
+- 影響テーブル: `documents`, `terms_extracted`, `glossary_provisional`, `glossary_refined`
 
-`### 8. runs/ - Run管理` を追加:
+### 解決策: 実行前にスコープに応じてテーブルクリア
 
-- **役割**: バックグラウンドパイプライン実行の管理
-- **manager.py**: `db_path`を受け取り、スレッド内で接続を作成
-- **executor.py**: CLIパイプラインコンポーネントの再利用
-- **スレッディングアーキテクチャ図**
-- **Runs APIエンドポイント一覧**
+**`src/genglossary/runs/executor.py`**
+```python
+def execute(self, conn, scope, cancel_event, log_queue, doc_root: str = "."):
+    # Clear tables before execution
+    self._clear_tables_for_scope(conn, scope)
+    # ... 既存ロジック
+
+def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: str) -> None:
+    """Clear relevant tables before execution."""
+    if scope == "full":
+        delete_all_documents(conn)
+        delete_all_terms(conn)
+        delete_all_provisional(conn)
+        delete_all_issues(conn)
+        delete_all_refined(conn)
+    elif scope == "from_terms":
+        delete_all_provisional(conn)
+        delete_all_issues(conn)
+        delete_all_refined(conn)
+    elif scope == "provisional_to_refined":
+        delete_all_issues(conn)
+        delete_all_refined(conn)
+```
+
+**`src/genglossary/db/document_repository.py`** (新規関数)
+```python
+def delete_all_documents(conn: sqlite3.Connection) -> None:
+    """Delete all documents."""
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM documents")
+    conn.commit()
+```
+
+### 変更ファイル
+- `src/genglossary/runs/executor.py` - クリア処理追加
+- `src/genglossary/db/document_repository.py` - delete_all_documents追加
 
 ---
 
-## フェーズ5: 最終確認
+## フェーズ5: テスト追加 (TDD)
 
-### code-simplifier agentレビュー
-- 重複コードの特定
-- リファクタリング提案
+### 新規テストケース
 
-### 静的解析とテスト
+**`tests/runs/test_manager.py`** (追加)
+```python
+def test_cancel_run_stops_execution():
+    """キャンセルが実行中スレッドに届くことを確認"""
+
+def test_sse_receives_completion_signal():
+    """SSEストリームが完了シグナルで閉じることを確認"""
+```
+
+**`tests/runs/test_executor.py`** (追加)
+```python
+def test_executor_uses_doc_root():
+    """doc_rootパラメータが使用されることを確認"""
+
+def test_executor_uses_llm_settings():
+    """llm_provider/llm_modelが使用されることを確認"""
+
+def test_re_execution_clears_tables():
+    """再実行時にテーブルがクリアされることを確認"""
+```
+
+**`tests/api/test_dependencies.py`** (新規)
+```python
+def test_run_manager_singleton_per_project():
+    """同一プロジェクトで同じRunManagerインスタンスが返ることを確認"""
+```
+
+---
+
+## 変更ファイル一覧
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `src/genglossary/api/dependencies.py` | RunManagerレジストリ追加 |
+| `src/genglossary/api/routers/runs.py` | get_run_managerをimportに変更 |
+| `src/genglossary/runs/manager.py` | コンストラクタ拡張、完了シグナル追加 |
+| `src/genglossary/runs/executor.py` | doc_root/model対応、テーブルクリア追加 |
+| `src/genglossary/db/document_repository.py` | delete_all_documents追加 |
+| `src/genglossary/llm/factory.py` | model引数対応（必要に応じて） |
+| `tests/runs/test_manager.py` | キャンセル・SSEテスト追加 |
+| `tests/runs/test_executor.py` | 設定反映・クリアテスト追加 |
+| `tests/api/test_dependencies.py` | シングルトンテスト新規作成 |
+
+---
+
+## 検証方法
+
+### 1. 単体テスト
+```bash
+uv run pytest tests/runs/ -v
+uv run pytest tests/api/test_dependencies.py -v
+```
+
+### 2. E2Eテスト（手動）
+```bash
+# サーバー起動
+uv run uvicorn genglossary.api.app:app --reload
+
+# ターミナル1: Run開始
+curl -X POST http://localhost:8000/api/projects/1/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scope": "full"}'
+
+# ターミナル2: SSEログ確認
+curl -N http://localhost:8000/api/projects/1/runs/1/logs
+
+# ターミナル3: キャンセル
+curl -X DELETE http://localhost:8000/api/projects/1/runs/1
+
+# 再実行テスト（UNIQUE制約確認）
+curl -X POST http://localhost:8000/api/projects/1/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scope": "full"}'
+```
+
+### 3. 静的解析
 ```bash
 uv run pyright
 uv run pytest
@@ -189,38 +282,13 @@ uv run pytest
 
 ---
 
-## 重要ファイル
+## Open Questionsへの回答
 
-| ファイル | 変更内容 |
-|---------|---------|
-| `src/genglossary/runs/manager.py` | db_path方式に変更 |
-| `src/genglossary/runs/executor.py` | パイプラインロジック統合 |
-| `src/genglossary/api/dependencies.py` | get_project_db_path追加 |
-| `src/genglossary/api/routers/runs.py` | 依存性変更 |
-| `tests/runs/test_manager.py` | fixture修正 |
-| `tests/runs/test_executor.py` | 新規作成 |
-| `tests/api/routers/test_runs.py` | 新規作成 |
-| `docs/architecture.md` | Run管理セクション追記 |
+1. **RunManagerをプロジェクト単位で共有する設計にする前提で良いか？**
+   → Yes。レジストリパターンで `db_path` をキーにシングルトン管理
 
----
+2. **再実行時はテーブルクリアか INSERT OR REPLACE/IGNORE の方針か？**
+   → テーブルクリア。古いデータとの混在を防ぎ、データの一貫性を保証
 
-## 検証方法
-
-1. **単体テスト**: `uv run pytest tests/runs/`
-2. **API統合テスト**: `uv run pytest tests/api/routers/test_runs.py`
-3. **フルテストスイート**: `uv run pytest`
-4. **静的解析**: `uv run pyright`
-5. **手動確認**: FastAPIサーバーを起動し、curlでRuns APIをテスト
-
-```bash
-# サーバー起動
-uv run uvicorn genglossary.api.app:app --reload
-
-# Run開始
-curl -X POST http://localhost:8000/api/projects/1/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scope": "full"}'
-
-# Run一覧
-curl http://localhost:8000/api/projects/1/runs
-```
+3. **Run実行時の入力ディレクトリは Project.doc_root で固定して良いか？**
+   → Yes。プロジェクト作成時に設定された `doc_root` を使用
