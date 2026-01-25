@@ -3,6 +3,7 @@
 import os
 import sqlite3
 from pathlib import Path
+from threading import Lock
 from typing import Generator
 
 from fastapi import Depends, HTTPException
@@ -12,6 +13,11 @@ from genglossary.db.connection import get_connection
 from genglossary.db.project_repository import get_project
 from genglossary.db.registry_schema import initialize_registry
 from genglossary.models.project import Project
+from genglossary.runs.manager import RunManager
+
+# RunManager registry: one instance per project (keyed by db_path)
+_run_manager_registry: dict[str, RunManager] = {}
+_registry_lock = Lock()
 
 
 def get_config() -> Config:
@@ -100,3 +106,23 @@ def get_project_db_path(project: Project = Depends(get_project_by_id)) -> str:
         str: Path to project database.
     """
     return project.db_path
+
+
+def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager:
+    """Get or create RunManager instance for the project (singleton per project).
+
+    Args:
+        project: Project instance from get_project_by_id.
+
+    Returns:
+        RunManager: RunManager instance for the project.
+    """
+    with _registry_lock:
+        if project.db_path not in _run_manager_registry:
+            _run_manager_registry[project.db_path] = RunManager(
+                db_path=project.db_path,
+                doc_root=project.doc_root,
+                llm_provider=project.llm_provider,
+                llm_model=project.llm_model,
+            )
+        return _run_manager_registry[project.db_path]

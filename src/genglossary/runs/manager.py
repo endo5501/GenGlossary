@@ -26,13 +26,25 @@ class RunManager:
     # Maximum log queue size to prevent unbounded memory growth
     MAX_LOG_QUEUE_SIZE = 1000
 
-    def __init__(self, db_path: str):
+    def __init__(
+        self,
+        db_path: str,
+        doc_root: str = ".",
+        llm_provider: str = "ollama",
+        llm_model: str = "",
+    ):
         """Initialize the RunManager.
 
         Args:
             db_path: Path to project database.
+            doc_root: Root directory for documents (default: ".").
+            llm_provider: LLM provider name (default: "ollama").
+            llm_model: LLM model name (default: "").
         """
         self.db_path = db_path
+        self.doc_root = doc_root
+        self.llm_provider = llm_provider
+        self.llm_model = llm_model
         self._thread: Thread | None = None
         self._cancel_event = Event()
         self._log_queue: Queue = Queue(maxsize=self.MAX_LOG_QUEUE_SIZE)
@@ -101,10 +113,17 @@ class RunManager:
                 conn, run_id, "running", started_at=datetime.now()
             )
 
-            # Execute pipeline
-            executor = PipelineExecutor()
+            # Execute pipeline with project settings
+            executor = PipelineExecutor(
+                provider=self.llm_provider,
+                model=self.llm_model,
+            )
             executor.execute(
-                conn, scope, self._cancel_event, self._log_queue
+                conn,
+                scope,
+                self._cancel_event,
+                self._log_queue,
+                doc_root=self.doc_root,
             )
 
             # Check if cancelled
@@ -127,6 +146,8 @@ class RunManager:
             )
             self._log_queue.put({"level": "error", "message": f"Run failed: {str(e)}"})
         finally:
+            # Send completion signal to close SSE stream
+            self._log_queue.put(None)
             # Close the connection when thread completes
             conn.close()
 

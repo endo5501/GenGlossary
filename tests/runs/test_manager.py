@@ -231,7 +231,7 @@ class TestRunManagerLogStreaming:
         """実行中のログがキャプチャされる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_queue):
+            def mock_execute(conn, scope, cancel_event, log_queue, doc_root="."):
                 log_queue.put({"level": "info", "message": "Starting execution"})
                 log_queue.put({"level": "info", "message": "Completed"})
 
@@ -240,11 +240,13 @@ class TestRunManagerLogStreaming:
             run_id = manager.start_run(scope="full")
             time.sleep(0.2)  # Allow execution to complete
 
-            # Retrieve logs from queue
+            # Retrieve logs from queue (filter out None completion signal)
             log_queue = manager.get_log_queue()
             logs = []
             while not log_queue.empty():
-                logs.append(log_queue.get_nowait())
+                log = log_queue.get_nowait()
+                if log is not None:
+                    logs.append(log)
 
             assert len(logs) >= 2
             assert any("Starting execution" in log["message"] for log in logs)
@@ -255,7 +257,7 @@ class TestRunManagerLogStreaming:
             # Mock executor that checks cancellation event
             cancel_detected = []
 
-            def mock_execute(conn, scope, cancel_event, log_queue):
+            def mock_execute(conn, scope, cancel_event, log_queue, doc_root="."):
                 log_queue.put({"level": "info", "message": "Starting"})
                 # Simulate some work, checking for cancellation
                 for i in range(10):
@@ -282,11 +284,13 @@ class TestRunManagerLogStreaming:
             assert len(cancel_detected) > 0
             assert cancel_detected[0] is True
 
-            # Check logs contain cancellation message
+            # Check logs contain cancellation message (filter out None)
             log_queue = manager.get_log_queue()
             logs = []
             while not log_queue.empty():
-                logs.append(log_queue.get_nowait())
+                log = log_queue.get_nowait()
+                if log is not None:
+                    logs.append(log)
 
             assert any("Cancelled" in log["message"] for log in logs)
 

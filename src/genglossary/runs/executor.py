@@ -5,14 +5,19 @@ import sqlite3
 from queue import Queue
 from threading import Event
 
-from genglossary.db.document_repository import create_document, list_all_documents
-from genglossary.db.issue_repository import create_issue
+from genglossary.db.document_repository import (
+    create_document,
+    delete_all_documents,
+    list_all_documents,
+)
+from genglossary.db.issue_repository import create_issue, delete_all_issues
 from genglossary.db.provisional_repository import (
     create_provisional_term,
+    delete_all_provisional,
     list_all_provisional,
 )
-from genglossary.db.refined_repository import create_refined_term
-from genglossary.db.term_repository import create_term, list_all_terms
+from genglossary.db.refined_repository import create_refined_term, delete_all_refined
+from genglossary.db.term_repository import create_term, delete_all_terms, list_all_terms
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.glossary_refiner import GlossaryRefiner
@@ -31,13 +36,14 @@ class PipelineExecutor:
     with support for cancellation and progress reporting.
     """
 
-    def __init__(self, provider: str = "ollama"):
+    def __init__(self, provider: str = "ollama", model: str = ""):
         """Initialize the PipelineExecutor.
 
         Args:
             provider: LLM provider name (default: 'ollama').
+            model: LLM model name (default: '').
         """
-        self._llm_client = create_llm_client(provider=provider)
+        self._llm_client = create_llm_client(provider=provider, model=model)
 
     def execute(
         self,
@@ -45,6 +51,7 @@ class PipelineExecutor:
         scope: str,
         cancel_event: Event,
         log_queue: Queue,
+        doc_root: str = ".",
     ) -> None:
         """Execute the pipeline for the given scope.
 
@@ -53,6 +60,7 @@ class PipelineExecutor:
             scope: Execution scope ('full', 'from_terms', 'provisional_to_refined').
             cancel_event: Event to signal cancellation.
             log_queue: Queue for log messages.
+            doc_root: Root directory for documents (default: ".").
         """
         # Log execution start
         log_queue.put({"level": "info", "message": f"Starting pipeline execution: {scope}"})
@@ -62,13 +70,16 @@ class PipelineExecutor:
             log_queue.put({"level": "info", "message": "Execution cancelled"})
             return
 
+        # Clear tables before execution
+        self._clear_tables_for_scope(conn, scope)
+
         # Execute based on scope
         if scope == "full":
-            self._execute_full(conn, cancel_event, log_queue)
+            self._execute_full(conn, cancel_event, log_queue, doc_root)
         elif scope == "from_terms":
-            self._execute_from_terms(conn, cancel_event, log_queue)
+            self._execute_from_terms(conn, cancel_event, log_queue, documents=None, extracted_terms=None)
         elif scope == "provisional_to_refined":
-            self._execute_provisional_to_refined(conn, cancel_event, log_queue)
+            self._execute_provisional_to_refined(conn, cancel_event, log_queue, glossary=None, documents=None)
         else:
             log_queue.put({"level": "error", "message": f"Unknown scope: {scope}"})
             return
@@ -76,7 +87,11 @@ class PipelineExecutor:
         log_queue.put({"level": "info", "message": "Pipeline execution completed"})
 
     def _execute_full(
-        self, conn: sqlite3.Connection, cancel_event: Event, log_queue: Queue
+        self,
+        conn: sqlite3.Connection,
+        cancel_event: Event,
+        log_queue: Queue,
+        doc_root: str = ".",
     ) -> None:
         """Execute full pipeline (steps 1-5).
 
@@ -84,6 +99,7 @@ class PipelineExecutor:
             conn: Project database connection.
             cancel_event: Event to signal cancellation.
             log_queue: Queue for log messages.
+            doc_root: Root directory for documents (default: ".").
         """
         # Step 1: Load documents
         if cancel_event.is_set():
@@ -91,7 +107,7 @@ class PipelineExecutor:
 
         log_queue.put({"level": "info", "message": "Loading documents..."})
         loader = DocumentLoader()
-        documents = loader.load_directory(".")  # TODO: Get actual input dir
+        documents = loader.load_directory(doc_root)
 
         if not documents:
             log_queue.put({"level": "error", "message": "No documents found"})
@@ -312,3 +328,27 @@ class PipelineExecutor:
                 )
 
             log_queue.put({"level": "info", "message": f"Refined {len(glossary.terms)} terms"})
+
+    def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: str) -> None:
+        """Clear relevant tables before execution.
+
+        Args:
+            conn: Project database connection.
+            scope: Execution scope.
+        """
+        if scope == "full":
+            # Clear all tables for full execution
+            delete_all_documents(conn)
+            delete_all_terms(conn)
+            delete_all_provisional(conn)
+            delete_all_issues(conn)
+            delete_all_refined(conn)
+        elif scope == "from_terms":
+            # Clear only glossary-related tables
+            delete_all_provisional(conn)
+            delete_all_issues(conn)
+            delete_all_refined(conn)
+        elif scope == "provisional_to_refined":
+            # Clear only review and refinement tables
+            delete_all_issues(conn)
+            delete_all_refined(conn)
