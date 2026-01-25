@@ -4,7 +4,7 @@ tags: [db, model, gui]
 description: "Define 'project' as a first-class entity with metadata, storage layout, and persistence for GUI use."
 created_at: "2026-01-24T16:40:08Z"
 started_at: 2026-01-25T11:01:09Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-25T11:54:53Z # Do not modify manually
 ---
 
 # Ticket Overview
