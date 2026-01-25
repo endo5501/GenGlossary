@@ -12,12 +12,15 @@ from genglossary.db.term_repository import create_term
 
 
 @pytest.fixture
-def test_project_setup(tmp_path: Path):
+def test_project_setup(tmp_path: Path, monkeypatch):
     """Setup test project with registry and project database."""
     registry_path = tmp_path / "registry.db"
     project_db_path = tmp_path / "project.db"
     doc_root = tmp_path / "docs"
     doc_root.mkdir()
+
+    # Set registry path for client fixture
+    monkeypatch.setenv("GENGLOSSARY_REGISTRY_PATH", str(registry_path))
 
     # Initialize registry
     registry_conn = get_connection(str(registry_path))
@@ -40,7 +43,7 @@ def test_project_setup(tmp_path: Path):
     }
 
 
-def test_list_terms_returns_empty_list(client: TestClient, test_project_setup):
+def test_list_terms_returns_empty_list(test_project_setup, client: TestClient):
     """Test GET /api/projects/{id}/terms returns empty list when no terms exist."""
     project_id = test_project_setup["project_id"]
 
@@ -51,7 +54,7 @@ def test_list_terms_returns_empty_list(client: TestClient, test_project_setup):
     assert data == []
 
 
-def test_list_terms_returns_all_terms(client: TestClient, test_project_setup):
+def test_list_terms_returns_all_terms(test_project_setup, client: TestClient):
     """Test GET /api/projects/{id}/terms returns all extracted terms."""
     project_id = test_project_setup["project_id"]
     project_db_path = test_project_setup["project_db_path"]
@@ -74,7 +77,7 @@ def test_list_terms_returns_all_terms(client: TestClient, test_project_setup):
     assert data[1]["term_text"] == "量子ビット"
 
 
-def test_get_term_by_id_returns_term(client: TestClient, test_project_setup):
+def test_get_term_by_id_returns_term(test_project_setup, client: TestClient):
     """Test GET /api/projects/{id}/terms/{term_id} returns specific term."""
     project_id = test_project_setup["project_id"]
     project_db_path = test_project_setup["project_db_path"]
@@ -93,7 +96,7 @@ def test_get_term_by_id_returns_term(client: TestClient, test_project_setup):
 
 
 def test_get_term_by_id_returns_404_for_missing_term(
-    client: TestClient, test_project_setup
+    test_project_setup, client: TestClient
 ):
     """Test GET /api/projects/{id}/terms/{term_id} returns 404 for missing term."""
     project_id = test_project_setup["project_id"]
@@ -103,7 +106,7 @@ def test_get_term_by_id_returns_404_for_missing_term(
     assert response.status_code == 404
 
 
-def test_create_term_adds_new_term(client: TestClient, test_project_setup):
+def test_create_term_adds_new_term(test_project_setup, client: TestClient):
     """Test POST /api/projects/{id}/terms creates a new term."""
     project_id = test_project_setup["project_id"]
 
@@ -118,7 +121,7 @@ def test_create_term_adds_new_term(client: TestClient, test_project_setup):
     assert data["category"] == "技術"
 
 
-def test_update_term_modifies_existing_term(client: TestClient, test_project_setup):
+def test_update_term_modifies_existing_term(test_project_setup, client: TestClient):
     """Test PATCH /api/projects/{id}/terms/{term_id} updates term."""
     project_id = test_project_setup["project_id"]
     project_db_path = test_project_setup["project_db_path"]
@@ -140,7 +143,7 @@ def test_update_term_modifies_existing_term(client: TestClient, test_project_set
     assert data["category"] == "新カテゴリ"
 
 
-def test_delete_term_removes_term(client: TestClient, test_project_setup):
+def test_delete_term_removes_term(test_project_setup, client: TestClient):
     """Test DELETE /api/projects/{id}/terms/{term_id} removes term."""
     project_id = test_project_setup["project_id"]
     project_db_path = test_project_setup["project_db_path"]

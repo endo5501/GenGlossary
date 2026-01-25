@@ -1,19 +1,17 @@
 """Fixtures for API tests."""
 
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client(tmp_path: Path, monkeypatch):
-    """Create TestClient for API testing with test registry database."""
-    from genglossary.api.app import create_app
+def client():
+    """Create TestClient for API testing.
 
-    # Set test registry path
-    registry_path = tmp_path / "test_registry.db"
-    monkeypatch.setenv("GENGLOSSARY_REGISTRY_PATH", str(registry_path))
+    Note: Tests should set GENGLOSSARY_REGISTRY_PATH via monkeypatch
+    before using this fixture if they need a specific registry path.
+    """
+    from genglossary.api.app import create_app
 
     app = create_app()
     return TestClient(app)
