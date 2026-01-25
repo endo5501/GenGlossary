@@ -245,3 +245,15 @@ Prefer SSE for simplicity; leave room to swap transport. Ensure runs respect pro
 - 影響: 並行リクエストに影響する可能性
 - 対応案: 非同期キューまたは `asyncio.Queue` への移行を検討
 - 優先度: Medium（現時点では実用上問題なし）
+
+## Code Review Follow-up (2026-01-26) ❗
+
+### Findings
+- **High**: ログがrun単位で分離されていない。RunManagerはプロジェクト単位の単一キューを保持しており、`/runs/{run_id}/logs` でも共有キューを消費するため、別runのログや過去runの完了シグナルで即終了する可能性がある。複数クライアント間でログが分散する恐れ。該当: `src/genglossary/runs/manager.py`, `src/genglossary/api/routers/runs.py`
+- **Medium**: ドキュメント無し時に `_execute_full` がエラーログのみで return し、RunManager が `completed` を付与する。失敗扱いにしたいなら例外化またはステータス更新が必要。該当: `src/genglossary/runs/executor.py`, `src/genglossary/runs/manager.py`
+- **Medium**: RunManagerレジストリがプロジェクト設定をキャッシュするため、`doc_root`/`llm_provider`/`llm_model` を更新してもRunManagerが更新されず古い設定で実行される。該当: `src/genglossary/api/dependencies.py`
+- **Medium**: 完了シグナル `None` の `put` がキュー満杯時にブロックし、スレッド終了が止まる可能性がある（maxsize=1000）。該当: `src/genglossary/runs/manager.py`
+- **Medium**: SSE内 `queue.get(timeout=1)` がイベントループを最大1秒ブロックする問題は残存。該当: `src/genglossary/api/routers/runs.py`
+
+### Testing Issue
+- **Low**: `test_sse_receives_completion_signal` のモックが `doc_root` 引数を受け取れず、例外経路で完了シグナルが送られてしまうため正常経路の検証になっていない。該当: `tests/runs/test_manager.py`

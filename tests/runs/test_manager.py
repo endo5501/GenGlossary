@@ -47,6 +47,26 @@ def manager(project_db_path: str) -> RunManager:
 class TestRunManagerStart:
     """Tests for RunManager.start_run method."""
 
+    def test_run_sets_failed_status_when_no_documents(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """ドキュメントがない場合はfailedステータスを設定する"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor to raise RuntimeError
+            mock_executor.return_value.execute.side_effect = RuntimeError("No documents found in doc_root")
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that run status is "failed"
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "failed"
+            assert "No documents found" in (run["error_message"] or "")
+
     def test_start_run_creates_run_record(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:

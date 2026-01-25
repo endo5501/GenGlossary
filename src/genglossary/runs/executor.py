@@ -111,7 +111,7 @@ class PipelineExecutor:
 
         if not documents:
             log_queue.put({"level": "error", "message": "No documents found"})
-            return
+            raise RuntimeError("No documents found in doc_root")
 
         # Save documents to database
         for document in documents:

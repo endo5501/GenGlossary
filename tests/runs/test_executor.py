@@ -55,6 +55,27 @@ def log_queue() -> Queue:
 class TestPipelineExecutorFull:
     """Tests for full scope execution."""
 
+    def test_full_scope_raises_error_when_no_documents(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_queue: Queue,
+    ) -> None:
+        """ドキュメントが見つからない場合はRuntimeErrorを発生させる"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock document loading to return empty list
+            mock_loader.return_value.load_directory.return_value = []
+
+            # Execute should raise RuntimeError
+            with pytest.raises(RuntimeError, match="No documents found"):
+                executor.execute(project_db, "full", cancel_event, log_queue)
+
     def test_full_scope_executes_all_steps(
         self,
         executor: PipelineExecutor,
