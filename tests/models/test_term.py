@@ -2,7 +2,7 @@
 
 import pytest
 
-from genglossary.models.term import Term, TermOccurrence
+from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
 
 
 class TestTermOccurrence:
@@ -138,3 +138,39 @@ class TestTerm:
         """Test that term name is stripped of whitespace."""
         term = Term(name="  API  ")
         assert term.name == "API"
+
+
+class TestClassifiedTerm:
+    """Test cases for ClassifiedTerm model."""
+
+    def test_create_classified_term(self) -> None:
+        """Test creating a ClassifiedTerm with term and category."""
+        classified = ClassifiedTerm(term="量子ビット", category=TermCategory.TECHNICAL_TERM)
+        assert classified.term == "量子ビット"
+        assert classified.category == TermCategory.TECHNICAL_TERM
+
+    def test_create_classified_term_person_name(self) -> None:
+        """Test creating a ClassifiedTerm with person_name category."""
+        classified = ClassifiedTerm(term="太郎", category=TermCategory.PERSON_NAME)
+        assert classified.term == "太郎"
+        assert classified.category == TermCategory.PERSON_NAME
+
+    def test_create_classified_term_common_noun(self) -> None:
+        """Test creating a ClassifiedTerm with common_noun category."""
+        classified = ClassifiedTerm(term="コンピュータ", category=TermCategory.COMMON_NOUN)
+        assert classified.term == "コンピュータ"
+        assert classified.category == TermCategory.COMMON_NOUN
+
+    def test_classified_term_all_categories(self) -> None:
+        """Test ClassifiedTerm accepts all TermCategory values."""
+        categories = [
+            TermCategory.PERSON_NAME,
+            TermCategory.PLACE_NAME,
+            TermCategory.ORGANIZATION,
+            TermCategory.TITLE,
+            TermCategory.TECHNICAL_TERM,
+            TermCategory.COMMON_NOUN,
+        ]
+        for category in categories:
+            classified = ClassifiedTerm(term="テスト", category=category)
+            assert classified.category == category
