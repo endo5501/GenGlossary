@@ -1539,3 +1539,38 @@ class TestTermExtractorReturnCategories:
             # Should return list[str] by default
             assert isinstance(result, list)
             assert all(isinstance(term, str) for term in result)
+
+    def test_get_classified_terms_deduplicates_same_term_in_multiple_categories(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that duplicate terms are deduplicated (first wins strategy)."""
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "量子コンピュータ", "category": "technical_term"},
+                {"term": "量子コンピュータ", "category": "person_name"},  # Duplicate
+                {"term": "量子ビット", "category": "technical_term"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = [
+                "量子コンピュータ",
+                "量子ビット",
+            ]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+            result = extractor.extract_terms([sample_document], return_categories=True)
+
+            # Should deduplicate and keep first occurrence (technical_term)
+            terms_dict = {ct.term: ct for ct in result}
+            assert len(result) == 2
+            assert "量子コンピュータ" in terms_dict
+            assert terms_dict["量子コンピュータ"].category == TermCategory.TECHNICAL_TERM
+            assert "量子ビット" in terms_dict
+            assert terms_dict["量子ビット"].category == TermCategory.TECHNICAL_TERM
