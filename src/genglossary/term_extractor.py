@@ -1,10 +1,12 @@
 """Term extractor - SudachiPy morphological analysis + LLM judgment."""
 
+from typing import overload
+
 from pydantic import BaseModel
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
-from genglossary.models.term import TermCategory
+from genglossary.models.term import ClassifiedTerm, TermCategory
 from genglossary.morphological_analyzer import MorphologicalAnalyzer
 from genglossary.types import ProgressCallback
 
@@ -127,12 +129,34 @@ class TermExtractor:
         """
         return "\n\n---\n\n".join(doc.content for doc in documents)
 
+    @overload
     def extract_terms(
         self,
         documents: list[Document],
         progress_callback: ProgressCallback | None = None,
         batch_size: int = 10,
-    ) -> list[str]:
+        *,
+        return_categories: bool = False,
+    ) -> list[str]: ...
+
+    @overload
+    def extract_terms(
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
+        *,
+        return_categories: bool = True,
+    ) -> list[ClassifiedTerm]: ...
+
+    def extract_terms(
+        self,
+        documents: list[Document],
+        progress_callback: ProgressCallback | None = None,
+        batch_size: int = 10,
+        *,
+        return_categories: bool = False,
+    ) -> list[str] | list[ClassifiedTerm]:
         """Extract terms from the given documents.
 
         Uses a two-phase LLM process:
@@ -144,9 +168,12 @@ class TermExtractor:
             progress_callback: Optional callback called after each batch is classified.
                 Receives (current_batch, total_batches) where current is 1-indexed.
             batch_size: Number of terms to classify per LLM call (default: 10).
+            return_categories: If True, return list[ClassifiedTerm] with category info.
+                If False (default), return list[str] excluding common_noun.
 
         Returns:
-            A list of unique approved terms.
+            If return_categories=False: A list of unique approved term strings (excludes common_noun).
+            If return_categories=True: A list of ClassifiedTerm objects (includes all categories).
         """
         non_empty_docs = self._filter_empty_documents(documents)
         if not non_empty_docs:
@@ -165,8 +192,13 @@ class TermExtractor:
             progress_callback=progress_callback,
         )
 
-        # Step 3: Select terms, excluding common nouns (Phase 2 of LLM processing)
-        return self._select_terms(classification, non_empty_docs)
+        # Step 3: Return based on return_categories flag
+        if return_categories:
+            # Return all categories as ClassifiedTerm objects
+            return self._get_classified_terms(classification)
+        else:
+            # Return only non-common-noun terms as strings (existing behavior)
+            return self._select_terms(classification, non_empty_docs)
 
     def analyze_extraction(
         self,
@@ -584,6 +616,29 @@ JSON形式で回答してください:
 すべての用語を分類してください。"""
 
         return prompt
+
+    def _get_classified_terms(
+        self, classification: TermClassificationResponse
+    ) -> list[ClassifiedTerm]:
+        """Convert classification results to list of ClassifiedTerm objects.
+
+        Args:
+            classification: Classification results from classification phase.
+
+        Returns:
+            List of ClassifiedTerm objects (includes all categories).
+        """
+        classified_terms: list[ClassifiedTerm] = []
+        for category_str, terms in classification.classified_terms.items():
+            category = TermCategory(category_str)
+            for term in terms:
+                # Strip whitespace and skip empty terms
+                stripped = term.strip()
+                if stripped:
+                    classified_terms.append(
+                        ClassifiedTerm(term=stripped, category=category)
+                    )
+        return classified_terms
 
     def _select_terms(
         self,
