@@ -4,7 +4,7 @@ tags: [api, llm, provisional]
 description: "Implement provisional glossary entry regeneration endpoint with LLM integration"
 created_at: "2026-01-25T12:59:01Z"
 started_at: 2026-01-25T13:03:13Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-25T13:36:17Z # Do not modify manually
 ---
 
 # Ticket Overview
