@@ -33,7 +33,15 @@ async function handleResponse<T>(response: Response): Promise<T> {
   if (response.status === 204 || response.headers.get('content-length') === '0') {
     return undefined as T
   }
-  return response.json()
+  try {
+    return await response.json()
+  } catch {
+    throw new ApiError(
+      `Invalid JSON response: ${response.status}`,
+      response.status,
+      'Response body is not valid JSON'
+    )
+  }
 }
 
 async function request<T>(
@@ -42,7 +50,8 @@ async function request<T>(
 ): Promise<T> {
   const url = `${getBaseUrl()}${endpoint}`
   const headers = new Headers(options.headers)
-  if (options.body && !headers.has('Content-Type')) {
+  // Only set Content-Type for string bodies (JSON). Let browser set it for FormData, Blob, etc.
+  if (typeof options.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
 

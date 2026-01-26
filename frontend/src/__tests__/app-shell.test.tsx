@@ -1,6 +1,17 @@
-import { describe, expect, it } from 'vitest'
-import { screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MantineProvider } from '@mantine/core'
 import { renderApp } from './test-utils'
+import { GlobalTopBar } from '../components/layout/GlobalTopBar'
+
+const renderGlobalTopBar = (props = {}) => {
+  return render(
+    <MantineProvider>
+      <GlobalTopBar {...props} />
+    </MantineProvider>
+  )
+}
 
 describe('AppShell', () => {
   describe('GlobalTopBar', () => {
@@ -27,6 +38,46 @@ describe('AppShell', () => {
     it('should display scope selector', async () => {
       await renderApp()
       expect(screen.getByTestId('scope-selector')).toBeInTheDocument()
+    })
+  })
+
+  describe('GlobalTopBar interactions', () => {
+    it('should call onRun with default scope when Run button is clicked', async () => {
+      const onRun = vi.fn()
+      renderGlobalTopBar({ onRun })
+      const user = userEvent.setup()
+
+      await user.click(screen.getByRole('button', { name: /run/i }))
+
+      expect(onRun).toHaveBeenCalledWith('full')
+    })
+
+    it('should call onStop when Stop button is clicked while running', async () => {
+      const onStop = vi.fn()
+      renderGlobalTopBar({ status: 'running', onStop })
+      const user = userEvent.setup()
+
+      await user.click(screen.getByRole('button', { name: /stop/i }))
+
+      expect(onStop).toHaveBeenCalled()
+    })
+
+    it('should disable Run button when status is running', () => {
+      renderGlobalTopBar({ status: 'running' })
+
+      expect(screen.getByRole('button', { name: /run/i })).toBeDisabled()
+    })
+
+    it('should disable Stop button when status is not running', () => {
+      renderGlobalTopBar({ status: 'pending' })
+
+      expect(screen.getByRole('button', { name: /stop/i })).toBeDisabled()
+    })
+
+    it('should enable Stop button when status is running', () => {
+      renderGlobalTopBar({ status: 'running' })
+
+      expect(screen.getByRole('button', { name: /stop/i })).toBeEnabled()
     })
   })
 

@@ -180,5 +180,22 @@ describe('API Client', () => {
         expect(capturedBody).toBe(expected)
       }
     })
+
+    it('should throw ApiError when response is not valid JSON', async () => {
+      server.use(
+        http.get('http://localhost:8000/api/test', () => {
+          return new HttpResponse('Not JSON content', {
+            status: 200,
+            headers: { 'content-type': 'text/plain' },
+          })
+        })
+      )
+
+      await expect(apiClient.get('/api/test')).rejects.toThrow(ApiError)
+      await expect(apiClient.get('/api/test')).rejects.toMatchObject({
+        status: 200,
+        detail: 'Response body is not valid JSON',
+      })
+    })
   })
 })
