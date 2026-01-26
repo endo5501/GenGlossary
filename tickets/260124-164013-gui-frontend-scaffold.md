@@ -16,21 +16,21 @@ Reference: `plan-gui.md` 全画面の共通レイアウト（グローバル操�
 
 ## Tasks
 
-- [ ] **Red**: 先にフロントテスト追加（`frontend/src/__tests__/app-shell.test.tsx` など）— ルーティング初期化、レイアウト枠の要素存在、APIクライアントのベースURL設定をRTL/Vitestで失敗させる
-- [ ] テスト失敗を確認（Red完了）
-- [ ] Initialize React + TypeScript project (Vite) under `frontend/` with pnpm and lint/prettier configs aligned to repo style
-- [ ] Configure Mantine as design system with custom theme tokens, avoiding default purple bias; set typography/color primitives（`docs/architecture.md` にUIスタックを追記）— plan-guiの意図的なビジュアルを反映
-- [ ] Add routing (TanStack Router or React Router) and query/data layer (TanStack Query) with API base URL env
-- [ ] Implement shared layout shell: global top bar (project title/status slots), left nav rail, main content area, bottom log panel placeholder
-- [ ] Build API client wrapper with auth-less base headers, error handling, and type-safe responses
-- [ ] Add storybook or component preview script if lightweight, otherwise document UI tokens in README
-- [ ] **Green**: 追加テストを含む lint/build/test が通ることを確認
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] **Red**: 先にフロントテスト追加（`frontend/src/__tests__/app-shell.test.tsx` など）— ルーティング初期化、レイアウト枠の要素存在、APIクライアントのベースURL設定をRTL/Vitestで失敗させる
+- [x] テスト失敗を確認（Red完了）
+- [x] Initialize React + TypeScript project (Vite) under `frontend/` with pnpm and lint/prettier configs aligned to repo style
+- [x] Configure Mantine as design system with custom theme tokens, avoiding default purple bias; set typography/color primitives（`docs/architecture.md` にUIスタックを追記）— plan-guiの意図的なビジュアルを反映
+- [x] Add routing (TanStack Router or React Router) and query/data layer (TanStack Query) with API base URL env
+- [x] Implement shared layout shell: global top bar (project title/status slots), left nav rail, main content area, bottom log panel placeholder
+- [x] Build API client wrapper with auth-less base headers, error handling, and type-safe responses
+- [x] Add storybook or component preview script if lightweight, otherwise document UI tokens in README
+- [x] **Green**: 追加テストを含む lint/build/test が通ることを確認
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes

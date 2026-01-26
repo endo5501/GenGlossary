@@ -35,7 +35,7 @@ Reference: `plan-gui.md` 「Settings（設定）」セクション
 - [ ] ローディング状態とエラー状態の表示
 - [ ] **Green**: テスト通過確認
 - [ ] Code simplification review using code-simplifier agent
-- [ ] Update docs/architecture.md
+- [ ] Update docs/architecture/*.md
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
