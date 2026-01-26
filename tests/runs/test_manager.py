@@ -298,11 +298,6 @@ class TestRunManagerSubscription:
 class TestRunManagerLogStreaming:
     """Tests for RunManager log streaming functionality."""
 
-    def test_get_log_queue_returns_queue(self, manager: RunManager) -> None:
-        """get_log_queueはログキューを返す"""
-        queue = manager.get_log_queue()
-        assert queue is not None
-
     def test_logs_are_captured_during_execution(
         self, manager: RunManager
     ) -> None:

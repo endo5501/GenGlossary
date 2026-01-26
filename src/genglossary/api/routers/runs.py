@@ -15,6 +15,21 @@ from genglossary.runs.manager import RunManager
 
 router = APIRouter(prefix="/api/projects/{project_id}/runs", tags=["runs"])
 
+# Finished run statuses
+_FINISHED_STATUSES: set[str] = {"completed", "failed", "cancelled"}
+
+
+def _is_run_finished(run_row: sqlite3.Row | None) -> bool:
+    """Check if run is in a finished state.
+
+    Args:
+        run_row: Database row for the run.
+
+    Returns:
+        bool: True if run is finished.
+    """
+    return run_row is not None and run_row["status"] in _FINISHED_STATUSES
+
 
 @router.post("", response_model=RunResponse, status_code=status.HTTP_201_CREATED)
 async def start_run(
@@ -178,7 +193,7 @@ async def stream_run_logs(
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
     # If run already completed/failed/cancelled, return immediate completion event.
-    if row["status"] in {"completed", "failed", "cancelled"}:
+    if _is_run_finished(row):
         async def completed_generator() -> AsyncIterator[str]:
             yield "event: complete\ndata: {}\n\n"
 
@@ -197,7 +212,7 @@ async def stream_run_logs(
         try:
             # Re-check status after subscribing to avoid missing completion signal.
             latest = get_run(project_db, run_id)
-            if latest is not None and latest["status"] in {"completed", "failed", "cancelled"}:
+            if _is_run_finished(latest):
                 yield "event: complete\ndata: {}\n\n"
                 return
 

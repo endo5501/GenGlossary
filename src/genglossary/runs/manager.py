@@ -48,7 +48,6 @@ class RunManager:
         self.llm_model = llm_model
         self._thread: Thread | None = None
         self._cancel_event = Event()
-        self._log_queue: Queue = Queue(maxsize=self.MAX_LOG_QUEUE_SIZE)
         self._current_run_id: int | None = None
         # Subscriber管理
         self._subscribers: dict[int, set[Queue]] = {}
@@ -223,6 +222,25 @@ class RunManager:
                 if not self._subscribers[run_id]:
                     del self._subscribers[run_id]
 
+    def _put_to_queue(self, queue: Queue, message: dict) -> None:
+        """Put message to queue, ensuring completion signals are delivered.
+
+        Args:
+            queue: Queue to put message to.
+            message: Message to put.
+        """
+        if message.get("complete"):
+            # For completion signals, make space if needed
+            while queue.full():
+                try:
+                    queue.get_nowait()
+                except Empty:
+                    break
+        try:
+            queue.put_nowait(message)
+        except Full:
+            pass  # Only regular messages are dropped when full
+
     def _broadcast_log(self, run_id: int, message: dict) -> None:
         """全subscriberにログをブロードキャストする.
 
@@ -233,27 +251,4 @@ class RunManager:
         with self._subscribers_lock:
             if run_id in self._subscribers:
                 for queue in self._subscribers[run_id]:
-                    if message.get("complete"):
-                        # Ensure completion signal is delivered by dropping oldest item if needed.
-                        while True:
-                            try:
-                                queue.put_nowait(message)
-                                break
-                            except Full:
-                                try:
-                                    queue.get_nowait()
-                                except Empty:
-                                    continue
-                    else:
-                        try:
-                            queue.put_nowait(message)
-                        except Full:
-                            pass  # Queue満杯時は破棄
-
-    def get_log_queue(self) -> Queue:
-        """Get the log queue for streaming logs.
-
-        Returns:
-            Queue: The log queue.
-        """
-        return self._log_queue
+                    self._put_to_queue(queue, message)

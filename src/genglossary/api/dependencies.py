@@ -108,6 +108,42 @@ def get_project_db_path(project: Project = Depends(get_project_by_id)) -> str:
     return project.db_path
 
 
+def _settings_match(manager: RunManager, project: Project) -> bool:
+    """Check if manager settings match project settings.
+
+    Args:
+        manager: RunManager instance to check.
+        project: Project instance to compare against.
+
+    Returns:
+        bool: True if settings match.
+    """
+    return (
+        manager.doc_root == project.doc_root
+        and manager.llm_provider == project.llm_provider
+        and manager.llm_model == project.llm_model
+    )
+
+
+def _create_and_register_manager(project: Project) -> RunManager:
+    """Create and register a new RunManager.
+
+    Args:
+        project: Project instance to create manager for.
+
+    Returns:
+        RunManager: Newly created manager instance.
+    """
+    manager = RunManager(
+        db_path=project.db_path,
+        doc_root=project.doc_root,
+        llm_provider=project.llm_provider,
+        llm_model=project.llm_model,
+    )
+    _run_manager_registry[project.db_path] = manager
+    return manager
+
+
 def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager:
     """Get or create RunManager instance for the project (singleton per project).
 
@@ -124,23 +160,13 @@ def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager
     with _registry_lock:
         existing = _run_manager_registry.get(project.db_path)
 
-        # Return existing manager if settings match or if there's an active run
-        if existing is not None:
-            settings_match = (
-                existing.doc_root == project.doc_root
-                and existing.llm_provider == project.llm_provider
-                and existing.llm_model == project.llm_model
-            )
+        if existing is None:
+            return _create_and_register_manager(project)
 
-            if settings_match or existing.get_active_run() is not None:
-                return existing
+        if existing.get_active_run() is not None:
+            return existing
 
-        # Create new RunManager (first time or settings changed with no active run)
-        manager = RunManager(
-            db_path=project.db_path,
-            doc_root=project.doc_root,
-            llm_provider=project.llm_provider,
-            llm_model=project.llm_model,
-        )
-        _run_manager_registry[project.db_path] = manager
-        return manager
+        if _settings_match(existing, project):
+            return existing
+
+        return _create_and_register_manager(project)
