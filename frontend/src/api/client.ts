@@ -29,6 +29,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
     }
     throw new ApiError(detail, response.status, detail)
   }
+  // 204 No Content or empty body
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as T
+  }
   return response.json()
 }
 
@@ -57,33 +61,18 @@ async function request<T>(
   }
 }
 
+// DRY helper for POST/PUT/PATCH methods
+const createDataMethod = (method: string) =>
+  <T>(endpoint: string, data?: unknown): Promise<T> =>
+    request<T>(endpoint, {
+      method,
+      body: data ? JSON.stringify(data) : undefined,
+    })
+
 export const apiClient = {
-  get: <T>(endpoint: string): Promise<T> => {
-    return request<T>(endpoint, { method: 'GET' })
-  },
-
-  post: <T>(endpoint: string, data?: unknown): Promise<T> => {
-    return request<T>(endpoint, {
-      method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
-    })
-  },
-
-  put: <T>(endpoint: string, data?: unknown): Promise<T> => {
-    return request<T>(endpoint, {
-      method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
-    })
-  },
-
-  patch: <T>(endpoint: string, data?: unknown): Promise<T> => {
-    return request<T>(endpoint, {
-      method: 'PATCH',
-      body: data ? JSON.stringify(data) : undefined,
-    })
-  },
-
-  delete: <T>(endpoint: string): Promise<T> => {
-    return request<T>(endpoint, { method: 'DELETE' })
-  },
+  get: <T>(endpoint: string): Promise<T> => request<T>(endpoint, { method: 'GET' }),
+  post: createDataMethod('POST'),
+  put: createDataMethod('PUT'),
+  patch: createDataMethod('PATCH'),
+  delete: <T>(endpoint: string): Promise<T> => request<T>(endpoint, { method: 'DELETE' }),
 }

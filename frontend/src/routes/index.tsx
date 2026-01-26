@@ -11,73 +11,29 @@ const rootRoute = createRootRoute({
   component: AppShell,
 })
 
-// Index route (redirects to /files)
-const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/',
-  component: () => <PagePlaceholder title="Home" />,
-})
+// Route configuration data
+const routeConfigs = [
+  { path: '/', title: 'Home' },
+  { path: '/files', title: 'Files' },
+  { path: '/terms', title: 'Terms' },
+  { path: '/provisional', title: 'Provisional Glossary' },
+  { path: '/issues', title: 'Issues' },
+  { path: '/refined', title: 'Refined Glossary' },
+  { path: '/document-viewer', title: 'Document Viewer' },
+  { path: '/settings', title: 'Settings' },
+] as const
 
-// Files route
-const filesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/files',
-  component: () => <PagePlaceholder title="Files" />,
-})
-
-// Terms route
-const termsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/terms',
-  component: () => <PagePlaceholder title="Terms" />,
-})
-
-// Provisional glossary route
-const provisionalRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/provisional',
-  component: () => <PagePlaceholder title="Provisional Glossary" />,
-})
-
-// Issues route
-const issuesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/issues',
-  component: () => <PagePlaceholder title="Issues" />,
-})
-
-// Refined glossary route
-const refinedRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/refined',
-  component: () => <PagePlaceholder title="Refined Glossary" />,
-})
-
-// Document viewer route
-const documentViewerRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/document-viewer',
-  component: () => <PagePlaceholder title="Document Viewer" />,
-})
-
-// Settings route
-const settingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/settings',
-  component: () => <PagePlaceholder title="Settings" />,
-})
+// Generate routes from configuration
+const routes = routeConfigs.map(({ path, title }) =>
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path,
+    component: () => <PagePlaceholder title={title} />,
+  })
+)
 
 // Create route tree
-export const routeTree = rootRoute.addChildren([
-  indexRoute,
-  filesRoute,
-  termsRoute,
-  provisionalRoute,
-  issuesRoute,
-  refinedRoute,
-  documentViewerRoute,
-  settingsRoute,
-])
+export const routeTree = rootRoute.addChildren(routes)
 
 // Create router instance
 export const router = createRouter({ routeTree })

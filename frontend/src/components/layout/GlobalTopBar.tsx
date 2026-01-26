@@ -74,8 +74,9 @@ export function GlobalTopBar({
         <Box data-testid="scope-selector">
           <Select
             value={scope}
-            onChange={(value) => setScope(value as RunScope)}
+            onChange={(value) => value && setScope(value as RunScope)}
             data={scopeOptions}
+            allowDeselect={false}
             w={180}
             aria-label="Scope"
           />

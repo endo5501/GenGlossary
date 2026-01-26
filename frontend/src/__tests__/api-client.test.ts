@@ -114,5 +114,32 @@ describe('API Client', () => {
 
       await expect(apiClient.get('/api/test')).rejects.toThrow(ApiError)
     })
+
+    it('should handle 204 No Content responses', async () => {
+      server.use(
+        http.delete('http://localhost:8000/api/test', () => {
+          return new HttpResponse(null, { status: 204 })
+        })
+      )
+
+      const result = await apiClient.delete('/api/test')
+
+      expect(result).toBeUndefined()
+    })
+
+    it('should handle empty body with content-length 0', async () => {
+      server.use(
+        http.post('http://localhost:8000/api/test', () => {
+          return new HttpResponse(null, {
+            status: 200,
+            headers: { 'content-length': '0' },
+          })
+        })
+      )
+
+      const result = await apiClient.post('/api/test', { data: 'test' })
+
+      expect(result).toBeUndefined()
+    })
   })
 })
