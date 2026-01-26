@@ -21,7 +21,7 @@ export function LogPanel() {
           onClick={() => setOpened((o) => !o)}
           aria-label={opened ? 'Collapse logs' : 'Expand logs'}
         >
-          {opened ? <IconChevronDown size={16} /> : <IconChevronUp size={16} />}
+          {opened ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
         </ActionIcon>
       </Group>
       <Collapse in={opened}>
