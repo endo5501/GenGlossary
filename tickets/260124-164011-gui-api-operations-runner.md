@@ -334,6 +334,37 @@ Prefer SSE for simplicity; leave room to swap transport. Ensure runs respect pro
 
 ---
 
+## Log Streaming Mitigation Options (2026-01-26)
+
+### Review Findings (recap)
+- **High**: `run_id` フィルタで別runのメッセージを再投入すると、同runのメッセージが来るまで無限ループしてビジーになり、keepaliveも送信されない可能性がある。
+- **Medium**: 単一Queue方式だと同一runに複数SSEクライアントが接続した際にログが分配され、各クライアントが完全なログを受け取れない。
+
+### Mitigation Options
+
+#### Option A: Run単位Queue + Subscribe登録（推奨）
+- **概要**: Run開始時に `run_id` 専用Queueを作成。SSE接続時にRunManagerへ登録し、該当runのQueueからのみ読み出す。  
+- **効果**: フィルタが不要になり、ビジー・再投入ループが解消。  
+- **複数クライアント対応**: Queueをクライアント毎に持ち、RunManagerがログをブロードキャスト（同一runログを全クライアントに配信）。
+- **実装イメージ**:
+  - `RunManager` に `self._log_subscribers: dict[int, set[Queue]]`
+  - SSE接続時に `register_subscriber(run_id)` / 切断時に `unregister_subscriber(run_id)`
+  - `_log()` で該当runのsubscriber全員に `put_nowait`
+
+#### Option B: Ring Buffer + Cursor方式
+- **概要**: Run単位で固定長のログバッファ（deque）を保持し、SSEは `cursor` を進めながら読み出す。  
+- **効果**: 複数クライアントが独立してログを全量取得可能。  
+- **補足**: SSEの `Last-Event-ID` を使えば再接続時の復元も可能。
+
+#### Option C: Dispatcherスレッド導入
+- **概要**: Executorは単一Queueに書き込み、Dispatcherがrun_idごとに別Queueへ振り分ける。  
+- **効果**: 既存ログ生成コードを大きく変えずにrun分離可能。  
+- **複数クライアント対応**: Option A/Bと組み合わせる必要あり。
+
+### 追加メモ
+- 小規模運用前提でも **Option A** が一番シンプルで安全（runフィルタ削除と同時に複数クライアントのログ欠落も防止）。
+- 永続性が必要な場合は `run_logs` テーブルを導入し、SSEはDB+メモリのハイブリッド方式にするのが堅実。
+
 ## Code Simplification Review (2026-01-26) ✅
 
 ### Implementation Status: **完了**
@@ -425,3 +456,127 @@ code-simplifierエージェントによるコードレビューを実施し、�
 2. **可読性向上**: ネスト削減とヘルパーメソッドで理解しやすい
 3. **テスト容易性**: シンプルな構造でテストが書きやすい
 4. **バグリスク低減**: コードが少ないほど、バグの入り込む余地が減る
+
+## Log Streaming改善 - Option A実装 (2026-01-26) ✅
+
+### Implementation Status: **完了**
+
+Log Streaming問題（High/Medium）を解決するため、Option Aを完全実装しました。
+
+**テスト結果**: 648 tests passing ✅ | 0 static analysis errors ✅
+
+---
+
+### 解決した問題
+
+1. **High**: `run_id`フィルタの再投入ループでビジーになり、keepaliveが送信されない
+2. **Medium**: 単一Queue方式で複数SSEクライアント接続時にログが分配される
+
+---
+
+### 実装内容（TDDアプローチ）
+
+#### Phase 1: テスト追加（TDD Red）
+
+**新規テスト**: 5個
+- `test_register_subscriber_creates_queue` - subscribe機能の基本動作 ✅
+- `test_multiple_subscribers_same_run_get_same_logs` - 複数クライアントが同じログを受信 ✅
+- `test_subscribers_only_receive_their_run_logs` - run_id分離 ✅
+- `test_unregister_subscriber_stops_receiving` - unsubscribe動作 ✅
+- `test_executor_uses_log_callback` - callbackパターンの動作 ✅
+
+#### Phase 2: RunManagerの変更（TDD Green）
+
+**変更ファイル**: `src/genglossary/runs/manager.py`
+
+1. **Subscriber管理の追加**
+   ```python
+   self._subscribers: dict[int, set[Queue]] = {}
+   self._subscribers_lock = Lock()
+   ```
+
+2. **新規メソッド**
+   - `register_subscriber(run_id: int) -> Queue` - SSEクライアント登録
+   - `unregister_subscriber(run_id: int, queue: Queue)` - 登録解除
+   - `_broadcast_log(run_id: int, message: dict)` - 全subscriberにブロードキャスト
+
+3. **実行フロー変更**
+   - `_execute_run()`で`log_callback`を作成してexecutorに渡す
+   - エラー時・完了時も`_broadcast_log()`経由で通知
+
+#### Phase 3: PipelineExecutorの変更
+
+**変更ファイル**: `src/genglossary/runs/executor.py`
+
+1. **インターフェース変更**
+   - `log_queue: Queue` → `log_callback: Callable[[dict], None]`
+   - `_log_queue` → `_log_callback`
+
+2. **ログ出力変更**
+   ```python
+   def _log(self, level: str, message: str) -> None:
+       if self._log_callback is not None:
+           self._log_callback({"run_id": self._run_id, "level": level, "message": message})
+   ```
+
+#### Phase 4: API Routerの変更
+
+**変更ファイル**: `src/genglossary/api/routers/runs.py`
+
+1. **SSEエンドポイント改善**
+   - `get_log_queue()` → `register_subscriber(run_id)`に変更
+   - run_idフィルタロジック（188-196行）を削除
+   - `finally`ブロックで`unregister_subscriber()`を呼び出し
+
+2. **完全なログ配信**
+   - 各SSEクライアントが独自のQueueを持つ
+   - 同一runの複数クライアントに完全なログをブロードキャスト
+
+#### Phase 5: 既存テストの修正
+
+**修正テスト**: 14個
+- RunManagerのテスト5個を新インターフェースに対応
+- PipelineExecutorのテスト9個を`log_callback`パターンに対応
+
+---
+
+### アーキテクチャ改善
+
+**Before**:
+```
+RunManager → 単一 _log_queue → 複数SSEクライアント（分配される）
+                                ↑ run_idフィルタで再投入ループ
+```
+
+**After**:
+```
+RunManager → _subscribers[run_id] = {Queue1, Queue2, ...}
+           → _broadcast_log() → 各Queueにput_nowait()
+           → 各SSEクライアントが独自のQueueから受信
+```
+
+---
+
+### 効果
+
+1. **ビジー問題解消**: run_idフィルタ削除により、再投入ループなし
+2. **keepalive正常動作**: ビジー状態が解消され、1秒ごとにkeepaliveを送信
+3. **複数クライアント対応**: 同一runに複数SSE接続しても全ログを受信
+4. **メモリ効率**: run終了時にsubscriberを削除し、メモリリークを防止
+5. **スレッドセーフ**: `_subscribers_lock`でsubscriber管理を保護
+
+---
+
+### テストカバレッジ
+
+**新規テスト**: 5個
+**既存テスト修正**: 14個
+**Total**: 648 tests passing ✅
+
+すべてのrun関連テスト（32個）が新しいアーキテクチャで正常動作を確認。
+
+---
+
+### 未対応の既知の問題
+
+なし（全ての問題を解決）
