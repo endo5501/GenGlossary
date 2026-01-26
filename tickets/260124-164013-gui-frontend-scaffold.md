@@ -3,7 +3,7 @@ priority: 6
 tags: [frontend, build, ux]
 description: "Bootstrap the web frontend (React/Vite) with design system, routing, API client, and shared layout shell."
 created_at: "2026-01-24T16:40:13Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-26T15:09:13Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -26,6 +26,7 @@ Reference: `plan-gui.md` 全画面の共通レイアウト（グローバル操�
 - [ ] Add storybook or component preview script if lightweight, otherwise document UI tokens in README
 - [ ] **Green**: 追加テストを含む lint/build/test が通ることを確認
 - [ ] Code simplification review using code-simplifier agent
+- [ ] Code review by codex MCP
 - [ ] Update docs/architecture.md
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
