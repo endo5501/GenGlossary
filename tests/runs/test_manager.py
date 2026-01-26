@@ -237,6 +237,46 @@ class TestRunManagerGetRun:
         assert run is None
 
 
+class TestRunManagerSubscription:
+    """Tests for RunManager subscription functionality."""
+
+    def test_register_subscriber_creates_queue(self, manager: RunManager) -> None:
+        """register_subscriberはQueueを作成して返す"""
+        queue = manager.register_subscriber(run_id=1)
+        assert queue is not None
+
+    def test_multiple_subscribers_same_run_get_same_logs(self, manager: RunManager) -> None:
+        """同じrunの複数subscriberが同じログを受信する"""
+        queue1 = manager.register_subscriber(run_id=1)
+        queue2 = manager.register_subscriber(run_id=1)
+
+        manager._broadcast_log(1, {"level": "info", "message": "test"})
+
+        log1 = queue1.get_nowait()
+        log2 = queue2.get_nowait()
+        assert log1 == log2
+
+    def test_subscribers_only_receive_their_run_logs(self, manager: RunManager) -> None:
+        """subscriberは自分のrunのログのみ受信する"""
+        queue1 = manager.register_subscriber(run_id=1)
+        queue2 = manager.register_subscriber(run_id=2)
+
+        manager._broadcast_log(1, {"level": "info", "message": "run1"})
+
+        log1 = queue1.get_nowait()
+        assert log1["message"] == "run1"
+        assert queue2.empty()
+
+    def test_unregister_subscriber_stops_receiving(self, manager: RunManager) -> None:
+        """unregister後はログを受信しない"""
+        queue = manager.register_subscriber(run_id=1)
+        manager.unregister_subscriber(run_id=1, queue=queue)
+
+        manager._broadcast_log(1, {"level": "info", "message": "test"})
+
+        assert queue.empty()
+
+
 class TestRunManagerLogStreaming:
     """Tests for RunManager log streaming functionality."""
 
@@ -251,20 +291,22 @@ class TestRunManagerLogStreaming:
         """実行中のログがキャプチャされる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting execution"})
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Completed"})
+            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
+                log_callback({"run_id": run_id, "level": "info", "message": "Starting execution"})
+                log_callback({"run_id": run_id, "level": "info", "message": "Completed"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
+
+            # Subscribe to logs
+            queue = manager.register_subscriber(run_id=1)
 
             run_id = manager.start_run(scope="full")
             time.sleep(0.2)  # Allow execution to complete
 
             # Retrieve logs from queue (filter out completion signal)
-            log_queue = manager.get_log_queue()
             logs = []
-            while not log_queue.empty():
-                log = log_queue.get_nowait()
+            while not queue.empty():
+                log = queue.get_nowait()
                 if log is not None and not log.get("complete"):
                     logs.append(log)
 
@@ -277,18 +319,21 @@ class TestRunManagerLogStreaming:
             # Mock executor that checks cancellation event
             cancel_detected = []
 
-            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting"})
+            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
+                log_callback({"run_id": run_id, "level": "info", "message": "Starting"})
                 # Simulate some work, checking for cancellation
                 for i in range(10):
                     if cancel_event.is_set():
                         cancel_detected.append(True)
-                        log_queue.put({"run_id": run_id, "level": "info", "message": "Cancelled"})
+                        log_callback({"run_id": run_id, "level": "info", "message": "Cancelled"})
                         return
                     time.sleep(0.1)
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Completed"})
+                log_callback({"run_id": run_id, "level": "info", "message": "Completed"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
+
+            # Subscribe to logs
+            queue = manager.register_subscriber(run_id=1)
 
             run_id = manager.start_run(scope="full")
             time.sleep(0.2)  # Allow thread to start
@@ -305,10 +350,9 @@ class TestRunManagerLogStreaming:
             assert cancel_detected[0] is True
 
             # Check logs contain cancellation message (filter out completion signal)
-            log_queue = manager.get_log_queue()
             logs = []
-            while not log_queue.empty():
-                log = log_queue.get_nowait()
+            while not queue.empty():
+                log = queue.get_nowait()
                 if log is not None and not log.get("complete"):
                     logs.append(log)
 
@@ -318,11 +362,14 @@ class TestRunManagerLogStreaming:
         """ログメッセージにrun_idが含まれることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting"})
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Completed"})
+            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
+                log_callback({"run_id": run_id, "level": "info", "message": "Starting"})
+                log_callback({"run_id": run_id, "level": "info", "message": "Completed"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
+
+            # Subscribe to logs
+            queue = manager.register_subscriber(run_id=1)
 
             run_id = manager.start_run(scope="full")
 
@@ -331,10 +378,9 @@ class TestRunManagerLogStreaming:
                 manager._thread.join(timeout=2)
 
             # Check that logs include run_id
-            log_queue = manager.get_log_queue()
             logs = []
-            while not log_queue.empty():
-                log = log_queue.get_nowait()
+            while not queue.empty():
+                log = queue.get_nowait()
                 if log is not None and not log.get("complete"):
                     logs.append(log)
 
@@ -346,10 +392,13 @@ class TestRunManagerLogStreaming:
         """完了シグナルにrun_idが含まれることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting"})
+            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
+                log_callback({"run_id": run_id, "level": "info", "message": "Starting"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
+
+            # Subscribe to logs
+            queue = manager.register_subscriber(run_id=1)
 
             run_id = manager.start_run(scope="full")
 
@@ -358,12 +407,11 @@ class TestRunManagerLogStreaming:
                 manager._thread.join(timeout=2)
 
             # Check that completion signal has run_id
-            log_queue = manager.get_log_queue()
             completion_signal_found = False
             completion_run_id = None
 
-            while not log_queue.empty():
-                log = log_queue.get_nowait()
+            while not queue.empty():
+                log = queue.get_nowait()
                 if log is not None and log.get("complete"):
                     completion_signal_found = True
                     completion_run_id = log.get("run_id")
@@ -375,12 +423,15 @@ class TestRunManagerLogStreaming:
         """SSEストリームが完了シグナルを受け取ることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_queue, doc_root=".", run_id=None):
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Starting"})
-                log_queue.put({"run_id": run_id, "level": "info", "message": "Completed"})
+            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
+                log_callback({"run_id": run_id, "level": "info", "message": "Starting"})
+                log_callback({"run_id": run_id, "level": "info", "message": "Completed"})
                 # Completion signal should be sent by manager, not executor
 
             mock_executor.return_value.execute.side_effect = mock_execute
+
+            # Subscribe to logs
+            queue = manager.register_subscriber(run_id=1)
 
             run_id = manager.start_run(scope="full")
 
@@ -389,12 +440,11 @@ class TestRunManagerLogStreaming:
                 manager._thread.join(timeout=2)
 
             # Check that completion signal was sent to queue
-            log_queue = manager.get_log_queue()
             logs = []
             completion_signal_found = False
 
-            while not log_queue.empty():
-                log = log_queue.get_nowait()
+            while not queue.empty():
+                log = queue.get_nowait()
                 if log is not None and log.get("complete"):
                     completion_signal_found = True
                 else:

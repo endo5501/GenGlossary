@@ -3,7 +3,6 @@
 import sqlite3
 import time
 from pathlib import Path
-from queue import Queue
 from threading import Event
 from unittest.mock import MagicMock, patch
 
@@ -47,9 +46,15 @@ def cancel_event() -> Event:
 
 
 @pytest.fixture
-def log_queue() -> Queue:
-    """Create a log queue."""
-    return Queue()
+def log_callback():
+    """Create a log callback that captures messages."""
+    logs = []
+
+    def callback(msg: dict) -> None:
+        logs.append(msg)
+
+    callback.logs = logs  # type: ignore
+    return callback
 
 
 class TestPipelineExecutorFull:
@@ -60,7 +65,7 @@ class TestPipelineExecutorFull:
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
         """ドキュメントが見つからない場合はRuntimeErrorを発生させる"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -74,14 +79,14 @@ class TestPipelineExecutorFull:
 
             # Execute should raise RuntimeError
             with pytest.raises(RuntimeError, match="No documents found"):
-                executor.execute(project_db, "full", cancel_event, log_queue)
+                executor.execute(project_db, "full", cancel_event, log_callback)
 
     def test_full_scope_executes_all_steps(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
         """full scopeは全ステップを実行する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -127,7 +132,7 @@ class TestPipelineExecutorFull:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute
-            executor.execute(project_db, "full", cancel_event, log_queue)
+            executor.execute(project_db, "full", cancel_event, log_callback)
 
             # Verify all components were called
             mock_loader.return_value.load_directory.assert_called_once()
@@ -140,7 +145,7 @@ class TestPipelineExecutorFull:
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
         """キャンセル時は途中で停止する"""
         # Set cancellation before execution
@@ -148,7 +153,7 @@ class TestPipelineExecutorFull:
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
-            executor.execute(project_db, "full", cancel_event, log_queue)
+            executor.execute(project_db, "full", cancel_event, log_callback)
 
             # DocumentLoader should not be called when cancelled
             mock_loader.return_value.load_directory.assert_not_called()
@@ -162,7 +167,7 @@ class TestPipelineExecutorFromTerms:
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
         """from_termsはドキュメント読み込みをスキップする"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -187,7 +192,7 @@ class TestPipelineExecutorFromTerms:
             mock_generator.return_value.generate.return_value = mock_glossary
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "from_terms", cancel_event, log_queue)
+            executor.execute(project_db, "from_terms", cancel_event, log_callback)
 
             # DocumentLoader.load_directory should not be called (we load from DB instead)
             mock_loader.return_value.load_directory.assert_not_called()
@@ -203,7 +208,7 @@ class TestPipelineExecutorProvisionalToRefined:
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
         """provisional_to_refinedは精査から開始する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -234,7 +239,7 @@ class TestPipelineExecutorProvisionalToRefined:
             # Mock review
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "provisional_to_refined", cancel_event, log_queue)
+            executor.execute(project_db, "provisional_to_refined", cancel_event, log_callback)
 
             # Earlier stages should not be called
             mock_loader.return_value.load_directory.assert_not_called()
@@ -253,9 +258,9 @@ class TestPipelineExecutorProgress:
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
-        """進捗がlog_queueに送信される"""
+        """進捗がlog_callbackに送信される"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
@@ -274,17 +279,54 @@ class TestPipelineExecutorProgress:
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "full", cancel_event, log_queue)
+            executor.execute(project_db, "full", cancel_event, log_callback)
 
-            # Check that log messages were queued
-            logs = []
-            while not log_queue.empty():
-                logs.append(log_queue.get_nowait())
+            # Check that log messages were captured
+            logs = log_callback.logs  # type: ignore
 
             # Should have at least start and completion messages
             assert len(logs) >= 2
             assert any("Starting pipeline execution" in log.get("message", "") for log in logs)
             assert any("completed" in log.get("message", "").lower() for log in logs)
+
+
+class TestPipelineExecutorLogCallback:
+    """Tests for log callback functionality."""
+
+    def test_executor_uses_log_callback(
+        self,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """executorがlog_callbackを使ってログを出力する"""
+        logs = []
+        callback = lambda msg: logs.append(msg)
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock components
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="test.txt", content="test")
+            ]
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            executor = PipelineExecutor()
+            executor.execute(project_db, "full", cancel_event, callback, doc_root=".", run_id=1)
+
+            assert len(logs) > 0
+            assert all(log.get("run_id") == 1 for log in logs)
 
 
 class TestPipelineExecutorConfiguration:
@@ -294,7 +336,7 @@ class TestPipelineExecutorConfiguration:
         self,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
         """executorがdoc_rootパラメータを使用することを確認"""
         executor = PipelineExecutor(provider="ollama")
@@ -320,7 +362,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute with custom doc_root
-            executor.execute(project_db, "full", cancel_event, log_queue, doc_root="/custom/path")
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/custom/path")
 
             # Verify load_directory was called with the custom doc_root
             mock_loader.return_value.load_directory.assert_called_once_with("/custom/path")
@@ -329,7 +371,7 @@ class TestPipelineExecutorConfiguration:
         self,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
         """executorがllm_provider/llm_modelを使用することを確認"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -356,7 +398,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute
-            executor.execute(project_db, "full", cancel_event, log_queue)
+            executor.execute(project_db, "full", cancel_event, log_callback)
 
             # Verify LLM client was created with custom settings
             mock_llm_factory.assert_called_once_with(provider="openai", model="gpt-4")
@@ -365,7 +407,7 @@ class TestPipelineExecutorConfiguration:
         self,
         project_db: sqlite3.Connection,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback,
     ) -> None:
         """再実行時にテーブルがクリアされることを確認"""
         executor = PipelineExecutor(provider="ollama")
@@ -396,7 +438,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute with full scope
-            executor.execute(project_db, "full", cancel_event, log_queue)
+            executor.execute(project_db, "full", cancel_event, log_callback)
 
             # Verify all tables were cleared before execution
             mock_delete_docs.assert_called_once()

@@ -4,6 +4,7 @@ import hashlib
 import sqlite3
 from queue import Queue
 from threading import Event
+from typing import Callable
 
 from genglossary.db.document_repository import (
     create_document,
@@ -45,18 +46,18 @@ class PipelineExecutor:
         """
         self._llm_client = create_llm_client(provider=provider, model=model)
         self._run_id: int | None = None
-        self._log_queue: Queue | None = None
+        self._log_callback: Callable[[dict], None] | None = None
         self._cancel_event: Event | None = None
 
     def _log(self, level: str, message: str) -> None:
-        """Log a message to the queue.
+        """Log a message using the callback.
 
         Args:
             level: Log level ('info', 'warning', 'error').
             message: Log message.
         """
-        if self._log_queue is not None:
-            self._log_queue.put({"run_id": self._run_id, "level": level, "message": message})
+        if self._log_callback is not None:
+            self._log_callback({"run_id": self._run_id, "level": level, "message": message})
 
     def _check_cancellation(self) -> bool:
         """Check if execution is cancelled.
@@ -74,7 +75,7 @@ class PipelineExecutor:
         conn: sqlite3.Connection,
         scope: str,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback: Callable[[dict], None],
         doc_root: str = ".",
         run_id: int | None = None,
     ) -> None:
@@ -84,13 +85,13 @@ class PipelineExecutor:
             conn: Project database connection.
             scope: Execution scope ('full', 'from_terms', 'provisional_to_refined').
             cancel_event: Event to signal cancellation.
-            log_queue: Queue for log messages.
+            log_callback: Callback function for log messages.
             doc_root: Root directory for documents (default: ".").
             run_id: Run ID for log filtering (default: None).
         """
         # Set execution context
         self._run_id = run_id
-        self._log_queue = log_queue
+        self._log_callback = log_callback
         self._cancel_event = cancel_event
 
         self._log("info", f"Starting pipeline execution: {scope}")

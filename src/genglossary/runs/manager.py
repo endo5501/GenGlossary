@@ -4,7 +4,8 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from queue import Queue
-from threading import Event, Thread
+from threading import Event, Lock, Thread
+from typing import Callable
 
 from genglossary.db.connection import get_connection
 from genglossary.db.runs_repository import (
@@ -49,6 +50,9 @@ class RunManager:
         self._cancel_event = Event()
         self._log_queue: Queue = Queue(maxsize=self.MAX_LOG_QUEUE_SIZE)
         self._current_run_id: int | None = None
+        # Subscriber管理
+        self._subscribers: dict[int, set[Queue]] = {}
+        self._subscribers_lock = Lock()
 
     @contextmanager
     def _db_connection(self):
@@ -113,6 +117,10 @@ class RunManager:
                 conn, run_id, "running", started_at=datetime.now()
             )
 
+            # ログコールバックを作成
+            def log_callback(msg: dict) -> None:
+                self._broadcast_log(run_id, msg)
+
             # Execute pipeline with project settings
             executor = PipelineExecutor(
                 provider=self.llm_provider,
@@ -122,7 +130,7 @@ class RunManager:
                 conn,
                 scope,
                 self._cancel_event,
-                self._log_queue,
+                log_callback,
                 doc_root=self.doc_root,
                 run_id=run_id,
             )
@@ -145,10 +153,10 @@ class RunManager:
                 finished_at=datetime.now(),
                 error_message=str(e),
             )
-            self._log_queue.put({"run_id": run_id, "level": "error", "message": f"Run failed: {str(e)}"})
+            self._broadcast_log(run_id, {"run_id": run_id, "level": "error", "message": f"Run failed: {str(e)}"})
         finally:
             # Send completion signal to close SSE stream
-            self._log_queue.put({"run_id": run_id, "complete": True})
+            self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
             # Close the connection when thread completes
             conn.close()
 
@@ -185,6 +193,50 @@ class RunManager:
         """
         with self._db_connection() as conn:
             return get_run(conn, run_id)
+
+    def register_subscriber(self, run_id: int) -> Queue:
+        """SSEクライアント用のQueueを作成し登録する.
+
+        Args:
+            run_id: Run ID.
+
+        Returns:
+            Queue: ログメッセージを受信するためのQueue.
+        """
+        queue: Queue = Queue(maxsize=self.MAX_LOG_QUEUE_SIZE)
+        with self._subscribers_lock:
+            if run_id not in self._subscribers:
+                self._subscribers[run_id] = set()
+            self._subscribers[run_id].add(queue)
+        return queue
+
+    def unregister_subscriber(self, run_id: int, queue: Queue) -> None:
+        """SSEクライアントの登録を解除する.
+
+        Args:
+            run_id: Run ID.
+            queue: 登録解除するQueue.
+        """
+        with self._subscribers_lock:
+            if run_id in self._subscribers:
+                self._subscribers[run_id].discard(queue)
+                if not self._subscribers[run_id]:
+                    del self._subscribers[run_id]
+
+    def _broadcast_log(self, run_id: int, message: dict) -> None:
+        """全subscriberにログをブロードキャストする.
+
+        Args:
+            run_id: Run ID.
+            message: ログメッセージ.
+        """
+        with self._subscribers_lock:
+            if run_id in self._subscribers:
+                for queue in self._subscribers[run_id]:
+                    try:
+                        queue.put_nowait(message)
+                    except:
+                        pass  # Queue満杯時は破棄
 
     def get_log_queue(self) -> Queue:
         """Get the log queue for streaming logs.

@@ -179,33 +179,25 @@ async def stream_run_logs(
 
     async def event_generator() -> AsyncIterator[str]:
         """Generate SSE events from log queue."""
-        log_queue = manager.get_log_queue()
+        queue = manager.register_subscriber(run_id)
+        try:
+            while True:
+                try:
+                    log_msg = queue.get(timeout=1)
 
-        while True:
-            try:
-                log_msg = log_queue.get(timeout=1)
+                    # Check for completion signal
+                    if log_msg.get("complete"):
+                        yield "event: complete\ndata: {}\n\n"
+                        break
 
-                # Filter messages by run_id
-                msg_run_id = log_msg.get("run_id")
-                if msg_run_id is not None and msg_run_id != run_id:
-                    # Message for different run - put back and skip
-                    try:
-                        log_queue.put_nowait(log_msg)
-                    except:
-                        pass  # Queue full, drop message
-                    continue
+                    # Send log message as SSE event
+                    yield f"data: {json.dumps(log_msg)}\n\n"
 
-                # Check for completion signal
-                if log_msg.get("complete"):
-                    yield "event: complete\ndata: {}\n\n"
-                    break
-
-                # Send log message as SSE event
-                yield f"data: {json.dumps(log_msg)}\n\n"
-
-            except Empty:
-                # Timeout - send keepalive
-                yield ": keepalive\n\n"
+                except Empty:
+                    # Timeout - send keepalive
+                    yield ": keepalive\n\n"
+        finally:
+            manager.unregister_subscriber(run_id, queue)
 
     return StreamingResponse(
         event_generator(),
