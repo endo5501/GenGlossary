@@ -133,3 +133,43 @@ GenGlossary/
 ├── pyproject.toml                # プロジェクト設定
 └── uv.lock                       # 依存関係ロック
 ```
+
+## フロントエンド（frontend/）
+
+React SPA のディレクトリ構成。
+
+```
+frontend/
+├── src/
+│   ├── __tests__/           # テストコード
+│   │   ├── setup.ts         # テストセットアップ
+│   │   ├── test-utils.tsx   # テストユーティリティ
+│   │   ├── api-client.test.ts   # APIクライアントテスト (14 tests)
+│   │   ├── app-shell.test.tsx   # レイアウトテスト (19 tests)
+│   │   └── routing.test.tsx     # ルーティングテスト (16 tests)
+│   ├── api/                 # API通信層
+│   │   ├── client.ts        # HTTPクライアント (ApiError, apiClient)
+│   │   ├── types.ts         # 型定義 (FileResponse, TermResponse, etc.)
+│   │   └── hooks/           # TanStack Queryフック（将来）
+│   │       └── index.ts
+│   ├── components/          # Reactコンポーネント
+│   │   ├── common/
+│   │   │   └── PagePlaceholder.tsx  # 未実装ページ用
+│   │   └── layout/
+│   │       ├── index.ts
+│   │       ├── AppShell.tsx      # メインレイアウト
+│   │       ├── GlobalTopBar.tsx  # ヘッダー
+│   │       ├── LeftNavRail.tsx   # 左ナビゲーション
+│   │       └── LogPanel.tsx      # ログビューア
+│   ├── routes/              # ルーティング設定
+│   │   └── index.tsx        # TanStack Routerルート定義
+│   ├── theme/               # テーマ設定
+│   │   └── theme.ts         # Mantineテーマ
+│   └── main.tsx             # エントリーポイント
+├── index.html               # HTMLテンプレート
+├── package.json             # 依存関係・スクリプト
+├── tsconfig.json            # TypeScript設定
+├── vite.config.ts           # Vite設定
+├── vitest.config.ts         # Vitest設定
+└── eslint.config.js         # ESLint設定
+```
