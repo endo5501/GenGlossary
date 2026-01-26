@@ -33,7 +33,7 @@ bash scripts/ticket.sh close
 - [プロジェクト概要](@.claude/rules/00-overview.md) - 4ステップフロー、技術スタック
 
 ### 詳細ドキュメント（必要時に参照）
-- `docs/architecture.md` - ディレクトリ構成、モジュール設計、データフロー
+- `docs/architecture/` - アーキテクチャガイド（README.md から各詳細へ）
 
 ## 困ったときは
 
