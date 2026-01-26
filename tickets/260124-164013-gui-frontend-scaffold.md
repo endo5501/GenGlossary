@@ -4,7 +4,7 @@ tags: [frontend, build, ux]
 description: "Bootstrap the web frontend (React/Vite) with design system, routing, API client, and shared layout shell."
 created_at: "2026-01-24T16:40:13Z"
 started_at: 2026-01-26T15:09:13Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-26T22:58:03Z # Do not modify manually
 ---
 
 # Ticket Overview
