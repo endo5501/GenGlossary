@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from genglossary.db.connection import get_connection
 from genglossary.db.project_repository import create_project
 from genglossary.db.registry_schema import initialize_registry
-from genglossary.db.runs_repository import create_run
+from genglossary.db.runs_repository import create_run, update_run_status
 
 
 @pytest.fixture
@@ -267,3 +267,23 @@ class TestGetCurrentRun:
 
         response = client.get(f"/api/projects/{project_id}/runs/current")
         assert response.status_code == 404
+
+
+class TestRunLogs:
+    """Tests for GET /api/projects/{id}/runs/{run_id}/logs endpoint."""
+
+    def test_logs_complete_immediately_for_finished_run(
+        self, test_project_setup, client: TestClient
+    ) -> None:
+        """完了済みRunは即完了イベントを返す"""
+        project_id = test_project_setup["project_id"]
+        project_db_path = test_project_setup["project_db_path"]
+
+        conn = get_connection(project_db_path)
+        run_id = create_run(conn, scope="full")
+        update_run_status(conn, run_id, "completed")
+        conn.close()
+
+        response = client.get(f"/api/projects/{project_id}/runs/{run_id}/logs")
+        assert response.status_code == 200
+        assert "event: complete" in response.text

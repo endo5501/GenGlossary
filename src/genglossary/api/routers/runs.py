@@ -177,10 +177,30 @@ async def stream_run_logs(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
+    # If run already completed/failed/cancelled, return immediate completion event.
+    if row["status"] in {"completed", "failed", "cancelled"}:
+        async def completed_generator() -> AsyncIterator[str]:
+            yield "event: complete\ndata: {}\n\n"
+
+        return StreamingResponse(
+            completed_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     async def event_generator() -> AsyncIterator[str]:
         """Generate SSE events from log queue."""
         queue = manager.register_subscriber(run_id)
         try:
+            # Re-check status after subscribing to avoid missing completion signal.
+            latest = get_run(project_db, run_id)
+            if latest is not None and latest["status"] in {"completed", "failed", "cancelled"}:
+                yield "event: complete\ndata: {}\n\n"
+                return
+
             while True:
                 try:
                     log_msg = queue.get(timeout=1)

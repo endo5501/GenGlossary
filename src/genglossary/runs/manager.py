@@ -3,7 +3,7 @@
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
-from queue import Queue
+from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
 from typing import Callable
 
@@ -233,10 +233,22 @@ class RunManager:
         with self._subscribers_lock:
             if run_id in self._subscribers:
                 for queue in self._subscribers[run_id]:
-                    try:
-                        queue.put_nowait(message)
-                    except:
-                        pass  # Queue満杯時は破棄
+                    if message.get("complete"):
+                        # Ensure completion signal is delivered by dropping oldest item if needed.
+                        while True:
+                            try:
+                                queue.put_nowait(message)
+                                break
+                            except Full:
+                                try:
+                                    queue.get_nowait()
+                                except Empty:
+                                    continue
+                    else:
+                        try:
+                            queue.put_nowait(message)
+                        except Full:
+                            pass  # Queue満杯時は破棄
 
     def get_log_queue(self) -> Queue:
         """Get the log queue for streaming logs.

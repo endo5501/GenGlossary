@@ -276,6 +276,24 @@ class TestRunManagerSubscription:
 
         assert queue.empty()
 
+    def test_completion_signal_delivered_even_when_queue_full(self, manager: RunManager) -> None:
+        """完了シグナルは満杯のキューでも配信される"""
+        queue = manager.register_subscriber(run_id=1)
+
+        for i in range(manager.MAX_LOG_QUEUE_SIZE):
+            queue.put_nowait({"run_id": 1, "level": "info", "message": f"msg-{i}"})
+
+        manager._broadcast_log(1, {"run_id": 1, "complete": True})
+
+        completion_found = False
+        while not queue.empty():
+            msg = queue.get_nowait()
+            if msg.get("complete"):
+                completion_found = True
+                break
+
+        assert completion_found, "Completion signal should be delivered even when queue is full"
+
 
 class TestRunManagerLogStreaming:
     """Tests for RunManager log streaming functionality."""

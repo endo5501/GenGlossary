@@ -580,3 +580,31 @@ RunManager → _subscribers[run_id] = {Queue1, Queue2, ...}
 ### 未対応の既知の問題
 
 なし（全ての問題を解決）
+
+## Log Streaming Follow-up Decisions (2026-01-26) ✅
+
+### Findings
+- High: Run 完了後に /runs/{run_id}/logs へ接続した場合、完了シグナルが届かず無期限でkeepalive を送り続けます。register_subscriber は“以後のログのみ”受信する設計なので、manager.py:158-160
+- Medium: subscriber キューが満杯になると _broadcast_log が silently drop します。完了シグナルも同様にドロップされるため、SSE が終了しない可能性があります。src/genglossary/runs/manager.py:233-239
+
+### Decision 1: 完了済みRunのログ取得方針
+- **方針**: `/runs/{run_id}/logs` は完了済みRunの場合、即時に `event: complete` を返して終了（ログ履歴は返さない）。
+- **理由**: Option Aはメモリ内配信前提のため、完了後の履歴を保持しない。シンプルさと運用要件（小規模前提）を優先。
+
+### Decision 2: 完了シグナルの配信保証
+- **方針**: subscriberキュー満杯時は**古いログを1件捨てて**完了シグナルを必ず投入する。
+- **理由**: SSEが終了しない状態を避けるため、完了通知を優先。
+
+## Log Streaming Follow-up Fixes (2026-01-26) ✅
+
+### 実装内容
+1. **完了済みRunへの即時完了イベント**
+   - `/runs/{run_id}/logs` は completed/failed/cancelled の場合、即座に `event: complete` を返して終了
+   - subscribe直後にもステータスを再確認し、完了済みなら即終了
+
+2. **完了シグナルの配信保証**
+   - 完了通知時はキュー満杯なら古いログを1件捨てて必ず投入
+
+### テスト
+- `test_logs_complete_immediately_for_finished_run`
+- `test_completion_signal_delivered_even_when_queue_full`
