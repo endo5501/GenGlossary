@@ -4,7 +4,7 @@ tags: [api, jobs, cli]
 description: "Expose glossary pipeline operations over HTTP and add a background run/queue subsystem with log streaming."
 created_at: "2026-01-24T16:40:11Z"
 started_at: 2026-01-25T13:45:02Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-26T14:24:53Z # Do not modify manually
 ---
 
 # Ticket Overview
