@@ -3,6 +3,7 @@
 import os
 import sqlite3
 from pathlib import Path
+from threading import Lock
 from typing import Generator
 
 from fastapi import Depends, HTTPException
@@ -12,6 +13,11 @@ from genglossary.db.connection import get_connection
 from genglossary.db.project_repository import get_project
 from genglossary.db.registry_schema import initialize_registry
 from genglossary.models.project import Project
+from genglossary.runs.manager import RunManager
+
+# RunManager registry: one instance per project (keyed by db_path)
+_run_manager_registry: dict[str, RunManager] = {}
+_registry_lock = Lock()
 
 
 def get_config() -> Config:
@@ -88,3 +94,79 @@ def get_project_db(
         yield conn
     finally:
         conn.close()
+
+
+def get_project_db_path(project: Project = Depends(get_project_by_id)) -> str:
+    """Get project database path.
+
+    Args:
+        project: Project instance from get_project_by_id.
+
+    Returns:
+        str: Path to project database.
+    """
+    return project.db_path
+
+
+def _settings_match(manager: RunManager, project: Project) -> bool:
+    """Check if manager settings match project settings.
+
+    Args:
+        manager: RunManager instance to check.
+        project: Project instance to compare against.
+
+    Returns:
+        bool: True if settings match.
+    """
+    return (
+        manager.doc_root == project.doc_root
+        and manager.llm_provider == project.llm_provider
+        and manager.llm_model == project.llm_model
+    )
+
+
+def _create_and_register_manager(project: Project) -> RunManager:
+    """Create and register a new RunManager.
+
+    Args:
+        project: Project instance to create manager for.
+
+    Returns:
+        RunManager: Newly created manager instance.
+    """
+    manager = RunManager(
+        db_path=project.db_path,
+        doc_root=project.doc_root,
+        llm_provider=project.llm_provider,
+        llm_model=project.llm_model,
+    )
+    _run_manager_registry[project.db_path] = manager
+    return manager
+
+
+def get_run_manager(project: Project = Depends(get_project_by_id)) -> RunManager:
+    """Get or create RunManager instance for the project (singleton per project).
+
+    If project settings have changed, recreates the RunManager only if no run
+    is currently active. If a run is active, returns the existing instance to
+    avoid interrupting the running job.
+
+    Args:
+        project: Project instance from get_project_by_id.
+
+    Returns:
+        RunManager: RunManager instance for the project.
+    """
+    with _registry_lock:
+        existing = _run_manager_registry.get(project.db_path)
+
+        if existing is None:
+            return _create_and_register_manager(project)
+
+        if existing.get_active_run() is not None:
+            return existing
+
+        if _settings_match(existing, project):
+            return existing
+
+        return _create_and_register_manager(project)

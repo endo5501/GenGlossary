@@ -92,3 +92,14 @@ def delete_document(conn: sqlite3.Connection, document_id: int) -> None:
     cursor = conn.cursor()
     cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))
     conn.commit()
+
+
+def delete_all_documents(conn: sqlite3.Connection) -> None:
+    """Delete all documents.
+
+    Args:
+        conn: Database connection.
+    """
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM documents")
+    conn.commit()
