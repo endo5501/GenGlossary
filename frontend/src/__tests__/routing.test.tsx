@@ -16,87 +16,25 @@ describe('Routing', () => {
   })
 
   describe('Route navigation', () => {
-    it('should navigate to /files', async () => {
+    const navigationRoutes = [
+      { path: '/files', name: /files/i },
+      { path: '/terms', name: /terms/i },
+      { path: '/provisional', name: /provisional/i },
+      { path: '/issues', name: /issues/i },
+      { path: '/refined', name: /refined/i },
+      { path: '/document-viewer', name: /document/i },
+      { path: '/settings', name: /settings/i },
+    ]
+
+    it.each(navigationRoutes)('should navigate to $path', async ({ path, name }) => {
       const { router } = await renderApp()
       const user = userEvent.setup()
 
-      const filesLink = screen.getByRole('link', { name: /files/i })
-      await user.click(filesLink)
+      const link = screen.getByRole('link', { name })
+      await user.click(link)
 
       await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/files')
-      })
-    })
-
-    it('should navigate to /terms', async () => {
-      const { router } = await renderApp()
-      const user = userEvent.setup()
-
-      const termsLink = screen.getByRole('link', { name: /terms/i })
-      await user.click(termsLink)
-
-      await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/terms')
-      })
-    })
-
-    it('should navigate to /provisional', async () => {
-      const { router } = await renderApp()
-      const user = userEvent.setup()
-
-      const provisionalLink = screen.getByRole('link', { name: /provisional/i })
-      await user.click(provisionalLink)
-
-      await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/provisional')
-      })
-    })
-
-    it('should navigate to /issues', async () => {
-      const { router } = await renderApp()
-      const user = userEvent.setup()
-
-      const issuesLink = screen.getByRole('link', { name: /issues/i })
-      await user.click(issuesLink)
-
-      await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/issues')
-      })
-    })
-
-    it('should navigate to /refined', async () => {
-      const { router } = await renderApp()
-      const user = userEvent.setup()
-
-      const refinedLink = screen.getByRole('link', { name: /refined/i })
-      await user.click(refinedLink)
-
-      await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/refined')
-      })
-    })
-
-    it('should navigate to /document-viewer', async () => {
-      const { router } = await renderApp()
-      const user = userEvent.setup()
-
-      const docViewerLink = screen.getByRole('link', { name: /document/i })
-      await user.click(docViewerLink)
-
-      await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/document-viewer')
-      })
-    })
-
-    it('should navigate to /settings', async () => {
-      const { router } = await renderApp()
-      const user = userEvent.setup()
-
-      const settingsLink = screen.getByRole('link', { name: /settings/i })
-      await user.click(settingsLink)
-
-      await waitFor(() => {
-        expect(router.state.location.pathname).toBe('/settings')
+        expect(router.state.location.pathname).toBe(path)
       })
     })
   })

@@ -30,7 +30,7 @@ describe('API Client', () => {
   })
 
   describe('apiClient', () => {
-    it('should make GET requests with correct headers', async () => {
+    it('should not set Content-Type header for GET requests without body', async () => {
       let capturedHeaders: Headers | null = null
 
       server.use(
@@ -41,6 +41,21 @@ describe('API Client', () => {
       )
 
       await apiClient.get('/api/test')
+
+      expect(capturedHeaders?.get('Content-Type')).toBeNull()
+    })
+
+    it('should set Content-Type header for POST requests with body', async () => {
+      let capturedHeaders: Headers | null = null
+
+      server.use(
+        http.post('http://localhost:8000/api/test', ({ request }) => {
+          capturedHeaders = new Headers(request.headers)
+          return HttpResponse.json({ success: true })
+        })
+      )
+
+      await apiClient.post('/api/test', { data: 'test' })
 
       expect(capturedHeaders?.get('Content-Type')).toBe('application/json')
     })
@@ -85,7 +100,7 @@ describe('API Client', () => {
       await expect(apiClient.get('/api/test')).rejects.toThrow(ApiError)
       await expect(apiClient.get('/api/test')).rejects.toMatchObject({
         status: 404,
-        message: 'Not found',
+        detail: 'Not found',
       })
     })
 
@@ -140,6 +155,30 @@ describe('API Client', () => {
       const result = await apiClient.post('/api/test', { data: 'test' })
 
       expect(result).toBeUndefined()
+    })
+
+    it('should send falsy data values correctly', async () => {
+      const testCases = [
+        { input: 0, expected: 0 },
+        { input: '', expected: '' },
+        { input: false, expected: false },
+        { input: null, expected: null },
+      ]
+
+      for (const { input, expected } of testCases) {
+        let capturedBody: unknown = null
+
+        server.use(
+          http.post('http://localhost:8000/api/test', async ({ request }) => {
+            capturedBody = await request.json()
+            return HttpResponse.json({ success: true })
+          })
+        )
+
+        await apiClient.post('/api/test', input)
+
+        expect(capturedBody).toBe(expected)
+      }
     })
   })
 })

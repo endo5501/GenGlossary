@@ -23,6 +23,9 @@ const scopeOptions = [
   { value: 'provisional_to_refined', label: 'Provisional to Refined' },
 ]
 
+const isRunScope = (value: string): value is RunScope =>
+  ['full', 'from_terms', 'provisional_to_refined'].includes(value)
+
 export function GlobalTopBar({
   status = 'pending',
   onRun,
@@ -74,7 +77,11 @@ export function GlobalTopBar({
         <Box data-testid="scope-selector">
           <Select
             value={scope}
-            onChange={(value) => value && setScope(value as RunScope)}
+            onChange={(value) => {
+              if (value && isRunScope(value)) {
+                setScope(value)
+              }
+            }}
             data={scopeOptions}
             allowDeselect={false}
             w={180}

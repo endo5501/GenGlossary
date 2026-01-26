@@ -27,7 +27,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       detail = response.statusText
     }
-    throw new ApiError(detail, response.status, detail)
+    throw new ApiError(`Request failed: ${response.status}`, response.status, detail)
   }
   // 204 No Content or empty body
   if (response.status === 204 || response.headers.get('content-length') === '0') {
@@ -42,7 +42,9 @@ async function request<T>(
 ): Promise<T> {
   const url = `${getBaseUrl()}${endpoint}`
   const headers = new Headers(options.headers)
-  headers.set('Content-Type', 'application/json')
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
 
   try {
     const response = await fetch(url, {
@@ -66,7 +68,7 @@ const createDataMethod = (method: string) =>
   <T>(endpoint: string, data?: unknown): Promise<T> =>
     request<T>(endpoint, {
       method,
-      body: data ? JSON.stringify(data) : undefined,
+      body: data !== undefined ? JSON.stringify(data) : undefined,
     })
 
 export const apiClient = {
