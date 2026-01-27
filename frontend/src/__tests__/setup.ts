@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, vi } from 'vitest'
 // Mock window.matchMedia for Mantine
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
+  value: vi.fn((query: string) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -31,6 +31,39 @@ Object.defineProperty(window, 'ResizeObserver', {
 
 // Mock scrollIntoView for Mantine Combobox
 Element.prototype.scrollIntoView = vi.fn()
+
+// Mock EventSource for SSE tests
+class EventSourceMock {
+  static CONNECTING = 0 as const
+  static OPEN = 1 as const
+  static CLOSED = 2 as const
+
+  url: string
+  readyState = EventSourceMock.CONNECTING
+  onopen: ((event: Event) => void) | null = null
+  onmessage: ((event: MessageEvent) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+
+  addEventListener = vi.fn()
+  removeEventListener = vi.fn()
+  close = vi.fn(() => {
+    this.readyState = EventSourceMock.CLOSED
+  })
+
+  constructor(url: string) {
+    this.url = url
+    // Simulate immediate connection for simpler tests
+    queueMicrotask(() => {
+      this.readyState = EventSourceMock.OPEN
+      this.onopen?.(new Event('open'))
+    })
+  }
+}
+
+Object.defineProperty(window, 'EventSource', {
+  writable: true,
+  value: EventSourceMock,
+})
 
 // MSW server setup for API mocking
 export const server = setupServer()

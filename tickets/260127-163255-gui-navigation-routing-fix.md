@@ -3,8 +3,8 @@ priority: 1
 tags: [gui, frontend, routing, critical]
 description: "ナビゲーション/ルーティング修正 - 各ページが正しく表示されるよう修正"
 created_at: "2026-01-27T16:32:55Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-27T16:42:15Z # Do not modify manually
+closed_at: 2026-01-27T22:25:00Z # Do not modify manually
 ---
 
 # ナビゲーション/ルーティング修正（最優先・重大）
@@ -32,19 +32,19 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] LeftNavRailのナビゲーションロジックをデバッグ
-- [ ] `/projects/{id}/files` 等のルートが正しく動作することを確認
-- [ ] `extractProjectId()` と `getPath()` の動作確認
-- [ ] 必要に応じてルーティング設定を修正
-- [ ] 全ページ（Files, Terms, Provisional, Issues, Refined, Settings）の表示確認
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] LeftNavRailのナビゲーションロジックをデバッグ
+- [x] `/projects/{id}/files` 等のルートが正しく動作することを確認
+- [x] `extractProjectId()` と `getPath()` の動作確認
+- [x] 必要に応じてルーティング設定を修正
+- [x] 全ページ（Files, Terms, Provisional, Issues, Refined, Settings）の表示確認
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 

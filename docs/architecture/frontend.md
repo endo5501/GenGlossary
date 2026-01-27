@@ -470,6 +470,15 @@ const routes = routeConfigs.map(({ path, title }) =>
 - **React Testing Library (RTL)**: コンポーネントテスト
 - **MSW (Mock Service Worker)**: API モック
 
+### テストセットアップ（setup.ts）
+
+テスト環境で必要なモックを `src/__tests__/setup.ts` で設定：
+
+- **matchMedia**: Mantine UIコンポーネント用
+- **ResizeObserver**: レイアウト監視用
+- **scrollIntoView**: Mantine Combobox用
+- **EventSource**: SSEログストリーミング用
+
 ### テストファイル構成
 
 | ファイル | テスト数 | 対象 |
