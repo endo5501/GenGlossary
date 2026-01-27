@@ -81,6 +81,65 @@ uv run genglossary generate --llm-provider openai --openai-base-url https://your
 uv run genglossary generate --llm-provider openai --openai-base-url http://localhost:8080/v1 -m local-model
 ```
 
+## Web UI（GUI）
+
+GenGlossaryはWebブラウザから操作できるGUIを提供します。CLIと同等の機能をグラフィカルなインターフェースで利用できます。
+
+### 起動方法
+
+```bash
+# バックエンドサーバーを起動（ポート8000）
+uv run uvicorn genglossary.api.main:app --reload
+
+# 別のターミナルでフロントエンドを起動（ポート5173）
+cd frontend
+npm install  # 初回のみ
+npm run dev
+```
+
+ブラウザで http://localhost:5173 を開くとWeb UIにアクセスできます。
+
+### 画面構成
+
+#### プロジェクト一覧（ホーム）
+
+- **プロジェクト一覧**: 名前、最終更新日時、ドキュメント数、用語数を表示
+- **プロジェクト概要カード**: 選択したプロジェクトの詳細と操作ボタン（開く/複製/削除）
+- **新規作成**: プロジェクト名とLLM設定を指定して作成
+
+#### プロジェクト詳細画面
+
+左サイドバーから各機能にアクセスできます：
+
+| ページ | 説明 |
+|-------|------|
+| **Files** | 登録ドキュメントの一覧表示、ファイル追加、差分スキャン |
+| **Terms** | 抽出された用語の一覧・詳細表示、再抽出、手動追加/削除 |
+| **Provisional** | 暫定用語集の一覧・編集（定義、confidence調整） |
+| **Issues** | 精査結果の一覧（タイプ別フィルタ対応）、再精査 |
+| **Refined** | 最終用語集の一覧・詳細表示、Markdownエクスポート |
+| **Document Viewer** | 原文ドキュメントの閲覧 |
+| **Settings** | プロジェクト名、LLM設定の編集 |
+
+#### グローバル操作バー
+
+画面上部に以下の操作を配置：
+
+- **Run ボタン**: パイプライン実行（用語抽出→用語集生成→精査→改善）
+- **Stop ボタン**: 実行中のパイプラインをキャンセル
+- **実行状態**: 現在の状態（Up-to-date / Running / Failed など）を表示
+
+#### ログパネル
+
+画面下部に折りたたみ可能なログビューアを配置。パイプライン実行中のログをリアルタイムで確認できます。
+
+### キーボード操作
+
+各ページのリスト項目はキーボードで操作できます：
+
+- **Tab**: 項目間を移動
+- **Enter / Space**: 項目を選択
+
 ### 用語抽出の分析（デバッグモード）
 
 用語抽出の品質を確認するため、中間結果を表示できます：
@@ -157,6 +216,9 @@ OPENAI_TIMEOUT=60
 
 # 出力設定
 DEFAULT_OUTPUT_PATH=./output/glossary.md
+
+# フロントエンド設定（frontend/.envに配置）
+# VITE_API_BASE_URL=http://localhost:8000
 ```
 
 ### LLMプロバイダー
@@ -255,14 +317,37 @@ uv run pytest tests/test_integration.py -v
 uv run pyright
 ```
 
+### フロントエンド開発
+
+```bash
+cd frontend
+
+# 開発サーバー起動
+npm run dev
+
+# テスト実行
+npm test
+
+# プロダクションビルド
+npm run build
+
+# リント
+npm run lint
+```
+
 ### プロジェクト構成
 
 ```
 GenGlossary/
 ├── src/genglossary/          # メインパッケージ
+│   ├── api/                  # FastAPI バックエンド
+│   │   ├── main.py           # APIエントリーポイント
+│   │   ├── routers/          # APIルーター
+│   │   └── schemas.py        # Pydanticスキーマ
 │   ├── models/               # データモデル
 │   ├── llm/                  # LLMクライアント
 │   ├── output/               # 出力フォーマッター
+│   ├── storage/              # データベースアクセス層
 │   ├── document_loader.py    # ドキュメント読み込み
 │   ├── term_extractor.py     # 用語抽出
 │   ├── glossary_generator.py # 用語集生成
@@ -270,7 +355,14 @@ GenGlossary/
 │   ├── glossary_refiner.py   # 改善
 │   ├── cli.py               # CLIエントリーポイント
 │   └── config.py            # 設定管理
-├── tests/                    # テストコード
+├── frontend/                 # React フロントエンド
+│   ├── src/
+│   │   ├── api/              # APIクライアント・フック
+│   │   ├── components/       # Reactコンポーネント
+│   │   ├── pages/            # ページコンポーネント
+│   │   └── routes/           # ルーティング設定
+│   └── package.json
+├── tests/                    # バックエンドテストコード
 ├── examples/                 # サンプルドキュメント
 └── output/                   # 生成された用語集
 ```
