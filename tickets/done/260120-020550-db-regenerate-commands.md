@@ -3,8 +3,8 @@ priority: 1
 tags: [db, cli, refactoring]
 description: "DB更新コマンド強化 - runsテーブル廃止とregenerateコマンド追加"
 created_at: "2026-01-20T02:05:50Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-20T02:27:06Z # Do not modify manually
+closed_at: 2026-01-20T12:13:31Z # Do not modify manually
 ---
 
 # DB更新コマンド強化計画
