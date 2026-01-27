@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiClient } from '../client'
+import { apiClient, getBaseUrl } from '../client'
 import type { GlossaryTermResponse } from '../types'
 import { useResourceList, useResourceDetail } from './useResource'
 
@@ -19,7 +19,7 @@ const refinedApi = {
     apiClient.get<GlossaryTermResponse>(`/api/projects/${projectId}/refined/${termId}`),
   exportMarkdown: async (projectId: number) => {
     const response = await fetch(
-      `http://localhost:8000/api/projects/${projectId}/refined/export`
+      `${getBaseUrl()}/api/projects/${projectId}/refined/export`
     )
     if (!response.ok) {
       throw new Error('Export failed')

@@ -13,7 +13,6 @@ import {
   useRegenerateRefined,
   useCurrentRun,
 } from '../api/hooks'
-import type { GlossaryTermResponse } from '../api/types'
 import { PageContainer } from '../components/common/PageContainer'
 import { OccurrenceList } from '../components/common/OccurrenceList'
 
@@ -24,7 +23,8 @@ interface RefinedPageProps {
 export function RefinedPage({ projectId }: RefinedPageProps) {
   const { data: entries, isLoading } = useRefined(projectId)
   const { data: currentRun } = useCurrentRun(projectId)
-  const [selectedEntry, setSelectedEntry] = useState<GlossaryTermResponse | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const selectedEntry = entries?.find((e) => e.id === selectedId) ?? null
 
   const exportMarkdown = useExportMarkdown(projectId)
   const regenerateRefined = useRegenerateRefined(projectId)
@@ -69,10 +69,19 @@ export function RefinedPage({ projectId }: RefinedPageProps) {
               key={entry.id}
               withBorder
               p="md"
-              onClick={() => setSelectedEntry(entry)}
+              onClick={() => setSelectedId(entry.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setSelectedId(entry.id)
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              aria-selected={selectedId === entry.id}
               style={{ cursor: 'pointer' }}
               bg={
-                selectedEntry?.id === entry.id
+                selectedId === entry.id
                   ? 'var(--mantine-color-blue-light)'
                   : undefined
               }

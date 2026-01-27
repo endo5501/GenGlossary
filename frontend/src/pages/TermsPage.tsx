@@ -15,7 +15,6 @@ import { useDisclosure } from '@mantine/hooks'
 import { IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useTerms, useCreateTerm, useDeleteTerm, useExtractTerms, useCurrentRun } from '../api/hooks'
-import type { TermDetailResponse } from '../api/types'
 import { PageContainer } from '../components/common/PageContainer'
 import { OccurrenceList } from '../components/common/OccurrenceList'
 
@@ -26,7 +25,8 @@ interface TermsPageProps {
 export function TermsPage({ projectId }: TermsPageProps) {
   const { data: terms, isLoading } = useTerms(projectId)
   const { data: currentRun } = useCurrentRun(projectId)
-  const [selectedTerm, setSelectedTerm] = useState<TermDetailResponse | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const selectedTerm = terms?.find((t) => t.id === selectedId) ?? null
   const [opened, { open, close }] = useDisclosure(false)
   const [newTermText, setNewTermText] = useState('')
   const [newTermCategory, setNewTermCategory] = useState('')
@@ -54,8 +54,8 @@ export function TermsPage({ projectId }: TermsPageProps) {
   const handleDeleteTerm = (termId: number) => {
     deleteTerm.mutate(termId, {
       onSuccess: () => {
-        if (selectedTerm?.id === termId) {
-          setSelectedTerm(null)
+        if (selectedId === termId) {
+          setSelectedId(null)
         }
       },
     })
@@ -104,9 +104,18 @@ export function TermsPage({ projectId }: TermsPageProps) {
             {terms?.map((term) => (
               <Table.Tr
                 key={term.id}
-                onClick={() => setSelectedTerm(term)}
+                onClick={() => setSelectedId(term.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedId(term.id)
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-selected={selectedId === term.id}
                 style={{ cursor: 'pointer' }}
-                bg={selectedTerm?.id === term.id ? 'var(--mantine-color-blue-light)' : undefined}
+                bg={selectedId === term.id ? 'var(--mantine-color-blue-light)' : undefined}
               >
                 <Table.Td>{term.term_text}</Table.Td>
                 <Table.Td>

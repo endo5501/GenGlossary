@@ -11,9 +11,8 @@ import {
 import { IconRefresh } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useIssues, useReviewIssues, useCurrentRun } from '../api/hooks'
-import type { IssueResponse } from '../api/types'
 import { PageContainer } from '../components/common/PageContainer'
-import { severityColors, issueTypeColors } from '../utils/colors'
+import { getSeverityColor, getIssueTypeColor } from '../utils/colors'
 
 interface IssuesPageProps {
   projectId: number
@@ -33,7 +32,8 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
     issueTypeFilter || undefined
   )
   const { data: currentRun } = useCurrentRun(projectId)
-  const [selectedIssue, setSelectedIssue] = useState<IssueResponse | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const selectedIssue = issues?.find((i) => i.id === selectedId) ?? null
 
   const reviewIssues = useReviewIssues(projectId)
 
@@ -78,10 +78,19 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
               key={issue.id}
               withBorder
               p="sm"
-              onClick={() => setSelectedIssue(issue)}
+              onClick={() => setSelectedId(issue.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setSelectedId(issue.id)
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              aria-selected={selectedId === issue.id}
               style={{ cursor: 'pointer' }}
               bg={
-                selectedIssue?.id === issue.id
+                selectedId === issue.id
                   ? 'var(--mantine-color-blue-light)'
                   : undefined
               }
@@ -89,12 +98,12 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
               <Group justify="space-between" mb="xs">
                 <Group gap="xs">
                   <Badge
-                    color={issueTypeColors[issue.issue_type] ?? 'gray'}
+                    color={getIssueTypeColor(issue.issue_type)}
                     variant="light"
                   >
                     {issue.issue_type}
                   </Badge>
-                  <Badge color={severityColors[issue.severity]} variant="outline">
+                  <Badge color={getSeverityColor(issue.severity)} variant="outline">
                     {issue.severity}
                   </Badge>
                 </Group>
@@ -109,13 +118,13 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
         <Paper data-testid="issue-detail-panel" withBorder p="md">
           <Group mb="md">
             <Badge
-              color={issueTypeColors[selectedIssue.issue_type] ?? 'gray'}
+              color={getIssueTypeColor(selectedIssue.issue_type)}
               size="lg"
             >
               {selectedIssue.issue_type}
             </Badge>
             <Badge
-              color={severityColors[selectedIssue.severity]}
+              color={getSeverityColor(selectedIssue.severity)}
               size="lg"
               variant="outline"
             >

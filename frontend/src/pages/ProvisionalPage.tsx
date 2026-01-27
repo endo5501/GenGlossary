@@ -18,7 +18,6 @@ import {
   useRegenerateProvisional,
   useCurrentRun,
 } from '../api/hooks'
-import type { GlossaryTermResponse } from '../api/types'
 import { PageContainer } from '../components/common/PageContainer'
 import { OccurrenceList } from '../components/common/OccurrenceList'
 
@@ -32,7 +31,8 @@ const getConfidenceColor = (confidence: number) =>
 export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
   const { data: entries, isLoading } = useProvisional(projectId)
   const { data: currentRun } = useCurrentRun(projectId)
-  const [selectedEntry, setSelectedEntry] = useState<GlossaryTermResponse | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const selectedEntry = entries?.find((e) => e.id === selectedId) ?? null
   const [editDefinition, setEditDefinition] = useState('')
   const [editConfidence, setEditConfidence] = useState(0)
 
@@ -50,20 +50,13 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
 
   const handleSave = () => {
     if (!selectedEntry) return
-    updateProvisional.mutate(
-      {
-        entryId: selectedEntry.id,
-        data: {
-          definition: editDefinition,
-          confidence: editConfidence,
-        },
+    updateProvisional.mutate({
+      entryId: selectedEntry.id,
+      data: {
+        definition: editDefinition,
+        confidence: editConfidence,
       },
-      {
-        onSuccess: (updated) => {
-          setSelectedEntry({ ...selectedEntry, ...updated })
-        },
-      }
-    )
+    })
   }
 
   const actionBar = (
@@ -99,10 +92,19 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
             {entries?.map((entry) => (
               <Table.Tr
                 key={entry.id}
-                onClick={() => setSelectedEntry(entry)}
+                onClick={() => setSelectedId(entry.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedId(entry.id)
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-selected={selectedId === entry.id}
                 style={{ cursor: 'pointer' }}
                 bg={
-                  selectedEntry?.id === entry.id
+                  selectedId === entry.id
                     ? 'var(--mantine-color-blue-light)'
                     : undefined
                 }

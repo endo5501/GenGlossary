@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { LogMessage } from '../types'
-
-const BASE_URL = 'http://localhost:8000'
+import { getBaseUrl } from '../client'
 
 interface UseLogStreamResult {
   logs: LogMessage[]
@@ -28,13 +27,18 @@ export function useLogStream(
 
   const clearLogs = useCallback(() => setLogs([]), [])
 
+  // Clear logs when runId changes
+  useEffect(() => {
+    setLogs([])
+  }, [runId])
+
   useEffect(() => {
     if (!runId) {
       setIsConnected(false)
       return
     }
 
-    const url = `${BASE_URL}/api/projects/${projectId}/runs/${runId}/logs`
+    const url = `${getBaseUrl()}/api/projects/${projectId}/runs/${runId}/logs`
     const eventSource = new EventSource(url)
 
     eventSource.onopen = () => {
@@ -44,7 +48,13 @@ export function useLogStream(
 
     eventSource.onmessage = (event) => {
       const log = parseLogMessage(event)
-      if (log) setLogs((prev) => [...prev, log])
+      if (log) {
+        const MAX_LOGS = 1000
+        setLogs((prev) => {
+          const newLogs = [...prev, log]
+          return newLogs.length > MAX_LOGS ? newLogs.slice(-MAX_LOGS) : newLogs
+        })
+      }
     }
 
     eventSource.addEventListener('complete', () => {

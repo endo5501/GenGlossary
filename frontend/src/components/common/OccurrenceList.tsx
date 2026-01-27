@@ -13,8 +13,8 @@ interface OccurrenceListProps {
 export function OccurrenceList({ occurrences }: OccurrenceListProps) {
   return (
     <Stack gap="xs">
-      {occurrences.map((occ, idx) => (
-        <Paper key={idx} withBorder p="xs">
+      {occurrences.map((occ) => (
+        <Paper key={`${occ.document_path}:${occ.line_number}`} withBorder p="xs">
           <Text size="sm" c="dimmed">
             {occ.document_path}:{occ.line_number}
           </Text>

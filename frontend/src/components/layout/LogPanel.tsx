@@ -61,7 +61,7 @@ export function LogPanel({ projectId, runId }: LogPanelProps) {
           ) : (
             logs.map((log, idx) => (
               <Text
-                key={idx}
+                key={`${log.run_id}-${idx}`}
                 size="xs"
                 style={{ color: levelColors[log.level] }}
               >

@@ -1,4 +1,4 @@
-import { Stack, Group, Center, Text, Loader } from '@mantine/core'
+import { Stack, Group, Center, Text, Loader, Button } from '@mantine/core'
 import type { ReactNode } from 'react'
 
 interface PageContainerProps {
@@ -9,6 +9,8 @@ interface PageContainerProps {
   children: ReactNode
   loadingTestId?: string
   emptyTestId?: string
+  error?: Error | null
+  onRetry?: () => void
 }
 
 export function PageContainer({
@@ -19,12 +21,32 @@ export function PageContainer({
   children,
   loadingTestId = 'page-loading',
   emptyTestId = 'page-empty',
+  error,
+  onRetry,
 }: PageContainerProps) {
   if (isLoading) {
     return (
       <Center data-testid={loadingTestId} h={200}>
         <Loader />
       </Center>
+    )
+  }
+
+  if (error) {
+    return (
+      <Stack>
+        <Group>{actionBar}</Group>
+        <Center data-testid="page-error" h={200}>
+          <Stack align="center">
+            <Text c="red">Error: {error.message}</Text>
+            {onRetry && (
+              <Button variant="outline" onClick={onRetry}>
+                Retry
+              </Button>
+            )}
+          </Stack>
+        </Center>
+      </Stack>
     )
   }
 
