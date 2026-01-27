@@ -25,12 +25,12 @@ Reference: `plan-gui.md` 「プロジェクト一覧（ホーム）」「Files�
 - [x] Document Viewer: tabbed doc selection and right-side term card placeholder; support jump-in from Files row
 - [x] Add optimistic states/spinners and empty states for no projects/no files
 - [x] **Green**: 追加テストを含めフロントテスト/ビルドが通ることを確認
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 
 ## Notes
