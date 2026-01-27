@@ -22,8 +22,43 @@ from genglossary.db.project_repository import (
     list_projects,
     update_project,
 )
+from genglossary.models.project import Project
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+
+def _get_project_or_404(
+    registry_conn: sqlite3.Connection,
+    project_id: int,
+) -> Project:
+    """Get project or raise 404.
+
+    Args:
+        registry_conn: Registry database connection.
+        project_id: Project ID.
+
+    Returns:
+        Project: The requested project.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    project = get_project(registry_conn, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    return project
+
+
+def _cleanup_db_file(db_path: str) -> None:
+    """Cleanup orphaned database file.
+
+    Args:
+        db_path: Path to the database file.
+    """
+    try:
+        Path(db_path).unlink(missing_ok=True)
+    except Exception:
+        pass
 
 
 def _get_projects_dir() -> Path:
@@ -90,9 +125,7 @@ async def get_project_by_id(
     Raises:
         HTTPException: 404 if project not found.
     """
-    project = get_project(registry_conn, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    project = _get_project_or_404(registry_conn, project_id)
     return ProjectResponse.from_project(project)
 
 
@@ -126,11 +159,7 @@ async def create_new_project(
             llm_model=request.llm_model,
         )
     except sqlite3.IntegrityError:
-        # Cleanup orphaned DB file
-        try:
-            Path(db_path).unlink(missing_ok=True)
-        except Exception:
-            pass
+        _cleanup_db_file(db_path)
         raise HTTPException(
             status_code=409, detail=f"Project name already exists: {request.name}"
         )
@@ -178,11 +207,7 @@ async def clone_existing_project(
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
     except sqlite3.IntegrityError:
-        # Cleanup orphaned cloned DB file
-        try:
-            Path(new_db_path).unlink(missing_ok=True)
-        except Exception:
-            pass
+        _cleanup_db_file(new_db_path)
         raise HTTPException(
             status_code=409, detail=f"Project name already exists: {request.new_name}"
         )
@@ -210,10 +235,7 @@ async def delete_existing_project(
     Raises:
         HTTPException: 404 if project not found.
     """
-    project = get_project(registry_conn, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
-
+    _get_project_or_404(registry_conn, project_id)
     delete_project(registry_conn, project_id)
 
 
@@ -236,12 +258,8 @@ async def update_existing_project(
     Raises:
         HTTPException: 404 if project not found.
     """
-    # Check if project exists
-    project = get_project(registry_conn, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    _get_project_or_404(registry_conn, project_id)
 
-    # Update fields
     update_project(
         registry_conn,
         project_id,
@@ -249,8 +267,5 @@ async def update_existing_project(
         llm_model=request.llm_model,
     )
 
-    # Return updated project
-    updated_project = get_project(registry_conn, project_id)
-    assert updated_project is not None
-
+    updated_project = _get_project_or_404(registry_conn, project_id)
     return ProjectResponse.from_project(updated_project)

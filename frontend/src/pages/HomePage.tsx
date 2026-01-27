@@ -26,6 +26,12 @@ const statusColors: Record<ProjectStatus, string> = {
   error: 'red',
 }
 
+function formatLastRun(lastRunAt: string | null, format: 'short' | 'long' = 'short'): string {
+  if (!lastRunAt) return format === 'short' ? '-' : 'Never'
+  const date = new Date(lastRunAt)
+  return format === 'short' ? date.toLocaleDateString() : date.toLocaleString()
+}
+
 function ProjectSummaryCard({
   project,
   onDelete,
@@ -56,10 +62,7 @@ function ProjectSummaryCard({
             <strong>LLM Model:</strong> {project.llm_model || '(not set)'}
           </Text>
           <Text size="sm">
-            <strong>Last Run:</strong>{' '}
-            {project.last_run_at
-              ? new Date(project.last_run_at).toLocaleString()
-              : 'Never'}
+            <strong>Last Run:</strong> {formatLastRun(project.last_run_at, 'long')}
           </Text>
         </Stack>
 
@@ -180,11 +183,7 @@ export function HomePage() {
                         {project.status}
                       </Badge>
                     </Table.Td>
-                    <Table.Td>
-                      {project.last_run_at
-                        ? new Date(project.last_run_at).toLocaleDateString()
-                        : '-'}
-                    </Table.Td>
+                    <Table.Td>{formatLastRun(project.last_run_at)}</Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>

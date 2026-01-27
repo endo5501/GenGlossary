@@ -23,7 +23,7 @@ export function CloneProjectDialog({
       setNewName(`${project.name} (Copy)`)
       setError(null)
     }
-  }, [opened, project.id])
+  }, [opened, project.name])
 
   const cloneMutation = useCloneProject()
 
@@ -48,8 +48,6 @@ export function CloneProjectDialog({
   }
 
   const handleClose = () => {
-    setNewName(`${project.name} (Copy)`)
-    setError(null)
     onClose()
   }
 

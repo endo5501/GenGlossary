@@ -7,6 +7,24 @@ from pydantic import BaseModel, Field, field_validator
 from genglossary.models.project import Project, ProjectStatus
 
 
+def _validate_project_name(v: str) -> str:
+    """Validate project name is not empty.
+
+    Args:
+        v: The project name to validate.
+
+    Returns:
+        The validated project name.
+
+    Raises:
+        ValueError: If the name is empty.
+    """
+    stripped = v.strip()
+    if not stripped:
+        raise ValueError("Project name cannot be empty")
+    return stripped
+
+
 class ProjectResponse(BaseModel):
     """Response schema for a project."""
 
@@ -54,21 +72,8 @@ class ProjectCreateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        """Validate project name is not empty.
-
-        Args:
-            v: The project name to validate.
-
-        Returns:
-            The validated project name.
-
-        Raises:
-            ValueError: If the name is empty.
-        """
-        stripped = v.strip()
-        if not stripped:
-            raise ValueError("Project name cannot be empty")
-        return stripped
+        """Validate project name is not empty."""
+        return _validate_project_name(v)
 
 
 class ProjectCloneRequest(BaseModel):
@@ -79,21 +84,8 @@ class ProjectCloneRequest(BaseModel):
     @field_validator("new_name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        """Validate project name is not empty.
-
-        Args:
-            v: The project name to validate.
-
-        Returns:
-            The validated project name.
-
-        Raises:
-            ValueError: If the name is empty.
-        """
-        stripped = v.strip()
-        if not stripped:
-            raise ValueError("Project name cannot be empty")
-        return stripped
+        """Validate project name is not empty."""
+        return _validate_project_name(v)
 
 
 class ProjectUpdateRequest(BaseModel):

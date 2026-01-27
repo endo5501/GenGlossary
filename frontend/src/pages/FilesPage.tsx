@@ -21,6 +21,33 @@ interface FilesPageProps {
   projectId: number
 }
 
+interface ChangeSectionProps {
+  items: string[]
+  label: string
+  color: string
+  prefix: string
+}
+
+function ChangeSection({ items, label, color, prefix }: ChangeSectionProps) {
+  if (items.length === 0) return null
+
+  return (
+    <Box>
+      <Group gap="xs" mb="xs">
+        <Badge color={color} size="sm">{label}</Badge>
+        <Text size="sm" c="dimmed">({items.length} files)</Text>
+      </Group>
+      <Stack gap={4}>
+        {items.map((path) => (
+          <Text key={path} size="sm" c={color}>
+            {prefix} {path}
+          </Text>
+        ))}
+      </Stack>
+    </Box>
+  )
+}
+
 function DiffScanResults({ results }: { results: DiffScanResponse }) {
   const hasChanges = results.added.length > 0 || results.modified.length > 0 || results.deleted.length > 0
 
@@ -32,58 +59,19 @@ function DiffScanResults({ results }: { results: DiffScanResponse }) {
     )
   }
 
+  const sections = [
+    { items: results.added, label: 'Added', color: 'green', prefix: '+' },
+    { items: results.modified, label: 'Modified', color: 'yellow', prefix: '~' },
+    { items: results.deleted, label: 'Deleted', color: 'red', prefix: '-' },
+  ]
+
   return (
     <Card withBorder p="md" data-testid="diff-scan-results">
       <Stack gap="sm">
         <Title order={5}>Scan Results</Title>
-
-        {results.added.length > 0 && (
-          <Box>
-            <Group gap="xs" mb="xs">
-              <Badge color="green" size="sm">Added</Badge>
-              <Text size="sm" c="dimmed">({results.added.length} files)</Text>
-            </Group>
-            <Stack gap={4}>
-              {results.added.map((path) => (
-                <Text key={path} size="sm" c="green">
-                  + {path}
-                </Text>
-              ))}
-            </Stack>
-          </Box>
-        )}
-
-        {results.modified.length > 0 && (
-          <Box>
-            <Group gap="xs" mb="xs">
-              <Badge color="yellow" size="sm">Modified</Badge>
-              <Text size="sm" c="dimmed">({results.modified.length} files)</Text>
-            </Group>
-            <Stack gap={4}>
-              {results.modified.map((path) => (
-                <Text key={path} size="sm" c="yellow">
-                  ~ {path}
-                </Text>
-              ))}
-            </Stack>
-          </Box>
-        )}
-
-        {results.deleted.length > 0 && (
-          <Box>
-            <Group gap="xs" mb="xs">
-              <Badge color="red" size="sm">Deleted</Badge>
-              <Text size="sm" c="dimmed">({results.deleted.length} files)</Text>
-            </Group>
-            <Stack gap={4}>
-              {results.deleted.map((path) => (
-                <Text key={path} size="sm" c="red">
-                  - {path}
-                </Text>
-              ))}
-            </Stack>
-          </Box>
-        )}
+        {sections.map((section) => (
+          <ChangeSection key={section.label} {...section} />
+        ))}
       </Stack>
     </Card>
   )
