@@ -4,7 +4,7 @@ tags: [frontend, gui, projects]
 description: "Implement GUI screens for project home, creation dialog, and Files/Document Viewer sections."
 created_at: "2026-01-24T16:40:16Z"
 started_at: 2026-01-26T22:58:32Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-27T13:06:30Z # Do not modify manually
 ---
 
 # Ticket Overview
