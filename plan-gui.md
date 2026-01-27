@@ -16,7 +16,7 @@
 * [x] tickets/done/260124-164011-gui-api-operations-runner.md
 * [x] tickets/done/260124-164013-gui-frontend-scaffold.md
 * [x] tickets/done/260124-164016-gui-frontend-projects-files.md
-* [ ] tickets/260124-164017-gui-frontend-settings.md
+* [x] tickets/done/260124-164017-gui-frontend-settings.md
 * [ ] tickets/260124-164019-gui-frontend-terms-review.md
 
 ## 画面構成
