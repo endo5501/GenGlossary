@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import type {
   TermResponse,
@@ -6,8 +6,8 @@ import type {
   TermCreateRequest,
   TermUpdateRequest,
 } from '../types'
+import { useResourceList, useResourceDetail } from './useResource'
 
-// Query keys
 export const termKeys = {
   all: ['terms'] as const,
   lists: () => [...termKeys.all, 'list'] as const,
@@ -17,7 +17,6 @@ export const termKeys = {
     [...termKeys.details(), projectId, termId] as const,
 }
 
-// API functions
 const termApi = {
   list: (projectId: number) =>
     apiClient.get<TermDetailResponse[]>(`/api/projects/${projectId}/terms`),
@@ -33,9 +32,8 @@ const termApi = {
     apiClient.post<{ message: string }>(`/api/projects/${projectId}/terms/extract`, {}),
 }
 
-// Hooks
 export function useTerms(projectId: number | undefined) {
-  return useQuery({
+  return useResourceList({
     queryKey: termKeys.list(projectId!),
     queryFn: () => termApi.list(projectId!),
     enabled: projectId !== undefined,
@@ -43,7 +41,7 @@ export function useTerms(projectId: number | undefined) {
 }
 
 export function useTerm(projectId: number | undefined, termId: number | undefined) {
-  return useQuery({
+  return useResourceDetail({
     queryKey: termKeys.detail(projectId!, termId!),
     queryFn: () => termApi.get(projectId!, termId!),
     enabled: projectId !== undefined && termId !== undefined,

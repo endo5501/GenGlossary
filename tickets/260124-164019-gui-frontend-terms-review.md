@@ -25,7 +25,7 @@ Reference: `plan-gui.md` 「Terms」「Provisional」「Issues」「Refined」�
 - [x] Global run controls in header (Full/From-Terms/etc.) wired to operations API; show status badge
 - [x] Log viewer pane consuming SSE/WebSocket stream; show inline progress per run（`docs/architecture.md`にログ/状態連携を追記）
 - [x] **Green**: 追加テストを含めフロントテスト/ビルドが通ることを確認
-- [ ] Code simplification review using code-simplifier agent
+- [x] Code simplification review using code-simplifier agent
 - [ ] Code review by codex MCP
 - [ ] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
@@ -50,8 +50,15 @@ Match layout described in plan-gui.md (upper action bar, mid list+detail). Ensur
 - 静的解析: pyright 0 errors
 - コミット: a291b60
 
+### Code Simplification Review 完了
+- 共通コンポーネント作成: PageContainer.tsx, OccurrenceList.tsx
+- 色定義の一元化: utils/colors.ts
+- APIフック簡略化: useResource.ts ヘルパー追加
+- 各ページの簡略化: 重複コード削減（約270行削減）
+- テスト: 112/114 passed (2件はEventSource既存問題)
+- ビルド: 成功
+
 ### 残タスク
-- Code simplification review
 - Code review by codex MCP
 - docs/architecture/*.md 更新
 - 開発者承認

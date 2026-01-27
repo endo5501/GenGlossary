@@ -6,14 +6,14 @@ import {
   Text,
   Paper,
   Stack,
-  Loader,
-  Center,
   Select,
 } from '@mantine/core'
 import { IconRefresh } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useIssues, useReviewIssues, useCurrentRun } from '../api/hooks'
 import type { IssueResponse } from '../api/types'
+import { PageContainer } from '../components/common/PageContainer'
+import { severityColors, issueTypeColors } from '../utils/colors'
 
 interface IssuesPageProps {
   projectId: number
@@ -25,18 +25,6 @@ const issueTypeOptions = [
   { value: 'inconsistent', label: 'Inconsistent' },
   { value: 'missing', label: 'Missing' },
 ]
-
-const severityColors: Record<string, string> = {
-  low: 'green',
-  medium: 'yellow',
-  high: 'red',
-}
-
-const issueTypeColors: Record<string, string> = {
-  ambiguous: 'orange',
-  inconsistent: 'grape',
-  missing: 'cyan',
-}
 
 export function IssuesPage({ projectId }: IssuesPageProps) {
   const [issueTypeFilter, setIssueTypeFilter] = useState<string>('')
@@ -51,72 +39,41 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
 
   const isRunning = currentRun?.status === 'running'
 
-  if (isLoading) {
-    return (
-      <Center data-testid="issues-loading" h={200}>
-        <Loader />
-      </Center>
-    )
-  }
-
-  if (!issues || issues.length === 0) {
-    return (
-      <Stack>
-        <Group>
-          <Button
-            leftSection={<IconRefresh size={16} />}
-            onClick={() => reviewIssues.mutate()}
-            disabled={isRunning}
-            aria-label="Review issues"
-          >
-            Review
-          </Button>
-          <Box data-testid="issue-type-filter">
-            <Select
-              value={issueTypeFilter}
-              onChange={(val) => setIssueTypeFilter(val ?? '')}
-              data={issueTypeOptions}
-              placeholder="Filter by type"
-              clearable
-              w={150}
-            />
-          </Box>
-        </Group>
-        <Center data-testid="issues-empty" h={200}>
-          <Text c="dimmed">No issues found. Great job!</Text>
-        </Center>
-      </Stack>
-    )
-  }
+  const actionBar = (
+    <>
+      <Button
+        leftSection={<IconRefresh size={16} />}
+        onClick={() => reviewIssues.mutate()}
+        disabled={isRunning}
+        aria-label="Review issues"
+      >
+        Review
+      </Button>
+      <Box data-testid="issue-type-filter">
+        <Select
+          value={issueTypeFilter}
+          onChange={(val) => setIssueTypeFilter(val ?? '')}
+          data={issueTypeOptions}
+          placeholder="Filter by type"
+          clearable
+          w={150}
+        />
+      </Box>
+    </>
+  )
 
   return (
-    <Stack>
-      {/* Action bar */}
-      <Group>
-        <Button
-          leftSection={<IconRefresh size={16} />}
-          onClick={() => reviewIssues.mutate()}
-          disabled={isRunning}
-          aria-label="Review issues"
-        >
-          Review
-        </Button>
-        <Box data-testid="issue-type-filter">
-          <Select
-            value={issueTypeFilter}
-            onChange={(val) => setIssueTypeFilter(val ?? '')}
-            data={issueTypeOptions}
-            placeholder="Filter by type"
-            clearable
-            w={150}
-          />
-        </Box>
-      </Group>
-
-      {/* Issues list */}
+    <PageContainer
+      isLoading={isLoading}
+      isEmpty={!issues || issues.length === 0}
+      emptyMessage="No issues found. Great job!"
+      actionBar={actionBar}
+      loadingTestId="issues-loading"
+      emptyTestId="issues-empty"
+    >
       <Box style={{ flex: 1 }}>
         <Stack gap="sm">
-          {issues.map((issue) => (
+          {issues?.map((issue) => (
             <Paper
               key={issue.id}
               withBorder
@@ -148,7 +105,6 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
         </Stack>
       </Box>
 
-      {/* Detail panel */}
       {selectedIssue && (
         <Paper data-testid="issue-detail-panel" withBorder p="md">
           <Group mb="md">
@@ -181,6 +137,6 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
           )}
         </Paper>
       )}
-    </Stack>
+    </PageContainer>
   )
 }

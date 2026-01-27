@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import type { GlossaryTermResponse } from '../types'
+import { useResourceList, useResourceDetail } from './useResource'
 
-// Query keys
 export const refinedKeys = {
   all: ['refined'] as const,
   lists: () => [...refinedKeys.all, 'list'] as const,
@@ -12,7 +12,6 @@ export const refinedKeys = {
     [...refinedKeys.details(), projectId, termId] as const,
 }
 
-// API functions
 const refinedApi = {
   list: (projectId: number) =>
     apiClient.get<GlossaryTermResponse[]>(`/api/projects/${projectId}/refined`),
@@ -31,9 +30,8 @@ const refinedApi = {
     apiClient.post<{ message: string }>(`/api/projects/${projectId}/refined/regenerate`, {}),
 }
 
-// Hooks
 export function useRefined(projectId: number | undefined) {
-  return useQuery({
+  return useResourceList({
     queryKey: refinedKeys.list(projectId!),
     queryFn: () => refinedApi.list(projectId!),
     enabled: projectId !== undefined,
@@ -44,7 +42,7 @@ export function useRefinedEntry(
   projectId: number | undefined,
   termId: number | undefined
 ) {
-  return useQuery({
+  return useResourceDetail({
     queryKey: refinedKeys.detail(projectId!, termId!),
     queryFn: () => refinedApi.get(projectId!, termId!),
     enabled: projectId !== undefined && termId !== undefined,

@@ -7,8 +7,6 @@ import {
   Text,
   Paper,
   Stack,
-  Loader,
-  Center,
   TextInput,
   Modal,
   ActionIcon,
@@ -18,6 +16,8 @@ import { IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useTerms, useCreateTerm, useDeleteTerm, useExtractTerms, useCurrentRun } from '../api/hooks'
 import type { TermDetailResponse } from '../api/types'
+import { PageContainer } from '../components/common/PageContainer'
+import { OccurrenceList } from '../components/common/OccurrenceList'
 
 interface TermsPageProps {
   projectId: number
@@ -61,65 +61,36 @@ export function TermsPage({ projectId }: TermsPageProps) {
     })
   }
 
-  if (isLoading) {
-    return (
-      <Center data-testid="terms-loading" h={200}>
-        <Loader />
-      </Center>
-    )
-  }
-
-  if (!terms || terms.length === 0) {
-    return (
-      <Stack>
-        <Group>
-          <Button
-            leftSection={<IconRefresh size={16} />}
-            onClick={() => extractTerms.mutate()}
-            disabled={isRunning}
-            aria-label="Extract terms"
-          >
-            Extract
-          </Button>
-          <Button
-            leftSection={<IconPlus size={16} />}
-            onClick={open}
-            disabled={isRunning}
-            aria-label="Add term"
-          >
-            Add
-          </Button>
-        </Group>
-        <Center data-testid="terms-empty" h={200}>
-          <Text c="dimmed">No terms found. Extract terms from documents or add manually.</Text>
-        </Center>
-      </Stack>
-    )
-  }
+  const actionBar = (
+    <>
+      <Button
+        leftSection={<IconRefresh size={16} />}
+        onClick={() => extractTerms.mutate()}
+        disabled={isRunning}
+        aria-label="Extract terms"
+      >
+        Extract
+      </Button>
+      <Button
+        leftSection={<IconPlus size={16} />}
+        onClick={open}
+        disabled={isRunning}
+        aria-label="Add term"
+      >
+        Add
+      </Button>
+    </>
+  )
 
   return (
-    <Stack>
-      {/* Action bar */}
-      <Group>
-        <Button
-          leftSection={<IconRefresh size={16} />}
-          onClick={() => extractTerms.mutate()}
-          disabled={isRunning}
-          aria-label="Extract terms"
-        >
-          Extract
-        </Button>
-        <Button
-          leftSection={<IconPlus size={16} />}
-          onClick={open}
-          disabled={isRunning}
-          aria-label="Add term"
-        >
-          Add
-        </Button>
-      </Group>
-
-      {/* Terms table */}
+    <PageContainer
+      isLoading={isLoading}
+      isEmpty={!terms || terms.length === 0}
+      emptyMessage="No terms found. Extract terms from documents or add manually."
+      actionBar={actionBar}
+      loadingTestId="terms-loading"
+      emptyTestId="terms-empty"
+    >
       <Box style={{ flex: 1 }}>
         <Table highlightOnHover>
           <Table.Thead>
@@ -130,7 +101,7 @@ export function TermsPage({ projectId }: TermsPageProps) {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {terms.map((term) => (
+            {terms?.map((term) => (
               <Table.Tr
                 key={term.id}
                 onClick={() => setSelectedTerm(term)}
@@ -154,23 +125,20 @@ export function TermsPage({ projectId }: TermsPageProps) {
         </Table>
       </Box>
 
-      {/* Detail panel */}
       {selectedTerm && (
         <Paper data-testid="term-detail-panel" withBorder p="md">
           <Group justify="space-between" mb="md">
             <Text fw={600} size="lg">
               {selectedTerm.term_text}
             </Text>
-            <Group>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                onClick={() => handleDeleteTerm(selectedTerm.id)}
-                aria-label="Delete term"
-              >
-                <IconTrash size={16} />
-              </ActionIcon>
-            </Group>
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              onClick={() => handleDeleteTerm(selectedTerm.id)}
+              aria-label="Delete term"
+            >
+              <IconTrash size={16} />
+            </ActionIcon>
           </Group>
 
           {selectedTerm.category && (
@@ -182,20 +150,10 @@ export function TermsPage({ projectId }: TermsPageProps) {
           <Text fw={500} mb="xs">
             Occurrences ({selectedTerm.occurrences.length})
           </Text>
-          <Stack gap="xs">
-            {selectedTerm.occurrences.map((occ, idx) => (
-              <Paper key={idx} withBorder p="xs">
-                <Text size="sm" c="dimmed">
-                  {occ.document_path}:{occ.line_number}
-                </Text>
-                <Text size="sm">{occ.context}</Text>
-              </Paper>
-            ))}
-          </Stack>
+          <OccurrenceList occurrences={selectedTerm.occurrences} />
         </Paper>
       )}
 
-      {/* Add term modal */}
       <Modal opened={opened} onClose={close} title="Add Term">
         <Stack>
           <TextInput
@@ -221,6 +179,6 @@ export function TermsPage({ projectId }: TermsPageProps) {
           </Group>
         </Stack>
       </Modal>
-    </Stack>
+    </PageContainer>
   )
 }

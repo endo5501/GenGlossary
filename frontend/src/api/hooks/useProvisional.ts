@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import type { GlossaryTermResponse, ProvisionalUpdateRequest } from '../types'
+import { useResourceList, useResourceDetail } from './useResource'
 
-// Query keys
 export const provisionalKeys = {
   all: ['provisional'] as const,
   lists: () => [...provisionalKeys.all, 'list'] as const,
@@ -12,7 +12,6 @@ export const provisionalKeys = {
     [...provisionalKeys.details(), projectId, entryId] as const,
 }
 
-// API functions
 const provisionalApi = {
   list: (projectId: number) =>
     apiClient.get<GlossaryTermResponse[]>(`/api/projects/${projectId}/provisional`),
@@ -30,9 +29,8 @@ const provisionalApi = {
     ),
 }
 
-// Hooks
 export function useProvisional(projectId: number | undefined) {
-  return useQuery({
+  return useResourceList({
     queryKey: provisionalKeys.list(projectId!),
     queryFn: () => provisionalApi.list(projectId!),
     enabled: projectId !== undefined,
@@ -43,7 +41,7 @@ export function useProvisionalEntry(
   projectId: number | undefined,
   entryId: number | undefined
 ) {
-  return useQuery({
+  return useResourceDetail({
     queryKey: provisionalKeys.detail(projectId!, entryId!),
     queryFn: () => provisionalApi.get(projectId!, entryId!),
     enabled: projectId !== undefined && entryId !== undefined,

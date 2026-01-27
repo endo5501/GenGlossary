@@ -6,8 +6,6 @@ import {
   Text,
   Paper,
   Stack,
-  Loader,
-  Center,
   Textarea,
   Slider,
   Progress,
@@ -21,10 +19,15 @@ import {
   useCurrentRun,
 } from '../api/hooks'
 import type { GlossaryTermResponse } from '../api/types'
+import { PageContainer } from '../components/common/PageContainer'
+import { OccurrenceList } from '../components/common/OccurrenceList'
 
 interface ProvisionalPageProps {
   projectId: number
 }
+
+const getConfidenceColor = (confidence: number) =>
+  confidence >= 0.8 ? 'green' : confidence >= 0.5 ? 'yellow' : 'red'
 
 export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
   const { data: entries, isLoading } = useProvisional(projectId)
@@ -38,7 +41,6 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
 
   const isRunning = currentRun?.status === 'running'
 
-  // Sync edit state when selection changes
   useEffect(() => {
     if (selectedEntry) {
       setEditDefinition(selectedEntry.definition)
@@ -64,51 +66,26 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
     )
   }
 
-  if (isLoading) {
-    return (
-      <Center data-testid="provisional-loading" h={200}>
-        <Loader />
-      </Center>
-    )
-  }
-
-  if (!entries || entries.length === 0) {
-    return (
-      <Stack>
-        <Group>
-          <Button
-            leftSection={<IconRefresh size={16} />}
-            onClick={() => regenerateProvisional.mutate()}
-            disabled={isRunning}
-            aria-label="Regenerate provisional glossary"
-          >
-            Regenerate
-          </Button>
-        </Group>
-        <Center data-testid="provisional-empty" h={200}>
-          <Text c="dimmed">
-            No provisional glossary entries. Run the pipeline to generate.
-          </Text>
-        </Center>
-      </Stack>
-    )
-  }
+  const actionBar = (
+    <Button
+      leftSection={<IconRefresh size={16} />}
+      onClick={() => regenerateProvisional.mutate()}
+      disabled={isRunning}
+      aria-label="Regenerate provisional glossary"
+    >
+      Regenerate
+    </Button>
+  )
 
   return (
-    <Stack>
-      {/* Action bar */}
-      <Group>
-        <Button
-          leftSection={<IconRefresh size={16} />}
-          onClick={() => regenerateProvisional.mutate()}
-          disabled={isRunning}
-          aria-label="Regenerate provisional glossary"
-        >
-          Regenerate
-        </Button>
-      </Group>
-
-      {/* Entries table */}
+    <PageContainer
+      isLoading={isLoading}
+      isEmpty={!entries || entries.length === 0}
+      emptyMessage="No provisional glossary entries. Run the pipeline to generate."
+      actionBar={actionBar}
+      loadingTestId="provisional-loading"
+      emptyTestId="provisional-empty"
+    >
       <Box style={{ flex: 1 }}>
         <Table highlightOnHover>
           <Table.Thead>
@@ -119,7 +96,7 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {entries.map((entry) => (
+            {entries?.map((entry) => (
               <Table.Tr
                 key={entry.id}
                 onClick={() => setSelectedEntry(entry)}
@@ -140,7 +117,7 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
                       value={entry.confidence * 100}
                       size="sm"
                       w={60}
-                      color={entry.confidence >= 0.8 ? 'green' : entry.confidence >= 0.5 ? 'yellow' : 'red'}
+                      color={getConfidenceColor(entry.confidence)}
                     />
                     <Text size="sm">{Math.round(entry.confidence * 100)}%</Text>
                   </Group>
@@ -151,7 +128,6 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
         </Table>
       </Box>
 
-      {/* Detail editor */}
       {selectedEntry && (
         <Paper data-testid="provisional-detail-editor" withBorder p="md">
           <Group justify="space-between" mb="md">
@@ -195,20 +171,11 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
               <Text fw={500} mb="xs">
                 Occurrences ({selectedEntry.occurrences.length})
               </Text>
-              <Stack gap="xs">
-                {selectedEntry.occurrences.map((occ, idx) => (
-                  <Paper key={idx} withBorder p="xs">
-                    <Text size="sm" c="dimmed">
-                      {occ.document_path}:{occ.line_number}
-                    </Text>
-                    <Text size="sm">{occ.context}</Text>
-                  </Paper>
-                ))}
-              </Stack>
+              <OccurrenceList occurrences={selectedEntry.occurrences} />
             </Box>
           </Stack>
         </Paper>
       )}
-    </Stack>
+    </PageContainer>
   )
 }

@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import type { IssueResponse } from '../types'
+import { useResourceList, useResourceDetail } from './useResource'
 
-// Query keys
 export const issueKeys = {
   all: ['issues'] as const,
   lists: () => [...issueKeys.all, 'list'] as const,
@@ -15,7 +15,6 @@ export const issueKeys = {
     [...issueKeys.details(), projectId, issueId] as const,
 }
 
-// API functions
 const issueApi = {
   list: (projectId: number, issueType?: string) => {
     const url = issueType
@@ -29,9 +28,8 @@ const issueApi = {
     apiClient.post<{ message: string }>(`/api/projects/${projectId}/issues/review`, {}),
 }
 
-// Hooks
 export function useIssues(projectId: number | undefined, issueType?: string) {
-  return useQuery({
+  return useResourceList({
     queryKey: issueKeys.list(projectId!, issueType),
     queryFn: () => issueApi.list(projectId!, issueType),
     enabled: projectId !== undefined,
@@ -39,7 +37,7 @@ export function useIssues(projectId: number | undefined, issueType?: string) {
 }
 
 export function useIssue(projectId: number | undefined, issueId: number | undefined) {
-  return useQuery({
+  return useResourceDetail({
     queryKey: issueKeys.detail(projectId!, issueId!),
     queryFn: () => issueApi.get(projectId!, issueId!),
     enabled: projectId !== undefined && issueId !== undefined,

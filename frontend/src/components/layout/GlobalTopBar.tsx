@@ -3,21 +3,13 @@ import { IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useCurrentRun, useStartRun, useCancelRun } from '../../api/hooks'
 import type { RunScope, RunStatus } from '../../api/types'
+import { statusColors } from '../../utils/colors'
 
 interface GlobalTopBarProps {
   projectId?: number
-  // Legacy props for testing
   status?: RunStatus
   onRun?: (scope: RunScope) => void
   onStop?: () => void
-}
-
-const statusColors: Record<RunStatus, string> = {
-  pending: 'gray',
-  running: 'blue',
-  completed: 'green',
-  failed: 'red',
-  cancelled: 'yellow',
 }
 
 const scopeOptions = [
@@ -37,33 +29,22 @@ export function GlobalTopBar({
 }: GlobalTopBarProps) {
   const [scope, setScope] = useState<RunScope>('full')
 
-  // Use API hooks when projectId is provided
   const { data: currentRun } = useCurrentRun(projectId)
   const startRun = useStartRun(projectId ?? 0)
   const cancelRun = useCancelRun(projectId ?? 0)
 
-  // Determine status: use API data if available, otherwise fall back to props
   const status = projectId && currentRun ? currentRun.status : (propStatus ?? 'pending')
   const runId = currentRun?.id
-  const progress = currentRun ? {
-    current: currentRun.progress_current,
-    total: currentRun.progress_total,
-  } : null
+  const progress = currentRun?.progress_total
+    ? { current: currentRun.progress_current, total: currentRun.progress_total }
+    : null
 
   const handleRun = () => {
-    if (projectId) {
-      startRun.mutate({ scope })
-    } else {
-      propOnRun?.(scope)
-    }
+    projectId ? startRun.mutate({ scope }) : propOnRun?.(scope)
   }
 
   const handleStop = () => {
-    if (projectId && runId) {
-      cancelRun.mutate(runId)
-    } else {
-      propOnStop?.()
-    }
+    projectId && runId ? cancelRun.mutate(runId) : propOnStop?.()
   }
 
   return (
