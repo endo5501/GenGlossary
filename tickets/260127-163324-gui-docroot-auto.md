@@ -36,9 +36,13 @@ Document Root入力欄を削除し、バックエンドでプロジェクト作�
 - [ ] バックエンドでプロジェクト作成時に doc_root を自動生成
 - [ ] APIスキーマから doc_root を任意フィールドに変更（または削除）
 - [ ] 自動生成されるパスの確認: `./projects/{project_name}/`
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Code review by codex MCP
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes

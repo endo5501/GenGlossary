@@ -32,9 +32,13 @@ Create画面でprovider=openaiを選択した時に、base_url入力欄を条件
 - [ ] provider === 'openai' の条件判定を追加
 - [ ] Base URL 入力フィールドを条件付きで表示
 - [ ] SettingsPage.tsx の実装を参考にする
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Code review by codex MCP
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes

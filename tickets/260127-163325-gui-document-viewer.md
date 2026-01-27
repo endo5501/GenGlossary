@@ -41,9 +41,13 @@ Document Viewer ページをスケルトン実装から完全実装にする。
 - [ ] 右ペイン: 用語カード（定義・出現箇所）
 - [ ] 右ペイン: 除外/編集/ジャンプボタン
 - [ ] バックエンドAPIの確認・追加（必要に応じて）
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Code review by codex MCP
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes

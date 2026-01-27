@@ -27,9 +27,13 @@ closed_at: null   # Do not modify manually
 - [ ] AppShellでprojectIdの有無を判定
 - [ ] projectIdがない場合はNavbarを非表示
 - [ ] ホーム画面でのレイアウト確認
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Code review by codex MCP
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes

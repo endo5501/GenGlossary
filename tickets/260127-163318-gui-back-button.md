@@ -32,9 +32,13 @@ closed_at: null   # Do not modify manually
 - [ ] GlobalTopBarに「戻る」ボタンまたはホームリンクを追加
 - [ ] タイトル「GenGlossary」をクリック可能にする（オプション）
 - [ ] プロジェクト選択時のみ戻るボタンを表示
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Code review by codex MCP
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes

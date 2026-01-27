@@ -52,9 +52,13 @@ closed_at: null   # Do not modify manually
 - [ ] [新規作成]ボタンを一覧の下部に移動
 - [ ] バックエンドAPIで統計情報（ドキュメント数、用語数、issues数）を返すよう拡張
 - [ ] 右ペイン（概要カード）の確認・調整
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Code review by codex MCP
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
