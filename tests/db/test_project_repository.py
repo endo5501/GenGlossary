@@ -57,6 +57,7 @@ class TestCreateProject:
             db_path=str(tmp_path / "novels" / "mynovel" / "project.db"),
             llm_provider="openai",
             llm_model="gpt-4",
+            llm_base_url="https://api.openai.com/v1",
             status=ProjectStatus.COMPLETED,
         )
 
@@ -65,7 +66,23 @@ class TestCreateProject:
         assert project.name == "my-novel"
         assert project.llm_provider == "openai"
         assert project.llm_model == "gpt-4"
+        assert project.llm_base_url == "https://api.openai.com/v1"
         assert project.status == ProjectStatus.COMPLETED
+
+    def test_create_project_with_default_llm_base_url(
+        self, registry_conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """llm_base_urlを指定しない場合は空文字列がデフォルト"""
+        project_id = create_project(
+            registry_conn,
+            name="test-project",
+            doc_root=str(tmp_path / "docs"),
+            db_path=str(tmp_path / "project.db"),
+        )
+
+        project = get_project(registry_conn, project_id)
+        assert project is not None
+        assert project.llm_base_url == ""
 
     def test_create_project_sets_timestamps(
         self, registry_conn: sqlite3.Connection, tmp_path: Path
@@ -288,6 +305,25 @@ class TestUpdateProject:
         assert project is not None
         assert project.llm_provider == "openai"
         assert project.llm_model == "gpt-4"
+
+    def test_update_llm_base_url(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
+        """llm_base_urlを更新できる"""
+        project_id = create_project(
+            registry_conn,
+            name="test-project",
+            doc_root=str(tmp_path / "docs"),
+            db_path=str(tmp_path / "project.db"),
+        )
+
+        update_project(
+            registry_conn,
+            project_id,
+            llm_base_url="https://api.openai.com/v1",
+        )
+
+        project = get_project(registry_conn, project_id)
+        assert project is not None
+        assert project.llm_base_url == "https://api.openai.com/v1"
 
     def test_update_status(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """ステータスを更新できる"""

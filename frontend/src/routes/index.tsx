@@ -5,7 +5,7 @@ import {
 } from '@tanstack/react-router'
 import { AppShell } from '../components/layout'
 import { PagePlaceholder } from '../components/common/PagePlaceholder'
-import { HomePage, FilesPage, DocumentViewerPage } from '../pages'
+import { HomePage, FilesPage, DocumentViewerPage, SettingsPage } from '../pages'
 
 // Root route with AppShell layout
 const rootRoute = createRootRoute({
@@ -38,6 +38,15 @@ const projectDocumentViewerRoute = createRoute({
   },
 })
 
+const projectSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$projectId/settings',
+  component: () => {
+    const { projectId } = projectSettingsRoute.useParams()
+    return <SettingsPage projectId={Number(projectId)} />
+  },
+})
+
 // Legacy placeholder routes for other pages
 const placeholderConfigs = [
   { path: '/files', title: 'Files' },
@@ -62,6 +71,7 @@ export const routeTree = rootRoute.addChildren([
   homeRoute,
   projectFilesRoute,
   projectDocumentViewerRoute,
+  projectSettingsRoute,
   ...placeholderRoutes,
 ])
 

@@ -48,6 +48,7 @@ class Project(BaseModel):
     db_path: str
     llm_provider: str = "ollama"
     llm_model: str = ""
+    llm_base_url: str = ""
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     last_run_at: datetime | None = None

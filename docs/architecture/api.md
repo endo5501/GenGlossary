@@ -183,6 +183,7 @@ class ProjectResponse(BaseModel):
     doc_root: str = Field(..., description="Document root path")
     llm_provider: str = Field(..., description="LLM provider name")
     llm_model: str = Field(..., description="LLM model name")
+    llm_base_url: str = Field(..., description="LLM base URL")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     last_run_at: datetime | None = Field(None, description="Last run timestamp")
@@ -190,8 +191,8 @@ class ProjectResponse(BaseModel):
 
     @classmethod
     def from_project(cls, project: Project) -> "ProjectResponse":
-        """Create from Project model."""
-        ...
+        """Create from Project model using Pydantic model_validate."""
+        return cls.model_validate(project, from_attributes=True)
 
 
 class ProjectCreateRequest(BaseModel):
@@ -200,12 +201,19 @@ class ProjectCreateRequest(BaseModel):
     doc_root: str = Field(..., description="Absolute path to document directory")
     llm_provider: str = Field(default="ollama", description="LLM provider name")
     llm_model: str = Field(default="", description="LLM model name")
+    llm_base_url: str = Field(default="", description="LLM base URL")
 
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         """Validate project name is not empty."""
         return _validate_project_name(v)  # 共通関数を使用
+
+    @field_validator("llm_base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        """Validate LLM base URL format (http/https only)."""
+        return _validate_llm_base_url(v)
 
 
 class ProjectCloneRequest(BaseModel):
@@ -221,8 +229,24 @@ class ProjectCloneRequest(BaseModel):
 
 class ProjectUpdateRequest(BaseModel):
     """Request schema for updating a project."""
+    name: str | None = Field(None, description="New project name")
     llm_provider: str | None = Field(None, description="New LLM provider name")
     llm_model: str | None = Field(None, description="New LLM model name")
+    llm_base_url: str | None = Field(None, description="New LLM base URL")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        """Validate project name if provided."""
+        if v is None:
+            return None
+        return _validate_project_name(v)
+
+    @field_validator("llm_base_url")
+    @classmethod
+    def validate_base_url(cls, v: str | None) -> str | None:
+        """Validate LLM base URL format if provided (http/https only)."""
+        return _validate_llm_base_url(v)
 ```
 
 **スキーマ設計のポイント:**
