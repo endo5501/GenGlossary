@@ -26,6 +26,7 @@ Reference: `plan-gui.md` 「プロジェクト一覧（ホーム）」「Files�
 - [x] Add optimistic states/spinners and empty states for no projects/no files
 - [x] **Green**: 追加テストを含めフロントテスト/ビルドが通ることを確認
 - [ ] Code simplification review using code-simplifier agent
+- [ ] Code review by codex MCP
 - [ ] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
