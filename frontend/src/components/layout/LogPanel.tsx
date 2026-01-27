@@ -1,9 +1,33 @@
 import { Paper, Text, Group, ActionIcon, Collapse, Box } from '@mantine/core'
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useLogStream } from '../../api/hooks'
+import type { LogMessage } from '../../api/types'
 
-export function LogPanel() {
+interface LogPanelProps {
+  projectId?: number
+  runId?: number
+}
+
+const levelColors: Record<LogMessage['level'], string> = {
+  info: 'var(--mantine-color-gray-3)',
+  warning: 'var(--mantine-color-yellow-5)',
+  error: 'var(--mantine-color-red-5)',
+}
+
+export function LogPanel({ projectId, runId }: LogPanelProps) {
   const [opened, setOpened] = useState(true)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Use SSE hook when projectId and runId are provided
+  const { logs } = useLogStream(projectId ?? 0, runId)
+
+  // Auto-scroll to bottom when new logs arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [logs])
 
   return (
     <Paper
@@ -26,6 +50,8 @@ export function LogPanel() {
       </Group>
       <Collapse in={opened}>
         <Box
+          ref={scrollRef}
+          data-testid="log-display"
           style={{
             fontFamily: 'monospace',
             fontSize: '12px',
@@ -37,9 +63,21 @@ export function LogPanel() {
             overflowY: 'auto',
           }}
         >
-          <Text size="xs" c="dimmed">
-            Log output will appear here...
-          </Text>
+          {logs.length === 0 ? (
+            <Text size="xs" c="dimmed">
+              Log output will appear here...
+            </Text>
+          ) : (
+            logs.map((log, idx) => (
+              <Text
+                key={idx}
+                size="xs"
+                style={{ color: levelColors[log.level] }}
+              >
+                [{log.level.toUpperCase()}] {log.message}
+              </Text>
+            ))
+          )}
         </Box>
       </Collapse>
     </Paper>

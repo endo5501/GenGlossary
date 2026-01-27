@@ -1,5 +1,13 @@
 import { http, HttpResponse } from 'msw'
-import type { ProjectResponse, FileResponse, DiffScanResponse } from '../api/types'
+import type {
+  ProjectResponse,
+  FileResponse,
+  DiffScanResponse,
+  TermDetailResponse,
+  GlossaryTermResponse,
+  IssueResponse,
+  RunResponse,
+} from '../api/types'
 
 // Mock data
 export const mockProjects: ProjectResponse[] = [
@@ -34,6 +42,109 @@ export const mockFiles: FileResponse[] = [
   { id: 2, file_path: 'doc2.txt', content_hash: 'def456' },
   { id: 3, file_path: 'subdir/doc3.md', content_hash: 'ghi789' },
 ]
+
+// Terms mock data
+export const mockTerms: TermDetailResponse[] = [
+  {
+    id: 1,
+    term_text: '量子コンピュータ',
+    category: '技術用語',
+    occurrences: [
+      { document_path: 'doc1.md', line_number: 1, context: '量子コンピュータは、量子力学の原理を利用して...' },
+      { document_path: 'doc1.md', line_number: 5, context: '量子コンピュータの最大の特徴は...' },
+    ],
+  },
+  {
+    id: 2,
+    term_text: '量子ビット',
+    category: '技術用語',
+    occurrences: [
+      { document_path: 'doc1.md', line_number: 3, context: '量子ビット（キュービット）を使用します。' },
+    ],
+  },
+  {
+    id: 3,
+    term_text: '重ね合わせ',
+    category: null,
+    occurrences: [
+      { document_path: 'doc1.md', line_number: 4, context: '重ね合わせという性質を持ちます。' },
+    ],
+  },
+]
+
+// Provisional glossary mock data
+export const mockProvisionalEntries: GlossaryTermResponse[] = [
+  {
+    id: 1,
+    term_name: '量子コンピュータ',
+    definition: '量子力学の原理を利用して計算を行うコンピュータ。',
+    confidence: 0.95,
+    occurrences: [
+      { document_path: 'doc1.md', line_number: 1, context: '量子コンピュータは...' },
+    ],
+  },
+  {
+    id: 2,
+    term_name: '量子ビット',
+    definition: '量子コンピュータで情報を扱う基本単位。',
+    confidence: 0.8,
+    occurrences: [
+      { document_path: 'doc1.md', line_number: 3, context: '量子ビット（キュービット）を使用します。' },
+    ],
+  },
+]
+
+// Issues mock data
+export const mockIssues: IssueResponse[] = [
+  {
+    id: 1,
+    term_id: 1,
+    issue_type: 'ambiguous',
+    description: '「量子コンピュータ」の定義が曖昧です。',
+    severity: 'medium',
+  },
+  {
+    id: 2,
+    term_id: 2,
+    issue_type: 'inconsistent',
+    description: '「量子ビット」と「キュービット」の使い分けが不明確です。',
+    severity: 'high',
+  },
+  {
+    id: 3,
+    term_id: null,
+    issue_type: 'missing',
+    description: '「量子もつれ」の定義が不足しています。',
+    severity: 'low',
+  },
+]
+
+// Refined glossary mock data
+export const mockRefinedEntries: GlossaryTermResponse[] = [
+  {
+    id: 1,
+    term_name: '量子コンピュータ',
+    definition: '量子力学の原理（重ね合わせ、量子もつれ）を利用して計算を行うコンピュータ。従来のコンピュータとは異なり、量子ビットを使用する。',
+    confidence: 0.98,
+    occurrences: [
+      { document_path: 'doc1.md', line_number: 1, context: '量子コンピュータは...' },
+      { document_path: 'doc1.md', line_number: 5, context: '量子コンピュータの最大の特徴は...' },
+    ],
+  },
+]
+
+// Run mock data
+export const mockCurrentRun: RunResponse = {
+  id: 0,
+  scope: 'full',
+  status: 'pending',
+  progress_current: 0,
+  progress_total: 0,
+  current_step: null,
+  created_at: '2024-01-15T10:00:00Z',
+  started_at: null,
+  completed_at: null,
+}
 
 const BASE_URL = 'http://localhost:8000'
 
@@ -158,5 +269,143 @@ export const handlers = [
       deleted: [],
     }
     return HttpResponse.json(response)
+  }),
+
+  // Terms
+  http.get(`${BASE_URL}/api/projects/:projectId/terms`, () => {
+    return HttpResponse.json(mockTerms)
+  }),
+
+  http.get(`${BASE_URL}/api/projects/:projectId/terms/:termId`, ({ params }) => {
+    const term = mockTerms.find((t) => t.id === Number(params.termId))
+    if (!term) {
+      return HttpResponse.json({ detail: 'Not found' }, { status: 404 })
+    }
+    return HttpResponse.json(term)
+  }),
+
+  http.post(`${BASE_URL}/api/projects/:projectId/terms`, async ({ request }) => {
+    const body = (await request.json()) as { term_text: string; category?: string }
+    const newTerm: TermDetailResponse = {
+      id: mockTerms.length + 1,
+      term_text: body.term_text,
+      category: body.category ?? null,
+      occurrences: [],
+    }
+    return HttpResponse.json(newTerm, { status: 201 })
+  }),
+
+  http.patch(`${BASE_URL}/api/projects/:projectId/terms/:termId`, async ({ params, request }) => {
+    const term = mockTerms.find((t) => t.id === Number(params.termId))
+    if (!term) {
+      return HttpResponse.json({ detail: 'Not found' }, { status: 404 })
+    }
+    const body = (await request.json()) as { term_text?: string; category?: string }
+    return HttpResponse.json({ ...term, ...body })
+  }),
+
+  http.delete(`${BASE_URL}/api/projects/:projectId/terms/:termId`, () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post(`${BASE_URL}/api/projects/:projectId/terms/extract`, () => {
+    return HttpResponse.json({ message: 'Extraction started' }, { status: 202 })
+  }),
+
+  // Provisional
+  http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+    return HttpResponse.json(mockProvisionalEntries)
+  }),
+
+  http.get(`${BASE_URL}/api/projects/:projectId/provisional/:entryId`, ({ params }) => {
+    const entry = mockProvisionalEntries.find((e) => e.id === Number(params.entryId))
+    if (!entry) {
+      return HttpResponse.json({ detail: 'Not found' }, { status: 404 })
+    }
+    return HttpResponse.json(entry)
+  }),
+
+  http.patch(`${BASE_URL}/api/projects/:projectId/provisional/:entryId`, async ({ params, request }) => {
+    const entry = mockProvisionalEntries.find((e) => e.id === Number(params.entryId))
+    if (!entry) {
+      return HttpResponse.json({ detail: 'Not found' }, { status: 404 })
+    }
+    const body = (await request.json()) as { definition?: string; confidence?: number }
+    return HttpResponse.json({ ...entry, ...body })
+  }),
+
+  http.post(`${BASE_URL}/api/projects/:projectId/provisional/regenerate`, () => {
+    return HttpResponse.json({ message: 'Regeneration started' }, { status: 202 })
+  }),
+
+  // Issues
+  http.get(`${BASE_URL}/api/projects/:projectId/issues`, ({ request }) => {
+    const url = new URL(request.url)
+    const issueType = url.searchParams.get('issue_type')
+    if (issueType) {
+      return HttpResponse.json(mockIssues.filter((i) => i.issue_type === issueType))
+    }
+    return HttpResponse.json(mockIssues)
+  }),
+
+  http.get(`${BASE_URL}/api/projects/:projectId/issues/:issueId`, ({ params }) => {
+    const issue = mockIssues.find((i) => i.id === Number(params.issueId))
+    if (!issue) {
+      return HttpResponse.json({ detail: 'Not found' }, { status: 404 })
+    }
+    return HttpResponse.json(issue)
+  }),
+
+  http.post(`${BASE_URL}/api/projects/:projectId/issues/review`, () => {
+    return HttpResponse.json({ message: 'Review started' }, { status: 202 })
+  }),
+
+  // Refined
+  http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+    return HttpResponse.json(mockRefinedEntries)
+  }),
+
+  http.get(`${BASE_URL}/api/projects/:projectId/refined/:termId`, ({ params }) => {
+    const entry = mockRefinedEntries.find((e) => e.id === Number(params.termId))
+    if (!entry) {
+      return HttpResponse.json({ detail: 'Not found' }, { status: 404 })
+    }
+    return HttpResponse.json(entry)
+  }),
+
+  http.get(`${BASE_URL}/api/projects/:projectId/refined/export`, () => {
+    const markdown = `# 用語集\n\n## 量子コンピュータ\n量子力学の原理を利用して計算を行うコンピュータ。`
+    return new HttpResponse(markdown, {
+      headers: { 'Content-Type': 'text/markdown' },
+    })
+  }),
+
+  http.post(`${BASE_URL}/api/projects/:projectId/refined/regenerate`, () => {
+    return HttpResponse.json({ message: 'Regeneration started' }, { status: 202 })
+  }),
+
+  // Runs
+  http.get(`${BASE_URL}/api/projects/:projectId/runs/current`, () => {
+    return HttpResponse.json(mockCurrentRun)
+  }),
+
+  http.post(`${BASE_URL}/api/projects/:projectId/runs`, async ({ request }) => {
+    const body = (await request.json()) as { scope: string }
+    const newRun: RunResponse = {
+      id: 1,
+      scope: body.scope as RunResponse['scope'],
+      status: 'running',
+      progress_current: 0,
+      progress_total: 4,
+      current_step: 'extracting_terms',
+      created_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+      completed_at: null,
+    }
+    return HttpResponse.json(newRun, { status: 201 })
+  }),
+
+  http.post(`${BASE_URL}/api/projects/:projectId/runs/:runId/cancel`, () => {
+    return HttpResponse.json({ ...mockCurrentRun, status: 'cancelled' })
   }),
 ]
