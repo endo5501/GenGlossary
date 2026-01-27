@@ -25,6 +25,29 @@ def _validate_project_name(v: str) -> str:
     return stripped
 
 
+def _validate_llm_base_url(v: str | None) -> str | None:
+    """Validate LLM base URL format.
+
+    Args:
+        v: The base URL to validate.
+
+    Returns:
+        The validated URL or None.
+
+    Raises:
+        ValueError: If the URL format is invalid.
+    """
+    if v is None or v == "":
+        return v
+    stripped = v.strip()
+    if not stripped:
+        return ""
+    # Validate URL scheme
+    if not stripped.startswith(("http://", "https://")):
+        raise ValueError("Base URL must start with http:// or https://")
+    return stripped
+
+
 class ProjectResponse(BaseModel):
     """Response schema for a project."""
 
@@ -78,6 +101,13 @@ class ProjectCreateRequest(BaseModel):
         """Validate project name is not empty."""
         return _validate_project_name(v)
 
+    @field_validator("llm_base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        """Validate LLM base URL format."""
+        result = _validate_llm_base_url(v)
+        return result if result is not None else ""
+
 
 class ProjectCloneRequest(BaseModel):
     """Request schema for cloning a project."""
@@ -106,3 +136,9 @@ class ProjectUpdateRequest(BaseModel):
         if v is None:
             return None
         return _validate_project_name(v)
+
+    @field_validator("llm_base_url")
+    @classmethod
+    def validate_base_url(cls, v: str | None) -> str | None:
+        """Validate LLM base URL format if provided."""
+        return _validate_llm_base_url(v)

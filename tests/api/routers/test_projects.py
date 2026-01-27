@@ -418,3 +418,15 @@ class TestUpdateProject:
         assert response.status_code == 200
         data = response.json()
         assert data["llm_base_url"] == "https://api.openai.com/v1"
+
+    def test_returns_422_for_invalid_base_url(
+        self, test_project_in_registry, client: TestClient
+    ):
+        """Test returns 422 for invalid base URL format."""
+        project_id = test_project_in_registry["project_id"]
+
+        payload = {"llm_base_url": "not-a-valid-url"}
+
+        response = client.patch(f"/api/projects/{project_id}", json=payload)
+
+        assert response.status_code == 422

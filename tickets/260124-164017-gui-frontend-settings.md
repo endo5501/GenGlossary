@@ -34,6 +34,7 @@ Reference: `plan-gui.md` 「Settings（設定）」セクション
   - 成功/エラートースト表示
 - [x] ローディング状態とエラー状態の表示
 - [x] **Green**: テスト通過確認
+- [x] Code review by codex MCP
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)

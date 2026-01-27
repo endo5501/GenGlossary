@@ -178,32 +178,17 @@ def update_project(
         raise ValueError(f"Project with id {project_id} not found")
 
     # Build update query dynamically based on provided fields
-    updates = []
-    values = []
+    field_mapping = {
+        "name": name,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "llm_base_url": llm_base_url,
+        "status": status.value if status is not None else None,
+        "last_run_at": last_run_at.isoformat() if last_run_at is not None else None,
+    }
 
-    if name is not None:
-        updates.append("name = ?")
-        values.append(name)
-
-    if llm_provider is not None:
-        updates.append("llm_provider = ?")
-        values.append(llm_provider)
-
-    if llm_model is not None:
-        updates.append("llm_model = ?")
-        values.append(llm_model)
-
-    if llm_base_url is not None:
-        updates.append("llm_base_url = ?")
-        values.append(llm_base_url)
-
-    if status is not None:
-        updates.append("status = ?")
-        values.append(status.value)
-
-    if last_run_at is not None:
-        updates.append("last_run_at = ?")
-        values.append(last_run_at.isoformat())
+    updates = [f"{field} = ?" for field, value in field_mapping.items() if value is not None]
+    values: list[str | int] = [value for value in field_mapping.values() if value is not None]
 
     # Always update updated_at
     updates.append("updated_at = datetime('now')")

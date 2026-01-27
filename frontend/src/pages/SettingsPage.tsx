@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Box,
   Button,
@@ -36,17 +36,16 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
   const [baseUrl, setBaseUrl] = useState<string>('')
   const [nameError, setNameError] = useState<string>('')
 
-  // Track if form has been initialized
-  const [initialized, setInitialized] = useState(false)
-
-  // Initialize form when project loads
-  if (project && !initialized) {
-    setName(project.name)
-    setProvider(project.llm_provider)
-    setModel(project.llm_model)
-    setBaseUrl(project.llm_base_url)
-    setInitialized(true)
-  }
+  // Initialize form when project loads or projectId changes
+  useEffect(() => {
+    if (project) {
+      setName(project.name)
+      setProvider(project.llm_provider)
+      setModel(project.llm_model)
+      setBaseUrl(project.llm_base_url)
+      setNameError('')
+    }
+  }, [project, projectId])
 
   // Check if there are changes
   const hasChanges = useMemo(() => {
@@ -116,9 +115,13 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
   }
 
   if (error) {
+    const errorMessage =
+      error instanceof ApiError && error.status === 404
+        ? 'Project not found'
+        : 'Failed to load project settings'
     return (
       <Center h="100%" data-testid="settings-error">
-        <Text c="red">Project not found</Text>
+        <Text c="red">{errorMessage}</Text>
       </Center>
     )
   }
@@ -198,7 +201,7 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
               <Button
                 onClick={handleSave}
                 loading={updateMutation.isPending}
-                disabled={!hasChanges}
+                disabled={!hasChanges || updateMutation.isPending}
               >
                 Save
               </Button>
