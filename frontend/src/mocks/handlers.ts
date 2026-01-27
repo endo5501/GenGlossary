@@ -22,6 +22,9 @@ export const mockProjects: ProjectResponse[] = [
     updated_at: '2024-01-15T10:00:00Z',
     last_run_at: '2024-01-15T12:00:00Z',
     status: 'completed',
+    document_count: 5,
+    term_count: 20,
+    issue_count: 3,
   },
   {
     id: 2,
@@ -34,6 +37,9 @@ export const mockProjects: ProjectResponse[] = [
     updated_at: '2024-01-16T10:00:00Z',
     last_run_at: null,
     status: 'created',
+    document_count: 3,
+    term_count: 15,
+    issue_count: 0,
   },
 ]
 
@@ -176,6 +182,9 @@ export const handlers = [
       updated_at: new Date().toISOString(),
       last_run_at: null,
       status: 'created',
+      document_count: 0,
+      term_count: 0,
+      issue_count: 0,
     }
     return HttpResponse.json(newProject, { status: 201 })
   }),
@@ -198,6 +207,9 @@ export const handlers = [
       updated_at: new Date().toISOString(),
       last_run_at: null,
       status: 'created',
+      document_count: source.document_count,
+      term_count: source.term_count,
+      issue_count: source.issue_count,
     }
     return HttpResponse.json(cloned, { status: 201 })
   }),
