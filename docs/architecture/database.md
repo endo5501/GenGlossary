@@ -324,7 +324,7 @@ def get_registry_connection(db_path: str) -> sqlite3.Connection:
 
 ### registry_schema.py
 ```python
-REGISTRY_SCHEMA_VERSION = 1
+REGISTRY_SCHEMA_VERSION = 2
 
 def initialize_registry(conn: sqlite3.Connection) -> None:
     """レジストリDBスキーマを初期化
@@ -332,8 +332,17 @@ def initialize_registry(conn: sqlite3.Connection) -> None:
     Creates:
         - schema_version テーブル
         - projects テーブル（name, doc_root, db_path, llm_*, created_at, status）
+
+    Migration v1→v2:
+        - llm_base_url カラムを projects テーブルに追加
     """
     ...
+
+def migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    """Add llm_base_url column to projects table."""
+    conn.execute(
+        "ALTER TABLE projects ADD COLUMN llm_base_url TEXT NOT NULL DEFAULT ''"
+    )
 
 def get_registry_schema_version(conn: sqlite3.Connection) -> int:
     """レジストリスキーマバージョンを取得"""
@@ -351,6 +360,7 @@ def create_project(
     db_path: str,
     llm_provider: str = "ollama",
     llm_model: str = "",
+    llm_base_url: str = "",
     status: ProjectStatus = ProjectStatus.CREATED
 ) -> int:
     """プロジェクトを作成
@@ -381,14 +391,17 @@ def list_projects(conn: sqlite3.Connection) -> list[Project]:
 def update_project(
     conn: sqlite3.Connection,
     project_id: int,
+    name: str | None = None,
     llm_provider: str | None = None,
     llm_model: str | None = None,
+    llm_base_url: str | None = None,
     status: ProjectStatus | None = None,
     last_run_at: datetime | None = None
 ) -> None:
     """プロジェクト情報を更新
 
     updated_atは自動的に更新されます。
+    name更新時は重複チェックが行われます（APIレベルで409エラー）。
 
     Raises:
         ValueError: 指定されたIDのプロジェクトが存在しない場合

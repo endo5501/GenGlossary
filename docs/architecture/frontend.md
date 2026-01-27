@@ -10,6 +10,7 @@ React + TypeScript で構築されたシングルページアプリケーショ�
 | 言語 | TypeScript | 5.9 |
 | ビルドツール | Vite | 7.2 |
 | UIライブラリ | Mantine | 8.3 |
+| 通知 | @mantine/notifications | 8.3 |
 | アイコン | Tabler Icons | 3.36 |
 | ルーティング | TanStack Router | 1.x |
 | データフェッチ | TanStack Query | 5.x |
@@ -29,8 +30,12 @@ frontend/src/
 ### エントリーポイント（main.tsx）
 
 ```tsx
-// MantineProvider + RouterProvider でアプリをラップ
+import { Notifications } from '@mantine/notifications'
+import '@mantine/notifications/styles.css'
+
+// MantineProvider + RouterProvider + Notifications でアプリをラップ
 <MantineProvider theme={theme}>
+  <Notifications />
   <RouterProvider router={router} />
 </MantineProvider>
 ```
@@ -91,6 +96,8 @@ Mantine のデフォルトテーマをベースにカスタマイズ。
 |---------------|------|
 | `HomePage` | プロジェクト一覧とサマリー表示 |
 | `FilesPage` | ファイル一覧とdiff-scan結果表示 |
+| `DocumentViewerPage` | ドキュメント閲覧ページ |
+| `SettingsPage` | プロジェクト設定ページ（名前、LLM設定の編集） |
 
 #### HomePage のユーティリティ関数
 
@@ -247,16 +254,28 @@ TanStack Router を使用した型安全なルーティング。
 
 ### ルート一覧
 
+**プロジェクト一覧:**
 | パス | ページ | 説明 |
 |-----|-------|------|
-| `/` | Home | ダッシュボード（未実装） |
-| `/files` | Files | 登録ファイル一覧 |
+| `/` | Home | プロジェクト一覧とサマリー |
+
+**プロジェクトスコープルート（`/projects/$projectId/...`）:**
+| パス | ページ | 説明 |
+|-----|-------|------|
+| `/projects/$projectId/files` | Files | 登録ファイル一覧 |
+| `/projects/$projectId/document-viewer` | Document Viewer | ドキュメント閲覧 |
+| `/projects/$projectId/settings` | Settings | プロジェクト設定（名前、LLM設定） |
+
+**レガシープレースホルダールート:**
+| パス | ページ | 説明 |
+|-----|-------|------|
+| `/files` | Files | 登録ファイル一覧（プレースホルダー） |
 | `/terms` | Terms | 抽出された用語一覧 |
 | `/provisional` | Provisional Glossary | 暫定用語集 |
 | `/issues` | Issues | 精査結果（問題点）一覧 |
 | `/refined` | Refined Glossary | 最終用語集 |
 | `/document-viewer` | Document Viewer | ドキュメント閲覧 |
-| `/settings` | Settings | 設定ページ |
+| `/settings` | Settings | 設定ページ（プレースホルダー） |
 
 ### ルート構成
 
@@ -292,8 +311,9 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `app-shell.test.tsx` | 19 | AppShell、GlobalTopBar、LeftNavRail、LogPanel |
 | `routing.test.tsx` | 16 | ルーティング、ナビゲーション |
 | `projects-page.test.tsx` | 11 | HomePage、FilesPage、ダイアログコンポーネント |
+| `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
 
-**合計**: 60 テスト
+**合計**: 71 テスト
 
 ### テスト実行
 
@@ -330,7 +350,7 @@ pnpm lint
 | Issues ページ | `GET /api/projects/{project_id}/issues` |
 | Refined ページ | `GET /api/projects/{project_id}/refined` |
 | Run/Stop ボタン | `POST/DELETE /api/projects/{project_id}/runs` |
-| Settings ページ | `GET/PUT /api/settings`（未実装） |
+| Settings ページ | `GET/PATCH /api/projects/{project_id}` |
 
 ### 環境変数
 

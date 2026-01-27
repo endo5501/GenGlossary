@@ -87,8 +87,9 @@ class Project(BaseModel):
     name: str                 # プロジェクト名（一意）
     doc_root: str            # ドキュメントディレクトリパス
     db_path: str             # プロジェクトDBパス（一意）
-    llm_provider: str        # LLMプロバイダー
+    llm_provider: str        # LLMプロバイダー（ollama / openai）
     llm_model: str           # LLMモデル名
+    llm_base_url: str        # LLMベースURL（OpenAI互換API用）
     created_at: datetime
     updated_at: datetime
     last_run_at: datetime | None
