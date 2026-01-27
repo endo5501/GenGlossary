@@ -163,6 +163,72 @@ class IssueResponse(BaseModel):
         return [cls.from_db_row(row) for row in rows]
 ```
 
+### project_schemas.py (Projects用スキーマ)
+```python
+def _validate_project_name(v: str) -> str:
+    """Validate project name is not empty.
+
+    共通バリデーション関数。ProjectCreateRequestとProjectCloneRequestで共有。
+    """
+    stripped = v.strip()
+    if not stripped:
+        raise ValueError("Project name cannot be empty")
+    return stripped
+
+
+class ProjectResponse(BaseModel):
+    """Response schema for a project."""
+    id: int = Field(..., description="Project ID")
+    name: str = Field(..., description="Project name")
+    doc_root: str = Field(..., description="Document root path")
+    llm_provider: str = Field(..., description="LLM provider name")
+    llm_model: str = Field(..., description="LLM model name")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+    last_run_at: datetime | None = Field(None, description="Last run timestamp")
+    status: ProjectStatus = Field(..., description="Project status")
+
+    @classmethod
+    def from_project(cls, project: Project) -> "ProjectResponse":
+        """Create from Project model."""
+        ...
+
+
+class ProjectCreateRequest(BaseModel):
+    """Request schema for creating a project."""
+    name: str = Field(..., description="Project name (must be unique)")
+    doc_root: str = Field(..., description="Absolute path to document directory")
+    llm_provider: str = Field(default="ollama", description="LLM provider name")
+    llm_model: str = Field(default="", description="LLM model name")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate project name is not empty."""
+        return _validate_project_name(v)  # 共通関数を使用
+
+
+class ProjectCloneRequest(BaseModel):
+    """Request schema for cloning a project."""
+    new_name: str = Field(..., description="Name for the cloned project")
+
+    @field_validator("new_name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate project name is not empty."""
+        return _validate_project_name(v)  # 共通関数を使用
+
+
+class ProjectUpdateRequest(BaseModel):
+    """Request schema for updating a project."""
+    llm_provider: str | None = Field(None, description="New LLM provider name")
+    llm_model: str | None = Field(None, description="New LLM model name")
+```
+
+**スキーマ設計のポイント:**
+- `_validate_project_name()` を共通関数として抽出し、重複を排除
+- `from_project()` でProjectモデルからレスポンスへの変換を統一
+
 ### file_schemas.py (Files用スキーマ)
 ```python
 class FileResponse(BaseModel):
@@ -222,6 +288,104 @@ async def version_info() -> VersionResponse:
     """バージョン情報"""
     return VersionResponse(name="genglossary", version=__version__)
 ```
+
+### projects.py (Projects API - プロジェクト管理)
+
+```python
+router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+
+def _get_project_or_404(
+    registry_conn: sqlite3.Connection,
+    project_id: int,
+) -> Project:
+    """Get project or raise 404.
+
+    プロジェクト取得 + 404チェックの共通ヘルパー。
+    複数のエンドポイントで同一パターンが使われるため抽出。
+    """
+    project = get_project(registry_conn, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    return project
+
+
+def _cleanup_db_file(db_path: str) -> None:
+    """Cleanup orphaned database file.
+
+    プロジェクト作成/クローン失敗時のDBファイルクリーンアップ。
+    IntegrityError発生時に呼び出される共通処理。
+    """
+    try:
+        Path(db_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+@router.get("", response_model=list[ProjectResponse])
+async def list_all_projects(
+    registry_conn: sqlite3.Connection = Depends(get_registry_db),
+) -> list[ProjectResponse]:
+    """プロジェクト一覧を取得"""
+    ...
+
+@router.get("/{project_id}", response_model=ProjectResponse)
+async def get_project_by_id(
+    project_id: int = PathParam(...),
+    registry_conn: sqlite3.Connection = Depends(get_registry_db),
+) -> ProjectResponse:
+    """プロジェクトをIDで取得"""
+    project = _get_project_or_404(registry_conn, project_id)
+    return ProjectResponse.from_project(project)
+
+@router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+async def create_new_project(
+    request: ProjectCreateRequest = Body(...),
+    registry_conn: sqlite3.Connection = Depends(get_registry_db),
+) -> ProjectResponse:
+    """新しいプロジェクトを作成"""
+    db_path = _generate_db_path(request.name)
+    try:
+        project_id = create_project(registry_conn, ...)
+    except sqlite3.IntegrityError:
+        _cleanup_db_file(db_path)  # 共通ヘルパーでクリーンアップ
+        raise HTTPException(status_code=409, detail="Project name already exists")
+    ...
+
+@router.post("/{project_id}/clone", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+async def clone_existing_project(
+    project_id: int = PathParam(...),
+    request: ProjectCloneRequest = Body(...),
+    registry_conn: sqlite3.Connection = Depends(get_registry_db),
+) -> ProjectResponse:
+    """プロジェクトをクローン"""
+    ...
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_existing_project(
+    project_id: int = PathParam(...),
+    registry_conn: sqlite3.Connection = Depends(get_registry_db),
+) -> None:
+    """プロジェクトを削除"""
+    _get_project_or_404(registry_conn, project_id)  # 存在確認
+    delete_project(registry_conn, project_id)
+
+@router.patch("/{project_id}", response_model=ProjectResponse)
+async def update_existing_project(
+    project_id: int = PathParam(...),
+    request: ProjectUpdateRequest = Body(...),
+    registry_conn: sqlite3.Connection = Depends(get_registry_db),
+) -> ProjectResponse:
+    """プロジェクト設定を更新"""
+    _get_project_or_404(registry_conn, project_id)  # 存在確認
+    update_project(registry_conn, project_id, ...)
+    updated_project = _get_project_or_404(registry_conn, project_id)
+    return ProjectResponse.from_project(updated_project)
+```
+
+**ヘルパー関数の設計:**
+- `_get_project_or_404()`: プロジェクト取得と404チェックを一元化。GET/DELETE/PATCHで使用
+- `_cleanup_db_file()`: DBファイルの孤立防止。create/clone失敗時に使用
 
 ### terms.py (Terms API - 抽出用語の管理)
 ```python
@@ -642,6 +806,14 @@ async def list_terms(
 - `DELETE /api/projects/{project_id}/files/{file_id}` - ファイル削除
 - `POST /api/projects/{project_id}/files/diff-scan` - ファイルシステムとDBの差分スキャン
 
+**Projects API (プロジェクト管理) - 6エンドポイント:**
+- `GET /api/projects` - プロジェクト一覧取得
+- `GET /api/projects/{project_id}` - プロジェクト詳細取得
+- `POST /api/projects` - プロジェクト作成
+- `POST /api/projects/{project_id}/clone` - プロジェクトクローン
+- `PATCH /api/projects/{project_id}` - プロジェクト設定更新
+- `DELETE /api/projects/{project_id}` - プロジェクト削除
+
 **Runs API (パイプライン実行管理) - 6エンドポイント:**
 - `POST /api/projects/{project_id}/runs` - Run開始
 - `DELETE /api/projects/{project_id}/runs/{run_id}` - Run キャンセル
@@ -650,7 +822,7 @@ async def list_terms(
 - `GET /api/projects/{project_id}/runs/current` - アクティブRun取得
 - `GET /api/projects/{project_id}/runs/{run_id}/logs` - SSEログストリーミング
 
-**合計: 33エンドポイント** (システム4 + データAPI 28 + Projects API 1)
+**合計: 38エンドポイント** (システム4 + Projects API 6 + データAPI 28)
 
 ## API実装のポイント
 

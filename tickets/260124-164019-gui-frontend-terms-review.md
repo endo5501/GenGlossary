@@ -26,6 +26,7 @@ Reference: `plan-gui.md` 「Terms」「Provisional」「Issues」「Refined」�
 - [ ] Log viewer pane consuming SSE/WebSocket stream; show inline progress per run（`docs/architecture.md`にログ/状態連携を追記）
 - [ ] **Green**: 追加テストを含めフロントテスト/ビルドが通ることを確認
 - [ ] Code simplification review using code-simplifier agent
+- [ ] Code review by codex MCP
 - [ ] Update docs/architecture/*.md
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)

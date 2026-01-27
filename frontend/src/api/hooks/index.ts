@@ -1,3 +1,19 @@
 // Re-export all hooks
-// These will be implemented in future tickets
-export {}
+export {
+  useProjects,
+  useProject,
+  useCreateProject,
+  useCloneProject,
+  useUpdateProject,
+  useDeleteProject,
+  projectKeys,
+} from './useProjects'
+
+export {
+  useFiles,
+  useFile,
+  useCreateFile,
+  useDeleteFile,
+  useDiffScan,
+  fileKeys,
+} from './useFiles'

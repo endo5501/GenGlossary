@@ -5,15 +5,41 @@ import {
 } from '@tanstack/react-router'
 import { AppShell } from '../components/layout'
 import { PagePlaceholder } from '../components/common/PagePlaceholder'
+import { HomePage, FilesPage, DocumentViewerPage } from '../pages'
 
 // Root route with AppShell layout
 const rootRoute = createRootRoute({
   component: AppShell,
 })
 
-// Route configuration data
-const routeConfigs = [
-  { path: '/', title: 'Home' },
+// Home route (project list)
+const homeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: HomePage,
+})
+
+// Project-scoped routes
+const projectFilesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$projectId/files',
+  component: () => {
+    const { projectId } = projectFilesRoute.useParams()
+    return <FilesPage projectId={Number(projectId)} />
+  },
+})
+
+const projectDocumentViewerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$projectId/document-viewer',
+  component: () => {
+    const { projectId } = projectDocumentViewerRoute.useParams()
+    return <DocumentViewerPage projectId={Number(projectId)} />
+  },
+})
+
+// Legacy placeholder routes for other pages
+const placeholderConfigs = [
   { path: '/files', title: 'Files' },
   { path: '/terms', title: 'Terms' },
   { path: '/provisional', title: 'Provisional Glossary' },
@@ -23,8 +49,7 @@ const routeConfigs = [
   { path: '/settings', title: 'Settings' },
 ] as const
 
-// Generate routes from configuration
-const routes = routeConfigs.map(({ path, title }) =>
+const placeholderRoutes = placeholderConfigs.map(({ path, title }) =>
   createRoute({
     getParentRoute: () => rootRoute,
     path,
@@ -33,7 +58,12 @@ const routes = routeConfigs.map(({ path, title }) =>
 )
 
 // Create route tree
-export const routeTree = rootRoute.addChildren(routes)
+export const routeTree = rootRoute.addChildren([
+  homeRoute,
+  projectFilesRoute,
+  projectDocumentViewerRoute,
+  ...placeholderRoutes,
+])
 
 // Create router instance
 export const router = createRouter({ routeTree })

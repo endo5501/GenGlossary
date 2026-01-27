@@ -14,7 +14,7 @@
 * [x] tickets/done/260124-164009-gui-api-data-endpoints.md
 * [x] tickets/done/260125-125901-api-provisional-regenerate.md
 * [x] tickets/done/260124-164011-gui-api-operations-runner.md
-* [ ] tickets/260124-164013-gui-frontend-scaffold.md
+* [x] tickets/done/260124-164013-gui-frontend-scaffold.md
 * [ ] tickets/260124-164016-gui-frontend-projects-files.md
 * [ ] tickets/260124-164017-gui-frontend-settings.md
 * [ ] tickets/260124-164019-gui-frontend-terms-review.md

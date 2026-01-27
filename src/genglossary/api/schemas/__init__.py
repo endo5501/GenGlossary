@@ -7,6 +7,12 @@ from genglossary.api.schemas.file_schemas import (
     FileResponse,
 )
 from genglossary.api.schemas.issue_schemas import IssueResponse
+from genglossary.api.schemas.project_schemas import (
+    ProjectCloneRequest,
+    ProjectCreateRequest,
+    ProjectResponse,
+    ProjectUpdateRequest,
+)
 from genglossary.api.schemas.provisional_schemas import (
     ProvisionalResponse,
     ProvisionalUpdateRequest,
@@ -31,4 +37,8 @@ __all__ = [
     "FileResponse",
     "FileCreateRequest",
     "DiffScanResponse",
+    "ProjectResponse",
+    "ProjectCreateRequest",
+    "ProjectCloneRequest",
+    "ProjectUpdateRequest",
 ]

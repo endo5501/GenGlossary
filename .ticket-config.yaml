@@ -45,7 +45,8 @@ default_content: |
   - [ ] {{Task 2}}
   ...
   - [ ] Code simplification review using code-simplifier agent
-  - [ ] Update docs/architecture.md
+  - [ ] Code review by codex MCP
+  - [ ] Update docs/architecture/*.md
   - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
   - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
   - [ ] Get developer approval before closing

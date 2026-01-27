@@ -85,6 +85,100 @@ Mantine のデフォルトテーマをベースにカスタマイズ。
 | `/document-viewer` | IconFileText | Documents |
 | `/settings` | IconSettings | Settings |
 
+### ページコンポーネント（pages/）
+
+| コンポーネント | 説明 |
+|---------------|------|
+| `HomePage` | プロジェクト一覧とサマリー表示 |
+| `FilesPage` | ファイル一覧とdiff-scan結果表示 |
+
+#### HomePage のユーティリティ関数
+
+```typescript
+function formatLastRun(lastRunAt: string | null, format: 'short' | 'long' = 'short'): string {
+  if (!lastRunAt) return format === 'short' ? '-' : 'Never'
+  const date = new Date(lastRunAt)
+  return format === 'short' ? date.toLocaleDateString() : date.toLocaleString()
+}
+```
+
+**設計ポイント:**
+- 日付フォーマットを統一し、テーブル（short）とサマリーカード（long）で異なる形式を使用
+- null値のハンドリングもフォーマットに応じて変更（"-" または "Never"）
+
+#### FilesPage の ChangeSection コンポーネント
+
+diff-scan 結果の表示で Added/Modified/Deleted セクションの重複を排除。
+
+```typescript
+interface ChangeSectionProps {
+  items: string[]
+  label: string
+  color: string
+  prefix: string
+}
+
+function ChangeSection({ items, label, color, prefix }: ChangeSectionProps) {
+  if (items.length === 0) return null
+
+  return (
+    <Box>
+      <Group gap="xs" mb="xs">
+        <Badge color={color} size="sm">{label}</Badge>
+        <Text size="sm" c="dimmed">({items.length} files)</Text>
+      </Group>
+      <Stack gap={4}>
+        {items.map((path) => (
+          <Text key={path} size="sm" c={color}>
+            {prefix} {path}
+          </Text>
+        ))}
+      </Stack>
+    </Box>
+  )
+}
+
+// 使用例（DiffScanResults内）
+const sections = [
+  { items: results.added, label: 'Added', color: 'green', prefix: '+' },
+  { items: results.modified, label: 'Modified', color: 'yellow', prefix: '~' },
+  { items: results.deleted, label: 'Deleted', color: 'red', prefix: '-' },
+]
+
+{sections.map((section) => (
+  <ChangeSection key={section.label} {...section} />
+))}
+```
+
+### ダイアログコンポーネント（components/dialogs/）
+
+| コンポーネント | 説明 |
+|---------------|------|
+| `CreateProjectDialog` | 新規プロジェクト作成ダイアログ |
+| `CloneProjectDialog` | プロジェクトクローンダイアログ |
+| `DeleteProjectDialog` | プロジェクト削除確認ダイアログ |
+
+#### CloneProjectDialog の設計
+
+```typescript
+// useEffectでダイアログ開閉時に状態リセット
+useEffect(() => {
+  if (opened) {
+    setNewName(`${project.name} (Copy)`)
+    setError(null)
+  }
+}, [opened, project.name])  // project.nameを依存配列に指定
+
+// handleCloseは単純にonCloseを呼ぶだけ（リセットはuseEffectで行う）
+const handleClose = () => {
+  onClose()
+}
+```
+
+**設計ポイント:**
+- `useEffect`の依存配列には実際に使用している値（`project.name`）を指定
+- `handleClose`での状態リセットは`useEffect`と重複するため削除
+
 ### 共通コンポーネント（components/common/）
 
 | コンポーネント | 説明 |
@@ -197,8 +291,9 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `api-client.test.ts` | 14 | APIクライアントの HTTP メソッド、エラーハンドリング |
 | `app-shell.test.tsx` | 19 | AppShell、GlobalTopBar、LeftNavRail、LogPanel |
 | `routing.test.tsx` | 16 | ルーティング、ナビゲーション |
+| `projects-page.test.tsx` | 11 | HomePage、FilesPage、ダイアログコンポーネント |
 
-**合計**: 49 テスト
+**合計**: 60 テスト
 
 ### テスト実行
 
