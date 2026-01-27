@@ -1,194 +1,168 @@
-# GUI Frontend Projects & Files 実装計画
+# コードレビュー指摘修正計画
 
-## チケット概要
+## 概要
 
-`tickets/260124-164016-gui-frontend-projects-files.md`
-
-プロジェクト一覧画面（ホーム）、プロジェクト作成/複製/削除ダイアログ、Filesタブ、Document Viewerを実装。TDDワークフローに従う。
-
-**スコープ**: バックエンドAPI + フロントエンド両方を実装
+codex MCPによるコードレビューで指摘された問題を修正する。
+認証関連は別チケット（`260127-123553-api-authentication.md`）で対応。
 
 ---
 
-## Step 1: バックエンド API 実装
+## 修正対象（5件）
 
-プロジェクト管理用のAPIルーター（`/api/projects`）を新規作成:
-
-### 新規ファイル
-
-1. **`src/genglossary/api/schemas/project_schemas.py`**
-   - `ProjectResponse` - プロジェクト情報レスポンス
-   - `ProjectCreateRequest` - 作成リクエスト
-   - `ProjectCloneRequest` - 複製リクエスト
-   - `ProjectUpdateRequest` - 更新リクエスト
-
-2. **`src/genglossary/api/routers/projects.py`**
-   ```
-   GET    /api/projects              - 一覧取得
-   GET    /api/projects/{id}         - 個別取得
-   POST   /api/projects              - 作成
-   POST   /api/projects/{id}/clone   - 複製
-   DELETE /api/projects/{id}         - 削除
-   PATCH  /api/projects/{id}         - 更新
-   ```
-
-3. **更新**: `routers/__init__.py`, `app.py` にルーター登録
+| # | 重要度 | 問題 | ファイル |
+|---|--------|------|----------|
+| 1 | Medium | CloneDialog state が prop 変更に反応しない | `CloneProjectDialog.tsx` |
+| 2 | Medium | Clone request の new_name バリデーション不足 | `project_schemas.py` |
+| 3 | Medium | Create/Clone 失敗時に orphan DB ファイル | `projects.py` |
+| 4 | Low | SPA で window.location.href 使用 | `HomePage.tsx`, `FilesPage.tsx` |
+| 5 | Low | Delete loading state がグローバル | `FilesPage.tsx` |
 
 ---
 
-## フロントエンド実装
+## Step 1: CloneDialog state 修正
 
-### Phase 1: Red（テスト作成）
+**ファイル**: `frontend/src/components/dialogs/CloneProjectDialog.tsx`
 
-**新規ファイル**: `frontend/src/__tests__/projects-page.test.tsx`
+**問題**: ダイアログを閉じずに別プロジェクトを選択すると、古い名前が残る
 
+**修正**:
 ```typescript
-// テストシナリオ:
-describe('HomePage (Projects)', () => {
-  it('ローディング状態を表示')
-  it('空状態（プロジェクトなし）を表示')
-  it('プロジェクト一覧を統計付きで表示')
-  it('クリックでプロジェクト選択')
-  it('選択プロジェクトのサマリーカード表示')
-})
+import { useEffect } from 'react'
 
-describe('Create/Clone/Delete Dialogs', () => {
-  it('作成ダイアログのバリデーション')
-  it('API呼び出しとトースト通知')
-})
-
-describe('FilesPage', () => {
-  it('ファイル一覧表示')
-  it('diff-scan実行')
-  it('Document Viewerへの遷移')
-})
+// 既存の useState の後に追加
+useEffect(() => {
+  if (opened) {
+    setNewName(`${project.name} (Copy)`)
+    setError(null)
+  }
+}, [opened, project.id])
 ```
 
-**MSWハンドラー**: `frontend/src/mocks/handlers.ts`
+---
 
-### Phase 2: 型定義とHooks
+## Step 2: ProjectCloneRequest バリデーション追加
 
-**更新**: `frontend/src/api/types.ts`
+**ファイル**: `src/genglossary/api/schemas/project_schemas.py`
+
+**修正**: `ProjectCloneRequest` に `validate_name` を追加
+
+```python
+class ProjectCloneRequest(BaseModel):
+    """Request schema for cloning a project."""
+
+    new_name: str = Field(..., description="Name for the cloned project")
+
+    @field_validator("new_name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate project name is not empty."""
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Project name cannot be empty")
+        return stripped
+```
+
+---
+
+## Step 3: Create/Clone のエラー時クリーンアップ
+
+**ファイル**: `src/genglossary/api/routers/projects.py`
+
+**修正**: `create_new_project` と `clone_existing_project` で例外時に DB ファイル削除
+
+```python
+from pathlib import Path
+
+# create_new_project 内
+except sqlite3.IntegrityError:
+    # Cleanup orphaned DB file
+    try:
+        Path(db_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+    raise HTTPException(...)
+
+# clone_existing_project 内
+except sqlite3.IntegrityError:
+    # Cleanup orphaned cloned DB file
+    try:
+        Path(new_db_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+    raise HTTPException(...)
+```
+
+---
+
+## Step 4: ルーターナビゲーションに変更
+
+**ファイル**: `frontend/src/pages/HomePage.tsx`, `frontend/src/pages/FilesPage.tsx`
+
+**修正**: `window.location.href` → `useNavigate()` に変更
+
 ```typescript
-export type ProjectStatus = 'created' | 'running' | 'completed' | 'error'
+// HomePage.tsx
+import { useNavigate } from '@tanstack/react-router'
 
-export interface ProjectResponse {
-  id: number
-  name: string
-  doc_root: string
-  llm_provider: string
-  llm_model: string
-  created_at: string
-  updated_at: string
-  last_run_at: string | null
-  status: ProjectStatus
+export function HomePage() {
+  const navigate = useNavigate()
+
+  // onOpen 内
+  navigate({ to: `/projects/${selectedProject.id}/files` })
 }
 
-export interface DiffScanResponse {
-  added: string[]
-  modified: string[]
-  deleted: string[]
-}
+// FilesPage.tsx 同様
+navigate({ to: `/projects/${projectId}/document-viewer`, search: { file: file.id } })
 ```
 
-**新規**: `frontend/src/api/hooks/useProjects.ts`
-- `useProjects()` - 一覧取得
-- `useProject(id)` - 個別取得
-- `useCreateProject()` - 作成 mutation
-- `useCloneProject()` - 複製 mutation
-- `useDeleteProject()` - 削除 mutation
+---
 
-**新規**: `frontend/src/api/hooks/useFiles.ts`
-- `useFiles(projectId)` - ファイル一覧
-- `useCreateFile()` - 追加 mutation
-- `useDeleteFile()` - 削除 mutation
-- `useDiffScan()` - スキャン mutation
+## Step 5: 個別ファイルの削除 loading 状態
 
-### Phase 3: Green（ページ実装）
+**ファイル**: `frontend/src/pages/FilesPage.tsx`
 
-**新規ページコンポーネント**:
-
-1. **`frontend/src/pages/HomePage.tsx`**
-   - 左: プロジェクトリスト（選択可能）
-   - 右: 選択プロジェクトのサマリーカード
-   - [+ Create] ボタン → ダイアログ
-
-2. **`frontend/src/pages/FilesPage.tsx`**
-   - ファイルリスト（Table）
-   - [Scan] [+ Add] ボタン
-   - 行クリック → Document Viewer
-
-3. **`frontend/src/pages/DocumentViewerPage.tsx`**
-   - タブ式ドキュメント表示
-   - 右: 用語カード（placeholder）
-
-**ダイアログコンポーネント**:
-
-4. **`frontend/src/components/dialogs/CreateProjectDialog.tsx`**
-5. **`frontend/src/components/dialogs/CloneProjectDialog.tsx`**
-6. **`frontend/src/components/dialogs/DeleteProjectDialog.tsx`**
-
-### Phase 4: ルーティング更新
-
-**更新**: `frontend/src/routes/index.tsx`
+**修正**: `deletingFileIds` state で個別管理
 
 ```typescript
-// プロジェクトIDをURLパラメータで管理
-'/'                              → HomePage
-'/projects/:projectId/files'     → FilesPage
-'/projects/:projectId/document-viewer' → DocumentViewerPage
+const [deletingFileId, setDeletingFileId] = useState<number | null>(null)
+
+const handleDeleteFile = async (fileId: number) => {
+  setDeletingFileId(fileId)
+  try {
+    await deleteFileMutation.mutateAsync(fileId)
+  } catch (err) {
+    console.error('Delete failed:', err)
+  } finally {
+    setDeletingFileId(null)
+  }
+}
+
+// ボタン
+<Button loading={deletingFileId === file.id}>
 ```
 
 ---
 
-## 依存関係図
+## 修正対象ファイル一覧
 
-```
-Backend projects router (前提条件)
-    │
-    ├──▶ types.ts (Project型追加)
-    │         │
-    │         ├──▶ MSW handlers → Tests (Red)
-    │         │
-    │         └──▶ TanStack Query hooks
-    │                   │
-    │                   └──▶ Pages (Green)
-    │                             │
-    │                             └──▶ Routing
-```
-
----
-
-## 重要ファイル
-
-| 目的 | ファイルパス |
-|------|-------------|
-| バックエンドルーターパターン | `src/genglossary/api/routers/files.py` |
-| プロジェクトリポジトリ | `src/genglossary/db/project_repository.py` |
-| フロントエンド型定義 | `frontend/src/api/types.ts` |
-| MSWセットアップ | `frontend/src/__tests__/setup.ts` |
-| ルーティング設定 | `frontend/src/routes/index.tsx` |
-| テストパターン | `frontend/src/__tests__/app-shell.test.tsx` |
-
----
-
-## 使用するMantineコンポーネント
-
-- `Table` - ファイル/プロジェクトリスト
-- `Card` - サマリーカード
-- `Modal` - ダイアログ
-- `TextInput`, `Select` - フォーム
-- `Skeleton` - ローディング
-- `Badge` - ステータス表示
-- `Tabs` - Document Viewer
-- `@mantine/notifications` - トースト通知（追加が必要）
+| ファイル | 修正内容 |
+|----------|----------|
+| `frontend/src/components/dialogs/CloneProjectDialog.tsx` | useEffect 追加 |
+| `src/genglossary/api/schemas/project_schemas.py` | バリデーター追加 |
+| `src/genglossary/api/routers/projects.py` | クリーンアップ追加 |
+| `frontend/src/pages/HomePage.tsx` | useNavigate 使用 |
+| `frontend/src/pages/FilesPage.tsx` | useNavigate + deletingFileId |
 
 ---
 
 ## 検証方法
 
-1. **テスト実行**: `cd frontend && npm run test`
-2. **ビルド確認**: `cd frontend && npm run build`
-3. **バックエンドテスト**: `uv run pytest`
+1. **バックエンドテスト**: `uv run pytest tests/api/routers/test_projects.py -v`
+2. **フロントエンドテスト**: `cd frontend && npm run test`
+3. **ビルド確認**: `cd frontend && npm run build`
 4. **静的解析**: `uv run pyright`
-5. **E2E確認**: 開発サーバー起動してブラウザで動作確認
+5. **手動確認**:
+   - プロジェクト選択後にCloneダイアログを開き、別プロジェクト選択 → 名前が更新されること
+   - 重複名でプロジェクト作成/クローン → orphan ファイルが残らないこと
+   - ページ遷移でフルリロードしないこと
+   - ファイル削除中に他の削除ボタンが影響されないこと
