@@ -29,6 +29,9 @@ Object.defineProperty(window, 'ResizeObserver', {
   value: ResizeObserverMock,
 })
 
+// Mock scrollIntoView for Mantine Combobox
+Element.prototype.scrollIntoView = vi.fn()
+
 // MSW server setup for API mocking
 export const server = setupServer()
 

@@ -9,6 +9,7 @@ export const mockProjects: ProjectResponse[] = [
     doc_root: '/path/to/docs1',
     llm_provider: 'ollama',
     llm_model: 'llama3.2',
+    llm_base_url: '',
     created_at: '2024-01-15T10:00:00Z',
     updated_at: '2024-01-15T10:00:00Z',
     last_run_at: '2024-01-15T12:00:00Z',
@@ -20,6 +21,7 @@ export const mockProjects: ProjectResponse[] = [
     doc_root: '/path/to/docs2',
     llm_provider: 'openai',
     llm_model: 'gpt-4',
+    llm_base_url: 'https://api.openai.com/v1',
     created_at: '2024-01-16T10:00:00Z',
     updated_at: '2024-01-16T10:00:00Z',
     last_run_at: null,
@@ -51,13 +53,14 @@ export const handlers = [
   }),
 
   http.post(`${BASE_URL}/api/projects`, async ({ request }) => {
-    const body = (await request.json()) as { name: string; doc_root: string }
+    const body = (await request.json()) as { name: string; doc_root: string; llm_base_url?: string }
     const newProject: ProjectResponse = {
       id: mockProjects.length + 1,
       name: body.name,
       doc_root: body.doc_root,
       llm_provider: 'ollama',
       llm_model: '',
+      llm_base_url: body.llm_base_url ?? '',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       last_run_at: null,
@@ -74,9 +77,12 @@ export const handlers = [
     }
     const body = (await request.json()) as { new_name: string }
     const cloned: ProjectResponse = {
-      ...source,
       id: mockProjects.length + 1,
       name: body.new_name,
+      doc_root: source.doc_root,
+      llm_provider: source.llm_provider,
+      llm_model: source.llm_model,
+      llm_base_url: source.llm_base_url,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       last_run_at: null,
@@ -100,11 +106,27 @@ export const handlers = [
     if (!project) {
       return HttpResponse.json({ detail: 'Not found' }, { status: 404 })
     }
-    const body = (await request.json()) as { llm_provider?: string; llm_model?: string }
+    const body = (await request.json()) as {
+      name?: string
+      llm_provider?: string
+      llm_model?: string
+      llm_base_url?: string
+    }
+
+    // Check for duplicate name
+    if (body.name) {
+      const existingWithName = mockProjects.find((p) => p.name === body.name && p.id !== id)
+      if (existingWithName) {
+        return HttpResponse.json({ detail: `Project name already exists: ${body.name}` }, { status: 409 })
+      }
+    }
+
     const updated: ProjectResponse = {
       ...project,
+      name: body.name ?? project.name,
       llm_provider: body.llm_provider ?? project.llm_provider,
       llm_model: body.llm_model ?? project.llm_model,
+      llm_base_url: body.llm_base_url ?? project.llm_base_url,
       updated_at: new Date().toISOString(),
     }
     return HttpResponse.json(updated)

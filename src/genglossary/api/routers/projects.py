@@ -157,6 +157,7 @@ async def create_new_project(
             db_path=db_path,
             llm_provider=request.llm_provider,
             llm_model=request.llm_model,
+            llm_base_url=request.llm_base_url,
         )
     except sqlite3.IntegrityError:
         _cleanup_db_file(db_path)
@@ -257,15 +258,23 @@ async def update_existing_project(
 
     Raises:
         HTTPException: 404 if project not found.
+        HTTPException: 409 if name already exists.
     """
     _get_project_or_404(registry_conn, project_id)
 
-    update_project(
-        registry_conn,
-        project_id,
-        llm_provider=request.llm_provider,
-        llm_model=request.llm_model,
-    )
+    try:
+        update_project(
+            registry_conn,
+            project_id,
+            name=request.name,
+            llm_provider=request.llm_provider,
+            llm_model=request.llm_model,
+            llm_base_url=request.llm_base_url,
+        )
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409, detail=f"Project name already exists: {request.name}"
+        )
 
     updated_project = _get_project_or_404(registry_conn, project_id)
     return ProjectResponse.from_project(updated_project)

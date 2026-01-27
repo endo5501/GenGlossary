@@ -355,3 +355,66 @@ class TestUpdateProject:
         response = client.patch("/api/projects/999", json=payload)
 
         assert response.status_code == 404
+
+    def test_updates_name(self, test_project_in_registry, client: TestClient):
+        """Test updates project name."""
+        project_id = test_project_in_registry["project_id"]
+
+        payload = {"name": "Updated Name"}
+
+        response = client.patch(f"/api/projects/{project_id}", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Updated Name"
+
+    def test_returns_409_for_duplicate_name_on_update(
+        self, test_project_in_registry, client: TestClient, tmp_path: Path
+    ):
+        """Test returns 409 when updating to an existing name."""
+        registry_path = test_project_in_registry["registry_path"]
+        doc_root = test_project_in_registry["doc_root"]
+        project_id = test_project_in_registry["project_id"]
+
+        # Create another project with a different name
+        db_path2 = tmp_path / "projects" / "project2.db"
+        db_path2.parent.mkdir(parents=True, exist_ok=True)
+        registry_conn = get_connection(registry_path)
+        create_project(
+            registry_conn,
+            name="Other Project",
+            doc_root=doc_root,
+            db_path=str(db_path2),
+        )
+        registry_conn.close()
+
+        # Try to update to the other project's name
+        payload = {"name": "Other Project"}
+
+        response = client.patch(f"/api/projects/{project_id}", json=payload)
+
+        assert response.status_code == 409
+
+    def test_returns_422_for_empty_name_on_update(
+        self, test_project_in_registry, client: TestClient
+    ):
+        """Test returns 422 for empty name validation error."""
+        project_id = test_project_in_registry["project_id"]
+
+        payload = {"name": ""}
+
+        response = client.patch(f"/api/projects/{project_id}", json=payload)
+
+        assert response.status_code == 422
+
+    def test_updates_llm_base_url(self, test_project_in_registry, client: TestClient):
+        """Test updates LLM base URL."""
+        project_id = test_project_in_registry["project_id"]
+
+        payload = {"llm_base_url": "https://api.openai.com/v1"}
+
+        response = client.patch(f"/api/projects/{project_id}", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["llm_base_url"] == "https://api.openai.com/v1"

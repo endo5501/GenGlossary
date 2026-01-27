@@ -37,6 +37,7 @@ class TestProjectCreation:
             db_path="/novels/mynovel/project.db",
             llm_provider="openai",
             llm_model="gpt-4",
+            llm_base_url="https://api.openai.com/v1",
             created_at=now,
             updated_at=now,
             last_run_at=now,
@@ -49,10 +50,21 @@ class TestProjectCreation:
         assert project.db_path == "/novels/mynovel/project.db"
         assert project.llm_provider == "openai"
         assert project.llm_model == "gpt-4"
+        assert project.llm_base_url == "https://api.openai.com/v1"
         assert project.created_at == now
         assert project.updated_at == now
         assert project.last_run_at == now
         assert project.status == ProjectStatus.COMPLETED
+
+    def test_project_has_llm_base_url_with_default(self) -> None:
+        """llm_base_urlはデフォルトで空文字列"""
+        project = Project(
+            name="test-project",
+            doc_root="/path/to/docs",
+            db_path="/path/to/project.db",
+        )
+
+        assert project.llm_base_url == ""
 
     def test_project_name_cannot_be_empty(self) -> None:
         """プロジェクト名が空文字列の場合はエラーになる"""

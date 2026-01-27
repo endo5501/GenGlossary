@@ -26,6 +26,7 @@ def _row_to_project(row: sqlite3.Row) -> Project:
         db_path=row["db_path"],
         llm_provider=row["llm_provider"],
         llm_model=row["llm_model"],
+        llm_base_url=row["llm_base_url"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
         last_run_at=(
@@ -44,6 +45,7 @@ def create_project(
     db_path: str,
     llm_provider: str = "ollama",
     llm_model: str = "",
+    llm_base_url: str = "",
     status: ProjectStatus = ProjectStatus.CREATED,
 ) -> int:
     """Create a new project.
@@ -55,6 +57,7 @@ def create_project(
         db_path: Absolute path to project database file.
         llm_provider: LLM provider name (default: "ollama").
         llm_model: LLM model name (default: "").
+        llm_base_url: LLM base URL (default: "").
         status: Initial project status (default: CREATED).
 
     Returns:
@@ -74,10 +77,10 @@ def create_project(
     cursor.execute(
         """
         INSERT INTO projects (
-            name, doc_root, db_path, llm_provider, llm_model, status
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            name, doc_root, db_path, llm_provider, llm_model, llm_base_url, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (name, doc_root, db_path, llm_provider, llm_model, status.value),
+        (name, doc_root, db_path, llm_provider, llm_model, llm_base_url, status.value),
     )
     conn.commit()
 
@@ -146,8 +149,10 @@ def list_projects(conn: sqlite3.Connection) -> list[Project]:
 def update_project(
     conn: sqlite3.Connection,
     project_id: int,
+    name: str | None = None,
     llm_provider: str | None = None,
     llm_model: str | None = None,
+    llm_base_url: str | None = None,
     status: ProjectStatus | None = None,
     last_run_at: datetime | None = None,
 ) -> None:
@@ -156,13 +161,16 @@ def update_project(
     Args:
         conn: Registry database connection.
         project_id: Project ID to update.
+        name: New project name (optional).
         llm_provider: New LLM provider (optional).
         llm_model: New LLM model (optional).
+        llm_base_url: New LLM base URL (optional).
         status: New status (optional).
         last_run_at: New last run timestamp (optional).
 
     Raises:
         ValueError: If project with the given ID does not exist.
+        sqlite3.IntegrityError: If name already exists for another project.
     """
     # Check if project exists
     project = get_project(conn, project_id)
@@ -173,6 +181,10 @@ def update_project(
     updates = []
     values = []
 
+    if name is not None:
+        updates.append("name = ?")
+        values.append(name)
+
     if llm_provider is not None:
         updates.append("llm_provider = ?")
         values.append(llm_provider)
@@ -180,6 +192,10 @@ def update_project(
     if llm_model is not None:
         updates.append("llm_model = ?")
         values.append(llm_model)
+
+    if llm_base_url is not None:
+        updates.append("llm_base_url = ?")
+        values.append(llm_base_url)
 
     if status is not None:
         updates.append("status = ?")
@@ -256,10 +272,10 @@ def clone_project(
     cursor.execute(
         """
         INSERT INTO projects (
-            name, doc_root, db_path, llm_provider, llm_model, status
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            name, doc_root, db_path, llm_provider, llm_model, llm_base_url, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (new_name, source.doc_root, new_db_path, source.llm_provider, source.llm_model, ProjectStatus.CREATED.value),
+        (new_name, source.doc_root, new_db_path, source.llm_provider, source.llm_model, source.llm_base_url, ProjectStatus.CREATED.value),
     )
     conn.commit()
 

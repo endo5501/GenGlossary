@@ -13,32 +13,50 @@ import { Link, useLocation } from '@tanstack/react-router'
 interface NavItem {
   label: string
   icon: React.ElementType
-  path: string
+  basePath: string
 }
 
 const navItems: NavItem[] = [
-  { label: 'Files', icon: IconFiles, path: '/files' },
-  { label: 'Terms', icon: IconList, path: '/terms' },
-  { label: 'Provisional', icon: IconFileDescription, path: '/provisional' },
-  { label: 'Issues', icon: IconAlertCircle, path: '/issues' },
-  { label: 'Refined', icon: IconFileCheck, path: '/refined' },
-  { label: 'Document Viewer', icon: IconEye, path: '/document-viewer' },
-  { label: 'Settings', icon: IconSettings, path: '/settings' },
+  { label: 'Files', icon: IconFiles, basePath: '/files' },
+  { label: 'Terms', icon: IconList, basePath: '/terms' },
+  { label: 'Provisional', icon: IconFileDescription, basePath: '/provisional' },
+  { label: 'Issues', icon: IconAlertCircle, basePath: '/issues' },
+  { label: 'Refined', icon: IconFileCheck, basePath: '/refined' },
+  { label: 'Document Viewer', icon: IconEye, basePath: '/document-viewer' },
+  { label: 'Settings', icon: IconSettings, basePath: '/settings' },
 ]
+
+function extractProjectId(pathname: string): number | undefined {
+  const match = pathname.match(/^\/projects\/(\d+)/)
+  return match ? Number(match[1]) : undefined
+}
+
+function getPath(basePath: string, projectId: number | undefined): string {
+  if (projectId !== undefined) {
+    return `/projects/${projectId}${basePath}`
+  }
+  return basePath
+}
+
+function isActive(pathname: string, basePath: string, projectId: number | undefined): boolean {
+  const targetPath = getPath(basePath, projectId)
+  return pathname === targetPath || pathname.startsWith(targetPath + '/')
+}
 
 export function LeftNavRail() {
   const location = useLocation()
+  const projectId = extractProjectId(location.pathname)
 
   return (
     <Stack gap={0}>
       {navItems.map((item) => (
         <NavLink
-          key={item.path}
+          key={item.basePath}
           component={Link}
-          to={item.path}
+          to={getPath(item.basePath, projectId)}
           label={item.label}
           leftSection={<item.icon size={20} />}
-          active={location.pathname === item.path}
+          active={isActive(location.pathname, item.basePath, projectId)}
         />
       ))}
     </Stack>

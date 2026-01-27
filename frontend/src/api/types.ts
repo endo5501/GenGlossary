@@ -7,6 +7,7 @@ export interface ProjectResponse {
   doc_root: string
   llm_provider: string
   llm_model: string
+  llm_base_url: string
   created_at: string
   updated_at: string
   last_run_at: string | null
@@ -18,6 +19,7 @@ export interface ProjectCreateRequest {
   doc_root: string
   llm_provider?: string
   llm_model?: string
+  llm_base_url?: string
 }
 
 export interface ProjectCloneRequest {
@@ -25,8 +27,10 @@ export interface ProjectCloneRequest {
 }
 
 export interface ProjectUpdateRequest {
+  name?: string
   llm_provider?: string
   llm_model?: string
+  llm_base_url?: string
 }
 
 // File types
