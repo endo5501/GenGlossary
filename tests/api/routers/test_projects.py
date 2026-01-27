@@ -6,8 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from genglossary.db.connection import get_connection
+from genglossary.db.document_repository import create_document
+from genglossary.db.issue_repository import create_issue
 from genglossary.db.project_repository import create_project
+from genglossary.db.provisional_repository import create_provisional_term
 from genglossary.db.registry_schema import initialize_registry
+from genglossary.models.term import TermOccurrence
 
 
 @pytest.fixture
@@ -83,6 +87,58 @@ class TestListProjects:
         assert data[0]["llm_provider"] == "ollama"
         assert data[0]["llm_model"] == "llama3.2"
         assert data[0]["status"] == "created"
+
+    def test_returns_projects_with_statistics(
+        self, test_project_in_registry, client: TestClient
+    ):
+        """Test returns projects with document_count, term_count, issue_count."""
+        response = client.get("/api/projects")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        project = data[0]
+        # Verify statistics fields are present
+        assert "document_count" in project
+        assert "term_count" in project
+        assert "issue_count" in project
+        # Verify default values for empty project
+        assert project["document_count"] == 0
+        assert project["term_count"] == 0
+        assert project["issue_count"] == 0
+
+    def test_returns_projects_with_correct_statistics_counts(
+        self, test_project_in_registry, client: TestClient
+    ):
+        """Test returns correct counts for documents, terms, and issues."""
+        project_db_path = test_project_in_registry["project_db_path"]
+
+        # Add data to project database
+        project_conn = get_connection(project_db_path)
+        # Add 2 documents
+        create_document(project_conn, "/path/to/doc1.md", "hash1")
+        create_document(project_conn, "/path/to/doc2.md", "hash2")
+        # Add 3 provisional terms
+        occurrence = TermOccurrence(
+            document_path="/path/to/doc1.md",
+            line_number=1,
+            context="Test context",
+        )
+        create_provisional_term(project_conn, "term1", "def1", 0.9, [occurrence])
+        create_provisional_term(project_conn, "term2", "def2", 0.8, [occurrence])
+        create_provisional_term(project_conn, "term3", "def3", 0.7, [occurrence])
+        # Add 1 issue
+        create_issue(project_conn, "term1", "unclear", "Test issue description")
+        project_conn.close()
+
+        # Verify statistics
+        response = client.get("/api/projects")
+        assert response.status_code == 200
+        data = response.json()
+        project = data[0]
+        assert project["document_count"] == 2
+        assert project["term_count"] == 3
+        assert project["issue_count"] == 1
 
     def test_returns_multiple_projects(
         self, test_registry_setup, client: TestClient, tmp_path: Path
