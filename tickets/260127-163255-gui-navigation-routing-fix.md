@@ -4,7 +4,7 @@ tags: [gui, frontend, routing, critical]
 description: "ナビゲーション/ルーティング修正 - 各ページが正しく表示されるよう修正"
 created_at: "2026-01-27T16:32:55Z"
 started_at: 2026-01-27T16:42:15Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-27T22:25:00Z # Do not modify manually
 ---
 
 # ナビゲーション/ルーティング修正（最優先・重大）
