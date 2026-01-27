@@ -18,17 +18,19 @@ export function AppShell() {
   const { data: currentRun } = useCurrentRun(projectId)
   const runId = currentRun?.status === 'running' ? currentRun.id : undefined
 
+  const hasProject = projectId !== undefined
+
   return (
     <MantineAppShell
       header={{ height: 60 }}
-      navbar={projectId ? { width: 200, breakpoint: 'sm' } : undefined}
+      navbar={hasProject ? { width: 200, breakpoint: 'sm' } : undefined}
       padding="md"
     >
       <MantineAppShell.Header>
         <GlobalTopBar projectId={projectId} />
       </MantineAppShell.Header>
 
-      {projectId && (
+      {hasProject && (
         <MantineAppShell.Navbar p="xs">
           <LeftNavRail />
         </MantineAppShell.Navbar>
@@ -36,10 +38,10 @@ export function AppShell() {
 
       <MantineAppShell.Main>
         <Box data-testid="main-content" style={{ height: '100%' }}>
-          <Box style={{ minHeight: projectId ? 'calc(100vh - 60px - 200px - 32px)' : 'calc(100vh - 60px - 32px)' }}>
+          <Box style={{ minHeight: hasProject ? 'calc(100vh - 60px - 200px - 32px)' : 'calc(100vh - 60px - 32px)' }}>
             <Outlet />
           </Box>
-          {projectId && <LogPanel projectId={projectId} runId={runId} />}
+          {hasProject && <LogPanel projectId={projectId} runId={runId} />}
         </Box>
       </MantineAppShell.Main>
     </MantineAppShell>

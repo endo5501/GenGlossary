@@ -113,10 +113,11 @@ describe('AppShell', () => {
       expect(screen.getByRole('button', { name: /stop/i })).toBeDisabled()
     })
 
-    it('should enable Stop button when status is running', () => {
+    it('should disable Stop button when status is running but runId is undefined', () => {
+      // When status is running but runId is not yet available, Stop button should be disabled
       renderGlobalTopBar({ projectId: 1, status: 'running' })
 
-      expect(screen.getByRole('button', { name: /stop/i })).toBeEnabled()
+      expect(screen.getByRole('button', { name: /stop/i })).toBeDisabled()
     })
   })
 
