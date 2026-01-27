@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Modal, TextInput, Button, Stack, Group, Text } from '@mantine/core'
 import { useCloneProject } from '../../api/hooks'
 import type { ProjectResponse } from '../../api/types'
@@ -16,6 +16,14 @@ export function CloneProjectDialog({
 }: CloneProjectDialogProps) {
   const [newName, setNewName] = useState(`${project.name} (Copy)`)
   const [error, setError] = useState<string | null>(null)
+
+  // Reset state when dialog opens or project changes
+  useEffect(() => {
+    if (opened) {
+      setNewName(`${project.name} (Copy)`)
+      setError(null)
+    }
+  }, [opened, project.id])
 
   const cloneMutation = useCloneProject()
 

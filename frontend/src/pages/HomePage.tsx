@@ -12,6 +12,7 @@ import {
   Badge,
 } from '@mantine/core'
 import { IconPlus, IconTrash, IconCopy, IconFolderOpen } from '@tabler/icons-react'
+import { useNavigate } from '@tanstack/react-router'
 import { useProjects } from '../api/hooks'
 import type { ProjectResponse, ProjectStatus } from '../api/types'
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog'
@@ -91,6 +92,7 @@ function ProjectSummaryCard({
 }
 
 export function HomePage() {
+  const navigate = useNavigate()
   const { data: projects, isLoading, error } = useProjects()
   const [selectedProject, setSelectedProject] = useState<ProjectResponse | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -198,7 +200,7 @@ export function HomePage() {
                 onClone={() => setCloneDialogOpen(true)}
                 onOpen={() => {
                   // Navigate to files page
-                  window.location.href = `/projects/${selectedProject.id}/files`
+                  navigate({ to: `/projects/${selectedProject.id}/files` })
                 }}
               />
             </Box>

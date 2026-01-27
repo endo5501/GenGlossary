@@ -13,6 +13,7 @@ import {
   Alert,
 } from '@mantine/core'
 import { IconPlus, IconTrash, IconRefresh, IconFile, IconCheck } from '@tabler/icons-react'
+import { useNavigate } from '@tanstack/react-router'
 import { useFiles, useDiffScan, useDeleteFile } from '../api/hooks'
 import type { DiffScanResponse } from '../api/types'
 
@@ -89,10 +90,12 @@ function DiffScanResults({ results }: { results: DiffScanResponse }) {
 }
 
 export function FilesPage({ projectId }: FilesPageProps) {
+  const navigate = useNavigate()
   const { data: files, isLoading, error } = useFiles(projectId)
   const diffScanMutation = useDiffScan(projectId)
   const deleteFileMutation = useDeleteFile(projectId)
   const [scanResults, setScanResults] = useState<DiffScanResponse | null>(null)
+  const [deletingFileId, setDeletingFileId] = useState<number | null>(null)
 
   const handleScan = async () => {
     try {
@@ -104,10 +107,13 @@ export function FilesPage({ projectId }: FilesPageProps) {
   }
 
   const handleDeleteFile = async (fileId: number) => {
+    setDeletingFileId(fileId)
     try {
       await deleteFileMutation.mutateAsync(fileId)
     } catch (err) {
       console.error('Delete failed:', err)
+    } finally {
+      setDeletingFileId(null)
     }
   }
 
@@ -189,7 +195,10 @@ export function FilesPage({ projectId }: FilesPageProps) {
                   style={{ cursor: 'pointer' }}
                   onClick={() => {
                     // Navigate to document viewer
-                    window.location.href = `/projects/${projectId}/document-viewer?file=${file.id}`
+                    navigate({
+                      to: `/projects/${projectId}/document-viewer`,
+                      search: { file: file.id },
+                    })
                   }}
                 >
                   <Table.Td>
@@ -212,7 +221,7 @@ export function FilesPage({ projectId }: FilesPageProps) {
                         e.stopPropagation()
                         handleDeleteFile(file.id)
                       }}
-                      loading={deleteFileMutation.isPending}
+                      loading={deletingFileId === file.id}
                     >
                       <IconTrash size={16} />
                     </Button>

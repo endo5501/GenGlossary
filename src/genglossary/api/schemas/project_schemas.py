@@ -76,6 +76,25 @@ class ProjectCloneRequest(BaseModel):
 
     new_name: str = Field(..., description="Name for the cloned project")
 
+    @field_validator("new_name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate project name is not empty.
+
+        Args:
+            v: The project name to validate.
+
+        Returns:
+            The validated project name.
+
+        Raises:
+            ValueError: If the name is empty.
+        """
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Project name cannot be empty")
+        return stripped
+
 
 class ProjectUpdateRequest(BaseModel):
     """Request schema for updating a project."""

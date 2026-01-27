@@ -126,6 +126,11 @@ async def create_new_project(
             llm_model=request.llm_model,
         )
     except sqlite3.IntegrityError:
+        # Cleanup orphaned DB file
+        try:
+            Path(db_path).unlink(missing_ok=True)
+        except Exception:
+            pass
         raise HTTPException(
             status_code=409, detail=f"Project name already exists: {request.name}"
         )
@@ -173,6 +178,11 @@ async def clone_existing_project(
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
     except sqlite3.IntegrityError:
+        # Cleanup orphaned cloned DB file
+        try:
+            Path(new_db_path).unlink(missing_ok=True)
+        except Exception:
+            pass
         raise HTTPException(
             status_code=409, detail=f"Project name already exists: {request.new_name}"
         )
