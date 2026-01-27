@@ -58,8 +58,17 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
     )
   }, [project, name, provider, model, baseUrl])
 
+  const getErrorMessage = (err: unknown): string => {
+    if (err instanceof ApiError) {
+      return err.detail || err.message
+    }
+    if (err instanceof Error) {
+      return err.message
+    }
+    return 'Failed to save settings'
+  }
+
   const handleSave = async () => {
-    // Validate
     if (!name.trim()) {
       setNameError('Name is required')
       return
@@ -69,12 +78,7 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
     try {
       await updateMutation.mutateAsync({
         id: projectId,
-        data: {
-          name: name !== project?.name ? name : undefined,
-          llm_provider: provider !== project?.llm_provider ? provider : undefined,
-          llm_model: model !== project?.llm_model ? model : undefined,
-          llm_base_url: baseUrl !== project?.llm_base_url ? baseUrl : undefined,
-        },
+        data: { name, llm_provider: provider, llm_model: model, llm_base_url: baseUrl },
       })
 
       notifications.show({
@@ -83,26 +87,16 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
         color: 'green',
       })
     } catch (err) {
-      let errorMessage = 'Failed to save settings'
-      if (err instanceof ApiError) {
-        errorMessage = err.detail || err.message
-      } else if (err instanceof Error) {
-        errorMessage = err.message
-      }
+      const errorMessage = getErrorMessage(err)
+      const title = errorMessage.includes('already exists')
+        ? `Project name already exists: ${name}`
+        : errorMessage
 
-      if (errorMessage.includes('already exists')) {
-        notifications.show({
-          title: 'Error',
-          message: `Project name already exists: ${name}`,
-          color: 'red',
-        })
-      } else {
-        notifications.show({
-          title: 'Error',
-          message: errorMessage,
-          color: 'red',
-        })
-      }
+      notifications.show({
+        title: 'Error',
+        message: title,
+        color: 'red',
+      })
     }
   }
 
@@ -144,8 +138,9 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
               placeholder="Enter project name"
               value={name}
               onChange={(e) => {
-                setName(e.currentTarget.value)
-                if (e.currentTarget.value.trim()) {
+                const newValue = e.currentTarget.value
+                setName(newValue)
+                if (newValue.trim() && nameError) {
                   setNameError('')
                 }
               }}

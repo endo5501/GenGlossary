@@ -72,18 +72,7 @@ class ProjectResponse(BaseModel):
         Returns:
             ProjectResponse: Response instance.
         """
-        return cls(
-            id=project.id,  # type: ignore[arg-type]
-            name=project.name,
-            doc_root=project.doc_root,
-            llm_provider=project.llm_provider,
-            llm_model=project.llm_model,
-            llm_base_url=project.llm_base_url,
-            created_at=project.created_at,
-            updated_at=project.updated_at,
-            last_run_at=project.last_run_at,
-            status=project.status,
-        )
+        return cls.model_validate(project, from_attributes=True)
 
 
 class ProjectCreateRequest(BaseModel):

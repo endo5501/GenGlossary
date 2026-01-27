@@ -129,6 +129,41 @@ async def get_project_by_id(
     return ProjectResponse.from_project(project)
 
 
+def _create_project_with_cleanup(
+    registry_conn: sqlite3.Connection,
+    request: ProjectCreateRequest,
+    db_path: str,
+) -> int:
+    """Create project and cleanup on failure.
+
+    Args:
+        registry_conn: Registry database connection.
+        request: Project creation request.
+        db_path: Database file path.
+
+    Returns:
+        int: Created project ID.
+
+    Raises:
+        HTTPException: 409 if project name already exists.
+    """
+    try:
+        return create_project(
+            registry_conn,
+            name=request.name,
+            doc_root=request.doc_root,
+            db_path=db_path,
+            llm_provider=request.llm_provider,
+            llm_model=request.llm_model,
+            llm_base_url=request.llm_base_url,
+        )
+    except sqlite3.IntegrityError:
+        _cleanup_db_file(db_path)
+        raise HTTPException(
+            status_code=409, detail=f"Project name already exists: {request.name}"
+        )
+
+
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_project(
     request: ProjectCreateRequest = Body(...),
@@ -146,29 +181,46 @@ async def create_new_project(
     Raises:
         HTTPException: 409 if project name already exists.
     """
-    # Generate unique database path
     db_path = _generate_db_path(request.name)
-
-    try:
-        project_id = create_project(
-            registry_conn,
-            name=request.name,
-            doc_root=request.doc_root,
-            db_path=db_path,
-            llm_provider=request.llm_provider,
-            llm_model=request.llm_model,
-            llm_base_url=request.llm_base_url,
-        )
-    except sqlite3.IntegrityError:
-        _cleanup_db_file(db_path)
-        raise HTTPException(
-            status_code=409, detail=f"Project name already exists: {request.name}"
-        )
-
-    project = get_project(registry_conn, project_id)
-    assert project is not None
-
+    project_id = _create_project_with_cleanup(registry_conn, request, db_path)
+    project = _get_project_or_404(registry_conn, project_id)
     return ProjectResponse.from_project(project)
+
+
+def _clone_project_with_cleanup(
+    registry_conn: sqlite3.Connection,
+    project_id: int,
+    new_name: str,
+    new_db_path: str,
+) -> int:
+    """Clone project and cleanup on failure.
+
+    Args:
+        registry_conn: Registry database connection.
+        project_id: Source project ID.
+        new_name: Name for cloned project.
+        new_db_path: Database file path for clone.
+
+    Returns:
+        int: Cloned project ID.
+
+    Raises:
+        HTTPException: 404 if source project not found, 409 if name exists.
+    """
+    try:
+        return clone_project(
+            registry_conn,
+            source_id=project_id,
+            new_name=new_name,
+            new_db_path=new_db_path,
+        )
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    except sqlite3.IntegrityError:
+        _cleanup_db_file(new_db_path)
+        raise HTTPException(
+            status_code=409, detail=f"Project name already exists: {new_name}"
+        )
 
 
 @router.post(
@@ -195,27 +247,9 @@ async def clone_existing_project(
         HTTPException: 404 if source project not found.
         HTTPException: 409 if new name already exists.
     """
-    # Generate unique database path for clone
     new_db_path = _generate_db_path(request.new_name)
-
-    try:
-        cloned_id = clone_project(
-            registry_conn,
-            source_id=project_id,
-            new_name=request.new_name,
-            new_db_path=new_db_path,
-        )
-    except ValueError:
-        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
-    except sqlite3.IntegrityError:
-        _cleanup_db_file(new_db_path)
-        raise HTTPException(
-            status_code=409, detail=f"Project name already exists: {request.new_name}"
-        )
-
-    project = get_project(registry_conn, cloned_id)
-    assert project is not None
-
+    cloned_id = _clone_project_with_cleanup(registry_conn, project_id, request.new_name, new_db_path)
+    project = _get_project_or_404(registry_conn, cloned_id)
     return ProjectResponse.from_project(project)
 
 
