@@ -4,7 +4,7 @@ tags: [frontend, gui, pipeline]
 description: "Deliver Terms/Provisional/Issues/Refined views with run controls and log viewer integration."
 created_at: "2026-01-24T16:40:19Z"
 started_at: 2026-01-27T14:05:56Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-27T15:38:45Z # Do not modify manually
 ---
 
 # Ticket Overview
