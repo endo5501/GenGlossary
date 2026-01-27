@@ -26,11 +26,11 @@ Reference: `plan-gui.md` 「Terms」「Provisional」「Issues」「Refined」�
 - [x] Log viewer pane consuming SSE/WebSocket stream; show inline progress per run（`docs/architecture.md`にログ/状態連携を追記）
 - [x] **Green**: 追加テストを含めフロントテスト/ビルドが通ることを確認
 - [x] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 
 ## Notes
@@ -57,8 +57,3 @@ Match layout described in plan-gui.md (upper action bar, mid list+detail). Ensur
 - 各ページの簡略化: 重複コード削減（約270行削減）
 - テスト: 112/114 passed (2件はEventSource既存問題)
 - ビルド: 成功
-
-### 残タスク
-- Code review by codex MCP
-- docs/architecture/*.md 更新
-- 開発者承認
