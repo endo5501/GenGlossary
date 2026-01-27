@@ -4,7 +4,7 @@ tags: [frontend, gui, settings]
 description: "Implement Settings page UI for project configuration (name, LLM settings)."
 created_at: "2026-01-25T00:00:00Z"
 started_at: 2026-01-27T13:08:03Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-27T14:04:53Z # Do not modify manually
 ---
 
 # Ticket Overview
