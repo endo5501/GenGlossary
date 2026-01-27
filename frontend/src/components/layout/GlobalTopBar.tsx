@@ -1,20 +1,15 @@
-import { Group, Title, Badge, Button, Select, Box } from '@mantine/core'
+import { Group, Title, Badge, Button, Select, Box, Text } from '@mantine/core'
 import { IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react'
 import { useState } from 'react'
+import { useCurrentRun, useStartRun, useCancelRun } from '../../api/hooks'
 import type { RunScope, RunStatus } from '../../api/types'
+import { statusColors } from '../../utils/colors'
 
 interface GlobalTopBarProps {
+  projectId?: number
   status?: RunStatus
   onRun?: (scope: RunScope) => void
   onStop?: () => void
-}
-
-const statusColors: Record<RunStatus, string> = {
-  pending: 'gray',
-  running: 'blue',
-  completed: 'green',
-  failed: 'red',
-  cancelled: 'yellow',
 }
 
 const scopeOptions = [
@@ -27,18 +22,29 @@ const isRunScope = (value: string): value is RunScope =>
   ['full', 'from_terms', 'provisional_to_refined'].includes(value)
 
 export function GlobalTopBar({
-  status = 'pending',
-  onRun,
-  onStop,
+  projectId,
+  status: propStatus,
+  onRun: propOnRun,
+  onStop: propOnStop,
 }: GlobalTopBarProps) {
   const [scope, setScope] = useState<RunScope>('full')
 
+  const { data: currentRun } = useCurrentRun(projectId)
+  const startRun = useStartRun(projectId ?? 0)
+  const cancelRun = useCancelRun(projectId ?? 0)
+
+  const status = projectId && currentRun ? currentRun.status : (propStatus ?? 'pending')
+  const runId = currentRun?.id
+  const progress = currentRun?.progress_total
+    ? { current: currentRun.progress_current, total: currentRun.progress_total }
+    : null
+
   const handleRun = () => {
-    onRun?.(scope)
+    projectId ? startRun.mutate({ scope }) : propOnRun?.(scope)
   }
 
   const handleStop = () => {
-    onStop?.()
+    projectId && runId ? cancelRun.mutate(runId) : propOnStop?.()
   }
 
   return (
@@ -51,6 +57,11 @@ export function GlobalTopBar({
         >
           {status}
         </Badge>
+        {status === 'running' && progress && progress.total > 0 && (
+          <Text size="sm" c="dimmed">
+            {progress.current} / {progress.total}
+          </Text>
+        )}
       </Group>
 
       <Group>
@@ -60,6 +71,7 @@ export function GlobalTopBar({
           color="green"
           onClick={handleRun}
           disabled={status === 'running'}
+          loading={startRun.isPending}
           aria-label="Run"
         >
           Run
@@ -70,6 +82,7 @@ export function GlobalTopBar({
           color="red"
           onClick={handleStop}
           disabled={status !== 'running'}
+          loading={cancelRun.isPending}
           aria-label="Stop"
         >
           Stop

@@ -59,8 +59,44 @@ export interface TermResponse {
 
 // Term occurrence
 export interface TermOccurrence {
+  document_path: string
   line_number: number
   context: string
+}
+
+// Extended term response with occurrences
+export interface TermDetailResponse extends TermResponse {
+  occurrences: TermOccurrence[]
+}
+
+// Term create/update requests
+export interface TermCreateRequest {
+  term_text: string
+  category?: string
+}
+
+export interface TermUpdateRequest {
+  term_text?: string
+  category?: string
+}
+
+// Provisional update request
+export interface ProvisionalUpdateRequest {
+  definition?: string
+  confidence?: number
+}
+
+// Log message for SSE stream
+export interface LogMessage {
+  run_id: number
+  level: 'info' | 'warning' | 'error'
+  message: string
+  timestamp: string
+}
+
+// Run create request
+export interface RunCreateRequest {
+  scope: RunScope
 }
 
 // Glossary types

@@ -1,9 +1,24 @@
 import { Paper, Text, Group, ActionIcon, Collapse, Box } from '@mantine/core'
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useLogStream } from '../../api/hooks'
+import { levelColors } from '../../utils/colors'
 
-export function LogPanel() {
+interface LogPanelProps {
+  projectId?: number
+  runId?: number
+}
+
+export function LogPanel({ projectId, runId }: LogPanelProps) {
   const [opened, setOpened] = useState(true)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const { logs } = useLogStream(projectId ?? 0, runId)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [logs])
 
   return (
     <Paper
@@ -26,6 +41,8 @@ export function LogPanel() {
       </Group>
       <Collapse in={opened}>
         <Box
+          ref={scrollRef}
+          data-testid="log-display"
           style={{
             fontFamily: 'monospace',
             fontSize: '12px',
@@ -37,9 +54,21 @@ export function LogPanel() {
             overflowY: 'auto',
           }}
         >
-          <Text size="xs" c="dimmed">
-            Log output will appear here...
-          </Text>
+          {logs.length === 0 ? (
+            <Text size="xs" c="dimmed">
+              Log output will appear here...
+            </Text>
+          ) : (
+            logs.map((log, idx) => (
+              <Text
+                key={`${log.run_id}-${idx}`}
+                size="xs"
+                style={{ color: levelColors[log.level] }}
+              >
+                [{log.level.toUpperCase()}] {log.message}
+              </Text>
+            ))
+          )}
         </Box>
       </Collapse>
     </Paper>

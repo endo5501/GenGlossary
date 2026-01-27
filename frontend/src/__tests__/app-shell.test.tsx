@@ -2,14 +2,22 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderApp } from './test-utils'
 import { GlobalTopBar } from '../components/layout/GlobalTopBar'
 
 const renderGlobalTopBar = (props = {}) => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  })
   return render(
-    <MantineProvider>
-      <GlobalTopBar {...props} />
-    </MantineProvider>
+    <QueryClientProvider client={queryClient}>
+      <MantineProvider>
+        <GlobalTopBar {...props} />
+      </MantineProvider>
+    </QueryClientProvider>
   )
 }
 

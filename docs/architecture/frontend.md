@@ -96,8 +96,43 @@ Mantine のデフォルトテーマをベースにカスタマイズ。
 |---------------|------|
 | `HomePage` | プロジェクト一覧とサマリー表示 |
 | `FilesPage` | ファイル一覧とdiff-scan結果表示 |
+| `TermsPage` | 抽出された用語一覧と詳細表示 |
+| `ProvisionalPage` | 暫定用語集の表示と編集 |
+| `IssuesPage` | 精査で見つかった問題一覧 |
+| `RefinedPage` | 最終用語集の表示とエクスポート |
 | `DocumentViewerPage` | ドキュメント閲覧ページ |
 | `SettingsPage` | プロジェクト設定ページ（名前、LLM設定の編集） |
+
+#### 用語集関連ページの共通パターン
+
+**ID ベースの選択:**
+```typescript
+// オブジェクトを直接保存するのではなく、ID を保存
+const [selectedId, setSelectedId] = useState<number | null>(null)
+const selectedEntry = entries?.find((e) => e.id === selectedId) ?? null
+```
+
+**キーボードアクセシビリティ:**
+```typescript
+<Table.Tr
+  onClick={() => setSelectedId(entry.id)}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      setSelectedId(entry.id)
+    }
+  }}
+  tabIndex={0}
+  role="button"
+  aria-selected={selectedId === entry.id}
+  style={{ cursor: 'pointer' }}
+>
+```
+
+**設計ポイント:**
+- IDベースの選択により、データ更新時に自動的に最新の値が反映される
+- キーボード操作（Tab + Enter/Space）をサポート
+- ARIA属性でスクリーンリーダー対応
 
 #### HomePage のユーティリティ関数
 
@@ -191,6 +226,46 @@ const handleClose = () => {
 | コンポーネント | 説明 |
 |---------------|------|
 | `PagePlaceholder` | 未実装ページ用のプレースホルダー。タイトルを表示 |
+| `PageContainer` | ページ共通のローディング、エラー、空状態を処理するコンテナ |
+| `OccurrenceList` | 用語の出現箇所リストを表示 |
+
+#### PageContainer
+
+ページ共通のローディング、エラー、空状態をハンドリングするコンテナコンポーネント。
+
+```typescript
+interface PageContainerProps {
+  isLoading: boolean       // ローディング中かどうか
+  isEmpty: boolean         // データが空かどうか
+  emptyMessage: string     // 空状態のメッセージ
+  actionBar: ReactNode     // アクションボタン領域
+  children: ReactNode      // コンテンツ
+  loadingTestId?: string   // ローディング状態のテスト用ID
+  emptyTestId?: string     // 空状態のテスト用ID
+  error?: Error | null     // エラーオブジェクト
+  onRetry?: () => void     // リトライ時のコールバック
+}
+```
+
+**状態遷移:**
+1. `isLoading: true` → ローディングスピナー表示
+2. `error` が存在 → エラーメッセージとリトライボタン表示
+3. `isEmpty: true` → 空状態メッセージ表示
+4. それ以外 → `children` を表示
+
+#### OccurrenceList
+
+用語の出現箇所をカードリストで表示。
+
+```typescript
+interface Occurrence {
+  document_path: string  // ドキュメントパス
+  line_number: number    // 行番号
+  context: string        // 前後のコンテキスト
+}
+
+// キーには安定した一意の値を使用
+key={`${occ.document_path}:${occ.line_number}`}
 
 ## APIクライアント（api/）
 
@@ -199,12 +274,29 @@ const handleClose = () => {
 fetch ベースの軽量 HTTP クライアント。
 
 ```typescript
+// ベースURL取得（他のモジュールからも利用可能）
+export function getBaseUrl(): string
+
 export const apiClient = {
   get: <T>(endpoint: string): Promise<T>,
   post: <T>(endpoint: string, data?: unknown): Promise<T>,
   put: <T>(endpoint: string, data?: unknown): Promise<T>,
   patch: <T>(endpoint: string, data?: unknown): Promise<T>,
   delete: <T>(endpoint: string): Promise<T>,
+}
+```
+
+#### getBaseUrl
+
+環境に応じたAPIベースURLを返す関数。SSEなど`apiClient`を経由しない通信でも使用。
+
+```typescript
+export function getBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_BASE_URL
+  if (!envUrl || envUrl === 'undefined') {
+    return 'http://localhost:8000'
+  }
+  return envUrl
 }
 ```
 
@@ -238,15 +330,90 @@ API レスポンスの TypeScript 型定義。
 | `PaginatedResponse<T>` | ページネーション付きレスポンス |
 | `ErrorResponse` | エラーレスポンス |
 
-### hooks/（将来実装）
+### hooks/
 
 TanStack Query を使用したカスタムフック。
 
+#### データフェッチフック
+
+| フック | 説明 |
+|-------|------|
+| `useTerms` | 用語一覧を取得 |
+| `useProvisional` | 暫定用語集を取得 |
+| `useIssues` | 問題一覧を取得（issueType でフィルタ可能） |
+| `useRefined` | 最終用語集を取得 |
+| `useCurrentRun` | 現在の実行状態を取得 |
+
 ```typescript
-// 例: useTerms, useProvisionalGlossary, useRun など
+// 例: useTerms
 export const useTerms = (projectId: number) =>
   useQuery(['terms', projectId], () => apiClient.get<TermResponse[]>(`/api/projects/${projectId}/terms`))
 ```
+
+#### ミューテーションフック
+
+| フック | 説明 |
+|-------|------|
+| `useExtractTerms` | 用語抽出を実行 |
+| `useCreateTerm` / `useDeleteTerm` | 用語の追加/削除 |
+| `useUpdateProvisional` | 暫定用語集エントリを更新 |
+| `useRegenerateProvisional` | 暫定用語集を再生成 |
+| `useReviewIssues` | 問題精査を実行 |
+| `useRegenerateRefined` | 最終用語集を再生成 |
+| `useExportMarkdown` | Markdown 形式でエクスポート |
+
+#### useLogStream
+
+SSE（Server-Sent Events）を使用したログストリーミングフック。
+
+```typescript
+interface UseLogStreamResult {
+  logs: LogMessage[]      // ログメッセージ配列
+  isConnected: boolean    // 接続状態
+  error: Error | null     // エラー
+  clearLogs: () => void   // ログクリア
+}
+
+export function useLogStream(
+  projectId: number,
+  runId: number | undefined
+): UseLogStreamResult
+```
+
+**設計ポイント:**
+- `getBaseUrl()` を使用して環境に応じた URL を生成
+- `runId` 変更時に自動でログをクリア
+- メモリリーク防止のため最大1000件に制限
+- クリーンアップ時に `EventSource.close()` を呼び出し
+
+## ユーティリティ（utils/）
+
+### colors.ts
+
+ステータスや重要度に応じた色定義とヘルパー関数。
+
+```typescript
+// 型定義
+export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type Severity = 'low' | 'medium' | 'high'
+export type IssueType = 'ambiguous' | 'inconsistent' | 'missing'
+
+// 色マッピング
+export const statusColors: Record<RunStatus, string>
+export const severityColors: Record<Severity, string>
+export const issueTypeColors: Record<IssueType, string>
+export const levelColors: Record<string, string>  // ログレベル用
+
+// ヘルパー関数（型安全でデフォルト値付き）
+export function getStatusColor(status: string): string
+export function getSeverityColor(severity: string): string
+export function getIssueTypeColor(issueType: string): string
+```
+
+**設計ポイント:**
+- 厳密な型定義で不正な値を防止
+- ヘルパー関数で未知の値に対してデフォルト色（'gray'）を返す
+- Mantine の色名を使用
 
 ## ルーティング（routes/）
 
@@ -312,8 +479,9 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `routing.test.tsx` | 16 | ルーティング、ナビゲーション |
 | `projects-page.test.tsx` | 11 | HomePage、FilesPage、ダイアログコンポーネント |
 | `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
+| `terms-workflow.test.tsx` | 43 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel |
 
-**合計**: 71 テスト
+**合計**: 114 テスト
 
 ### テスト実行
 

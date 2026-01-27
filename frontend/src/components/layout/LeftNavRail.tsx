@@ -19,10 +19,10 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Files', icon: IconFiles, basePath: '/files', projectScoped: true },
-  { label: 'Terms', icon: IconList, basePath: '/terms', projectScoped: false },
-  { label: 'Provisional', icon: IconFileDescription, basePath: '/provisional', projectScoped: false },
-  { label: 'Issues', icon: IconAlertCircle, basePath: '/issues', projectScoped: false },
-  { label: 'Refined', icon: IconFileCheck, basePath: '/refined', projectScoped: false },
+  { label: 'Terms', icon: IconList, basePath: '/terms', projectScoped: true },
+  { label: 'Provisional', icon: IconFileDescription, basePath: '/provisional', projectScoped: true },
+  { label: 'Issues', icon: IconAlertCircle, basePath: '/issues', projectScoped: true },
+  { label: 'Refined', icon: IconFileCheck, basePath: '/refined', projectScoped: true },
   { label: 'Document Viewer', icon: IconEye, basePath: '/document-viewer', projectScoped: true },
   { label: 'Settings', icon: IconSettings, basePath: '/settings', projectScoped: true },
 ]
