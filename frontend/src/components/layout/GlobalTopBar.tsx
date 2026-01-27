@@ -47,6 +47,18 @@ export function GlobalTopBar({
     projectId && runId ? cancelRun.mutate(runId) : propOnStop?.()
   }
 
+  // Home page: simple header without project controls
+  if (!projectId) {
+    return (
+      <Group h="100%" px="md" justify="space-between">
+        <Group>
+          <Title order={4}>GenGlossary</Title>
+        </Group>
+      </Group>
+    )
+  }
+
+  // Project detail page: full header with status and controls
   return (
     <Group h="100%" px="md" justify="space-between">
       <Group>

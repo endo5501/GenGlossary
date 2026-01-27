@@ -21,26 +21,25 @@ export function AppShell() {
   return (
     <MantineAppShell
       header={{ height: 60 }}
-      navbar={{
-        width: 200,
-        breakpoint: 'sm',
-      }}
+      navbar={projectId ? { width: 200, breakpoint: 'sm' } : undefined}
       padding="md"
     >
       <MantineAppShell.Header>
         <GlobalTopBar projectId={projectId} />
       </MantineAppShell.Header>
 
-      <MantineAppShell.Navbar p="xs">
-        <LeftNavRail />
-      </MantineAppShell.Navbar>
+      {projectId && (
+        <MantineAppShell.Navbar p="xs">
+          <LeftNavRail />
+        </MantineAppShell.Navbar>
+      )}
 
       <MantineAppShell.Main>
         <Box data-testid="main-content" style={{ height: '100%' }}>
-          <Box style={{ minHeight: 'calc(100vh - 60px - 200px - 32px)' }}>
+          <Box style={{ minHeight: projectId ? 'calc(100vh - 60px - 200px - 32px)' : 'calc(100vh - 60px - 32px)' }}>
             <Outlet />
           </Box>
-          <LogPanel projectId={projectId} runId={runId} />
+          {projectId && <LogPanel projectId={projectId} runId={runId} />}
         </Box>
       </MantineAppShell.Main>
     </MantineAppShell>
