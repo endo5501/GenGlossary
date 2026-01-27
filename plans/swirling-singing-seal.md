@@ -1,144 +1,206 @@
-# コードレビュー指摘修正計画
+# コード簡略化リファクタリング計画
 
 ## 概要
 
-codex MCPによるコードレビューで指摘された問題を修正する。
-認証関連は別チケット（`260127-123553-api-authentication.md`）で対応。
+code-simplifier エージェントによるレビュー指摘に基づき、重複コードの排除と可読性向上のリファクタリングを行う。
 
 ---
 
-## 修正対象（5件）
+## 修正対象（7件）
 
-| # | 重要度 | 問題 | ファイル |
+| # | 優先度 | 問題 | ファイル |
 |---|--------|------|----------|
-| 1 | Medium | CloneDialog state が prop 変更に反応しない | `CloneProjectDialog.tsx` |
-| 2 | Medium | Clone request の new_name バリデーション不足 | `project_schemas.py` |
-| 3 | Medium | Create/Clone 失敗時に orphan DB ファイル | `projects.py` |
-| 4 | Low | SPA で window.location.href 使用 | `HomePage.tsx`, `FilesPage.tsx` |
-| 5 | Low | Delete loading state がグローバル | `FilesPage.tsx` |
+| 1 | 高 | バリデーション関数の重複 | `project_schemas.py` |
+| 2 | 高 | プロジェクト取得パターンの重複 | `projects.py` |
+| 3 | 高 | DBクリーンアップの重複 | `projects.py` |
+| 4 | 高 | DiffScanResults内の繰り返し | `FilesPage.tsx` |
+| 5 | 中 | handleClose内の不要なリセット | `CloneProjectDialog.tsx` |
+| 6 | 中 | useEffect依存配列の修正 | `CloneProjectDialog.tsx` |
+| 7 | 中 | 日付フォーマットの重複 | `HomePage.tsx` |
 
 ---
 
-## Step 1: CloneDialog state 修正
+## Step 1: バリデーション関数の共通化
 
-**ファイル**: `frontend/src/components/dialogs/CloneProjectDialog.tsx`
+**ファイル**: `src/genglossary/api/schemas/project_schemas.py`
 
-**問題**: ダイアログを閉じずに別プロジェクトを選択すると、古い名前が残る
+**問題**: `ProjectCreateRequest.validate_name` と `ProjectCloneRequest.validate_name` が同一ロジック
+
+**修正**:
+```python
+def _validate_project_name(v: str) -> str:
+    """Validate project name is not empty."""
+    stripped = v.strip()
+    if not stripped:
+        raise ValueError("Project name cannot be empty")
+    return stripped
+
+
+class ProjectCreateRequest(BaseModel):
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return _validate_project_name(v)
+
+
+class ProjectCloneRequest(BaseModel):
+    @field_validator("new_name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return _validate_project_name(v)
+```
+
+---
+
+## Step 2: プロジェクト取得ヘルパー追加
+
+**ファイル**: `src/genglossary/api/routers/projects.py`
+
+**問題**: `get_project` + 404チェックが3箇所で重複
+
+**修正**:
+```python
+def _get_project_or_404(
+    registry_conn: sqlite3.Connection,
+    project_id: int,
+) -> Project:
+    """Get project or raise 404."""
+    project = get_project(registry_conn, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    return project
+```
+
+使用箇所:
+- `get_project_by_id`
+- `delete_existing_project`
+- `update_existing_project`
+
+---
+
+## Step 3: DBクリーンアップヘルパー追加
+
+**ファイル**: `src/genglossary/api/routers/projects.py`
+
+**問題**: DBファイル削除ロジックが2箇所で重複
+
+**修正**:
+```python
+def _cleanup_db_file(db_path: str) -> None:
+    """Cleanup orphaned database file."""
+    try:
+        Path(db_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+```
+
+使用箇所:
+- `create_new_project` の except ブロック
+- `clone_existing_project` の except ブロック
+
+---
+
+## Step 4: ChangeListコンポーネント抽出
+
+**ファイル**: `frontend/src/pages/FilesPage.tsx`
+
+**問題**: Added/Modified/Deleted セクションがほぼ同一構造で3回繰り返し
 
 **修正**:
 ```typescript
-import { useEffect } from 'react'
+interface ChangeSectionProps {
+  items: string[]
+  label: string
+  color: string
+  prefix: string
+}
 
-// 既存の useState の後に追加
+function ChangeSection({ items, label, color, prefix }: ChangeSectionProps) {
+  if (items.length === 0) return null
+
+  return (
+    <Box>
+      <Group gap="xs" mb="xs">
+        <Badge color={color} size="sm">{label}</Badge>
+        <Text size="sm" c="dimmed">({items.length} files)</Text>
+      </Group>
+      <Stack gap={4}>
+        {items.map((path) => (
+          <Text key={path} size="sm" c={color}>
+            {prefix} {path}
+          </Text>
+        ))}
+      </Stack>
+    </Box>
+  )
+}
+
+// DiffScanResults内で使用
+const sections = [
+  { items: results.added, label: 'Added', color: 'green', prefix: '+' },
+  { items: results.modified, label: 'Modified', color: 'yellow', prefix: '~' },
+  { items: results.deleted, label: 'Deleted', color: 'red', prefix: '-' },
+]
+
+{sections.map((section) => (
+  <ChangeSection key={section.label} {...section} />
+))}
+```
+
+---
+
+## Step 5: handleClose簡略化
+
+**ファイル**: `frontend/src/components/dialogs/CloneProjectDialog.tsx`
+
+**問題**: `handleClose`内の状態リセットは`useEffect`で行われるため不要
+
+**修正**:
+```typescript
+const handleClose = () => {
+  onClose()
+}
+```
+
+---
+
+## Step 6: useEffect依存配列修正
+
+**ファイル**: `frontend/src/components/dialogs/CloneProjectDialog.tsx`
+
+**問題**: `project.name`を使用しているのに`project.id`を依存配列に指定
+
+**修正**:
+```typescript
 useEffect(() => {
   if (opened) {
     setNewName(`${project.name} (Copy)`)
     setError(null)
   }
-}, [opened, project.id])
+}, [opened, project.name])  // project.id → project.name
 ```
 
 ---
 
-## Step 2: ProjectCloneRequest バリデーション追加
+## Step 7: 日付フォーマットユーティリティ追加
 
-**ファイル**: `src/genglossary/api/schemas/project_schemas.py`
+**ファイル**: `frontend/src/pages/HomePage.tsx`
 
-**修正**: `ProjectCloneRequest` に `validate_name` を追加
+**問題**: 日付フォーマットが2箇所で異なる形式（`toLocaleString` vs `toLocaleDateString`）
 
-```python
-class ProjectCloneRequest(BaseModel):
-    """Request schema for cloning a project."""
-
-    new_name: str = Field(..., description="Name for the cloned project")
-
-    @field_validator("new_name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        """Validate project name is not empty."""
-        stripped = v.strip()
-        if not stripped:
-            raise ValueError("Project name cannot be empty")
-        return stripped
-```
-
----
-
-## Step 3: Create/Clone のエラー時クリーンアップ
-
-**ファイル**: `src/genglossary/api/routers/projects.py`
-
-**修正**: `create_new_project` と `clone_existing_project` で例外時に DB ファイル削除
-
-```python
-from pathlib import Path
-
-# create_new_project 内
-except sqlite3.IntegrityError:
-    # Cleanup orphaned DB file
-    try:
-        Path(db_path).unlink(missing_ok=True)
-    except Exception:
-        pass
-    raise HTTPException(...)
-
-# clone_existing_project 内
-except sqlite3.IntegrityError:
-    # Cleanup orphaned cloned DB file
-    try:
-        Path(new_db_path).unlink(missing_ok=True)
-    except Exception:
-        pass
-    raise HTTPException(...)
-```
-
----
-
-## Step 4: ルーターナビゲーションに変更
-
-**ファイル**: `frontend/src/pages/HomePage.tsx`, `frontend/src/pages/FilesPage.tsx`
-
-**修正**: `window.location.href` → `useNavigate()` に変更
-
+**修正**:
 ```typescript
-// HomePage.tsx
-import { useNavigate } from '@tanstack/react-router'
-
-export function HomePage() {
-  const navigate = useNavigate()
-
-  // onOpen 内
-  navigate({ to: `/projects/${selectedProject.id}/files` })
+function formatLastRun(lastRunAt: string | null, format: 'short' | 'long' = 'short'): string {
+  if (!lastRunAt) return format === 'short' ? '-' : 'Never'
+  const date = new Date(lastRunAt)
+  return format === 'short' ? date.toLocaleDateString() : date.toLocaleString()
 }
 
-// FilesPage.tsx 同様
-navigate({ to: `/projects/${projectId}/document-viewer`, search: { file: file.id } })
-```
+// ProjectSummaryCard内
+{formatLastRun(project.last_run_at, 'long')}
 
----
-
-## Step 5: 個別ファイルの削除 loading 状態
-
-**ファイル**: `frontend/src/pages/FilesPage.tsx`
-
-**修正**: `deletingFileIds` state で個別管理
-
-```typescript
-const [deletingFileId, setDeletingFileId] = useState<number | null>(null)
-
-const handleDeleteFile = async (fileId: number) => {
-  setDeletingFileId(fileId)
-  try {
-    await deleteFileMutation.mutateAsync(fileId)
-  } catch (err) {
-    console.error('Delete failed:', err)
-  } finally {
-    setDeletingFileId(null)
-  }
-}
-
-// ボタン
-<Button loading={deletingFileId === file.id}>
+// Table内
+{formatLastRun(project.last_run_at)}
 ```
 
 ---
@@ -147,22 +209,18 @@ const handleDeleteFile = async (fileId: number) => {
 
 | ファイル | 修正内容 |
 |----------|----------|
-| `frontend/src/components/dialogs/CloneProjectDialog.tsx` | useEffect 追加 |
-| `src/genglossary/api/schemas/project_schemas.py` | バリデーター追加 |
-| `src/genglossary/api/routers/projects.py` | クリーンアップ追加 |
-| `frontend/src/pages/HomePage.tsx` | useNavigate 使用 |
-| `frontend/src/pages/FilesPage.tsx` | useNavigate + deletingFileId |
+| `src/genglossary/api/schemas/project_schemas.py` | `_validate_project_name` 共通関数追加 |
+| `src/genglossary/api/routers/projects.py` | `_get_project_or_404`, `_cleanup_db_file` 追加 |
+| `frontend/src/pages/FilesPage.tsx` | `ChangeSection` コンポーネント抽出 |
+| `frontend/src/components/dialogs/CloneProjectDialog.tsx` | handleClose簡略化、依存配列修正 |
+| `frontend/src/pages/HomePage.tsx` | `formatLastRun` ユーティリティ追加 |
 
 ---
 
 ## 検証方法
 
 1. **バックエンドテスト**: `uv run pytest tests/api/routers/test_projects.py -v`
-2. **フロントエンドテスト**: `cd frontend && npm run test`
-3. **ビルド確認**: `cd frontend && npm run build`
-4. **静的解析**: `uv run pyright`
-5. **手動確認**:
-   - プロジェクト選択後にCloneダイアログを開き、別プロジェクト選択 → 名前が更新されること
-   - 重複名でプロジェクト作成/クローン → orphan ファイルが残らないこと
-   - ページ遷移でフルリロードしないこと
-   - ファイル削除中に他の削除ボタンが影響されないこと
+2. **静的解析**: `uv run pyright src/genglossary/api/`
+3. **フロントエンドテスト**: `cd frontend && npm run test`
+4. **ビルド確認**: `cd frontend && npm run build`
+5. **手動確認**: 既存機能が正常に動作すること
