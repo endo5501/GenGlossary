@@ -89,7 +89,7 @@ GenGlossaryはWebブラウザから操作できるGUIを提供します。CLIと
 
 ```bash
 # バックエンドサーバーを起動（ポート8000）
-uv run uvicorn genglossary.api.main:app --reload
+uv run genglossary api serve --reload
 
 # 別のターミナルでフロントエンドを起動（ポート5173）
 cd frontend
