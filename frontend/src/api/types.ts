@@ -1,8 +1,49 @@
+// Project types
+export type ProjectStatus = 'created' | 'running' | 'completed' | 'error'
+
+export interface ProjectResponse {
+  id: number
+  name: string
+  doc_root: string
+  llm_provider: string
+  llm_model: string
+  created_at: string
+  updated_at: string
+  last_run_at: string | null
+  status: ProjectStatus
+}
+
+export interface ProjectCreateRequest {
+  name: string
+  doc_root: string
+  llm_provider?: string
+  llm_model?: string
+}
+
+export interface ProjectCloneRequest {
+  new_name: string
+}
+
+export interface ProjectUpdateRequest {
+  llm_provider?: string
+  llm_model?: string
+}
+
 // File types
 export interface FileResponse {
   id: number
   file_path: string
   content_hash: string
+}
+
+export interface FileCreateRequest {
+  file_path: string
+}
+
+export interface DiffScanResponse {
+  added: string[]
+  modified: string[]
+  deleted: string[]
 }
 
 // Term types
