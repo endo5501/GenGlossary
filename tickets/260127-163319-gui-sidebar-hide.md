@@ -3,8 +3,8 @@ priority: 4
 tags: [gui, frontend, layout]
 description: "プロジェクト未選択時のサイドバー非表示"
 created_at: "2026-01-27T16:33:19Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-28T13:06:01Z # Do not modify manually
+closed_at: 2026-01-28T13:08:54Z # Do not modify manually
 ---
 
 # プロジェクト未選択時のサイドバー非表示
@@ -24,17 +24,17 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] AppShellでprojectIdの有無を判定
-- [ ] projectIdがない場合はNavbarを非表示
-- [ ] ホーム画面でのレイアウト確認
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] AppShellでprojectIdの有無を判定
+- [x] projectIdがない場合はNavbarを非表示
+- [x] ホーム画面でのレイアウト確認
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent (既に実装済み - 変更不要)
+- [x] Code review by codex MCP (既に実装済み - 変更不要)
+- [x] Update docs/architecture/*.md (既に実装済み - 変更不要)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
