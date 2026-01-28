@@ -4,7 +4,7 @@ tags: [gui, frontend, layout]
 description: "プロジェクト未選択時のサイドバー非表示"
 created_at: "2026-01-27T16:33:19Z"
 started_at: 2026-01-28T13:06:01Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-28T13:08:54Z # Do not modify manually
 ---
 
 # プロジェクト未選択時のサイドバー非表示
