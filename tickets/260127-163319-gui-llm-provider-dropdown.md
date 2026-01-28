@@ -30,16 +30,16 @@ Create画面のLLM ProviderをTextInputからSelectコンポーネントに変�
 
 ## Tasks
 
-- [ ] TextInput を Select コンポーネントに変更
-- [ ] 選択肢: ollama, openai
-- [ ] SettingsPage.tsx の実装を参考にする（L162-176）
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] TextInput を Select コンポーネントに変更
+- [x] 選択肢: ollama, openai
+- [x] SettingsPage.tsx の実装を参考にする（L162-176）
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md (skipped - directory does not exist)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes

@@ -179,7 +179,7 @@ describe('Create Project Dialog', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
 
-    // LLM Provider should be a Select component (rendered as textbox)
+    // LLM Provider should be a Select component (Mantine Select uses textbox role)
     const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
     expect(providerSelect).toBeInTheDocument()
     // Default value should be Ollama
