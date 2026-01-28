@@ -37,7 +37,7 @@ Create画面のLLM ProviderをTextInputからSelectコンポーネントに変�
 - [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [x] Code simplification review using code-simplifier agent
 - [x] Code review by codex MCP
-- [x] Update docs/architecture/*.md (skipped - directory does not exist)
+- [x] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
