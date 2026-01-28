@@ -4,7 +4,7 @@ tags: [gui, frontend, file-handling]
 description: "Files画面のAddボタンをファイル選択ダイアログに改善"
 created_at: "2026-01-28T15:51:13Z"
 started_at: 2026-01-28T15:53:25Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-28T22:47:27Z # Do not modify manually
 ---
 
 # Ticket Overview
