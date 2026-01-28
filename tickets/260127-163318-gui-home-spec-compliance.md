@@ -4,7 +4,7 @@ tags: [gui, frontend, home]
 description: "プロジェクト一覧画面（ホーム）の仕様準拠"
 created_at: "2026-01-27T16:33:18Z"
 started_at: 2026-01-27T22:29:58Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-28T12:46:47Z # Do not modify manually
 ---
 
 # プロジェクト一覧画面（ホーム）の仕様準拠
