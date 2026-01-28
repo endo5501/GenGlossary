@@ -3,8 +3,8 @@ priority: 9
 tags: [gui, frontend, files]
 description: "Files画面 - Addボタン機能実装"
 created_at: "2026-01-28T13:55:03Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-28T13:55:31Z # Do not modify manually
+closed_at: 2026-01-28T15:46:48Z # Do not modify manually
 ---
 
 # Files画面 - Addボタン機能実装
@@ -29,18 +29,18 @@ Files画面の「Add」ボタンをクリックしても何も起きない。`on
 
 ## Tasks
 
-- [ ] `AddFileDialog` コンポーネントのテスト作成
-- [ ] `AddFileDialog` コンポーネントの実装（パス入力フォーム）
-- [ ] FilesPage に Add ボタンの onClick ハンドラを追加
-- [ ] FilesPage のテスト追加
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `AddFileDialog` コンポーネントのテスト作成
+- [x] `AddFileDialog` コンポーネントの実装（パス入力フォーム）
+- [x] FilesPage に Add ボタンの onClick ハンドラを追加
+- [x] FilesPage のテスト追加
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## 修正対象ファイル
 

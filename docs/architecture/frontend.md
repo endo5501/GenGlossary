@@ -237,6 +237,7 @@ const sections = [
 | `CreateProjectDialog` | 新規プロジェクト作成ダイアログ |
 | `CloneProjectDialog` | プロジェクトクローンダイアログ |
 | `DeleteProjectDialog` | プロジェクト削除確認ダイアログ |
+| `AddFileDialog` | ファイル追加ダイアログ（FilesPageから使用） |
 
 #### CreateProjectDialog の設計
 
@@ -548,11 +549,12 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `api-client.test.ts` | 14 | APIクライアントの HTTP メソッド、エラーハンドリング |
 | `app-shell.test.tsx` | 32 | AppShell、GlobalTopBar（戻るボタン含む）、LeftNavRail、LogPanel、レイアウト分離 |
 | `routing.test.tsx` | 16 | ルーティング、ナビゲーション |
-| `projects-page.test.tsx` | 11 | HomePage、FilesPage、ダイアログコンポーネント |
+| `projects-page.test.tsx` | 16 | HomePage、FilesPage、ダイアログコンポーネント |
+| `components/dialogs/AddFileDialog.test.tsx` | 6 | AddFileDialogコンポーネント |
 | `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
 | `terms-workflow.test.tsx` | 43 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel |
 
-**合計**: 127 テスト
+**合計**: 138 テスト
 
 ### テスト実行
 
