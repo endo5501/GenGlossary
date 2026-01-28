@@ -22,7 +22,9 @@ export function AddFileDialog({ projectId, opened, onClose }: AddFileDialogProps
     }
   }, [opened])
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
     // Validation
     if (!filePath.trim()) {
       setError('File path is required')
@@ -36,6 +38,7 @@ export function AddFileDialog({ projectId, opened, onClose }: AddFileDialogProps
       handleClose()
     } catch (err) {
       console.error('Failed to add file:', err)
+      setError('Failed to add file. Please try again.')
     }
   }
 
@@ -47,25 +50,26 @@ export function AddFileDialog({ projectId, opened, onClose }: AddFileDialogProps
 
   return (
     <Modal opened={opened} onClose={handleClose} title="Add File" size="md">
-      <Stack gap="md">
-        <TextInput
-          label="File Path"
-          placeholder="path/to/file.md"
-          value={filePath}
-          onChange={(e) => setFilePath(e.currentTarget.value)}
-          error={error}
-          required
-        />
+      <form onSubmit={handleSubmit}>
+        <Stack gap="md">
+          <TextInput
+            label="File Path"
+            placeholder="path/to/file.md"
+            value={filePath}
+            onChange={(e) => setFilePath(e.currentTarget.value)}
+            error={error}
+          />
 
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} loading={createMutation.isPending}>
-            Add
-          </Button>
-        </Group>
-      </Stack>
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={handleClose} type="button">
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMutation.isPending}>
+              Add
+            </Button>
+          </Group>
+        </Stack>
+      </form>
     </Modal>
   )
 }
