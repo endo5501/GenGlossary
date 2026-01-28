@@ -1,6 +1,11 @@
 import { useState } from 'react'
-import { Modal, TextInput, Button, Stack, Group } from '@mantine/core'
+import { Modal, TextInput, Button, Stack, Group, Select } from '@mantine/core'
 import { useCreateProject } from '../../api/hooks'
+
+const LLM_PROVIDERS = [
+  { value: 'ollama', label: 'Ollama' },
+  { value: 'openai', label: 'OpenAI' },
+]
 
 interface CreateProjectDialogProps {
   opened: boolean
@@ -77,11 +82,15 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
           required
         />
 
-        <TextInput
+        <Select
           label="LLM Provider"
-          placeholder="ollama"
+          data={LLM_PROVIDERS}
           value={llmProvider}
-          onChange={(e) => setLlmProvider(e.currentTarget.value)}
+          onChange={(value) => {
+            if (value) {
+              setLlmProvider(value)
+            }
+          }}
         />
 
         <TextInput

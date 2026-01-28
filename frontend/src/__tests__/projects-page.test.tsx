@@ -179,18 +179,25 @@ describe('Create Project Dialog', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
 
-    // LLM Provider should be a combobox (Select component)
+    // LLM Provider should be a Select component (rendered as textbox)
     const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
     expect(providerSelect).toBeInTheDocument()
+    // Default value should be Ollama
+    expect(providerSelect).toHaveValue('Ollama')
 
     // Click to open dropdown
     await user.click(providerSelect)
 
-    // Should show ollama and openai options
+    // Should show ollama and openai options in the dropdown
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: /ollama/i })).toBeInTheDocument()
+      expect(screen.getByText('OpenAI')).toBeInTheDocument()
     })
-    expect(screen.getByRole('option', { name: /openai/i })).toBeInTheDocument()
+
+    // Select OpenAI
+    await user.click(screen.getByText('OpenAI'))
+
+    // Value should change
+    expect(providerSelect).toHaveValue('OpenAI')
   })
 })
 
