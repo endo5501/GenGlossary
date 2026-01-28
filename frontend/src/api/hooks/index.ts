@@ -13,8 +13,8 @@ export {
   useFiles,
   useFile,
   useCreateFile,
+  useCreateFilesBulk,
   useDeleteFile,
-  useDiffScan,
   fileKeys,
 } from './useFiles'
 

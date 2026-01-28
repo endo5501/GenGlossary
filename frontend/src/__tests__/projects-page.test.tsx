@@ -317,7 +317,7 @@ describe('FilesPage', () => {
       expect(screen.getByText('doc1.md')).toBeInTheDocument()
     })
     expect(screen.getByText('doc2.txt')).toBeInTheDocument()
-    expect(screen.getByText('subdir/doc3.md')).toBeInTheDocument()
+    expect(screen.getByText('doc3.md')).toBeInTheDocument()
   })
 
   it('displays empty state when no files', async () => {
@@ -334,24 +334,6 @@ describe('FilesPage', () => {
     })
   })
 
-  it('runs diff-scan when clicking scan button', async () => {
-    const { user } = renderWithProviders(<FilesPage projectId={1} />)
-
-    await waitFor(() => {
-      expect(screen.getByText('doc1.md')).toBeInTheDocument()
-    })
-
-    // Click scan button
-    const scanButton = screen.getByRole('button', { name: /scan/i })
-    await user.click(scanButton)
-
-    // Should show scan results
-    await waitFor(() => {
-      expect(screen.getByTestId('diff-scan-results')).toBeInTheDocument()
-    })
-    expect(screen.getByText(/new_file.md/)).toBeInTheDocument()
-  })
-
   it('opens add file dialog when clicking add button', async () => {
     const { user } = renderWithProviders(<FilesPage projectId={1} />)
 
@@ -363,36 +345,10 @@ describe('FilesPage', () => {
     const addButton = screen.getByRole('button', { name: /add/i })
     await user.click(addButton)
 
-    // Dialog should open
+    // Dialog should open with dropzone UI
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
-    expect(screen.getByLabelText(/file path/i)).toBeInTheDocument()
-  })
-
-  it('adds file via add dialog', async () => {
-    const { user } = renderWithProviders(<FilesPage projectId={1} />)
-
-    await waitFor(() => {
-      expect(screen.getByText('doc1.md')).toBeInTheDocument()
-    })
-
-    // Click add button
-    const addButton = screen.getByRole('button', { name: /add/i })
-    await user.click(addButton)
-
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
-    })
-
-    // Fill in file path and submit
-    await user.type(screen.getByLabelText(/file path/i), 'new-file.md')
-    const submitButton = within(screen.getByRole('dialog')).getByRole('button', { name: /^add$/i })
-    await user.click(submitButton)
-
-    // Dialog should close
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    })
+    expect(screen.getByText(/drag files here or click to select/i)).toBeInTheDocument()
   })
 })

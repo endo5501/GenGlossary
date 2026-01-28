@@ -5,28 +5,29 @@ from typing import cast
 
 
 def create_document(
-    conn: sqlite3.Connection, file_path: str, content_hash: str
+    conn: sqlite3.Connection, file_name: str, content: str, content_hash: str
 ) -> int:
     """Create a new document record.
 
     Args:
         conn: Database connection.
-        file_path: Path to the document file.
+        file_name: Name of the document file.
+        content: Content of the document.
         content_hash: Hash of the document content (for change detection).
 
     Returns:
         int: The ID of the created document.
 
     Raises:
-        sqlite3.IntegrityError: If file_path already exists.
+        sqlite3.IntegrityError: If file_name already exists.
     """
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO documents (file_path, content_hash)
-        VALUES (?, ?)
+        INSERT INTO documents (file_name, content, content_hash)
+        VALUES (?, ?, ?)
         """,
-        (file_path, content_hash),
+        (file_name, content, content_hash),
     )
     conn.commit()
     # lastrowid is guaranteed to be non-None after INSERT
@@ -62,22 +63,22 @@ def list_all_documents(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return cursor.fetchall()
 
 
-def get_document_by_path(
-    conn: sqlite3.Connection, file_path: str
+def get_document_by_name(
+    conn: sqlite3.Connection, file_name: str
 ) -> sqlite3.Row | None:
-    """Get a document by file_path.
+    """Get a document by file_name.
 
     Args:
         conn: Database connection.
-        file_path: The file path.
+        file_name: The file name.
 
     Returns:
         sqlite3.Row | None: The document record if found, None otherwise.
     """
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT * FROM documents WHERE file_path = ?",
-        (file_path,),
+        "SELECT * FROM documents WHERE file_name = ?",
+        (file_name,),
     )
     return cursor.fetchone()
 

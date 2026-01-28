@@ -40,8 +40,10 @@ from genglossary.db.metadata_repository import (
 # Document repository
 from genglossary.db.document_repository import (
     create_document,
+    delete_all_documents,
+    delete_document,
     get_document,
-    get_document_by_path,
+    get_document_by_name,
     list_all_documents,
 )
 
@@ -116,8 +118,10 @@ __all__ = [
     "clear_metadata",
     # Documents
     "create_document",
+    "delete_all_documents",
+    "delete_document",
     "get_document",
-    "get_document_by_path",
+    "get_document_by_name",
     "list_all_documents",
     # Terms
     "create_term",

@@ -9,92 +9,22 @@ import {
   Table,
   Text,
   Title,
-  Badge,
-  Alert,
 } from '@mantine/core'
-import { IconPlus, IconTrash, IconRefresh, IconFile, IconCheck } from '@tabler/icons-react'
+import { IconPlus, IconTrash, IconFile } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
-import { useFiles, useDiffScan, useDeleteFile } from '../api/hooks'
-import type { DiffScanResponse } from '../api/types'
+import { useFiles, useDeleteFile } from '../api/hooks'
 import { AddFileDialog } from '../components/dialogs/AddFileDialog'
 
 interface FilesPageProps {
   projectId: number
 }
 
-interface ChangeSectionProps {
-  items: string[]
-  label: string
-  color: string
-  prefix: string
-}
-
-function ChangeSection({ items, label, color, prefix }: ChangeSectionProps) {
-  if (items.length === 0) return null
-
-  return (
-    <Box>
-      <Group gap="xs" mb="xs">
-        <Badge color={color} size="sm">{label}</Badge>
-        <Text size="sm" c="dimmed">({items.length} files)</Text>
-      </Group>
-      <Stack gap={4}>
-        {items.map((path) => (
-          <Text key={path} size="sm" c={color}>
-            {prefix} {path}
-          </Text>
-        ))}
-      </Stack>
-    </Box>
-  )
-}
-
-function DiffScanResults({ results }: { results: DiffScanResponse }) {
-  const hasChanges = results.added.length > 0 || results.modified.length > 0 || results.deleted.length > 0
-
-  if (!hasChanges) {
-    return (
-      <Alert icon={<IconCheck size={16} />} color="green" data-testid="diff-scan-results">
-        No changes detected. All files are up to date.
-      </Alert>
-    )
-  }
-
-  const sections = [
-    { items: results.added, label: 'Added', color: 'green', prefix: '+' },
-    { items: results.modified, label: 'Modified', color: 'yellow', prefix: '~' },
-    { items: results.deleted, label: 'Deleted', color: 'red', prefix: '-' },
-  ]
-
-  return (
-    <Card withBorder p="md" data-testid="diff-scan-results">
-      <Stack gap="sm">
-        <Title order={5}>Scan Results</Title>
-        {sections.map((section) => (
-          <ChangeSection key={section.label} {...section} />
-        ))}
-      </Stack>
-    </Card>
-  )
-}
-
 export function FilesPage({ projectId }: FilesPageProps) {
   const navigate = useNavigate()
   const { data: files, isLoading, error } = useFiles(projectId)
-  const diffScanMutation = useDiffScan(projectId)
   const deleteFileMutation = useDeleteFile(projectId)
-  const [scanResults, setScanResults] = useState<DiffScanResponse | null>(null)
   const [deletingFileId, setDeletingFileId] = useState<number | null>(null)
   const [addDialogOpened, setAddDialogOpened] = useState(false)
-
-  const handleScan = async () => {
-    try {
-      const results = await diffScanMutation.mutateAsync()
-      setScanResults(results)
-    } catch (err) {
-      console.error('Scan failed:', err)
-    }
-  }
 
   const handleDeleteFile = async (fileId: number) => {
     setDeletingFileId(fileId)
@@ -130,24 +60,8 @@ export function FilesPage({ projectId }: FilesPageProps) {
     <Box p="md">
       <Group justify="space-between" mb="lg">
         <Title order={2}>Files</Title>
-        <Group gap="sm">
-          <Button
-            variant="outline"
-            leftSection={<IconRefresh size={16} />}
-            onClick={handleScan}
-            loading={diffScanMutation.isPending}
-          >
-            Scan
-          </Button>
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setAddDialogOpened(true)}>Add</Button>
-        </Group>
+        <Button leftSection={<IconPlus size={16} />} onClick={() => setAddDialogOpened(true)}>Add</Button>
       </Group>
-
-      {scanResults && (
-        <Box mb="lg">
-          <DiffScanResults results={scanResults} />
-        </Box>
-      )}
 
       {isEmpty ? (
         <Card withBorder p="xl" data-testid="files-empty">
@@ -157,14 +71,13 @@ export function FilesPage({ projectId }: FilesPageProps) {
               No files registered
             </Text>
             <Text c="dimmed">
-              Use Scan to detect files in the document root.
+              Click Add to upload files to the project.
             </Text>
             <Button
-              leftSection={<IconRefresh size={16} />}
-              onClick={handleScan}
-              loading={diffScanMutation.isPending}
+              leftSection={<IconPlus size={16} />}
+              onClick={() => setAddDialogOpened(true)}
             >
-              Scan for Files
+              Add Files
             </Button>
           </Stack>
         </Card>
@@ -173,7 +86,7 @@ export function FilesPage({ projectId }: FilesPageProps) {
           <Table highlightOnHover>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>File Path</Table.Th>
+                <Table.Th>File Name</Table.Th>
                 <Table.Th>Content Hash</Table.Th>
                 <Table.Th style={{ width: 100 }}>Actions</Table.Th>
               </Table.Tr>
@@ -194,7 +107,7 @@ export function FilesPage({ projectId }: FilesPageProps) {
                   <Table.Td>
                     <Group gap="xs">
                       <IconFile size={16} />
-                      {file.file_path}
+                      {file.file_name}
                     </Group>
                   </Table.Td>
                   <Table.Td>

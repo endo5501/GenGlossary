@@ -182,7 +182,8 @@ def _generate_glossary_with_db(
         for document in documents:
             # Calculate content hash for deduplication
             content_hash = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
-            create_document(conn, document.file_path, content_hash)
+            file_name = document.file_path.rsplit("/", 1)[-1]
+            create_document(conn, file_name, document.content, content_hash)
         if verbose:
             console.print(f"[dim]  → データベースに {len(documents)} 件のドキュメントを保存[/dim]")
 

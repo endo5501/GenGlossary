@@ -112,14 +112,12 @@ def _reconstruct_documents_from_db(
     Warns about missing files but continues processing.
     """
     documents: list[Document] = []
-    loader = DocumentLoader()
     for doc_row in doc_rows:
-        try:
-            doc = loader.load_file(doc_row["file_path"])
-            documents.append(doc)
-        except FileNotFoundError:
-            console.print(f"[yellow]警告: ファイルが見つかりません: {doc_row['file_path']}[/yellow]")
-            continue
+        doc = Document(
+            file_path=doc_row["file_name"],
+            content=doc_row["content"],
+        )
+        documents.append(doc)
     return documents
 
 

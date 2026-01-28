@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -20,10 +20,11 @@ CREATE TABLE IF NOT EXISTS metadata (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Input documents
+-- Input documents (v4: file_path → file_name, added content column)
 CREATE TABLE IF NOT EXISTS documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_path TEXT NOT NULL UNIQUE,
+    file_name TEXT NOT NULL UNIQUE,
+    content TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -98,6 +99,7 @@ def initialize_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
 
     _ensure_metadata_input_path(conn)
+    _migrate_documents_table_v4(conn)
 
     # Set schema version if not already set
     cursor = conn.cursor()
@@ -117,6 +119,57 @@ def _ensure_metadata_input_path(conn: sqlite3.Connection) -> None:
         cursor.execute(
             "ALTER TABLE metadata ADD COLUMN input_path TEXT NOT NULL DEFAULT ''"
         )
+
+
+def _migrate_documents_table_v4(conn: sqlite3.Connection) -> None:
+    """Migrate documents table from v3 to v4.
+
+    Changes:
+    - file_path → file_name (rename column)
+    - Add content column
+
+    For existing data, content is set to empty string (migration requires re-upload).
+    """
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(documents)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    # Check if migration is needed (file_path exists but file_name doesn't)
+    if "file_path" in columns and "file_name" not in columns:
+        # SQLite doesn't support RENAME COLUMN in older versions,
+        # so we recreate the table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS documents_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_name TEXT NOT NULL UNIQUE,
+                content TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+
+        # Migrate existing data (extract filename from path, content is empty)
+        cursor.execute(
+            """
+            INSERT INTO documents_new (id, file_name, content, content_hash, created_at)
+            SELECT id,
+                   CASE
+                       WHEN instr(file_path, '/') > 0
+                       THEN substr(file_path, length(file_path) - length(replace(file_path, '/', '')) + 1)
+                       ELSE file_path
+                   END,
+                   '',
+                   content_hash,
+                   created_at
+            FROM documents
+            """
+        )
+
+        # Drop old table and rename new one
+        cursor.execute("DROP TABLE documents")
+        cursor.execute("ALTER TABLE documents_new RENAME TO documents")
 
 
 def get_schema_version(conn: sqlite3.Connection) -> int:

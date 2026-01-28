@@ -39,18 +39,17 @@ export interface ProjectUpdateRequest {
 // File types
 export interface FileResponse {
   id: number
-  file_path: string
+  file_name: string
   content_hash: string
 }
 
 export interface FileCreateRequest {
-  file_path: string
+  file_name: string
+  content: string
 }
 
-export interface DiffScanResponse {
-  added: string[]
-  modified: string[]
-  deleted: string[]
+export interface FileCreateBulkRequest {
+  files: FileCreateRequest[]
 }
 
 // Term types

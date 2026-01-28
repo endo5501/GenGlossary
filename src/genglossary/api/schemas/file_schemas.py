@@ -9,7 +9,7 @@ class FileResponse(BaseModel):
     """Response schema for a document file."""
 
     id: int = Field(..., description="Document ID")
-    file_path: str = Field(..., description="File path")
+    file_name: str = Field(..., description="File name")
     content_hash: str = Field(..., description="Content hash")
 
     @classmethod
@@ -24,7 +24,7 @@ class FileResponse(BaseModel):
         """
         return cls(
             id=row["id"],
-            file_path=row["file_path"],
+            file_name=row["file_name"],
             content_hash=row["content_hash"],
         )
 
@@ -42,14 +42,26 @@ class FileResponse(BaseModel):
 
 
 class FileCreateRequest(BaseModel):
-    """Request schema for creating a document file."""
+    """Request schema for creating a document file with content."""
 
-    file_path: str = Field(..., description="File path relative to doc_root")
+    file_name: str = Field(..., description="File name (without path)")
+    content: str = Field(..., description="File content")
+
+
+class FileCreateBulkRequest(BaseModel):
+    """Request schema for creating multiple document files."""
+
+    files: list[FileCreateRequest] = Field(
+        ..., description="List of files to create"
+    )
 
 
 class DiffScanResponse(BaseModel):
-    """Response schema for diff scan operation."""
+    """Response schema for diff scan operation.
 
-    added: list[str] = Field(..., description="List of newly added file paths")
-    modified: list[str] = Field(..., description="List of modified file paths")
-    deleted: list[str] = Field(..., description="List of deleted file paths")
+    Note: This is deprecated for GUI mode since files are stored with content in DB.
+    """
+
+    added: list[str] = Field(..., description="List of newly added file names")
+    modified: list[str] = Field(..., description="List of modified file names")
+    deleted: list[str] = Field(..., description="List of deleted file names")
