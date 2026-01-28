@@ -17,6 +17,7 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
   const [docRoot, setDocRoot] = useState('')
   const [llmProvider, setLlmProvider] = useState('ollama')
   const [llmModel, setLlmModel] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
   const [errors, setErrors] = useState<{ name?: string; doc_root?: string }>({})
 
   const createMutation = useCreateProject()
@@ -40,11 +41,13 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
     setErrors({})
 
     try {
+      const trimmedBaseUrl = baseUrl.trim()
       await createMutation.mutateAsync({
         name: name.trim(),
         doc_root: docRoot.trim(),
         llm_provider: llmProvider,
         llm_model: llmModel,
+        llm_base_url: llmProvider === 'openai' && trimmedBaseUrl ? trimmedBaseUrl : undefined,
       })
       handleClose()
     } catch (error) {
@@ -57,6 +60,7 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
     setDocRoot('')
     setLlmProvider('ollama')
     setLlmModel('')
+    setBaseUrl('')
     setErrors({})
     onClose()
   }
@@ -99,6 +103,16 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
           value={llmModel}
           onChange={(e) => setLlmModel(e.currentTarget.value)}
         />
+
+        {llmProvider === 'openai' && (
+          <TextInput
+            label="Base URL"
+            placeholder="https://api.openai.com/v1"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.currentTarget.value)}
+            description="Custom API endpoint for OpenAI-compatible providers"
+          />
+        )}
 
         <Group justify="flex-end" gap="sm">
           <Button variant="default" onClick={handleClose}>
