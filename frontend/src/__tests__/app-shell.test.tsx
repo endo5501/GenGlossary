@@ -1,24 +1,39 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider, createMemoryHistory, createRouter, createRootRoute } from '@tanstack/react-router'
 import { renderApp } from './test-utils'
 import { GlobalTopBar } from '../components/layout/GlobalTopBar'
 
-const renderGlobalTopBar = (props = {}) => {
+const renderGlobalTopBar = async (props: Record<string, unknown> = {}) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
     },
   })
-  return render(
+  const rootRoute = createRootRoute({
+    component: () => <GlobalTopBar {...props} />,
+  })
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
+  const result = render(
     <QueryClientProvider client={queryClient}>
       <MantineProvider>
-        <GlobalTopBar {...props} />
+        <RouterProvider router={router} />
       </MantineProvider>
     </QueryClientProvider>
   )
+
+  // Wait for router to be ready
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /run/i })).toBeInTheDocument()
+  })
+
+  return result
 }
 
 describe('AppShell', () => {
@@ -26,6 +41,11 @@ describe('AppShell', () => {
     it('should display GenGlossary title', async () => {
       await renderApp('/')
       expect(screen.getByText('GenGlossary')).toBeInTheDocument()
+    })
+
+    it('should NOT display back button', async () => {
+      await renderApp('/')
+      expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument()
     })
 
     it('should NOT display status badge', async () => {
@@ -67,6 +87,41 @@ describe('AppShell', () => {
       expect(screen.getByText('GenGlossary')).toBeInTheDocument()
     })
 
+    it('should display back button', async () => {
+      await renderApp('/projects/1/files')
+      expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument()
+    })
+
+    it('should navigate to home when back button is clicked', async () => {
+      const { router } = await renderApp('/projects/1/files')
+      const user = userEvent.setup()
+
+      const backButton = screen.getByRole('button', { name: /back/i })
+      await user.click(backButton)
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/')
+      })
+    })
+
+    it('should make GenGlossary title clickable', async () => {
+      await renderApp('/projects/1/files')
+      const titleLink = screen.getByRole('link', { name: /genglossary/i })
+      expect(titleLink).toBeInTheDocument()
+    })
+
+    it('should navigate to home when clicking GenGlossary title', async () => {
+      const { router } = await renderApp('/projects/1/files')
+      const user = userEvent.setup()
+
+      const titleLink = screen.getByRole('link', { name: /genglossary/i })
+      await user.click(titleLink)
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/')
+      })
+    })
+
     it('should display status badge', async () => {
       await renderApp('/projects/1/files')
       expect(screen.getByTestId('status-badge')).toBeInTheDocument()
@@ -101,21 +156,21 @@ describe('AppShell', () => {
   })
 
   describe('GlobalTopBar button states (with projectId)', () => {
-    it('should disable Run button when status is running', () => {
-      renderGlobalTopBar({ projectId: 1, status: 'running' })
+    it('should disable Run button when status is running', async () => {
+      await renderGlobalTopBar({ projectId: 1, status: 'running' })
 
       expect(screen.getByRole('button', { name: /run/i })).toBeDisabled()
     })
 
-    it('should disable Stop button when status is not running', () => {
-      renderGlobalTopBar({ projectId: 1, status: 'pending' })
+    it('should disable Stop button when status is not running', async () => {
+      await renderGlobalTopBar({ projectId: 1, status: 'pending' })
 
       expect(screen.getByRole('button', { name: /stop/i })).toBeDisabled()
     })
 
-    it('should disable Stop button when status is running but runId is undefined', () => {
+    it('should disable Stop button when status is running but runId is undefined', async () => {
       // When status is running but runId is not yet available, Stop button should be disabled
-      renderGlobalTopBar({ projectId: 1, status: 'running' })
+      await renderGlobalTopBar({ projectId: 1, status: 'running' })
 
       expect(screen.getByRole('button', { name: /stop/i })).toBeDisabled()
     })
