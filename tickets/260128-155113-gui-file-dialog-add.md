@@ -57,11 +57,11 @@ Files画面のAddボタンの機能を改善する。
 ### 品質保証
 - [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 
