@@ -238,6 +238,26 @@ const sections = [
 | `CloneProjectDialog` | プロジェクトクローンダイアログ |
 | `DeleteProjectDialog` | プロジェクト削除確認ダイアログ |
 
+#### CreateProjectDialog の設計
+
+```typescript
+// LLM Provider は Select コンポーネントで選択
+const LLM_PROVIDERS = [
+  { value: 'ollama', label: 'Ollama' },
+  { value: 'openai', label: 'OpenAI' },
+]
+
+// フォームフィールド
+// - Project Name: TextInput (必須)
+// - Document Root: TextInput (必須)
+// - LLM Provider: Select (デフォルト: ollama)
+// - LLM Model: TextInput
+```
+
+**設計ポイント:**
+- LLM Provider は入力ミス防止のため Select コンポーネントを使用
+- SettingsPage と同じ `LLM_PROVIDERS` 定数を使用（将来的には共通化を検討）
+
 #### CloneProjectDialog の設計
 
 ```typescript

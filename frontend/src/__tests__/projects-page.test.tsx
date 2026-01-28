@@ -163,6 +163,42 @@ describe('Create Project Dialog', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
+
+  it('has LLM Provider as dropdown with ollama and openai options', async () => {
+    const { user } = renderWithProviders(<HomePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project 1')).toBeInTheDocument()
+    })
+
+    // Open dialog
+    const createButton = screen.getByRole('button', { name: /新規作成/i })
+    await user.click(createButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    // LLM Provider should be a Select component (Mantine Select uses textbox role)
+    const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
+    expect(providerSelect).toBeInTheDocument()
+    // Default value should be Ollama
+    expect(providerSelect).toHaveValue('Ollama')
+
+    // Click to open dropdown
+    await user.click(providerSelect)
+
+    // Should show ollama and openai options in the dropdown
+    await waitFor(() => {
+      expect(screen.getByText('OpenAI')).toBeInTheDocument()
+    })
+
+    // Select OpenAI
+    await user.click(screen.getByText('OpenAI'))
+
+    // Value should change
+    expect(providerSelect).toHaveValue('OpenAI')
+  })
 })
 
 describe('Delete Project Dialog', () => {

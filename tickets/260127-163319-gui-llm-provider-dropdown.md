@@ -3,8 +3,8 @@ priority: 5
 tags: [gui, frontend, create]
 description: "Create画面 - LLM Provider ドロップダウン化"
 created_at: "2026-01-27T16:33:19Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-28T13:09:39Z # Do not modify manually
+closed_at: 2026-01-28T13:21:56Z # Do not modify manually
 ---
 
 # Create画面 - LLM Provider ドロップダウン化
@@ -30,17 +30,17 @@ Create画面のLLM ProviderをTextInputからSelectコンポーネントに変�
 
 ## Tasks
 
-- [ ] TextInput を Select コンポーネントに変更
-- [ ] 選択肢: ollama, openai
-- [ ] SettingsPage.tsx の実装を参考にする（L162-176）
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] TextInput を Select コンポーネントに変更
+- [x] 選択肢: ollama, openai
+- [x] SettingsPage.tsx の実装を参考にする（L162-176）
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
