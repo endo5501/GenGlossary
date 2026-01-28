@@ -16,6 +16,7 @@ import { IconPlus, IconTrash, IconRefresh, IconFile, IconCheck } from '@tabler/i
 import { useNavigate } from '@tanstack/react-router'
 import { useFiles, useDiffScan, useDeleteFile } from '../api/hooks'
 import type { DiffScanResponse } from '../api/types'
+import { AddFileDialog } from '../components/dialogs/AddFileDialog'
 
 interface FilesPageProps {
   projectId: number
@@ -84,6 +85,7 @@ export function FilesPage({ projectId }: FilesPageProps) {
   const deleteFileMutation = useDeleteFile(projectId)
   const [scanResults, setScanResults] = useState<DiffScanResponse | null>(null)
   const [deletingFileId, setDeletingFileId] = useState<number | null>(null)
+  const [addDialogOpened, setAddDialogOpened] = useState(false)
 
   const handleScan = async () => {
     try {
@@ -137,7 +139,7 @@ export function FilesPage({ projectId }: FilesPageProps) {
           >
             Scan
           </Button>
-          <Button leftSection={<IconPlus size={16} />}>Add</Button>
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setAddDialogOpened(true)}>Add</Button>
         </Group>
       </Group>
 
@@ -220,6 +222,12 @@ export function FilesPage({ projectId }: FilesPageProps) {
           </Table>
         </Card>
       )}
+
+      <AddFileDialog
+        projectId={projectId}
+        opened={addDialogOpened}
+        onClose={() => setAddDialogOpened(false)}
+      />
     </Box>
   )
 }

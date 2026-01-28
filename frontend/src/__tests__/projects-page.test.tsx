@@ -351,4 +351,48 @@ describe('FilesPage', () => {
     })
     expect(screen.getByText(/new_file.md/)).toBeInTheDocument()
   })
+
+  it('opens add file dialog when clicking add button', async () => {
+    const { user } = renderWithProviders(<FilesPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('doc1.md')).toBeInTheDocument()
+    })
+
+    // Click add button
+    const addButton = screen.getByRole('button', { name: /add/i })
+    await user.click(addButton)
+
+    // Dialog should open
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    expect(screen.getByLabelText(/file path/i)).toBeInTheDocument()
+  })
+
+  it('adds file via add dialog', async () => {
+    const { user } = renderWithProviders(<FilesPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('doc1.md')).toBeInTheDocument()
+    })
+
+    // Click add button
+    const addButton = screen.getByRole('button', { name: /add/i })
+    await user.click(addButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    // Fill in file path and submit
+    await user.type(screen.getByLabelText(/file path/i), 'new-file.md')
+    const submitButton = within(screen.getByRole('dialog')).getByRole('button', { name: /^add$/i })
+    await user.click(submitButton)
+
+    // Dialog should close
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
 })
