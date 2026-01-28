@@ -4,7 +4,7 @@ tags: [gui, frontend, backend, create]
 description: "Create画面 - Document Root 自動化"
 created_at: "2026-01-27T16:33:24Z"
 started_at: 2026-01-28T13:33:46Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-28T13:49:20Z # Do not modify manually
 ---
 
 # Create画面 - Document Root 自動化
