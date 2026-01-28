@@ -24,6 +24,10 @@ function renderWithProviders(ui: React.ReactElement) {
   }
 }
 
+function createMockFile(name: string, content: string): File {
+  return new File([content], name, { type: 'text/plain' })
+}
+
 describe('AddFileDialog', () => {
   beforeEach(() => {
     server.use(...handlers)
@@ -34,8 +38,8 @@ describe('AddFileDialog', () => {
     renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByText(/add file/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/file path/i)).toBeInTheDocument()
+    expect(screen.getByText(/add files/i)).toBeInTheDocument()
+    expect(screen.getByText(/drag files here or click to select/i)).toBeInTheDocument()
   })
 
   it('does not render dialog when closed', () => {
@@ -45,70 +49,66 @@ describe('AddFileDialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('validates required file path', async () => {
+  it('shows add button as disabled when no files selected', () => {
     const onClose = vi.fn()
-    const { user } = renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
+    renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
 
-    // Try to submit empty form
-    const submitButton = screen.getByRole('button', { name: /^add$/i })
-    await user.click(submitButton)
-
-    // Should show validation error
-    await waitFor(() => {
-      expect(screen.getByText(/file path is required/i)).toBeInTheDocument()
-    })
+    const addButton = screen.getByRole('button', { name: /add \(0\)/i })
+    expect(addButton).toBeDisabled()
   })
 
-  it('calls mutation and closes on valid submission', async () => {
+  it('shows file list when files are dropped', async () => {
     const onClose = vi.fn()
-    const { user } = renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
+    renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
 
-    // Fill in file path
-    const input = screen.getByLabelText(/file path/i)
-    await user.type(input, 'new-file.md')
+    const dropzone = screen.getByText(/drag files here or click to select/i).closest('div')!
+    const file = createMockFile('test.md', '# Test content')
 
-    // Submit
-    const submitButton = screen.getByRole('button', { name: /^add$/i })
-    await user.click(submitButton)
+    // Simulate file drop
+    const dataTransfer = {
+      files: [file],
+      items: [
+        {
+          kind: 'file',
+          type: 'text/plain',
+          getAsFile: () => file,
+        },
+      ],
+      types: ['Files'],
+    }
 
-    // Dialog should close
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalled()
+    await waitFor(async () => {
+      const dropEvent = new Event('drop', { bubbles: true })
+      Object.assign(dropEvent, { dataTransfer })
+      dropzone.dispatchEvent(dropEvent)
     })
+
+    // File should appear in selected list after processing
+    await waitFor(
+      () => {
+        expect(screen.getByText('test.md')).toBeInTheDocument()
+      },
+      { timeout: 2000 }
+    )
   })
 
-  it('clears form and calls onClose when cancel clicked', async () => {
+  it('calls onClose when cancel clicked', async () => {
     const onClose = vi.fn()
     const { user } = renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
 
-    // Type something in the input
-    const input = screen.getByLabelText(/file path/i)
-    await user.type(input, 'some-file.md')
-
-    // Click cancel
     const cancelButton = screen.getByRole('button', { name: /cancel/i })
     await user.click(cancelButton)
 
-    // onClose should be called
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('clears input value when dialog reopens', async () => {
+  it('clears selected files when dialog reopens', async () => {
     const onClose = vi.fn()
-    const { user, rerender } = renderWithProviders(
+    const { rerender } = renderWithProviders(
       <AddFileDialog projectId={1} opened={true} onClose={onClose} />
     )
 
-    // Type something in the input
-    const input = screen.getByLabelText(/file path/i)
-    await user.type(input, 'some-file.md')
-    expect(input).toHaveValue('some-file.md')
-
-    // Close dialog
-    const cancelButton = screen.getByRole('button', { name: /cancel/i })
-    await user.click(cancelButton)
-
-    // Rerender as closed then opened again
+    // Close and reopen dialog
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -127,10 +127,17 @@ describe('AddFileDialog', () => {
       </QueryClientProvider>
     )
 
-    // Input should be cleared
+    // Add button should be disabled (no files selected)
     await waitFor(() => {
-      const newInput = screen.getByLabelText(/file path/i)
-      expect(newInput).toHaveValue('')
+      const addButton = screen.getByRole('button', { name: /add \(0\)/i })
+      expect(addButton).toBeDisabled()
     })
+  })
+
+  it('displays allowed file types message', () => {
+    const onClose = vi.fn()
+    renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
+
+    expect(screen.getByText(/only .txt and .md files are allowed/i)).toBeInTheDocument()
   })
 })

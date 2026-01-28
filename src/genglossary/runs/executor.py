@@ -1,8 +1,6 @@
 """Pipeline executor for running glossary generation steps."""
 
-import hashlib
 import sqlite3
-from queue import Queue
 from threading import Event
 from typing import Callable
 
@@ -28,6 +26,7 @@ from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.models.term import Term
 from genglossary.term_extractor import TermExtractor
+from genglossary.utils.hash import compute_content_hash
 
 
 class PipelineExecutor:
@@ -118,6 +117,9 @@ class PipelineExecutor:
     def _load_documents_from_db(self, conn: sqlite3.Connection) -> list[Document]:
         """Load documents from database.
 
+        In v4 schema, documents store content directly in DB, so we don't need
+        to read from filesystem.
+
         Args:
             conn: Project database connection.
 
@@ -125,7 +127,7 @@ class PipelineExecutor:
             list[Document]: Loaded documents.
 
         Raises:
-            RuntimeError: If no documents found or loading fails.
+            RuntimeError: If no documents found.
         """
         self._log("info", "Loading documents from database...")
         doc_rows = list_all_documents(conn)
@@ -133,19 +135,14 @@ class PipelineExecutor:
             self._log("error", "No documents found in database")
             raise RuntimeError("Cannot execute pipeline without documents")
 
-        # Reconstruct Document objects by re-reading files
-        loader = DocumentLoader()
+        # Create Document objects directly from DB content (v4 schema)
         documents = []
         for row in doc_rows:
-            try:
-                doc = loader.load_file(row["file_path"])
-                documents.append(doc)
-            except Exception as e:
-                self._log("warning", f"Failed to load document {row['file_path']}: {str(e)}")
-
-        if not documents:
-            self._log("error", "No documents could be loaded from file system")
-            raise RuntimeError("Cannot execute pipeline without documents")
+            doc = Document(
+                file_path=row["file_name"],  # Use file_name as file_path
+                content=row["content"],      # Content directly from DB
+            )
+            documents.append(doc)
 
         return documents
 
@@ -172,10 +169,12 @@ class PipelineExecutor:
             self._log("error", "No documents found")
             raise RuntimeError("No documents found in doc_root")
 
-        # Save documents to database
+        # Save documents to database (v4: save file_name and content)
         for document in documents:
-            content_hash = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
-            create_document(conn, document.file_path, content_hash)
+            content_hash = compute_content_hash(document.content)
+            # Extract file name from path for DB storage
+            file_name = document.file_path.rsplit("/", 1)[-1]
+            create_document(conn, file_name, document.content, content_hash)
 
         self._log("info", f"Loaded {len(documents)} documents")
 

@@ -162,14 +162,14 @@ class TestPipelineExecutorFull:
 class TestPipelineExecutorFromTerms:
     """Tests for from_terms scope execution."""
 
-    def test_from_terms_skips_document_loading(
+    def test_from_terms_skips_document_loading_from_filesystem(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """from_termsはドキュメント読み込みをスキップする"""
+        """from_termsはファイルシステムからの読み込みをスキップし、DBから取得する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
@@ -182,9 +182,8 @@ class TestPipelineExecutorFromTerms:
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock DB data loading
-            mock_list_docs.return_value = [{"file_path": "test.txt"}]
-            mock_loader.return_value.load_file.return_value = MagicMock(file_path="test.txt", content="test")
+            # Mock DB data loading (v4: file_name and content from DB)
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
             mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # Mock glossary generation
@@ -196,6 +195,8 @@ class TestPipelineExecutorFromTerms:
 
             # DocumentLoader.load_directory should not be called (we load from DB instead)
             mock_loader.return_value.load_directory.assert_not_called()
+            # DocumentLoader.load_file should not be called (content comes from DB)
+            mock_loader.return_value.load_file.assert_not_called()
             # TermExtractor should not be called
             mock_extractor.return_value.extract_terms.assert_not_called()
 
@@ -223,7 +224,7 @@ class TestPipelineExecutorProvisionalToRefined:
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock DB data loading
+            # Mock DB data loading (v4: file_name and content from DB)
             from genglossary.models.term import TermOccurrence
             mock_list_provisional.return_value = [
                 {
@@ -233,8 +234,7 @@ class TestPipelineExecutorProvisionalToRefined:
                     "occurrences": [TermOccurrence(document_path="test.txt", line_number=1, context="ctx")]
                 }
             ]
-            mock_list_docs.return_value = [{"file_path": "test.txt"}]
-            mock_loader.return_value.load_file.return_value = MagicMock(file_path="test.txt", content="test")
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
 
             # Mock review
             mock_reviewer.return_value.review.return_value = []
@@ -243,6 +243,8 @@ class TestPipelineExecutorProvisionalToRefined:
 
             # Earlier stages should not be called
             mock_loader.return_value.load_directory.assert_not_called()
+            # DocumentLoader.load_file should not be called (content comes from DB)
+            mock_loader.return_value.load_file.assert_not_called()
             mock_extractor.return_value.extract_terms.assert_not_called()
             mock_generator.return_value.generate.assert_not_called()
 

@@ -169,7 +169,7 @@ class TestProvisionalRegenerate:
 
         # Note: Need to add documents for GlossaryGenerator
         from genglossary.db.document_repository import create_document
-        create_document(conn, "/tmp/test.txt", "abc123")
+        create_document(conn, "test.txt", "test content", "abc123")
         conn.close()
 
         # Setup mocks
@@ -329,7 +329,7 @@ class TestRefinedRegenerate:
             "unclear",
             "定義を改善する必要がある"
         )
-        create_document(conn, "/tmp/test.txt", "abc123")
+        create_document(conn, "test.txt", "test content", "abc123")
         conn.close()
 
         # Setup mocks

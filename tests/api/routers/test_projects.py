@@ -115,9 +115,9 @@ class TestListProjects:
 
         # Add data to project database
         project_conn = get_connection(project_db_path)
-        # Add 2 documents
-        create_document(project_conn, "/path/to/doc1.md", "hash1")
-        create_document(project_conn, "/path/to/doc2.md", "hash2")
+        # Add 2 documents (v4: file_name and content)
+        create_document(project_conn, "doc1.md", "Content 1", "hash1")
+        create_document(project_conn, "doc2.md", "Content 2", "hash2")
         # Add 3 provisional terms
         occurrence = TermOccurrence(
             document_path="/path/to/doc1.md",

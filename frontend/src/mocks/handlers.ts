@@ -2,7 +2,6 @@ import { http, HttpResponse } from 'msw'
 import type {
   ProjectResponse,
   FileResponse,
-  DiffScanResponse,
   TermDetailResponse,
   GlossaryTermResponse,
   IssueResponse,
@@ -44,9 +43,9 @@ export const mockProjects: ProjectResponse[] = [
 ]
 
 export const mockFiles: FileResponse[] = [
-  { id: 1, file_path: 'doc1.md', content_hash: 'abc123' },
-  { id: 2, file_path: 'doc2.txt', content_hash: 'def456' },
-  { id: 3, file_path: 'subdir/doc3.md', content_hash: 'ghi789' },
+  { id: 1, file_name: 'doc1.md', content_hash: 'abc123' },
+  { id: 2, file_name: 'doc2.txt', content_hash: 'def456' },
+  { id: 3, file_name: 'doc3.md', content_hash: 'ghi789' },
 ]
 
 // Terms mock data
@@ -261,26 +260,27 @@ export const handlers = [
   }),
 
   http.post(`${BASE_URL}/api/projects/:projectId/files`, async ({ request }) => {
-    const body = (await request.json()) as { file_path: string }
+    const body = (await request.json()) as { file_name: string; content: string }
     const newFile: FileResponse = {
       id: mockFiles.length + 1,
-      file_path: body.file_path,
+      file_name: body.file_name,
       content_hash: 'new_hash_' + Date.now(),
     }
     return HttpResponse.json(newFile, { status: 201 })
   }),
 
-  http.delete(`${BASE_URL}/api/projects/:projectId/files/:fileId`, () => {
-    return new HttpResponse(null, { status: 204 })
+  http.post(`${BASE_URL}/api/projects/:projectId/files/bulk`, async ({ request }) => {
+    const body = (await request.json()) as { files: { file_name: string; content: string }[] }
+    const newFiles: FileResponse[] = body.files.map((f, idx) => ({
+      id: mockFiles.length + idx + 1,
+      file_name: f.file_name,
+      content_hash: 'new_hash_' + Date.now() + idx,
+    }))
+    return HttpResponse.json(newFiles, { status: 201 })
   }),
 
-  http.post(`${BASE_URL}/api/projects/:projectId/files/diff-scan`, () => {
-    const response: DiffScanResponse = {
-      added: ['new_file.md', 'another_new.txt'],
-      modified: ['doc1.md'],
-      deleted: [],
-    }
-    return HttpResponse.json(response)
+  http.delete(`${BASE_URL}/api/projects/:projectId/files/:fileId`, () => {
+    return new HttpResponse(null, { status: 204 })
   }),
 
   // Terms

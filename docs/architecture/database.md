@@ -1,13 +1,18 @@
-# データベース層 (Schema v3)
+# データベース層 (Schema v4)
 
 **役割**: SQLiteへのデータ永続化とCRUD操作
+
+**Schema v4の主な変更点**:
+- `documents`テーブルの`file_path`を`file_name`にリネーム
+- `documents`テーブルに`content`カラムを追加（ファイル内容をDBに直接保存）
+- `utils/hash.py`にハッシュ計算ユーティリティを追加
 
 **Schema v3の主な変更点**:
 - `runs`テーブルを再導入（バックグラウンド実行管理用）
 - Run履歴の追跡とステータス管理をサポート
 - `runs_repository.py`を追加
 
-**Schema v2からの変更点**:
+**過去のバージョン変更点**:
 - `runs`テーブルを廃止し、`metadata`テーブル（単一行）に変更（v1→v2）
 - 全てのrepository関数から`run_id`パラメータを削除（v1→v2）
 - `glossary_helpers.py`で用語集関連の共通処理を集約（v1→v2）
@@ -37,12 +42,19 @@ def database_connection(db_path: str):
 
 ## schema.py
 ```python
+SCHEMA_VERSION = 4
+
 def initialize_db(conn: sqlite3.Connection) -> None:
-    """データベーススキーマを初期化 (Schema v3)"""
+    """データベーススキーマを初期化 (Schema v4)"""
     # テーブル作成: metadata, documents, terms_extracted,
     # glossary_provisional, glossary_issues, glossary_refined, runs
     # metadataテーブルは単一行（id=1固定）でLLM設定や入力パスを保存
     # runsテーブルはバックグラウンド実行の履歴を管理
+    #
+    # documentsテーブル (v4):
+    #   file_name TEXT NOT NULL UNIQUE  -- ファイル名（パスではない）
+    #   content TEXT NOT NULL           -- ファイル内容
+    #   content_hash TEXT NOT NULL      -- SHA256ハッシュ
     ...
 
 def get_schema_version(conn: sqlite3.Connection) -> int:
@@ -93,6 +105,45 @@ def upsert_metadata(
 
 def clear_metadata(conn: sqlite3.Connection) -> None:
     """メタデータを削除"""
+    ...
+```
+
+## document_repository.py
+```python
+def create_document(
+    conn: sqlite3.Connection,
+    file_name: str,
+    content: str,
+    content_hash: str
+) -> int:
+    """ドキュメントを作成（file_name + content + hash）
+
+    Returns:
+        作成されたドキュメントのID
+
+    Raises:
+        sqlite3.IntegrityError: file_nameが既に存在する場合
+    """
+    ...
+
+def get_document(conn: sqlite3.Connection, document_id: int) -> sqlite3.Row | None:
+    """IDでドキュメントを取得"""
+    ...
+
+def get_document_by_name(conn: sqlite3.Connection, file_name: str) -> sqlite3.Row | None:
+    """ファイル名でドキュメントを取得"""
+    ...
+
+def list_all_documents(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """全ドキュメントを取得（id順）"""
+    ...
+
+def delete_document(conn: sqlite3.Connection, document_id: int) -> None:
+    """ドキュメントを削除"""
+    ...
+
+def delete_all_documents(conn: sqlite3.Connection) -> None:
+    """全ドキュメントを削除"""
     ...
 ```
 

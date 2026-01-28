@@ -7,7 +7,7 @@ import pytest
 from genglossary.db.document_repository import (
     create_document,
     get_document,
-    get_document_by_path,
+    get_document_by_name,
     list_all_documents,
 )
 from genglossary.db.schema import initialize_db
@@ -36,7 +36,8 @@ class TestCreateDocument:
         """Test that create_document returns a document ID."""
         doc_id = create_document(
             db_with_schema,
-            file_path="/path/to/doc.txt",
+            file_name="doc.txt",
+            content="Hello World",
             content_hash="abc123",
         )
 
@@ -47,9 +48,11 @@ class TestCreateDocument:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_document stores data correctly."""
+        test_content = "# Test Document\n\nThis is content."
         doc_id = create_document(
             db_with_schema,
-            file_path="/path/to/doc.txt",
+            file_name="doc.txt",
+            content=test_content,
             content_hash="abc123",
         )
 
@@ -58,17 +61,19 @@ class TestCreateDocument:
         row = cursor.fetchone()
 
         assert row is not None
-        assert row["file_path"] == "/path/to/doc.txt"
+        assert row["file_name"] == "doc.txt"
+        assert row["content"] == test_content
         assert row["content_hash"] == "abc123"
 
     def test_create_document_unique_constraint(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that file_path must be unique."""
+        """Test that file_name must be unique."""
         # Create first document
         create_document(
             db_with_schema,
-            file_path="/path/to/doc.txt",
+            file_name="doc.txt",
+            content="Content 1",
             content_hash="abc123",
         )
 
@@ -76,7 +81,8 @@ class TestCreateDocument:
         with pytest.raises(sqlite3.IntegrityError):
             create_document(
                 db_with_schema,
-                file_path="/path/to/doc.txt",
+                file_name="doc.txt",
+                content="Content 2",
                 content_hash="def456",
             )
 
@@ -88,9 +94,11 @@ class TestGetDocument:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that get_document returns document data."""
+        test_content = "Test content"
         doc_id = create_document(
             db_with_schema,
-            file_path="/path/to/doc.txt",
+            file_name="doc.txt",
+            content=test_content,
             content_hash="abc123",
         )
 
@@ -98,7 +106,8 @@ class TestGetDocument:
 
         assert doc is not None
         assert doc["id"] == doc_id
-        assert doc["file_path"] == "/path/to/doc.txt"
+        assert doc["file_name"] == "doc.txt"
+        assert doc["content"] == test_content
         assert doc["content_hash"] == "abc123"
 
     def test_get_document_returns_none_for_nonexistent_id(
@@ -127,12 +136,14 @@ class TestListAllDocuments:
         """Test that list_all_documents returns all documents."""
         doc_id1 = create_document(
             db_with_schema,
-            file_path="/path/to/doc1.txt",
+            file_name="doc1.txt",
+            content="Content 1",
             content_hash="abc123",
         )
         doc_id2 = create_document(
             db_with_schema,
-            file_path="/path/to/doc2.txt",
+            file_name="doc2.txt",
+            content="Content 2",
             content_hash="def456",
         )
 
@@ -148,12 +159,14 @@ class TestListAllDocuments:
         """Test that list_all_documents returns documents ordered by id."""
         create_document(
             db_with_schema,
-            file_path="/path/to/doc1.txt",
+            file_name="doc1.txt",
+            content="Content 1",
             content_hash="abc123",
         )
         create_document(
             db_with_schema,
-            file_path="/path/to/doc2.txt",
+            file_name="doc2.txt",
+            content="Content 2",
             content_hash="def456",
         )
 
@@ -162,29 +175,32 @@ class TestListAllDocuments:
         assert docs[0]["id"] < docs[1]["id"]
 
 
-class TestGetDocumentByPath:
-    """Test get_document_by_path function."""
+class TestGetDocumentByName:
+    """Test get_document_by_name function."""
 
-    def test_get_document_by_path_returns_document(
+    def test_get_document_by_name_returns_document(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that get_document_by_path returns the correct document."""
+        """Test that get_document_by_name returns the correct document."""
+        test_content = "Test content"
         doc_id = create_document(
             db_with_schema,
-            file_path="/path/to/doc.txt",
+            file_name="doc.txt",
+            content=test_content,
             content_hash="abc123",
         )
 
-        doc = get_document_by_path(db_with_schema, "/path/to/doc.txt")
+        doc = get_document_by_name(db_with_schema, "doc.txt")
 
         assert doc is not None
         assert doc["id"] == doc_id
-        assert doc["file_path"] == "/path/to/doc.txt"
+        assert doc["file_name"] == "doc.txt"
+        assert doc["content"] == test_content
 
-    def test_get_document_by_path_returns_none_for_nonexistent(
+    def test_get_document_by_name_returns_none_for_nonexistent(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that get_document_by_path returns None for non-existent path."""
-        doc = get_document_by_path(db_with_schema, "/nonexistent.txt")
+        """Test that get_document_by_name returns None for non-existent name."""
+        doc = get_document_by_name(db_with_schema, "nonexistent.txt")
 
         assert doc is None

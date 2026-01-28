@@ -62,8 +62,8 @@ def test_list_files_returns_all_documents(test_project_setup, client: TestClient
 
     # Add some documents
     conn = get_connection(project_db_path)
-    doc1_id = create_document(conn, "doc1.txt", "hash1")
-    doc2_id = create_document(conn, "doc2.md", "hash2")
+    doc1_id = create_document(conn, "doc1.txt", "Content 1", "hash1")
+    doc2_id = create_document(conn, "doc2.md", "Content 2", "hash2")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/files")
@@ -72,10 +72,10 @@ def test_list_files_returns_all_documents(test_project_setup, client: TestClient
     data = response.json()
     assert len(data) == 2
     assert data[0]["id"] == doc1_id
-    assert data[0]["file_path"] == "doc1.txt"
+    assert data[0]["file_name"] == "doc1.txt"
     assert data[0]["content_hash"] == "hash1"
     assert data[1]["id"] == doc2_id
-    assert data[1]["file_path"] == "doc2.md"
+    assert data[1]["file_name"] == "doc2.md"
 
 
 def test_get_file_by_id_returns_document(test_project_setup, client: TestClient):
@@ -84,7 +84,7 @@ def test_get_file_by_id_returns_document(test_project_setup, client: TestClient)
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
-    doc_id = create_document(conn, "test.txt", "test_hash")
+    doc_id = create_document(conn, "test.txt", "Test content", "test_hash")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/files/{doc_id}")
@@ -92,7 +92,7 @@ def test_get_file_by_id_returns_document(test_project_setup, client: TestClient)
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == doc_id
-    assert data["file_path"] == "test.txt"
+    assert data["file_name"] == "test.txt"
     assert data["content_hash"] == "test_hash"
 
 
@@ -107,37 +107,127 @@ def test_get_file_by_id_returns_404_for_missing_file(
     assert response.status_code == 404
 
 
-def test_create_file_adds_new_document(test_project_setup, client: TestClient):
-    """Test POST /api/projects/{id}/files creates a new document."""
+def test_create_file_adds_new_document_with_content(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files creates a new document with content."""
     project_id = test_project_setup["project_id"]
-    doc_root = test_project_setup["doc_root"]
 
-    # Create actual file in doc_root
-    test_file = Path(doc_root) / "new_doc.txt"
-    test_file.write_text("テストコンテンツ", encoding="utf-8")
-
-    payload = {"file_path": "new_doc.txt"}
+    payload = {"file_name": "new_doc.txt", "content": "This is test content."}
 
     response = client.post(f"/api/projects/{project_id}/files", json=payload)
 
     assert response.status_code == 201
     data = response.json()
     assert "id" in data
-    assert data["file_path"] == "new_doc.txt"
+    assert data["file_name"] == "new_doc.txt"
     assert "content_hash" in data
 
 
-def test_create_file_returns_400_for_missing_file(
-    test_project_setup, client: TestClient
-):
-    """Test POST /api/projects/{id}/files returns 400 if file doesn't exist."""
+def test_create_file_rejects_invalid_extension(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files rejects non txt/md files."""
     project_id = test_project_setup["project_id"]
 
-    payload = {"file_path": "nonexistent.txt"}
+    payload = {"file_name": "script.py", "content": "print('hello')"}
 
     response = client.post(f"/api/projects/{project_id}/files", json=payload)
 
     assert response.status_code == 400
+    assert "extension" in response.json()["detail"].lower()
+
+
+def test_create_file_rejects_path_in_filename(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files rejects file names with path separators."""
+    project_id = test_project_setup["project_id"]
+
+    # Test forward slash
+    payload = {"file_name": "path/to/file.txt", "content": "content"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 400
+
+    # Test backslash
+    payload = {"file_name": "path\\to\\file.txt", "content": "content"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 400
+
+
+def test_create_file_returns_409_for_duplicate_file(
+    test_project_setup, client: TestClient
+):
+    """Test POST /api/projects/{id}/files returns 409 for duplicate file."""
+    project_id = test_project_setup["project_id"]
+
+    payload = {"file_name": "duplicate.txt", "content": "Content 1"}
+
+    # First creation should succeed
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 201
+
+    # Second creation should return 409 Conflict
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 409
+
+
+def test_create_files_bulk_adds_multiple_documents(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files/bulk creates multiple documents."""
+    project_id = test_project_setup["project_id"]
+
+    payload = {
+        "files": [
+            {"file_name": "file1.txt", "content": "Content 1"},
+            {"file_name": "file2.md", "content": "# Markdown content"},
+        ]
+    }
+
+    response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["file_name"] == "file1.txt"
+    assert data[1]["file_name"] == "file2.md"
+
+
+def test_create_files_bulk_returns_400_for_invalid_extension(
+    test_project_setup, client: TestClient
+):
+    """Test POST /api/projects/{id}/files/bulk rejects invalid extensions."""
+    project_id = test_project_setup["project_id"]
+
+    payload = {
+        "files": [
+            {"file_name": "valid.txt", "content": "Content"},
+            {"file_name": "invalid.py", "content": "print('x')"},
+        ]
+    }
+
+    response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+    assert response.status_code == 400
+
+
+def test_create_files_bulk_rolls_back_on_duplicate(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files/bulk rolls back all on duplicate."""
+    project_id = test_project_setup["project_id"]
+
+    # First create one file
+    payload1 = {"file_name": "existing.txt", "content": "Existing"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload1)
+    assert response.status_code == 201
+
+    # Now try bulk with duplicate
+    payload2 = {
+        "files": [
+            {"file_name": "new.txt", "content": "New"},
+            {"file_name": "existing.txt", "content": "Duplicate"},
+        ]
+    }
+    response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload2)
+
+    assert response.status_code == 409
+
+    # Verify new.txt was not created (rolled back)
+    response = client.get(f"/api/projects/{project_id}/files")
+    files = response.json()
+    assert len(files) == 1  # Only existing.txt should exist
 
 
 def test_delete_file_removes_document(test_project_setup, client: TestClient):
@@ -146,7 +236,7 @@ def test_delete_file_removes_document(test_project_setup, client: TestClient):
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
-    doc_id = create_document(conn, "delete_me.txt", "hash")
+    doc_id = create_document(conn, "delete_me.txt", "To be deleted", "hash")
     conn.close()
 
     response = client.delete(f"/api/projects/{project_id}/files/{doc_id}")
@@ -162,129 +252,19 @@ def test_delete_file_removes_document(test_project_setup, client: TestClient):
     conn.close()
 
 
-def test_diff_scan_detects_new_files(test_project_setup, client: TestClient):
-    """Test POST /api/projects/{id}/files/diff-scan detects new files."""
-    project_id = test_project_setup["project_id"]
-    doc_root = test_project_setup["doc_root"]
-
-    # Create new files in doc_root
-    test_file1 = Path(doc_root) / "new1.txt"
-    test_file2 = Path(doc_root) / "new2.md"
-    test_file1.write_text("content1", encoding="utf-8")
-    test_file2.write_text("content2", encoding="utf-8")
-
-    response = client.post(f"/api/projects/{project_id}/files/diff-scan")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert "added" in data
-    assert "modified" in data
-    assert "deleted" in data
-    assert len(data["added"]) == 2
-    assert "new1.txt" in data["added"]
-    assert "new2.md" in data["added"]
-
-
-def test_diff_scan_detects_modified_files(test_project_setup, client: TestClient):
-    """Test POST /api/projects/{id}/files/diff-scan detects modified files."""
-    project_id = test_project_setup["project_id"]
-    project_db_path = test_project_setup["project_db_path"]
-    doc_root = test_project_setup["doc_root"]
-
-    # Create file and register it
-    test_file = Path(doc_root) / "modified.txt"
-    test_file.write_text("old content", encoding="utf-8")
-
-    conn = get_connection(project_db_path)
-    create_document(conn, "modified.txt", "old_hash")
-    conn.close()
-
-    # Modify the file
-    test_file.write_text("new content", encoding="utf-8")
-
-    response = client.post(f"/api/projects/{project_id}/files/diff-scan")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data["modified"]) == 1
-    assert "modified.txt" in data["modified"]
-
-
-def test_diff_scan_detects_deleted_files(test_project_setup, client: TestClient):
-    """Test POST /api/projects/{id}/files/diff-scan detects deleted files."""
-    project_id = test_project_setup["project_id"]
-    project_db_path = test_project_setup["project_db_path"]
-
-    # Register a file that doesn't exist in filesystem
-    conn = get_connection(project_db_path)
-    create_document(conn, "deleted.txt", "hash")
-    conn.close()
-
-    response = client.post(f"/api/projects/{project_id}/files/diff-scan")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data["deleted"]) == 1
-    assert "deleted.txt" in data["deleted"]
-
-
-def test_get_files_returns_404_for_missing_project(client: TestClient):
-    """Test GET /api/projects/{id}/files returns 404 for missing project."""
-    response = client.get("/api/projects/999/files")
-
-    assert response.status_code == 404
-
-
-def test_create_file_rejects_path_traversal_attack(
-    test_project_setup, client: TestClient
-):
-    """Test POST /api/projects/{id}/files rejects path traversal attempts."""
-    project_id = test_project_setup["project_id"]
-
-    # Test relative path traversal
-    payload = {"file_path": "../secret.txt"}
-    response = client.post(f"/api/projects/{project_id}/files", json=payload)
-    assert response.status_code == 400
-
-    # Test absolute path
-    payload = {"file_path": "/etc/passwd"}
-    response = client.post(f"/api/projects/{project_id}/files", json=payload)
-    assert response.status_code == 400
-
-    # Test path with multiple traversals
-    payload = {"file_path": "../../etc/passwd"}
-    response = client.post(f"/api/projects/{project_id}/files", json=payload)
-    assert response.status_code == 400
-
-
-def test_create_file_returns_409_for_duplicate_file(
-    test_project_setup, client: TestClient
-):
-    """Test POST /api/projects/{id}/files returns 409 for duplicate file."""
-    project_id = test_project_setup["project_id"]
-    doc_root = test_project_setup["doc_root"]
-
-    # Create actual file in doc_root
-    test_file = Path(doc_root) / "duplicate.txt"
-    test_file.write_text("テストコンテンツ", encoding="utf-8")
-
-    # First creation should succeed
-    payload = {"file_path": "duplicate.txt"}
-    response = client.post(f"/api/projects/{project_id}/files", json=payload)
-    assert response.status_code == 201
-
-    # Second creation should return 409 Conflict
-    response = client.post(f"/api/projects/{project_id}/files", json=payload)
-    assert response.status_code == 409
-
-
 def test_delete_file_returns_404_for_missing_file(
     test_project_setup, client: TestClient
 ):
     """Test DELETE /api/projects/{id}/files/{file_id} returns 404 for missing file."""
     project_id = test_project_setup["project_id"]
 
-    # Attempt to delete non-existent file
     response = client.delete(f"/api/projects/{project_id}/files/999")
+
+    assert response.status_code == 404
+
+
+def test_get_files_returns_404_for_missing_project(client: TestClient):
+    """Test GET /api/projects/{id}/files returns 404 for missing project."""
+    response = client.get("/api/projects/999/files")
 
     assert response.status_code == 404

@@ -537,11 +537,11 @@ class TestCloneProject:
             db_path=str(tmp_path / "original.db"),
         )
 
-        # Insert test data into source DB
+        # Insert test data into source DB (v4: file_name and content)
         source_conn = get_connection(str(tmp_path / "original.db"))
         source_conn.execute(
-            "INSERT INTO documents (file_path, content_hash) VALUES (?, ?)",
-            ("/path/to/doc.txt", "hash123"),
+            "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+            ("doc.txt", "Test content", "hash123"),
         )
         source_conn.commit()
         source_conn.close()
@@ -557,10 +557,11 @@ class TestCloneProject:
         # Verify cloned DB has the same data
         clone_conn = get_connection(str(tmp_path / "clone.db"))
         cursor = clone_conn.cursor()
-        cursor.execute("SELECT file_path, content_hash FROM documents")
+        cursor.execute("SELECT file_name, content, content_hash FROM documents")
         rows = cursor.fetchall()
         clone_conn.close()
 
         assert len(rows) == 1
-        assert rows[0]["file_path"] == "/path/to/doc.txt"
+        assert rows[0]["file_name"] == "doc.txt"
+        assert rows[0]["content"] == "Test content"
         assert rows[0]["content_hash"] == "hash123"

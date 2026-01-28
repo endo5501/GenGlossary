@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
-import type { FileResponse, FileCreateRequest, DiffScanResponse } from '../types'
+import type { FileResponse, FileCreateRequest, FileCreateBulkRequest } from '../types'
 
 // Query keys
 export const fileKeys = {
@@ -20,10 +20,10 @@ const fileApi = {
     apiClient.get<FileResponse>(`/api/projects/${projectId}/files/${fileId}`),
   create: (projectId: number, data: FileCreateRequest) =>
     apiClient.post<FileResponse>(`/api/projects/${projectId}/files`, data),
+  createBulk: (projectId: number, data: FileCreateBulkRequest) =>
+    apiClient.post<FileResponse[]>(`/api/projects/${projectId}/files/bulk`, data),
   delete: (projectId: number, fileId: number) =>
     apiClient.delete<void>(`/api/projects/${projectId}/files/${fileId}`),
-  diffScan: (projectId: number) =>
-    apiClient.post<DiffScanResponse>(`/api/projects/${projectId}/files/diff-scan`),
 }
 
 // Hooks
@@ -54,22 +54,23 @@ export function useCreateFile(projectId: number) {
   })
 }
 
-export function useDeleteFile(projectId: number) {
+export function useCreateFilesBulk(projectId: number) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (fileId: number) => fileApi.delete(projectId, fileId),
+    mutationFn: (files: FileCreateRequest[]) =>
+      fileApi.createBulk(projectId, { files }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
     },
   })
 }
 
-export function useDiffScan(projectId: number) {
+export function useDeleteFile(projectId: number) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => fileApi.diffScan(projectId),
+    mutationFn: (fileId: number) => fileApi.delete(projectId, fileId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
     },

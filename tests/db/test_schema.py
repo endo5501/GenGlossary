@@ -41,7 +41,7 @@ class TestSchemaInitialization:
         initialize_db(in_memory_db)
 
         version = get_schema_version(in_memory_db)
-        assert version == 3
+        assert version == 4  # v4: documents table has content column
 
     def test_initialize_db_is_idempotent(self, in_memory_db: sqlite3.Connection) -> None:
         """Test that initialize_db can be called multiple times safely."""
@@ -129,7 +129,7 @@ class TestDocumentsTable:
     def test_documents_table_has_required_columns(
         self, in_memory_db: sqlite3.Connection
     ) -> None:
-        """Test that documents table has all required columns including created_at."""
+        """Test that documents table has all required columns including content."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
@@ -137,30 +137,32 @@ class TestDocumentsTable:
         columns = {row[1]: row[2] for row in cursor.fetchall()}
 
         assert "id" in columns
-        assert "file_path" in columns
+        assert "file_name" in columns  # v4: file_path → file_name
+        assert "content" in columns  # v4: content column added
         assert "content_hash" in columns
         assert "created_at" in columns
         assert "run_id" not in columns  # v2: run_id should be removed
+        assert "file_path" not in columns  # v4: file_path should be removed
 
     def test_documents_table_unique_constraint(
         self, in_memory_db: sqlite3.Connection
     ) -> None:
-        """Test that file_path is unique in v2."""
+        """Test that file_name is unique in v4."""
         initialize_db(in_memory_db)
 
         cursor = in_memory_db.cursor()
 
         # Insert first document
         cursor.execute(
-            "INSERT INTO documents (file_path, content_hash) VALUES (?, ?)",
-            ("/path/to/doc.txt", "abc123"),
+            "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+            ("doc.txt", "Hello World", "abc123"),
         )
 
-        # Try to insert duplicate file_path
+        # Try to insert duplicate file_name
         with pytest.raises(sqlite3.IntegrityError):
             cursor.execute(
-                "INSERT INTO documents (file_path, content_hash) VALUES (?, ?)",
-                ("/path/to/doc.txt", "def456"),
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("doc.txt", "Different content", "def456"),
             )
 
     def test_documents_table_default_created_at(
@@ -171,13 +173,30 @@ class TestDocumentsTable:
 
         cursor = in_memory_db.cursor()
         cursor.execute(
-            "INSERT INTO documents (file_path, content_hash) VALUES (?, ?)",
-            ("/path/to/doc.txt", "abc123"),
+            "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+            ("doc.txt", "Hello World", "abc123"),
         )
         cursor.execute("SELECT created_at FROM documents WHERE id = 1")
         created_at = cursor.fetchone()[0]
 
         assert created_at is not None
+
+    def test_documents_table_content_column(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that content column stores file content correctly."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        test_content = "# Test Document\n\nThis is test content."
+        cursor.execute(
+            "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+            ("test.md", test_content, "hash123"),
+        )
+        cursor.execute("SELECT content FROM documents WHERE file_name = ?", ("test.md",))
+        stored_content = cursor.fetchone()[0]
+
+        assert stored_content == test_content
 
 
 class TestTermsExtractedTable:

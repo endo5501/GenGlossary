@@ -1,14 +1,12 @@
 """Files API endpoints."""
 
-import hashlib
 import sqlite3
-from pathlib import Path as FilePath
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
-from genglossary.api.dependencies import get_project_by_id, get_project_db
+from genglossary.api.dependencies import get_project_db
 from genglossary.api.schemas.file_schemas import (
-    DiffScanResponse,
+    FileCreateBulkRequest,
     FileCreateRequest,
     FileResponse,
 )
@@ -16,28 +14,45 @@ from genglossary.db.document_repository import (
     create_document,
     delete_document,
     get_document,
-    get_document_by_path,
+    get_document_by_name,
     list_all_documents,
 )
-from genglossary.models.project import Project
+from genglossary.utils.hash import compute_content_hash
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
+ALLOWED_EXTENSIONS = {".txt", ".md"}
 
-def _compute_file_hash(file_path: FilePath) -> str:
-    """Compute SHA256 hash of a file.
+
+def _validate_file_name(file_name: str) -> None:
+    """Validate file name.
 
     Args:
-        file_path: Path to the file.
+        file_name: File name to validate.
 
-    Returns:
-        str: Hexadecimal hash string.
+    Raises:
+        HTTPException: If file name is invalid.
     """
-    sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
+    # Check for path separators
+    if "/" in file_name or "\\" in file_name:
+        raise HTTPException(
+            status_code=400,
+            detail="File name cannot contain path separators",
+        )
+
+    # Check extension
+    if "." not in file_name:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
+        )
+
+    ext = "." + file_name.rsplit(".", 1)[-1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
+        )
 
 
 @router.get("", response_model=list[FileResponse])
@@ -88,49 +103,36 @@ async def get_file_by_id(
 async def create_file(
     project_id: int = Path(..., description="Project ID"),
     request: FileCreateRequest = Body(...),
-    project: Project = Depends(get_project_by_id),
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> FileResponse:
     """Add a new document file to the project.
 
     Args:
         project_id: Project ID (path parameter).
-        request: File creation request.
-        project: Project instance.
+        request: File creation request with file_name and content.
         project_db: Project database connection.
 
     Returns:
         FileResponse: The created document.
 
     Raises:
-        HTTPException: 400 if file doesn't exist in doc_root or path is invalid.
+        HTTPException: 400 if file name or extension is invalid.
+        HTTPException: 409 if file already exists.
     """
-    # Resolve and validate file path (prevent path traversal)
-    doc_root = FilePath(project.doc_root).resolve()
-    file_full_path = (doc_root / request.file_path).resolve()
-
-    # Security check: ensure path is within doc_root
-    try:
-        file_full_path.relative_to(doc_root)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid file path")
-
-    # Check if file exists and is a file
-    if not file_full_path.is_file():
-        raise HTTPException(
-            status_code=400,
-            detail=f"File not found in doc_root: {request.file_path}",
-        )
+    # Validate file name
+    _validate_file_name(request.file_name)
 
     # Compute hash
-    content_hash = _compute_file_hash(file_full_path)
+    content_hash = compute_content_hash(request.content)
 
     # Create document
     try:
-        doc_id = create_document(project_db, request.file_path, content_hash)
+        doc_id = create_document(
+            project_db, request.file_name, request.content, content_hash
+        )
     except sqlite3.IntegrityError:
         raise HTTPException(
-            status_code=409, detail=f"File already exists: {request.file_path}"
+            status_code=409, detail=f"File already exists: {request.file_name}"
         )
 
     # Return created document
@@ -138,6 +140,69 @@ async def create_file(
     assert row is not None
 
     return FileResponse.from_db_row(row)
+
+
+@router.post(
+    "/bulk", response_model=list[FileResponse], status_code=status.HTTP_201_CREATED
+)
+async def create_files_bulk(
+    project_id: int = Path(..., description="Project ID"),
+    request: FileCreateBulkRequest = Body(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> list[FileResponse]:
+    """Add multiple document files to the project.
+
+    This is an atomic operation - if any file fails validation or already exists,
+    none of the files will be created.
+
+    Args:
+        project_id: Project ID (path parameter).
+        request: Bulk file creation request with list of files.
+        project_db: Project database connection.
+
+    Returns:
+        list[FileResponse]: List of created documents.
+
+    Raises:
+        HTTPException: 400 if any file name or extension is invalid.
+        HTTPException: 409 if any file already exists.
+    """
+    # Validate all file names first
+    for file_req in request.files:
+        _validate_file_name(file_req.file_name)
+
+    # Check for duplicates in request
+    file_names = [f.file_name for f in request.files]
+    if len(file_names) != len(set(file_names)):
+        raise HTTPException(
+            status_code=400, detail="Duplicate file names in request"
+        )
+
+    # Check for existing files
+    for file_req in request.files:
+        existing = get_document_by_name(project_db, file_req.file_name)
+        if existing is not None:
+            raise HTTPException(
+                status_code=409, detail=f"File already exists: {file_req.file_name}"
+            )
+
+    # Create all documents
+    created_ids = []
+    for file_req in request.files:
+        content_hash = compute_content_hash(file_req.content)
+        doc_id = create_document(
+            project_db, file_req.file_name, file_req.content, content_hash
+        )
+        created_ids.append(doc_id)
+
+    # Return created documents
+    responses = []
+    for doc_id in created_ids:
+        row = get_document(project_db, doc_id)
+        assert row is not None
+        responses.append(FileResponse.from_db_row(row))
+
+    return responses
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -162,61 +227,3 @@ async def delete_file(
         raise HTTPException(status_code=404, detail=f"File {file_id} not found")
 
     delete_document(project_db, file_id)
-
-
-@router.post("/diff-scan", response_model=DiffScanResponse)
-async def diff_scan(
-    project_id: int = Path(..., description="Project ID"),
-    project: Project = Depends(get_project_by_id),
-    project_db: sqlite3.Connection = Depends(get_project_db),
-) -> DiffScanResponse:
-    """Scan doc_root for file changes (added, modified, deleted).
-
-    Args:
-        project_id: Project ID (path parameter).
-        project: Project instance.
-        project_db: Project database connection.
-
-    Returns:
-        DiffScanResponse: Lists of added, modified, and deleted files.
-    """
-    doc_root = FilePath(project.doc_root)
-
-    # Get all registered documents
-    registered_docs = {row["file_path"]: row for row in list_all_documents(project_db)}
-
-    # Scan filesystem for all files
-    if not doc_root.exists():
-        # If doc_root doesn't exist, all registered files are deleted
-        return DiffScanResponse(
-            added=[], modified=[], deleted=list(registered_docs.keys())
-        )
-
-    filesystem_files = {
-        str(f.relative_to(doc_root))
-        for f in doc_root.rglob("*")
-        if f.is_file()
-    }
-
-    # Detect changes
-    added = []
-    modified = []
-    deleted = []
-
-    # Check for new and modified files
-    for file_path in filesystem_files:
-        if file_path not in registered_docs:
-            added.append(file_path)
-        else:
-            # Check if file was modified (hash changed)
-            full_path = doc_root / file_path
-            current_hash = _compute_file_hash(full_path)
-            if current_hash != registered_docs[file_path]["content_hash"]:
-                modified.append(file_path)
-
-    # Check for deleted files
-    for file_path in registered_docs.keys():
-        if file_path not in filesystem_files:
-            deleted.append(file_path)
-
-    return DiffScanResponse(added=added, modified=modified, deleted=deleted)
