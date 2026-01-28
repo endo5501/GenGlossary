@@ -12,6 +12,9 @@ export interface ProjectResponse {
   updated_at: string
   last_run_at: string | null
   status: ProjectStatus
+  document_count: number
+  term_count: number
+  issue_count: number
 }
 
 export interface ProjectCreateRequest {

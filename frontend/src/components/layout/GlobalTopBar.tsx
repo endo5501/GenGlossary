@@ -47,6 +47,16 @@ export function GlobalTopBar({
     projectId && runId ? cancelRun.mutate(runId) : propOnStop?.()
   }
 
+  // Home page: simple header without project controls
+  if (projectId === undefined) {
+    return (
+      <Group h="100%" px="md" justify="space-between">
+        <Title order={4}>GenGlossary</Title>
+      </Group>
+    )
+  }
+
+  // Project detail page: full header with status and controls
   return (
     <Group h="100%" px="md" justify="space-between">
       <Group>
@@ -70,7 +80,7 @@ export function GlobalTopBar({
           variant="filled"
           color="green"
           onClick={handleRun}
-          disabled={status === 'running'}
+          disabled={status === 'running' || startRun.isPending}
           loading={startRun.isPending}
           aria-label="Run"
         >
@@ -81,7 +91,7 @@ export function GlobalTopBar({
           variant="outline"
           color="red"
           onClick={handleStop}
-          disabled={status !== 'running'}
+          disabled={status !== 'running' || runId === undefined}
           loading={cancelRun.isPending}
           aria-label="Stop"
         >

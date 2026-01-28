@@ -12,8 +12,10 @@ from genglossary.api.schemas.project_schemas import (
     ProjectCloneRequest,
     ProjectCreateRequest,
     ProjectResponse,
+    ProjectStatistics,
     ProjectUpdateRequest,
 )
+from genglossary.db.connection import get_connection
 from genglossary.db.project_repository import (
     clone_project,
     create_project,
@@ -21,6 +23,11 @@ from genglossary.db.project_repository import (
     get_project,
     list_projects,
     update_project,
+)
+from genglossary.db.stats_repository import (
+    count_documents,
+    count_issues,
+    count_provisional_terms,
 )
 from genglossary.models.project import Project
 
@@ -92,20 +99,46 @@ def _generate_db_path(name: str) -> str:
     return str(db_path)
 
 
+def _get_project_statistics(db_path: str) -> ProjectStatistics:
+    """Get statistics for a project from its database.
+
+    Args:
+        db_path: Path to the project database file.
+
+    Returns:
+        ProjectStatistics: Statistics for the project.
+    """
+    try:
+        project_conn = get_connection(db_path)
+        stats = ProjectStatistics(
+            document_count=count_documents(project_conn),
+            term_count=count_provisional_terms(project_conn),
+            issue_count=count_issues(project_conn),
+        )
+        project_conn.close()
+        return stats
+    except Exception:
+        return ProjectStatistics()
+
+
 @router.get("", response_model=list[ProjectResponse])
 async def list_all_projects(
     registry_conn: sqlite3.Connection = Depends(get_registry_db),
 ) -> list[ProjectResponse]:
-    """List all projects.
+    """List all projects with statistics.
 
     Args:
         registry_conn: Registry database connection.
 
     Returns:
-        list[ProjectResponse]: List of all projects, ordered by created_at desc.
+        list[ProjectResponse]: List of all projects with statistics.
     """
     projects = list_projects(registry_conn)
-    return [ProjectResponse.from_project(p) for p in projects]
+    result = []
+    for p in projects:
+        stats = _get_project_statistics(p.db_path)
+        result.append(ProjectResponse.from_project(p, stats))
+    return result
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

@@ -26,9 +26,9 @@ const statusColors: Record<ProjectStatus, string> = {
   error: 'red',
 }
 
-function formatLastRun(lastRunAt: string | null, format: 'short' | 'long' = 'short'): string {
-  if (!lastRunAt) return format === 'short' ? '-' : 'Never'
-  const date = new Date(lastRunAt)
+function formatDate(dateStr: string | null, format: 'short' | 'long' = 'short'): string {
+  if (!dateStr) return format === 'short' ? '-' : 'Never'
+  const date = new Date(dateStr)
   return format === 'short' ? date.toLocaleDateString() : date.toLocaleString()
 }
 
@@ -62,7 +62,7 @@ function ProjectSummaryCard({
             <strong>LLM Model:</strong> {project.llm_model || '(not set)'}
           </Text>
           <Text size="sm">
-            <strong>Last Run:</strong> {formatLastRun(project.last_run_at, 'long')}
+            <strong>Last Run:</strong> {formatDate(project.last_run_at, 'long')}
           </Text>
         </Stack>
 
@@ -125,15 +125,7 @@ export function HomePage() {
 
   return (
     <Box p="md">
-      <Group justify="space-between" mb="lg">
-        <Title order={2}>Projects</Title>
-        <Button
-          leftSection={<IconPlus size={16} />}
-          onClick={() => setCreateDialogOpen(true)}
-        >
-          Create
-        </Button>
-      </Group>
+      <Title order={2} mb="lg">Projects</Title>
 
       {isEmpty ? (
         <Card withBorder p="xl" data-testid="projects-empty">
@@ -155,40 +147,48 @@ export function HomePage() {
       ) : (
         <Group align="flex-start" gap="lg">
           {/* Project List */}
-          <Card withBorder style={{ flex: 1 }}>
-            <Table highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Name</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                  <Table.Th>Last Run</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {projects.map((project) => (
-                  <Table.Tr
-                    key={project.id}
-                    onClick={() => setSelectedProject(project)}
-                    style={{
-                      cursor: 'pointer',
-                      backgroundColor:
-                        selectedProject?.id === project.id
-                          ? 'var(--mantine-color-blue-light)'
-                          : undefined,
-                    }}
-                  >
-                    <Table.Td>{project.name}</Table.Td>
-                    <Table.Td>
-                      <Badge color={statusColors[project.status]} size="sm">
-                        {project.status}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>{formatLastRun(project.last_run_at)}</Table.Td>
+          <Stack style={{ flex: 1 }} gap="md">
+            <Card withBorder>
+              <Table highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>名前</Table.Th>
+                    <Table.Th>最終更新</Table.Th>
+                    <Table.Th>Doc</Table.Th>
+                    <Table.Th>用語</Table.Th>
+                    <Table.Th>issues</Table.Th>
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Card>
+                </Table.Thead>
+                <Table.Tbody>
+                  {projects.map((project) => (
+                    <Table.Tr
+                      key={project.id}
+                      onClick={() => setSelectedProject(project)}
+                      style={{
+                        cursor: 'pointer',
+                        backgroundColor:
+                          selectedProject?.id === project.id
+                            ? 'var(--mantine-color-blue-light)'
+                            : undefined,
+                      }}
+                    >
+                      <Table.Td>{project.name}</Table.Td>
+                      <Table.Td>{formatDate(project.updated_at)}</Table.Td>
+                      <Table.Td>{project.document_count}</Table.Td>
+                      <Table.Td>{project.term_count}</Table.Td>
+                      <Table.Td>{project.issue_count}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Card>
+            <Button
+              leftSection={<IconPlus size={16} />}
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              新規作成
+            </Button>
+          </Stack>
 
           {/* Summary Card */}
           {selectedProject && (

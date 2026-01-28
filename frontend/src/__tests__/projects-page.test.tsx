@@ -48,7 +48,7 @@ describe('HomePage (Projects)', () => {
     expect(screen.getByText(/no projects/i)).toBeInTheDocument()
   })
 
-  it('displays project list with statistics', async () => {
+  it('displays project list with statistics columns', async () => {
     renderWithProviders(<HomePage />)
 
     await waitFor(() => {
@@ -56,9 +56,10 @@ describe('HomePage (Projects)', () => {
     })
     expect(screen.getByText('Test Project 2')).toBeInTheDocument()
 
-    // Check status badges are displayed
-    expect(screen.getByText('completed')).toBeInTheDocument()
-    expect(screen.getByText('created')).toBeInTheDocument()
+    // Check table headers for statistics columns
+    expect(screen.getByText('Doc')).toBeInTheDocument()
+    expect(screen.getByText('用語')).toBeInTheDocument()
+    expect(screen.getByText('issues')).toBeInTheDocument()
   })
 
   it('selects project on click and shows summary card', async () => {
@@ -89,8 +90,8 @@ describe('HomePage (Projects)', () => {
       expect(screen.getByText('Test Project 1')).toBeInTheDocument()
     })
 
-    // Click create button
-    const createButton = screen.getByRole('button', { name: /create/i })
+    // Click create button (now in Japanese and at bottom of list)
+    const createButton = screen.getByRole('button', { name: /新規作成/i })
     await user.click(createButton)
 
     // Dialog should open
@@ -114,9 +115,9 @@ describe('Create Project Dialog', () => {
       expect(screen.getByText('Test Project 1')).toBeInTheDocument()
     })
 
-    // Open dialog - use the first Create button (in header)
-    const createButtons = screen.getAllByRole('button', { name: /create/i })
-    await user.click(createButtons[0])
+    // Open dialog - click 新規作成 button (at bottom of list)
+    const createButton = screen.getByRole('button', { name: /新規作成/i })
+    await user.click(createButton)
 
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -140,9 +141,9 @@ describe('Create Project Dialog', () => {
       expect(screen.getByText('Test Project 1')).toBeInTheDocument()
     })
 
-    // Open dialog - use the first Create button (in header)
-    const createButtons = screen.getAllByRole('button', { name: /create/i })
-    await user.click(createButtons[0])
+    // Open dialog - click 新規作成 button (at bottom of list)
+    const createButton = screen.getByRole('button', { name: /新規作成/i })
+    await user.click(createButton)
 
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()

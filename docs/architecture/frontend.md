@@ -50,16 +50,33 @@ Mantine のデフォルトテーマをベースにカスタマイズ。
 
 | コンポーネント | 説明 |
 |---------------|------|
-| `AppShell` | メインレイアウト。ヘッダー (60px)、ナビゲーション (200px)、コンテンツエリアを含む |
-| `GlobalTopBar` | グローバルヘッダー。アプリタイトル、パイプラインステータス、Run/Stop ボタン |
-| `LeftNavRail` | 左サイドナビゲーション。8ページへのリンク |
-| `LogPanel` | 折りたたみ可能なログビューア。パイプライン実行ログを表示 |
+| `AppShell` | メインレイアウト。`projectId`の有無に応じて表示要素を切り替え |
+| `GlobalTopBar` | グローバルヘッダー。ホーム画面ではシンプル表示、プロジェクト詳細では完全表示 |
+| `LeftNavRail` | 左サイドナビゲーション。プロジェクト詳細画面でのみ表示 |
+| `LogPanel` | 折りたたみ可能なログビューア。プロジェクト詳細画面でのみ表示 |
 
 #### AppShell レイアウト
 
+**レイアウト分離:**
+- ホーム画面（`/`）: シンプルレイアウト（ヘッダーのみ）
+- プロジェクト詳細画面（`/projects/$projectId/*`）: フルレイアウト
+
+**ホーム画面レイアウト:**
 ```
 ┌────────────────────────────────────────────────┐
-│           GlobalTopBar (60px)                  │
+│     GlobalTopBar (シンプル: タイトルのみ)       │
+├────────────────────────────────────────────────┤
+│                                                │
+│              Content Area                      │
+│             (プロジェクト一覧)                  │
+│                                                │
+└────────────────────────────────────────────────┘
+```
+
+**プロジェクト詳細画面レイアウト:**
+```
+┌────────────────────────────────────────────────┐
+│  GlobalTopBar (タイトル + ステータス + Run/Stop) │
 ├────────────┬───────────────────────────────────┤
 │            │                                   │
 │ LeftNavRail│         Content Area              │
@@ -70,12 +87,32 @@ Mantine のデフォルトテーマをベースにカスタマイズ。
 └────────────┴───────────────────────────────────┘
 ```
 
+**条件付きレンダリング:**
+```typescript
+const hasProject = projectId !== undefined
+
+// ナビゲーションバーはプロジェクト詳細のみ
+navbar={hasProject ? { width: 200, breakpoint: 'sm' } : undefined}
+
+// LeftNavRailはプロジェクト詳細のみ
+{hasProject && <MantineAppShell.Navbar>...</MantineAppShell.Navbar>}
+
+// LogPanelはプロジェクト詳細のみ
+{hasProject && <LogPanel projectId={projectId} runId={runId} />}
+```
+
 #### GlobalTopBar の機能
 
+**ホーム画面（`projectId === undefined`）:**
+- **アプリタイトル**: "GenGlossary" のみ表示
+
+**プロジェクト詳細画面（`projectId !== undefined`）:**
 - **アプリタイトル**: "GenGlossary"
-- **パイプラインステータス**: 現在の実行状態を表示
-- **Run ボタン**: パイプライン実行開始（未実装 → API 連携予定）
-- **Stop ボタン**: 実行中のパイプラインをキャンセル（未実装 → API 連携予定）
+- **パイプラインステータス**: 現在の実行状態をバッジで表示
+- **進捗表示**: 実行中は `current / total` を表示
+- **Run ボタン**: パイプライン実行開始（実行中または開始処理中は無効化）
+- **Stop ボタン**: 実行中のパイプラインをキャンセル（非実行中または `runId` 未取得時は無効化）
+- **Scope セレクター**: 実行範囲の選択（Full Pipeline / From Terms / Provisional to Refined）
 
 #### LeftNavRail のナビゲーション項目
 
@@ -484,13 +521,13 @@ const routes = routeConfigs.map(({ path, title }) =>
 | ファイル | テスト数 | 対象 |
 |---------|---------|------|
 | `api-client.test.ts` | 14 | APIクライアントの HTTP メソッド、エラーハンドリング |
-| `app-shell.test.tsx` | 19 | AppShell、GlobalTopBar、LeftNavRail、LogPanel |
+| `app-shell.test.tsx` | 27 | AppShell、GlobalTopBar、LeftNavRail、LogPanel、レイアウト分離 |
 | `routing.test.tsx` | 16 | ルーティング、ナビゲーション |
 | `projects-page.test.tsx` | 11 | HomePage、FilesPage、ダイアログコンポーネント |
 | `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
 | `terms-workflow.test.tsx` | 43 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel |
 
-**合計**: 114 テスト
+**合計**: 122 テスト
 
 ### テスト実行
 

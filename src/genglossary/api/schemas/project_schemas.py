@@ -48,6 +48,14 @@ def _validate_llm_base_url(v: str | None) -> str | None:
     return stripped
 
 
+class ProjectStatistics(BaseModel):
+    """Statistics for a project."""
+
+    document_count: int = Field(default=0, description="Number of documents")
+    term_count: int = Field(default=0, description="Number of terms in glossary")
+    issue_count: int = Field(default=0, description="Number of glossary issues")
+
+
 class ProjectResponse(BaseModel):
     """Response schema for a project."""
 
@@ -61,18 +69,29 @@ class ProjectResponse(BaseModel):
     updated_at: datetime = Field(..., description="Last update timestamp")
     last_run_at: datetime | None = Field(None, description="Last run timestamp")
     status: ProjectStatus = Field(..., description="Project status")
+    document_count: int = Field(0, description="Number of documents")
+    term_count: int = Field(0, description="Number of terms in glossary")
+    issue_count: int = Field(0, description="Number of glossary issues")
 
     @classmethod
-    def from_project(cls, project: Project) -> "ProjectResponse":
+    def from_project(
+        cls,
+        project: Project,
+        statistics: ProjectStatistics | None = None,
+    ) -> "ProjectResponse":
         """Create from Project model.
 
         Args:
             project: Project model instance.
+            statistics: Optional statistics for the project.
 
         Returns:
             ProjectResponse: Response instance.
         """
-        return cls.model_validate(project, from_attributes=True)
+        data = project.model_dump()
+        if statistics:
+            data.update(statistics.model_dump())
+        return cls.model_validate(data)
 
 
 class ProjectCreateRequest(BaseModel):

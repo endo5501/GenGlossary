@@ -15,19 +15,20 @@ describe('Routing', () => {
     })
   })
 
-  describe('Route navigation', () => {
+  describe('Route navigation (from project page)', () => {
     const navigationRoutes = [
-      { path: '/files', name: /files/i },
-      { path: '/terms', name: /terms/i },
-      { path: '/provisional', name: /provisional/i },
-      { path: '/issues', name: /issues/i },
-      { path: '/refined', name: /refined/i },
-      { path: '/document-viewer', name: /document/i },
-      { path: '/settings', name: /settings/i },
+      { path: '/projects/1/files', name: /files/i },
+      { path: '/projects/1/terms', name: /terms/i },
+      { path: '/projects/1/provisional', name: /provisional/i },
+      { path: '/projects/1/issues', name: /issues/i },
+      { path: '/projects/1/refined', name: /refined/i },
+      { path: '/projects/1/document-viewer', name: /document/i },
+      { path: '/projects/1/settings', name: /settings/i },
     ]
 
     it.each(navigationRoutes)('should navigate to $path', async ({ path, name }) => {
-      const { router } = await renderApp()
+      // Start from a project page to have sidebar navigation available
+      const { router } = await renderApp('/projects/1/files')
       const user = userEvent.setup()
 
       const link = screen.getByRole('link', { name })
