@@ -3,7 +3,7 @@ priority: 6
 tags: [gui, frontend, create]
 description: "Create画面 - OpenAI設定フィールド追加"
 created_at: "2026-01-27T16:33:24Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-28T13:23:07Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
