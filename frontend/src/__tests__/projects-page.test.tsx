@@ -163,6 +163,35 @@ describe('Create Project Dialog', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
+
+  it('has LLM Provider as dropdown with ollama and openai options', async () => {
+    const { user } = renderWithProviders(<HomePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project 1')).toBeInTheDocument()
+    })
+
+    // Open dialog
+    const createButton = screen.getByRole('button', { name: /新規作成/i })
+    await user.click(createButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    // LLM Provider should be a combobox (Select component)
+    const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
+    expect(providerSelect).toBeInTheDocument()
+
+    // Click to open dropdown
+    await user.click(providerSelect)
+
+    // Should show ollama and openai options
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /ollama/i })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('option', { name: /openai/i })).toBeInTheDocument()
+  })
 })
 
 describe('Delete Project Dialog', () => {
