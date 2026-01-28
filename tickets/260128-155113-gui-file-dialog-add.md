@@ -28,35 +28,35 @@ Files画面のAddボタンの機能を改善する。
 ## Tasks
 
 ### Phase 1: バックエンド - DBスキーマ変更
-- [ ] documentsテーブルにcontentカラム追加のテスト作成
-- [ ] file_path → file_name への変更
-- [ ] schema.py の実装とマイグレーション
+- [x] documentsテーブルにcontentカラム追加のテスト作成
+- [x] file_path → file_name への変更
+- [x] schema.py の実装とマイグレーション
 
 ### Phase 2: バックエンド - document_repository変更
-- [ ] content対応のCRUD関数テスト作成
-- [ ] document_repository.py の実装
+- [x] content対応のCRUD関数テスト作成
+- [x] document_repository.py の実装
 
 ### Phase 3: バックエンド - APIスキーマ変更
-- [ ] file_schemas.py のリクエスト/レスポンススキーマ変更
+- [x] file_schemas.py のリクエスト/レスポンススキーマ変更
 
 ### Phase 4: バックエンド - APIエンドポイント変更
-- [ ] 新APIのテスト作成
-- [ ] files.py の実装（単一/バルク作成）
+- [x] 新APIのテスト作成
+- [x] files.py の実装（単一/バルク作成）
 
 ### Phase 5: バックエンド - PipelineExecutor変更
-- [ ] DBからcontentを取得するテスト作成
-- [ ] executor.py の実装
+- [x] DBからcontentを取得するテスト作成
+- [x] executor.py の実装
 
 ### Phase 6-8: フロントエンド
-- [ ] @mantine/dropzone パッケージ追加
-- [ ] types.ts の型定義変更
-- [ ] useFiles.ts の複数ファイル一括作成hook追加
-- [ ] AddFileDialog.tsx をDropzone UIに書き換え
-- [ ] フロントエンドテスト更新
+- [x] @mantine/dropzone パッケージ追加
+- [x] types.ts の型定義変更
+- [x] useFiles.ts の複数ファイル一括作成hook追加
+- [x] AddFileDialog.tsx をDropzone UIに書き換え
+- [x] フロントエンドテスト更新
 
 ### 品質保証
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
 - [ ] Code review by codex MCP
 - [ ] Update docs/architecture/*.md
