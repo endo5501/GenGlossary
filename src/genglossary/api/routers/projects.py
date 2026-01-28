@@ -179,11 +179,28 @@ async def get_project_by_id(
     return ProjectResponse.from_project(project)
 
 
+def _cleanup_doc_root(doc_root: str) -> None:
+    """Cleanup auto-generated document root directory if empty.
+
+    Args:
+        doc_root: Path to the document root directory.
+    """
+    try:
+        doc_root_path = Path(doc_root)
+        if doc_root_path.exists() and doc_root_path.is_dir():
+            # Only remove if empty (safe cleanup)
+            if not any(doc_root_path.iterdir()):
+                doc_root_path.rmdir()
+    except Exception:
+        pass
+
+
 def _create_project_with_cleanup(
     registry_conn: sqlite3.Connection,
     request: ProjectCreateRequest,
     db_path: str,
     doc_root: str,
+    doc_root_auto_generated: bool = False,
 ) -> int:
     """Create project and cleanup on failure.
 
@@ -192,6 +209,7 @@ def _create_project_with_cleanup(
         request: Project creation request.
         db_path: Database file path.
         doc_root: Document root path.
+        doc_root_auto_generated: Whether doc_root was auto-generated.
 
     Returns:
         int: Created project ID.
@@ -211,6 +229,8 @@ def _create_project_with_cleanup(
         )
     except sqlite3.IntegrityError:
         _cleanup_db_file(db_path)
+        if doc_root_auto_generated:
+            _cleanup_doc_root(doc_root)
         raise HTTPException(
             status_code=409, detail=f"Project name already exists: {request.name}"
         )
@@ -235,8 +255,11 @@ async def create_new_project(
     """
     db_path = _generate_db_path(request.name)
     # Auto-generate doc_root if not provided
+    doc_root_auto_generated = not request.doc_root
     doc_root = request.doc_root or _generate_doc_root(request.name)
-    project_id = _create_project_with_cleanup(registry_conn, request, db_path, doc_root)
+    project_id = _create_project_with_cleanup(
+        registry_conn, request, db_path, doc_root, doc_root_auto_generated
+    )
     project = _get_project_or_404(registry_conn, project_id)
     return ProjectResponse.from_project(project)
 

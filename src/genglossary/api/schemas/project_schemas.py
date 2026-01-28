@@ -94,6 +94,26 @@ class ProjectResponse(BaseModel):
         return cls.model_validate(data)
 
 
+def _validate_doc_root(v: str | None) -> str | None:
+    """Validate document root path.
+
+    Args:
+        v: The document root path to validate.
+
+    Returns:
+        The validated path or None.
+
+    Raises:
+        ValueError: If the path is invalid.
+    """
+    if v is None:
+        return None
+    stripped = v.strip()
+    if not stripped:
+        return None  # Treat empty/whitespace as not provided
+    return stripped
+
+
 class ProjectCreateRequest(BaseModel):
     """Request schema for creating a project."""
 
@@ -110,6 +130,12 @@ class ProjectCreateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         """Validate project name is not empty."""
         return _validate_project_name(v)
+
+    @field_validator("doc_root")
+    @classmethod
+    def validate_doc_root(cls, v: str | None) -> str | None:
+        """Validate document root path if provided."""
+        return _validate_doc_root(v)
 
     @field_validator("llm_base_url")
     @classmethod
