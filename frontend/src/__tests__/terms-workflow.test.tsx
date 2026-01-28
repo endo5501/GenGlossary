@@ -134,6 +134,23 @@ const mockRunRunning: RunResponse = {
 }
 
 // Test wrapper with providers
+// Create a simple wrapper that provides all necessary contexts without RouterProvider
+// Since the pages themselves don't use useNavigate, we don't need RouterProvider for them
+// Only GlobalTopBar uses useNavigate, and it's tested separately in app-shell.test.tsx
+
+// We need to mock useNavigate and Link for components that use them
+vi.mock('@tanstack/react-router', async () => {
+  const actual = await vi.importActual('@tanstack/react-router')
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+    // Mock Link as a simple anchor that renders children
+    Link: ({ children, to, ...props }: { children: React.ReactNode; to: string; [key: string]: unknown }) => (
+      <a href={to} {...props}>{children}</a>
+    ),
+  }
+})
+
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: {

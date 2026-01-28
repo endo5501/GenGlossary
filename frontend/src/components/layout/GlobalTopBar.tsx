@@ -1,6 +1,7 @@
-import { Group, Title, Badge, Button, Select, Box, Text } from '@mantine/core'
-import { IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react'
+import { Group, Title, Badge, Button, Select, Box, Text, Anchor } from '@mantine/core'
+import { IconPlayerPlay, IconPlayerStop, IconArrowLeft } from '@tabler/icons-react'
 import { useState } from 'react'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useCurrentRun, useStartRun, useCancelRun } from '../../api/hooks'
 import type { RunScope, RunStatus } from '../../api/types'
 import { statusColors } from '../../utils/colors'
@@ -28,6 +29,7 @@ export function GlobalTopBar({
   onStop: propOnStop,
 }: GlobalTopBarProps) {
   const [scope, setScope] = useState<RunScope>('full')
+  const navigate = useNavigate()
 
   const { data: currentRun } = useCurrentRun(projectId)
   const startRun = useStartRun(projectId ?? 0)
@@ -38,6 +40,8 @@ export function GlobalTopBar({
   const progress = currentRun?.progress_total
     ? { current: currentRun.progress_current, total: currentRun.progress_total }
     : null
+
+  const navigateToHome = () => navigate({ to: '/' })
 
   const handleRun = () => {
     projectId ? startRun.mutate({ scope }) : propOnRun?.(scope)
@@ -60,7 +64,18 @@ export function GlobalTopBar({
   return (
     <Group h="100%" px="md" justify="space-between">
       <Group>
-        <Title order={4}>GenGlossary</Title>
+        <Button
+          variant="subtle"
+          size="compact-sm"
+          leftSection={<IconArrowLeft size={16} />}
+          onClick={navigateToHome}
+          aria-label="Back"
+        >
+          Back
+        </Button>
+        <Anchor component={Link} to="/" underline="never" c="inherit">
+          <Title order={4}>GenGlossary</Title>
+        </Anchor>
         <Badge
           color={statusColors[status]}
           data-testid="status-badge"
