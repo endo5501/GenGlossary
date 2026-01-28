@@ -99,6 +99,21 @@ def _generate_db_path(name: str) -> str:
     return str(db_path)
 
 
+def _generate_doc_root(name: str) -> str:
+    """Generate document root path for a project.
+
+    Args:
+        name: Project name.
+
+    Returns:
+        str: Absolute path to the project document directory.
+    """
+    projects_dir = _get_projects_dir()
+    doc_root = projects_dir / name
+    doc_root.mkdir(parents=True, exist_ok=True)
+    return str(doc_root)
+
+
 def _get_project_statistics(db_path: str) -> ProjectStatistics:
     """Get statistics for a project from its database.
 
@@ -166,6 +181,7 @@ def _create_project_with_cleanup(
     registry_conn: sqlite3.Connection,
     request: ProjectCreateRequest,
     db_path: str,
+    doc_root: str,
 ) -> int:
     """Create project and cleanup on failure.
 
@@ -173,6 +189,7 @@ def _create_project_with_cleanup(
         registry_conn: Registry database connection.
         request: Project creation request.
         db_path: Database file path.
+        doc_root: Document root path.
 
     Returns:
         int: Created project ID.
@@ -184,7 +201,7 @@ def _create_project_with_cleanup(
         return create_project(
             registry_conn,
             name=request.name,
-            doc_root=request.doc_root,
+            doc_root=doc_root,
             db_path=db_path,
             llm_provider=request.llm_provider,
             llm_model=request.llm_model,
@@ -215,7 +232,9 @@ async def create_new_project(
         HTTPException: 409 if project name already exists.
     """
     db_path = _generate_db_path(request.name)
-    project_id = _create_project_with_cleanup(registry_conn, request, db_path)
+    # Auto-generate doc_root if not provided
+    doc_root = request.doc_root if request.doc_root else _generate_doc_root(request.name)
+    project_id = _create_project_with_cleanup(registry_conn, request, db_path, doc_root)
     project = _get_project_or_404(registry_conn, project_id)
     return ProjectResponse.from_project(project)
 

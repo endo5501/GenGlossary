@@ -98,7 +98,9 @@ class ProjectCreateRequest(BaseModel):
     """Request schema for creating a project."""
 
     name: str = Field(..., description="Project name (must be unique)")
-    doc_root: str = Field(..., description="Absolute path to document directory")
+    doc_root: str | None = Field(
+        default=None, description="Document directory (auto-generated if not provided)"
+    )
     llm_provider: str = Field(default="ollama", description="LLM provider name")
     llm_model: str = Field(default="", description="LLM model name")
     llm_base_url: str = Field(default="", description="LLM base URL")
