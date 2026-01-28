@@ -4,7 +4,7 @@ tags: [gui, frontend, navigation]
 description: "プロジェクト詳細画面に「戻る」ボタン追加"
 created_at: "2026-01-27T16:33:18Z"
 started_at: 2026-01-28T12:48:16Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-28T13:04:31Z # Do not modify manually
 ---
 
 # プロジェクト詳細画面に「戻る」ボタン追加
