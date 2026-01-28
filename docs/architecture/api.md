@@ -266,7 +266,7 @@ class ProjectUpdateRequest(BaseModel):
 class FileResponse(BaseModel):
     """Response schema for a document file."""
     id: int = Field(..., description="Document ID")
-    file_path: str = Field(..., description="File path")
+    file_name: str = Field(..., description="File name")
     content_hash: str = Field(..., description="Content hash")
 
     @classmethod
@@ -274,7 +274,7 @@ class FileResponse(BaseModel):
         """Create from database row."""
         return cls(
             id=row["id"],
-            file_path=row["file_path"],
+            file_name=row["file_name"],
             content_hash=row["content_hash"],
         )
 
@@ -286,14 +286,13 @@ class FileResponse(BaseModel):
 
 class FileCreateRequest(BaseModel):
     """Request schema for creating a document file."""
-    file_path: str = Field(..., description="File path relative to doc_root")
+    file_name: str = Field(..., description="File name (without path)")
+    content: str = Field(..., description="File content")
 
 
-class DiffScanResponse(BaseModel):
-    """Response schema for diff scan operation."""
-    added: list[str] = Field(..., description="List of newly added file paths")
-    modified: list[str] = Field(..., description="List of modified file paths")
-    deleted: list[str] = Field(..., description="List of deleted file paths")
+class FileCreateBulkRequest(BaseModel):
+    """Request schema for bulk file creation."""
+    files: list[FileCreateRequest] = Field(..., description="List of files to create")
 ```
 
 **スキーマ設計のポイント:**
@@ -624,41 +623,45 @@ async def export_markdown(
 ```python
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
+ALLOWED_EXTENSIONS = {".txt", ".md"}
+
+def _validate_file_name(file_name: str) -> None:
+    """ファイル名を検証（パス区切り文字禁止、拡張子チェック）"""
+    ...
+
 # GET /api/projects/{project_id}/files - ファイル一覧取得
 # GET /api/projects/{project_id}/files/{file_id} - ファイル詳細取得
-# POST /api/projects/{project_id}/files - ファイル追加
+# POST /api/projects/{project_id}/files - ファイル追加（content受け取り）
+# POST /api/projects/{project_id}/files/bulk - 複数ファイル一括追加
 # DELETE /api/projects/{project_id}/files/{file_id} - ファイル削除
 
-@router.post("/diff-scan", response_model=DiffScanResponse)
-async def scan_file_diff(
-    project_id: int = Path(...),
-    project: Project = Depends(get_project_by_id),
+@router.post("", response_model=FileResponse, status_code=201)
+async def create_file(
+    request: FileCreateRequest = Body(...),
     project_db: sqlite3.Connection = Depends(get_project_db),
-) -> DiffScanResponse:
-    """ファイルシステムとDBの差分をスキャン"""
-    db_files = {row["file_path"]: row for row in list_all_documents(project_db)}
-    fs_files = {}
+) -> FileResponse:
+    """ファイルを追加（file_name + contentを受け取り、DBに保存）"""
+    _validate_file_name(request.file_name)
+    content_hash = compute_content_hash(request.content)
+    doc_id = create_document(project_db, request.file_name, request.content, content_hash)
+    ...
 
-    doc_root = Path(project.doc_root)
-    if doc_root.exists():
-        for file_path in doc_root.rglob("*.txt"):
-            rel_path = str(file_path.relative_to(doc_root))
-            fs_files[rel_path] = _compute_file_hash(file_path)
-
-    added = [path for path in fs_files if path not in db_files]
-    deleted = [path for path in db_files if path not in fs_files]
-    modified = [
-        path for path in fs_files
-        if path in db_files and fs_files[path] != db_files[path]["content_hash"]
-    ]
-
-    return DiffScanResponse(added=added, modified=modified, deleted=deleted)
+@router.post("/bulk", response_model=list[FileResponse], status_code=201)
+async def create_files_bulk(
+    request: FileCreateBulkRequest = Body(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> list[FileResponse]:
+    """複数ファイルを一括追加（バリデーション後、全ファイルを作成）"""
+    # 全ファイル名のバリデーション → 重複チェック → 既存ファイルチェック → 一括作成
+    ...
 ```
 
-**diff-scanのロジック:**
-- ファイルシステム上の `.txt` ファイルをスキャン
-- SHA256ハッシュで変更を検出
-- added / modified / deleted を返却
+**ファイル追加のロジック:**
+- HTML5 File APIからファイル名とコンテンツを受け取り
+- SHA256ハッシュで重複検出
+- `.txt`, `.md` のみ許可
+- パス区切り文字（`/`, `\`）を含むファイル名を拒否
+- bulk APIは全ファイルのバリデーション後に一括作成
 
 ## middleware/
 
@@ -839,9 +842,9 @@ async def list_terms(
 **Files API (ドキュメント管理) - 5エンドポイント:**
 - `GET /api/projects/{project_id}/files` - ファイル一覧取得
 - `GET /api/projects/{project_id}/files/{file_id}` - ファイル詳細取得
-- `POST /api/projects/{project_id}/files` - ファイル追加
+- `POST /api/projects/{project_id}/files` - ファイル追加（file_name + content）
+- `POST /api/projects/{project_id}/files/bulk` - 複数ファイル一括追加
 - `DELETE /api/projects/{project_id}/files/{file_id}` - ファイル削除
-- `POST /api/projects/{project_id}/files/diff-scan` - ファイルシステムとDBの差分スキャン
 
 **Projects API (プロジェクト管理) - 6エンドポイント:**
 - `GET /api/projects` - プロジェクト一覧取得

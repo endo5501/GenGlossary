@@ -201,11 +201,16 @@ class PipelineExecutor:
 | `provisional_to_refined` | 4→5 | 既存の暫定用語集から精査・改善 |
 
 **パイプラインステップ:**
-1. ドキュメント読み込み (DocumentLoader)
+1. ドキュメント読み込み (DocumentLoader / DBから直接読み込み)
 2. 用語抽出 (TermExtractor)
 3. 用語集生成 (GlossaryGenerator)
 4. 精査 (GlossaryReviewer)
 5. 改善 (GlossaryRefiner)
+
+**ドキュメント読み込みの方式 (Schema v4):**
+- `full` スコープ: DocumentLoaderでファイルシステムから読み込み後、file_name + content をDBに保存
+- `from_terms` / `provisional_to_refined`: DBから直接contentを取得（`_load_documents_from_db()`）
+- GUIからのファイル追加: HTML5 File APIでブラウザから読み取り、APIを通じてDBに保存
 
 各ステップで:
 - キャンセルイベントをチェック
@@ -361,12 +366,13 @@ get_run_manager(db_path) → RunManager
 **tests/runs/test_manager.py (13 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 
-**tests/runs/test_executor.py (5 tests)**
+**tests/runs/test_executor.py (10 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
 - キャンセル処理
 - 進捗ログ
+- DBからのドキュメント読み込み（v4対応）
 
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 48 tests** (Repository 20 + Manager 13 + Executor 5 + API 10)
+**合計: 53 tests** (Repository 20 + Manager 13 + Executor 10 + API 10)

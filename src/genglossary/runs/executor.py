@@ -1,8 +1,6 @@
 """Pipeline executor for running glossary generation steps."""
 
-import hashlib
 import sqlite3
-from queue import Queue
 from threading import Event
 from typing import Callable
 
@@ -28,6 +26,7 @@ from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.models.term import Term
 from genglossary.term_extractor import TermExtractor
+from genglossary.utils.hash import compute_content_hash
 
 
 class PipelineExecutor:
@@ -172,7 +171,7 @@ class PipelineExecutor:
 
         # Save documents to database (v4: save file_name and content)
         for document in documents:
-            content_hash = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
+            content_hash = compute_content_hash(document.content)
             # Extract file name from path for DB storage
             file_name = document.file_path.rsplit("/", 1)[-1]
             create_document(conn, file_name, document.content, content_hash)

@@ -11,6 +11,7 @@ React + TypeScript で構築されたシングルページアプリケーショ�
 | ビルドツール | Vite | 7.2 |
 | UIライブラリ | Mantine | 8.3 |
 | 通知 | @mantine/notifications | 8.3 |
+| ファイルドロップ | @mantine/dropzone | 8.3 |
 | アイコン | Tabler Icons | 3.36 |
 | ルーティング | TanStack Router | 1.x |
 | データフェッチ | TanStack Query | 5.x |
@@ -133,7 +134,7 @@ navbar={hasProject ? { width: 200, breakpoint: 'sm' } : undefined}
 | コンポーネント | 説明 |
 |---------------|------|
 | `HomePage` | プロジェクト一覧とサマリー表示 |
-| `FilesPage` | ファイル一覧とdiff-scan結果表示 |
+| `FilesPage` | ファイル一覧と追加・削除 |
 | `TermsPage` | 抽出された用語一覧と詳細表示 |
 | `ProvisionalPage` | 暫定用語集の表示と編集 |
 | `IssuesPage` | 精査で見つかった問題一覧 |
@@ -186,48 +187,54 @@ function formatLastRun(lastRunAt: string | null, format: 'short' | 'long' = 'sho
 - 日付フォーマットを統一し、テーブル（short）とサマリーカード（long）で異なる形式を使用
 - null値のハンドリングもフォーマットに応じて変更（"-" または "Never"）
 
-#### FilesPage の ChangeSection コンポーネント
+#### AddFileDialog の Dropzone UI
 
-diff-scan 結果の表示で Added/Modified/Deleted セクションの重複を排除。
+@mantine/dropzone を使用したファイルアップロードダイアログ。HTML5 File API でファイル内容を読み取り、バックエンドに送信。
 
 ```typescript
-interface ChangeSectionProps {
-  items: string[]
-  label: string
-  color: string
-  prefix: string
+// Dropzone設定
+<Dropzone
+  onDrop={handleDrop}
+  accept={['text/markdown', 'text/plain']}
+  maxSize={5 * 1024 * 1024}  // 5MB制限
+>
+  ...
+</Dropzone>
+
+// FileReader APIでファイル内容を読み取り
+const handleDrop = (files: FileWithPath[]) => {
+  files.forEach((file) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      // ファイル名と内容をstateに保存
+    }
+    reader.readAsText(file)
+  })
 }
 
-function ChangeSection({ items, label, color, prefix }: ChangeSectionProps) {
-  if (items.length === 0) return null
-
-  return (
-    <Box>
-      <Group gap="xs" mb="xs">
-        <Badge color={color} size="sm">{label}</Badge>
-        <Text size="sm" c="dimmed">({items.length} files)</Text>
-      </Group>
-      <Stack gap={4}>
-        {items.map((path) => (
-          <Text key={path} size="sm" c={color}>
-            {prefix} {path}
-          </Text>
-        ))}
-      </Stack>
-    </Box>
+// 一括アップロード
+const handleAdd = () => {
+  createFilesBulk(
+    selectedFiles.map((f) => ({ file_name: f.name, content: f.content }))
   )
 }
+```
 
-// 使用例（DiffScanResults内）
-const sections = [
-  { items: results.added, label: 'Added', color: 'green', prefix: '+' },
-  { items: results.modified, label: 'Modified', color: 'yellow', prefix: '~' },
-  { items: results.deleted, label: 'Deleted', color: 'red', prefix: '-' },
-]
-
-{sections.map((section) => (
-  <ChangeSection key={section.label} {...section} />
-))}
+**UI構成:**
+```
+┌─────────────────────────────────────┐
+│  Add Files                      [×] │
+├─────────────────────────────────────┤
+│  ┌─────────────────────────────┐    │
+│  │   Drag files here or click  │    │
+│  │   to select                 │    │
+│  │   Only .txt and .md files   │    │
+│  └─────────────────────────────┘    │
+│  Selected Files (2)                 │
+│  ├─ document1.md         [Remove]   │
+│  └─ notes.txt            [Remove]   │
+│            [Cancel]  [Add (2)]      │
+└─────────────────────────────────────┘
 ```
 
 ### ダイアログコンポーネント（components/dialogs/）
@@ -237,7 +244,7 @@ const sections = [
 | `CreateProjectDialog` | 新規プロジェクト作成ダイアログ |
 | `CloneProjectDialog` | プロジェクトクローンダイアログ |
 | `DeleteProjectDialog` | プロジェクト削除確認ダイアログ |
-| `AddFileDialog` | ファイル追加ダイアログ（FilesPageから使用） |
+| `AddFileDialog` | ファイル追加ダイアログ（@mantine/dropzone使用、複数ファイル対応） |
 
 #### CreateProjectDialog の設計
 
@@ -383,7 +390,7 @@ API レスポンスの TypeScript 型定義。
 
 | 型 | 説明 |
 |---|------|
-| `FileResponse` | ファイル情報（id, file_path, content_hash） |
+| `FileResponse` | ファイル情報（id, file_name, content_hash） |
 | `TermResponse` | 抽出された用語（id, term_text, category） |
 | `TermOccurrence` | 用語の出現箇所（line_number, context） |
 | `GlossaryTermResponse` | 用語集エントリ（term_name, definition, confidence, occurrences） |
@@ -585,7 +592,7 @@ pnpm lint
 
 | フロントエンド | バックエンド API |
 |---------------|-----------------|
-| Files ページ | `GET /api/projects/{project_id}/files` |
+| Files ページ | `GET/POST/POST(bulk)/DELETE /api/projects/{project_id}/files` |
 | Terms ページ | `GET /api/projects/{project_id}/terms` |
 | Provisional ページ | `GET /api/projects/{project_id}/provisional` |
 | Issues ページ | `GET /api/projects/{project_id}/issues` |

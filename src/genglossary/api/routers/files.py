@@ -1,6 +1,5 @@
 """Files API endpoints."""
 
-import hashlib
 import sqlite3
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
@@ -18,22 +17,11 @@ from genglossary.db.document_repository import (
     get_document_by_name,
     list_all_documents,
 )
+from genglossary.utils.hash import compute_content_hash
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
 ALLOWED_EXTENSIONS = {".txt", ".md"}
-
-
-def _compute_content_hash(content: str) -> str:
-    """Compute SHA256 hash of content.
-
-    Args:
-        content: Text content.
-
-    Returns:
-        str: Hexadecimal hash string.
-    """
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def _validate_file_name(file_name: str) -> None:
@@ -53,7 +41,13 @@ def _validate_file_name(file_name: str) -> None:
         )
 
     # Check extension
-    ext = "." + file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+    if "." not in file_name:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
+        )
+
+    ext = "." + file_name.rsplit(".", 1)[-1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
@@ -129,7 +123,7 @@ async def create_file(
     _validate_file_name(request.file_name)
 
     # Compute hash
-    content_hash = _compute_content_hash(request.content)
+    content_hash = compute_content_hash(request.content)
 
     # Create document
     try:
@@ -195,7 +189,7 @@ async def create_files_bulk(
     # Create all documents
     created_ids = []
     for file_req in request.files:
-        content_hash = _compute_content_hash(file_req.content)
+        content_hash = compute_content_hash(file_req.content)
         doc_id = create_document(
             project_db, file_req.file_name, file_req.content, content_hash
         )

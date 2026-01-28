@@ -1,6 +1,5 @@
 """Command-line interface for GenGlossary."""
 
-import hashlib
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +28,7 @@ from genglossary.models.glossary import Glossary
 from genglossary.progress import progress_task
 from genglossary.output.markdown_writer import MarkdownWriter
 from genglossary.term_extractor import TermExtractor, TermExtractionAnalysis
+from genglossary.utils.hash import compute_content_hash
 
 console = Console()
 
@@ -181,7 +181,7 @@ def _generate_glossary_with_db(
     if conn is not None:
         for document in documents:
             # Calculate content hash for deduplication
-            content_hash = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
+            content_hash = compute_content_hash(document.content)
             file_name = document.file_path.rsplit("/", 1)[-1]
             create_document(conn, file_name, document.content, content_hash)
         if verbose:

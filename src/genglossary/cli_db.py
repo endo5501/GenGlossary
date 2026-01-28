@@ -170,34 +170,34 @@ def _reconstruct_issues_from_rows(
 
 def _validate_prerequisites(
     conn: sqlite3.Connection,
-    required_data: list[tuple[Callable, str, str]],
-) -> tuple[bool, list]:
+    required_data: list[tuple[Callable, str]],
+) -> list | None:
     """Validate that required data exists in database.
 
     Args:
         conn: Database connection.
-        required_data: List of (fetch_function, empty_message, data_name) tuples.
+        required_data: List of (fetch_function, empty_message) tuples.
 
     Returns:
-        Tuple of (all_valid, data_results).
-        If all_valid is False, caller should return early.
+        List of fetched data if all valid, None otherwise.
 
     Example:
-        valid, (terms, docs) = _validate_prerequisites(conn, [
-            (list_all_terms, "用語がありません", "terms"),
-            (list_all_documents, "ドキュメントがありません", "documents"),
+        data = _validate_prerequisites(conn, [
+            (list_all_terms, "用語がありません"),
+            (list_all_documents, "ドキュメントがありません"),
         ])
-        if not valid:
+        if data is None:
             return
+        terms, docs = data
     """
     results = []
-    for fetch_func, empty_msg, _ in required_data:
+    for fetch_func, empty_msg in required_data:
         data = fetch_func(conn)
         if not data:
             console.print(f"[yellow]{empty_msg}[/yellow]")
-            return False, []
+            return None
         results.append(data)
-    return True, results
+    return results
 
 
 def _save_glossary_terms(
@@ -738,15 +738,16 @@ def provisional_regenerate(llm_provider: str, model: str | None, db_path: str) -
 
     with _db_operation(db_path) as conn:
         # Validate and load prerequisites
-        valid, (term_rows, doc_rows) = _validate_prerequisites(
+        data = _validate_prerequisites(
             conn,
             [
-                (list_all_terms, "抽出用語がありません。先にterms regenerateを実行してください。", "terms"),
-                (list_all_documents, "ドキュメントがありません。先にterms regenerateを実行してください。", "documents"),
+                (list_all_terms, "抽出用語がありません。先にterms regenerateを実行してください。"),
+                (list_all_documents, "ドキュメントがありません。先にterms regenerateを実行してください。"),
             ],
         )
-        if not valid:
+        if data is None:
             return
+        term_rows, doc_rows = data
 
         # Reconstruct ClassifiedTerm objects from database
         from genglossary.models.term import ClassifiedTerm, TermCategory
@@ -967,16 +968,17 @@ def refined_regenerate(llm_provider: str, model: str | None, db_path: str) -> No
 
     with _db_operation(db_path) as conn:
         # Validate and load prerequisites
-        valid, (provisional_rows, issue_rows, doc_rows) = _validate_prerequisites(
+        data = _validate_prerequisites(
             conn,
             [
-                (list_all_provisional, "暫定用語がありません。先にprovisional regenerateを実行してください。", "provisional"),
-                (list_all_issues, "精査結果がありません。先にissues regenerateを実行してください。", "issues"),
-                (list_all_documents, "ドキュメントがありません", "documents"),
+                (list_all_provisional, "暫定用語がありません。先にprovisional regenerateを実行してください。"),
+                (list_all_issues, "精査結果がありません。先にissues regenerateを実行してください。"),
+                (list_all_documents, "ドキュメントがありません"),
             ],
         )
-        if not valid:
+        if data is None:
             return
+        provisional_rows, issue_rows, doc_rows = data
 
         # Reconstruct objects from database
         glossary = _reconstruct_glossary_from_rows(provisional_rows)
@@ -1080,14 +1082,15 @@ def issues_regenerate(llm_provider: str, model: str | None, db_path: str) -> Non
 
     with _db_operation(db_path) as conn:
         # Validate and load prerequisites
-        valid, (provisional_rows,) = _validate_prerequisites(
+        data = _validate_prerequisites(
             conn,
             [
-                (list_all_provisional, "暫定用語がありません。先にprovisional regenerateを実行してください。", "provisional"),
+                (list_all_provisional, "暫定用語がありません。先にprovisional regenerateを実行してください。"),
             ],
         )
-        if not valid:
+        if data is None:
             return
+        (provisional_rows,) = data
 
         # Reconstruct Glossary object
         glossary = _reconstruct_glossary_from_rows(provisional_rows)
