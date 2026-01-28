@@ -41,12 +41,13 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
     setErrors({})
 
     try {
+      const trimmedBaseUrl = baseUrl.trim()
       await createMutation.mutateAsync({
         name: name.trim(),
         doc_root: docRoot.trim(),
         llm_provider: llmProvider,
         llm_model: llmModel,
-        llm_base_url: llmProvider === 'openai' ? baseUrl : undefined,
+        llm_base_url: llmProvider === 'openai' && trimmedBaseUrl ? trimmedBaseUrl : undefined,
       })
       handleClose()
     } catch (error) {
