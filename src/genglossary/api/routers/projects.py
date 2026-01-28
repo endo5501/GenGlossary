@@ -109,7 +109,9 @@ def _generate_doc_root(name: str) -> str:
         str: Absolute path to the project document directory.
     """
     projects_dir = _get_projects_dir()
-    doc_root = projects_dir / name
+    # Sanitize name for filesystem (consistent with _generate_db_path)
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in name)
+    doc_root = projects_dir / safe_name
     doc_root.mkdir(parents=True, exist_ok=True)
     return str(doc_root)
 
@@ -233,7 +235,7 @@ async def create_new_project(
     """
     db_path = _generate_db_path(request.name)
     # Auto-generate doc_root if not provided
-    doc_root = request.doc_root if request.doc_root else _generate_doc_root(request.name)
+    doc_root = request.doc_root or _generate_doc_root(request.name)
     project_id = _create_project_with_cleanup(registry_conn, request, db_path, doc_root)
     project = _get_project_or_404(registry_conn, project_id)
     return ProjectResponse.from_project(project)
