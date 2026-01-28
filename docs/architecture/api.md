@@ -198,7 +198,9 @@ class ProjectResponse(BaseModel):
 class ProjectCreateRequest(BaseModel):
     """Request schema for creating a project."""
     name: str = Field(..., description="Project name (must be unique)")
-    doc_root: str = Field(..., description="Absolute path to document directory")
+    doc_root: str | None = Field(
+        default=None, description="Document directory (auto-generated if not provided)"
+    )
     llm_provider: str = Field(default="ollama", description="LLM provider name")
     llm_model: str = Field(default="", description="LLM model name")
     llm_base_url: str = Field(default="", description="LLM base URL")
@@ -208,6 +210,12 @@ class ProjectCreateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         """Validate project name is not empty."""
         return _validate_project_name(v)  # 共通関数を使用
+
+    @field_validator("doc_root")
+    @classmethod
+    def validate_doc_root(cls, v: str | None) -> str | None:
+        """Validate document root path if provided."""
+        return _validate_doc_root(v)  # 空白をNoneに変換
 
     @field_validator("llm_base_url")
     @classmethod
@@ -367,12 +375,17 @@ async def create_new_project(
     request: ProjectCreateRequest = Body(...),
     registry_conn: sqlite3.Connection = Depends(get_registry_db),
 ) -> ProjectResponse:
-    """新しいプロジェクトを作成"""
+    """新しいプロジェクトを作成
+
+    doc_rootが未指定の場合、{data_dir}/projects/{project_name}/に自動生成される。
+    """
     db_path = _generate_db_path(request.name)
+    doc_root = request.doc_root or _generate_doc_root(request.name)
     try:
         project_id = create_project(registry_conn, ...)
     except sqlite3.IntegrityError:
         _cleanup_db_file(db_path)  # 共通ヘルパーでクリーンアップ
+        _cleanup_doc_root(doc_root)  # 自動生成したdoc_rootもクリーンアップ
         raise HTTPException(status_code=409, detail="Project name already exists")
     ...
 
