@@ -199,6 +199,79 @@ describe('Create Project Dialog', () => {
     // Value should change
     expect(providerSelect).toHaveValue('OpenAI')
   })
+
+  it('shows Base URL field when OpenAI is selected', async () => {
+    const { user } = renderWithProviders(<HomePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project 1')).toBeInTheDocument()
+    })
+
+    // Open dialog
+    const createButton = screen.getByRole('button', { name: /新規作成/i })
+    await user.click(createButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    // Base URL field should NOT be visible with Ollama (default)
+    expect(screen.queryByLabelText(/base url/i)).not.toBeInTheDocument()
+
+    // Select OpenAI
+    const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
+    await user.click(providerSelect)
+    await waitFor(() => {
+      expect(screen.getByText('OpenAI')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('OpenAI'))
+
+    // Base URL field should now be visible
+    await waitFor(() => {
+      expect(screen.getByLabelText(/base url/i)).toBeInTheDocument()
+    })
+  })
+
+  it('hides Base URL field when switching back to Ollama', async () => {
+    const { user } = renderWithProviders(<HomePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project 1')).toBeInTheDocument()
+    })
+
+    // Open dialog
+    const createButton = screen.getByRole('button', { name: /新規作成/i })
+    await user.click(createButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    // Select OpenAI
+    const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
+    await user.click(providerSelect)
+    await waitFor(() => {
+      expect(screen.getByText('OpenAI')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('OpenAI'))
+
+    // Base URL should be visible
+    await waitFor(() => {
+      expect(screen.getByLabelText(/base url/i)).toBeInTheDocument()
+    })
+
+    // Switch back to Ollama
+    await user.click(providerSelect)
+    await waitFor(() => {
+      expect(screen.getByText('Ollama')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Ollama'))
+
+    // Base URL should be hidden again
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/base url/i)).not.toBeInTheDocument()
+    })
+  })
 })
 
 describe('Delete Project Dialog', () => {
