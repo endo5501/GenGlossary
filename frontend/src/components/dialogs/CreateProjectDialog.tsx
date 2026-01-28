@@ -14,23 +14,19 @@ interface CreateProjectDialogProps {
 
 export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProps) {
   const [name, setName] = useState('')
-  const [docRoot, setDocRoot] = useState('')
   const [llmProvider, setLlmProvider] = useState('ollama')
   const [llmModel, setLlmModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
-  const [errors, setErrors] = useState<{ name?: string; doc_root?: string }>({})
+  const [errors, setErrors] = useState<{ name?: string }>({})
 
   const createMutation = useCreateProject()
 
   const handleSubmit = async () => {
     // Validation
-    const newErrors: { name?: string; doc_root?: string } = {}
+    const newErrors: { name?: string } = {}
 
     if (!name.trim()) {
       newErrors.name = 'Name is required'
-    }
-    if (!docRoot.trim()) {
-      newErrors.doc_root = 'Document root is required'
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -44,7 +40,6 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
       const trimmedBaseUrl = baseUrl.trim()
       await createMutation.mutateAsync({
         name: name.trim(),
-        doc_root: docRoot.trim(),
         llm_provider: llmProvider,
         llm_model: llmModel,
         llm_base_url: llmProvider === 'openai' && trimmedBaseUrl ? trimmedBaseUrl : undefined,
@@ -57,7 +52,6 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
 
   const handleClose = () => {
     setName('')
-    setDocRoot('')
     setLlmProvider('ollama')
     setLlmModel('')
     setBaseUrl('')
@@ -74,15 +68,6 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}
           error={errors.name}
-          required
-        />
-
-        <TextInput
-          label="Document Root"
-          placeholder="/path/to/documents"
-          value={docRoot}
-          onChange={(e) => setDocRoot(e.currentTarget.value)}
-          error={errors.doc_root}
           required
         />
 

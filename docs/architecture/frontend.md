@@ -249,16 +249,18 @@ const LLM_PROVIDERS = [
 
 // フォームフィールド
 // - Project Name: TextInput (必須)
-// - Document Root: TextInput (必須)
 // - LLM Provider: Select (デフォルト: ollama)
 // - LLM Model: TextInput
 // - Base URL: TextInput (OpenAI選択時のみ表示)
+//
+// NOTE: Document Rootはバックエンドで自動生成されるため、入力欄はありません
 ```
 
 **設計ポイント:**
 - LLM Provider は入力ミス防止のため Select コンポーネントを使用
 - SettingsPage と同じ `LLM_PROVIDERS` 定数を使用（将来的には共通化を検討）
 - Base URL は OpenAI 選択時のみ条件付き表示（SettingsPage と同様のパターン）
+- Document Root はバックエンドで `{data_dir}/projects/{project_name}/` に自動生成される
 
 #### CloneProjectDialog の設計
 

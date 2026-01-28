@@ -3,8 +3,8 @@ priority: 7
 tags: [gui, frontend, backend, create]
 description: "Create画面 - Document Root 自動化"
 created_at: "2026-01-27T16:33:24Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-28T13:33:46Z # Do not modify manually
+closed_at: 2026-01-28T13:49:20Z # Do not modify manually
 ---
 
 # Create画面 - Document Root 自動化
@@ -32,18 +32,18 @@ Document Root入力欄を削除し、バックエンドでプロジェクト作�
 
 ## Tasks
 
-- [ ] フロントエンドから Document Root 入力欄を削除
-- [ ] バックエンドでプロジェクト作成時に doc_root を自動生成
-- [ ] APIスキーマから doc_root を任意フィールドに変更（または削除）
-- [ ] 自動生成されるパスの確認: `./projects/{project_name}/`
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] フロントエンドから Document Root 入力欄を削除
+- [x] バックエンドでプロジェクト作成時に doc_root を自動生成
+- [x] APIスキーマから doc_root を任意フィールドに変更（または削除）
+- [x] 自動生成されるパスの確認: `./projects/{project_name}/`
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 

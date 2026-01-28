@@ -99,6 +99,23 @@ def _generate_db_path(name: str) -> str:
     return str(db_path)
 
 
+def _generate_doc_root(name: str) -> str:
+    """Generate document root path for a project.
+
+    Args:
+        name: Project name.
+
+    Returns:
+        str: Absolute path to the project document directory.
+    """
+    projects_dir = _get_projects_dir()
+    # Sanitize name for filesystem (consistent with _generate_db_path)
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in name)
+    doc_root = projects_dir / safe_name
+    doc_root.mkdir(parents=True, exist_ok=True)
+    return str(doc_root)
+
+
 def _get_project_statistics(db_path: str) -> ProjectStatistics:
     """Get statistics for a project from its database.
 
@@ -162,10 +179,28 @@ async def get_project_by_id(
     return ProjectResponse.from_project(project)
 
 
+def _cleanup_doc_root(doc_root: str) -> None:
+    """Cleanup auto-generated document root directory if empty.
+
+    Args:
+        doc_root: Path to the document root directory.
+    """
+    try:
+        doc_root_path = Path(doc_root)
+        if doc_root_path.exists() and doc_root_path.is_dir():
+            # Only remove if empty (safe cleanup)
+            if not any(doc_root_path.iterdir()):
+                doc_root_path.rmdir()
+    except Exception:
+        pass
+
+
 def _create_project_with_cleanup(
     registry_conn: sqlite3.Connection,
     request: ProjectCreateRequest,
     db_path: str,
+    doc_root: str,
+    doc_root_auto_generated: bool = False,
 ) -> int:
     """Create project and cleanup on failure.
 
@@ -173,6 +208,8 @@ def _create_project_with_cleanup(
         registry_conn: Registry database connection.
         request: Project creation request.
         db_path: Database file path.
+        doc_root: Document root path.
+        doc_root_auto_generated: Whether doc_root was auto-generated.
 
     Returns:
         int: Created project ID.
@@ -184,7 +221,7 @@ def _create_project_with_cleanup(
         return create_project(
             registry_conn,
             name=request.name,
-            doc_root=request.doc_root,
+            doc_root=doc_root,
             db_path=db_path,
             llm_provider=request.llm_provider,
             llm_model=request.llm_model,
@@ -192,6 +229,8 @@ def _create_project_with_cleanup(
         )
     except sqlite3.IntegrityError:
         _cleanup_db_file(db_path)
+        if doc_root_auto_generated:
+            _cleanup_doc_root(doc_root)
         raise HTTPException(
             status_code=409, detail=f"Project name already exists: {request.name}"
         )
@@ -215,7 +254,12 @@ async def create_new_project(
         HTTPException: 409 if project name already exists.
     """
     db_path = _generate_db_path(request.name)
-    project_id = _create_project_with_cleanup(registry_conn, request, db_path)
+    # Auto-generate doc_root if not provided
+    doc_root_auto_generated = not request.doc_root
+    doc_root = request.doc_root or _generate_doc_root(request.name)
+    project_id = _create_project_with_cleanup(
+        registry_conn, request, db_path, doc_root, doc_root_auto_generated
+    )
     project = _get_project_or_404(registry_conn, project_id)
     return ProjectResponse.from_project(project)
 
