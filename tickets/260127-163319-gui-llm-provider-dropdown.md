@@ -4,7 +4,7 @@ tags: [gui, frontend, create]
 description: "Create画面 - LLM Provider ドロップダウン化"
 created_at: "2026-01-27T16:33:19Z"
 started_at: 2026-01-28T13:09:39Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-28T13:21:56Z # Do not modify manually
 ---
 
 # Create画面 - LLM Provider ドロップダウン化
