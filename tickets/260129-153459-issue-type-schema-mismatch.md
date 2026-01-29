@@ -4,7 +4,7 @@ tags: [bug, frontend, backend, schema]
 description: "Frontend/Backend間でIssue Typeのスキーマが不一致"
 created_at: "2026-01-29T15:34:59Z"
 started_at: 2026-01-29T16:05:30Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-29T22:26:25Z # Do not modify manually
 ---
 
 # Frontend/Backend間でIssue Typeのスキーマが不一致
