@@ -6,7 +6,6 @@ from typing import Callable
 
 from genglossary.db.document_repository import (
     create_document,
-    delete_all_documents,
     list_all_documents,
 )
 from genglossary.db.issue_repository import create_issue, delete_all_issues
@@ -162,19 +161,27 @@ class PipelineExecutor:
             return
 
         self._log("info", "Loading documents...")
-        loader = DocumentLoader()
-        documents = loader.load_directory(doc_root)
+        doc_rows = list_all_documents(conn)
 
-        if not documents:
-            self._log("error", "No documents found")
-            raise RuntimeError("No documents found in doc_root")
+        if doc_rows:
+            # GUI mode: use documents already stored in DB
+            documents = [
+                Document(file_path=row["file_name"], content=row["content"])
+                for row in doc_rows
+            ]
+        else:
+            # CLI mode: load from filesystem and save to DB
+            loader = DocumentLoader()
+            documents = loader.load_directory(doc_root)
 
-        # Save documents to database (v4: save file_name and content)
-        for document in documents:
-            content_hash = compute_content_hash(document.content)
-            # Extract file name from path for DB storage
-            file_name = document.file_path.rsplit("/", 1)[-1]
-            create_document(conn, file_name, document.content, content_hash)
+            if not documents:
+                self._log("error", "No documents found")
+                raise RuntimeError("No documents found in doc_root")
+
+            for document in documents:
+                content_hash = compute_content_hash(document.content)
+                file_name = document.file_path.rsplit("/", 1)[-1]
+                create_document(conn, file_name, document.content, content_hash)
 
         self._log("info", f"Loaded {len(documents)} documents")
 
@@ -343,8 +350,7 @@ class PipelineExecutor:
             scope: Execution scope.
         """
         if scope == "full":
-            # Clear all tables for full execution
-            delete_all_documents(conn)
+            # Clear all tables for full execution (except documents)
             delete_all_terms(conn)
             delete_all_provisional(conn)
             delete_all_issues(conn)

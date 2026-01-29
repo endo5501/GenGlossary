@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import type { FileResponse, FileCreateRequest, FileCreateBulkRequest } from '../types'
+import { projectKeys } from './useProjects'
 
 // Query keys
 export const fileKeys = {
@@ -50,6 +51,7 @@ export function useCreateFile(projectId: number) {
     mutationFn: (data: FileCreateRequest) => fileApi.create(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
     },
   })
 }
@@ -62,6 +64,7 @@ export function useCreateFilesBulk(projectId: number) {
       fileApi.createBulk(projectId, { files }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
     },
   })
 }
@@ -73,6 +76,7 @@ export function useDeleteFile(projectId: number) {
     mutationFn: (fileId: number) => fileApi.delete(projectId, fileId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
     },
   })
 }

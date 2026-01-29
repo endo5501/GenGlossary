@@ -419,7 +419,6 @@ class TestPipelineExecutorConfiguration:
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.delete_all_documents") as mock_delete_docs, \
              patch("genglossary.runs.executor.delete_all_terms") as mock_delete_terms, \
              patch("genglossary.runs.executor.delete_all_provisional") as mock_delete_prov, \
              patch("genglossary.runs.executor.delete_all_issues") as mock_delete_issues, \
@@ -442,9 +441,113 @@ class TestPipelineExecutorConfiguration:
             # Execute with full scope
             executor.execute(project_db, "full", cancel_event, log_callback)
 
-            # Verify all tables were cleared before execution
-            mock_delete_docs.assert_called_once()
+            # Verify tables were cleared before execution (documents are NOT cleared)
             mock_delete_terms.assert_called_once()
             mock_delete_prov.assert_called_once()
             mock_delete_issues.assert_called_once()
             mock_delete_refined.assert_called_once()
+
+
+class TestPipelineExecutorDBDocuments:
+    """Tests for DB-first document loading in full scope."""
+
+    def test_full_scope_uses_db_documents_when_available(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """DBにドキュメントがある場合、DocumentLoaderを使わずDBのドキュメントを使用する"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB documents (simulating GUI-uploaded files)
+            mock_list_docs.return_value = [
+                {"file_name": "uploaded.txt", "content": "uploaded content"}
+            ]
+
+            # Mock term extraction
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            # Mock glossary generation
+            mock_glossary = Glossary(terms={
+                "term1": Term(
+                    name="term1",
+                    definition="test definition",
+                    confidence=0.9,
+                    occurrences=[
+                        TermOccurrence(
+                            document_path="uploaded.txt",
+                            line_number=1,
+                            context="uploaded content"
+                        )
+                    ]
+                )
+            })
+            mock_generator.return_value.generate.return_value = mock_glossary
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute full scope
+            executor.execute(project_db, "full", cancel_event, log_callback)
+
+            # DocumentLoader.load_directory should NOT be called (DB documents used)
+            mock_loader.return_value.load_directory.assert_not_called()
+
+            # TermExtractor should be called with DB documents
+            mock_extractor.return_value.extract_terms.assert_called_once()
+            call_args = mock_extractor.return_value.extract_terms.call_args
+            documents_arg = call_args[0][0]
+            assert len(documents_arg) == 1
+            assert documents_arg[0].file_path == "uploaded.txt"
+            assert documents_arg[0].content == "uploaded content"
+
+    def test_full_scope_falls_back_to_filesystem_when_db_empty(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """DBにドキュメントがない場合、ファイルシステムから読み込む（CLIモード）"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # DB is empty (CLI mode)
+            mock_list_docs.return_value = []
+
+            # Mock filesystem loading
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="cli_file.txt", content="cli content")
+            ]
+
+            # Mock term extraction
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute full scope
+            executor.execute(project_db, "full", cancel_event, log_callback)
+
+            # DocumentLoader.load_directory SHOULD be called (fallback to filesystem)
+            mock_loader.return_value.load_directory.assert_called_once()
