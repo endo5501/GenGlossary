@@ -1,6 +1,7 @@
 """Pipeline executor for running glossary generation steps."""
 
 import sqlite3
+from pathlib import Path
 from threading import Event
 from typing import Callable
 
@@ -114,14 +115,15 @@ class PipelineExecutor:
 
         self._log("info", "Pipeline execution completed")
 
-    def _load_documents_from_db(self, conn: sqlite3.Connection) -> list[Document]:
-        """Load documents from database.
+    def _load_documents(self, conn: sqlite3.Connection, doc_root: str = ".") -> list[Document]:
+        """Load documents from database or filesystem.
 
-        In v4 schema, documents store content directly in DB, so we don't need
-        to read from filesystem.
+        DB-first approach: Try to load from DB first (GUI mode), fall back to
+        filesystem if needed (CLI mode).
 
         Args:
             conn: Project database connection.
+            doc_root: Root directory for documents (default: ".").
 
         Returns:
             list[Document]: Loaded documents.
@@ -129,22 +131,37 @@ class PipelineExecutor:
         Raises:
             RuntimeError: If no documents found.
         """
-        self._log("info", "Loading documents from database...")
+        # Try loading from database first (GUI mode)
         doc_rows = list_all_documents(conn)
-        if not doc_rows:
-            self._log("error", "No documents found in database")
-            raise RuntimeError("Cannot execute pipeline without documents")
+        if doc_rows:
+            self._log("info", "Loading documents from database...")
+            documents = []
+            for row in doc_rows:
+                doc = Document(
+                    file_path=row["file_name"],
+                    content=row["content"],
+                )
+                documents.append(doc)
+            return documents
 
-        # Create Document objects directly from DB content (v4 schema)
-        documents = []
-        for row in doc_rows:
-            doc = Document(
-                file_path=row["file_name"],  # Use file_name as file_path
-                content=row["content"],      # Content directly from DB
-            )
-            documents.append(doc)
+        # Fall back to filesystem if DB is empty (CLI mode)
+        if doc_root and doc_root != ".":
+            self._log("info", f"Loading documents from filesystem: {doc_root}")
+            loader = DocumentLoader()
+            documents = loader.load_directory(doc_root)
 
-        return documents
+            if documents:
+                # Save loaded documents to DB
+                delete_all_documents(conn)
+                for document in documents:
+                    content_hash = compute_content_hash(document.content)
+                    file_name = Path(document.file_path).name
+                    create_document(conn, file_name, document.content, content_hash)
+                return documents
+
+        # No documents found
+        self._log("error", "No documents found")
+        raise RuntimeError("Cannot execute pipeline without documents")
 
     def _execute_full(
         self,
@@ -161,30 +178,7 @@ class PipelineExecutor:
         if self._check_cancellation():
             return
 
-        self._log("info", "Loading documents...")
-
-        # CLI mode: doc_root が明示的に指定されている場合はFS優先
-        use_filesystem = doc_root != "."
-
-        if use_filesystem:
-            # CLI mode: ファイルシステムから読み込み、既存DBドキュメントを置き換え
-            loader = DocumentLoader()
-            documents = loader.load_directory(doc_root)
-
-            if not documents:
-                self._log("error", "No documents found")
-                raise RuntimeError("No documents found in doc_root")
-
-            # 既存ドキュメントをクリアして新しいものを保存
-            delete_all_documents(conn)
-            for document in documents:
-                content_hash = compute_content_hash(document.content)
-                file_name = document.file_path.rsplit("/", 1)[-1]
-                create_document(conn, file_name, document.content, content_hash)
-        else:
-            # GUI mode: DBドキュメントを使用
-            documents = self._load_documents_from_db(conn)
-
+        documents = self._load_documents(conn, doc_root)
         self._log("info", f"Loaded {len(documents)} documents")
 
         # Step 2: Extract terms
@@ -225,7 +219,7 @@ class PipelineExecutor:
         if documents is None:
             if self._check_cancellation():
                 return
-            documents = self._load_documents_from_db(conn)
+            documents = self._load_documents(conn)
 
         # Load terms from DB if not provided
         if extracted_terms is None:
@@ -300,7 +294,7 @@ class PipelineExecutor:
         if documents is None:
             if self._check_cancellation():
                 return
-            documents = self._load_documents_from_db(conn)
+            documents = self._load_documents(conn)
 
         # Step 4: Review glossary
         if self._check_cancellation():

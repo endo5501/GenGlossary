@@ -207,21 +207,35 @@ class PipelineExecutor:
 4. 精査 (GlossaryReviewer)
 5. 改善 (GlossaryRefiner)
 
-**ドキュメント読み込みの方式 (Schema v4):**
+**ドキュメント読み込みの方式 (Schema v4 - DB-first approach):**
 
-`full` スコープのドキュメント読み込みは、`doc_root` パラメータに基づいてCLI/GUIモードを判定します：
+`_load_documents()` メソッドがDB優先アプローチでドキュメントを読み込みます：
 
-| モード | 条件 | 動作 |
-|-------|------|------|
-| **GUIモード** | `doc_root == "."` (デフォルト) | DBに保存済みのドキュメントを`_load_documents_from_db()`で読み込み |
-| **CLIモード** | `doc_root != "."` (明示的指定) | ファイルシステムから読み込み、既存DBドキュメントを削除して新規保存 |
+```
+1. まずDBからドキュメントを読み込み
+   ↓ DBにドキュメントがあれば
+   → そのまま使用（GUIモード）
 
-- `from_terms` / `provisional_to_refined`: DBから直接contentを取得（`_load_documents_from_db()`）
+   ↓ DBが空で doc_root が指定されていれば
+   → ファイルシステムから読み込み、DBに保存（CLIモード）
+
+   ↓ 両方とも空なら
+   → RuntimeError("Cannot execute pipeline without documents")
+```
+
+| 条件 | 動作 |
+|------|------|
+| DBにドキュメントあり | DBから読み込み（GUIモード） |
+| DBが空 + `doc_root` 指定あり | ファイルシステムから読み込み、DBに保存（CLIモード） |
+| DBが空 + `doc_root` 未指定/`"."` | エラー |
+
+- `full` / `from_terms` / `provisional_to_refined`: すべて `_load_documents()` を使用
 - GUIからのファイル追加: HTML5 File APIでブラウザから読み取り、APIを通じてDBに保存
 
-**CLI/GUIモード判定の理由:**
-- GUI: ブラウザからアップロードしたファイルはDBに保存されるため、DB優先
-- CLI: `doc_root` を明示的に指定した場合はファイルシステムの内容を使用したいため、FS優先でDBを上書き
+**DB-firstアプローチの理由:**
+- GUIプロジェクト作成時に `doc_root` が自動生成されるが、ドキュメントはDBに保存される
+- `doc_root` の値だけではGUI/CLIモードを判定できないため、DBの有無で判断
+- CLI: DBが空の場合のみファイルシステムにフォールバック
 
 各ステップで:
 - キャンセルイベントをチェック
@@ -377,15 +391,16 @@ get_run_manager(db_path) → RunManager
 **tests/runs/test_manager.py (13 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 
-**tests/runs/test_executor.py (13 tests)**
+**tests/runs/test_executor.py (17 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
 - キャンセル処理
 - 進捗ログ
-- CLI/GUIモード判定に基づくドキュメント読み込み（v4対応）
-  - GUIモード（`doc_root="."` → DB優先）
-  - CLIモード（`doc_root` 明示指定 → FS優先、DB上書き）
+- DB-first document loading（v4対応）
+  - GUIモード: DBにドキュメントがあればDBから読み込み
+  - CLIモード: DBが空なら `doc_root` から読み込み
+  - 両方空ならエラー
 
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 56 tests** (Repository 20 + Manager 13 + Executor 13 + API 10)
+**合計: 60 tests** (Repository 20 + Manager 13 + Executor 17 + API 10)
