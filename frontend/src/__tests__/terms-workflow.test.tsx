@@ -63,24 +63,31 @@ const mockProvisionalEntries: GlossaryTermResponse[] = [
 ]
 
 // Mock data - matches actual backend response (term_name instead of term_id, no severity)
+// Backend Issue Types: unclear, contradiction, missing_relation, unnecessary
 const mockIssues: IssueResponse[] = [
   {
     id: 1,
     term_name: '量子コンピュータ',
-    issue_type: 'ambiguous',
+    issue_type: 'unclear',
     description: '「量子コンピュータ」の定義が曖昧です。',
   },
   {
     id: 2,
     term_name: '量子ビット',
-    issue_type: 'inconsistent',
+    issue_type: 'contradiction',
     description: '「量子ビット」と「キュービット」の使い分けが不明確です。',
   },
   {
     id: 3,
     term_name: '量子もつれ',
-    issue_type: 'missing',
+    issue_type: 'missing_relation',
     description: '「量子もつれ」の定義が不足しています。',
+  },
+  {
+    id: 4,
+    term_name: '量子アルゴリズム',
+    issue_type: 'unnecessary',
+    description: '「量子アルゴリズム」は用語集に不要です。',
   },
 ]
 
@@ -518,10 +525,11 @@ describe('IssuesPage', () => {
     renderWithProviders(<IssuesPage projectId={1} />)
 
     await waitFor(() => {
-      expect(screen.getByText('ambiguous')).toBeInTheDocument()
+      expect(screen.getByText('unclear')).toBeInTheDocument()
     })
-    expect(screen.getByText('inconsistent')).toBeInTheDocument()
-    expect(screen.getByText('missing')).toBeInTheDocument()
+    expect(screen.getByText('contradiction')).toBeInTheDocument()
+    expect(screen.getByText('missing_relation')).toBeInTheDocument()
+    expect(screen.getByText('unnecessary')).toBeInTheDocument()
   })
 
   it('shows term names in issues', async () => {
@@ -548,7 +556,7 @@ describe('IssuesPage', () => {
     renderWithProviders(<IssuesPage projectId={1} />)
 
     await waitFor(() => {
-      expect(screen.getByText('ambiguous')).toBeInTheDocument()
+      expect(screen.getByText('unclear')).toBeInTheDocument()
     })
 
     // Should have filter select
@@ -559,7 +567,7 @@ describe('IssuesPage', () => {
     const { user } = renderWithProviders(<IssuesPage projectId={1} />)
 
     await waitFor(() => {
-      expect(screen.getByText('ambiguous')).toBeInTheDocument()
+      expect(screen.getByText('unclear')).toBeInTheDocument()
     })
 
     // Click on filter dropdown
@@ -567,15 +575,15 @@ describe('IssuesPage', () => {
     const input = within(filter).getByRole('textbox')
     await user.click(input)
 
-    // Wait for dropdown to open and select Ambiguous
+    // Wait for dropdown to open and select Unclear
     await waitFor(() => {
-      expect(screen.getByText('Ambiguous')).toBeInTheDocument()
+      expect(screen.getByText('Unclear')).toBeInTheDocument()
     })
-    await user.click(screen.getByText('Ambiguous'))
+    await user.click(screen.getByText('Unclear'))
 
-    // Only ambiguous issues should be shown (via API refetch)
+    // Only unclear issues should be shown (via API refetch)
     await waitFor(() => {
-      expect(screen.queryByText('inconsistent')).not.toBeInTheDocument()
+      expect(screen.queryByText('contradiction')).not.toBeInTheDocument()
     })
   })
 
@@ -597,7 +605,7 @@ describe('IssuesPage', () => {
     renderWithProviders(<IssuesPage projectId={1} />)
 
     await waitFor(() => {
-      expect(screen.getByText('ambiguous')).toBeInTheDocument()
+      expect(screen.getByText('unclear')).toBeInTheDocument()
     })
 
     expect(screen.getByRole('button', { name: /review/i })).toBeInTheDocument()
