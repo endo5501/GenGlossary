@@ -4,7 +4,7 @@ tags: [bug, gui]
 description: "GUI: Run実行時に「No documents found」エラーが発生する問題"
 created_at: "2026-01-29T13:37:03Z"
 started_at: 2026-01-29T13:40:50Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-29T14:18:17Z # Do not modify manually
 ---
 
 # GUI: Run実行時に「No documents found」エラーが発生する問題
