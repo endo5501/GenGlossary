@@ -473,13 +473,15 @@ export function useLogStream(
 ステータスや重要度に応じた色定義とヘルパー関数。
 
 ```typescript
-// 型定義
-export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-export type IssueType = 'ambiguous' | 'inconsistent' | 'missing'
+// 型定義はapi/types.tsからインポート
+import type { RunStatus, IssueType } from '../api/types'
+
+// IssueType は以下の値を持つ（バックエンドと同じ）:
+// 'unclear' | 'contradiction' | 'missing_relation' | 'unnecessary'
 
 // 色マッピング
 export const statusColors: Record<RunStatus, string>
-export const issueTypeColors: Record<IssueType, string>
+export const issueTypeColors: Record<IssueType, string>  // unclear: orange, contradiction: grape, missing_relation: cyan, unnecessary: gray
 export const levelColors: Record<string, string>  // ログレベル用
 
 // ヘルパー関数（型安全でデフォルト値付き）
