@@ -683,7 +683,7 @@ class TestGlossaryGeneratorPromptBuilding:
         many_occurrences = [
             TermOccurrence(
                 document_path=f"/test{i}.md",
-                line_number=i,
+                line_number=i + 1,  # line_number must be >= 1
                 context=f"Context line {i}",
             )
             for i in range(10)

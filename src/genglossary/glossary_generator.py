@@ -33,6 +33,17 @@ class GlossaryGenerator:
         ("\uac00", "\ud7af"),  # Korean Hangul
     ]
 
+    # Maximum number of context occurrences to include in prompt
+    MAX_CONTEXT_COUNT = 5
+
+    # Few-shot example for definition generation
+    FEW_SHOT_EXAMPLE = """Input:
+用語: アソリウス島騎士団
+出現箇所: 「アソリウス島騎士団は魔神討伐の最前線で戦っている。」
+
+Output:
+{"definition": "エデルト王国の辺境、アソリウス島を守る騎士団。魔神討伐の最前線として重要な役割を担う。", "confidence": 0.9}"""
+
     def __init__(self, llm_client: BaseLLMClient) -> None:
         """Initialize the GlossaryGenerator.
 
@@ -218,6 +229,52 @@ class GlossaryGenerator:
             for start, end in self.CJK_RANGES
         )
 
+    def _build_context_text(self, occurrences: list[TermOccurrence]) -> str:
+        """Build context text from term occurrences.
+
+        Args:
+            occurrences: List of term occurrences with context.
+
+        Returns:
+            Formatted context text for prompt.
+        """
+        if not occurrences:
+            return "(ドキュメント内に出現箇所がありません)"
+
+        limited_occurrences = occurrences[: self.MAX_CONTEXT_COUNT]
+        contexts = [f"- {occ.context}" for occ in limited_occurrences]
+        return "\n".join(contexts)
+
+    def _build_definition_prompt(self, term: str, context_text: str) -> str:
+        """Build the prompt for definition generation.
+
+        Args:
+            term: The term to define.
+            context_text: Formatted context text from occurrences.
+
+        Returns:
+            Complete prompt for LLM.
+        """
+        return f"""あなたは用語集を作成するアシスタントです。
+与えられた用語について、出現箇所のコンテキストから文脈固有の意味を1-2文で説明してください。
+
+## Example
+
+以下は出力形式の例です。この例の内容をそのまま使わないでください。
+
+{self.FEW_SHOT_EXAMPLE}
+
+## End Example
+
+## 今回の用語:
+
+用語: {term}
+出現箇所とコンテキスト:
+{context_text}
+
+信頼度の基準: 明確=0.8+, 推測可能=0.5-0.7, 不明確=0.0-0.4
+JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-1.0}}"""
+
     def _generate_definition(
         self, term: str, occurrences: list[TermOccurrence]
     ) -> tuple[str, float]:
@@ -230,37 +287,8 @@ class GlossaryGenerator:
         Returns:
             Tuple of (definition, confidence).
         """
-        # Build context from occurrences
-        if occurrences:
-            contexts = [
-                f"- {occ.context}" for occ in occurrences[:5]  # Limit to 5
-            ]
-            context_text = "\n".join(contexts)
-        else:
-            context_text = "(ドキュメント内に出現箇所がありません)"
-
-        prompt = f"""あなたは用語集を作成するアシスタントです。
-与えられた用語について、出現箇所のコンテキストから文脈固有の意味を1-2文で説明してください。
-
-## Example
-
-以下は出力形式の例です。この例の内容をそのまま使わないでください。
-
-Input:
-用語: アソリウス島騎士団
-出現箇所: 「アソリウス島騎士団は魔神討伐の最前線で戦っている。」
-
-Output:
-{{"definition": "エデルト王国の辺境、アソリウス島を守る騎士団。魔神討伐の最前線として重要な役割を担う。", "confidence": 0.9}}
-
-## 今回の用語:
-
-用語: {term}
-出現箇所とコンテキスト:
-{context_text}
-
-信頼度の基準: 明確=0.8+, 推測可能=0.5-0.7, 不明確=0.0-0.4
-JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-1.0}}"""
+        context_text = self._build_context_text(occurrences)
+        prompt = self._build_definition_prompt(term, context_text)
 
         response = self.llm_client.generate_structured(
             prompt, DefinitionResponse

@@ -3,7 +3,7 @@ priority: 4
 tags: [refactoring, code-quality]
 description: "GlossaryGenerator: プロンプト構築ロジックのリファクタリング"
 created_at: "2026-01-29T15:56:49Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-29T23:03:37Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
