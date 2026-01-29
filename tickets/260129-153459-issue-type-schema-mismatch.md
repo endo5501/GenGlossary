@@ -87,8 +87,8 @@ const issueTypeOptions = [
 - [x] スキーマ統一方針を決定（Option A or B） → **Option A: フロントエンドをバックエンドに合わせる**
 - [x] 選択したオプションに基づいて修正
 - [x] フィルター機能のテストを追加
-- [ ] Issues画面にアイテムが表示されることを確認 → **要手動確認**
-- [ ] Refined画面にアイテムが表示されることを確認 → **要手動確認**
+- [x] Issues画面にアイテムが表示されることを確認 → **手動確認完了**
+- [x] Refined画面にアイテムが表示されることを確認 → **手動確認完了**
 - [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
@@ -96,7 +96,7 @@ const issueTypeOptions = [
 - [x] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 
 ## 実装サマリー
