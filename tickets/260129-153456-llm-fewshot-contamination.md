@@ -4,7 +4,7 @@ tags: [bug, llm, pipeline]
 description: "GlossaryGenerator: Few-shot exampleがLLM出力に混入する"
 created_at: "2026-01-29T15:34:56Z"
 started_at: 2026-01-29T15:50:43Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-29T16:02:26Z # Do not modify manually
 ---
 
 # GlossaryGenerator: Few-shot exampleがLLM出力に混入する
