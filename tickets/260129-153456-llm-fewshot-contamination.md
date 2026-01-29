@@ -3,7 +3,7 @@ priority: 2
 tags: [bug, llm, pipeline]
 description: "GlossaryGenerator: Few-shot exampleがLLM出力に混入する"
 created_at: "2026-01-29T15:34:56Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-29T15:50:43Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -71,19 +71,36 @@ JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-
 
 ## Tasks
 
-- [ ] プロンプト構造を改善
-- [ ] テストで定義生成の品質を確認
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] プロンプト構造を改善
+- [x] テストで定義生成の品質を確認
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md (不要: 内部実装の変更のみでAPIに影響なし)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
 
 - LLMのモデルやバージョンによって挙動が異なる可能性あり
 - Ollamaローカル実行環境での検証が必要
+
+## 実装結果
+
+### 変更内容
+- `src/genglossary/glossary_generator.py`: プロンプト構造を改善
+  - 冒頭にシステム説明を追加
+  - `## Example` セクションに例を配置し、「この例の内容をそのまま使わないでください」と明記
+  - Input/Output形式で構造化
+  - `## 今回の用語:` セクションで実際のタスクを明確に区別
+
+### テスト
+- `tests/test_glossary_generator.py`: プロンプト構造検証テストを2件追加
+  - `test_definition_prompt_separates_example_from_task`
+  - `test_definition_prompt_example_does_not_appear_in_task_section`
+
+### 関連チケット
+- `260129-155649-glossary-generator-prompt-refactoring`: code-simplifier/codex MCPからのリファクタリング提案をチケット化
