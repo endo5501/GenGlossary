@@ -361,10 +361,14 @@ API is an interface.
 
         assert len(callback_calls) == 0
 
-    def test_definition_prompt_includes_few_shot_examples(
+    def test_definition_prompt_separates_example_from_task(
         self, mock_llm_client: MagicMock
     ) -> None:
-        """Test that definition prompt includes few-shot examples."""
+        """Test that definition prompt clearly separates few-shot example from actual task.
+
+        The prompt must structure examples as Input/Output pairs and clearly mark
+        the actual task section to prevent LLM from confusing examples with real output.
+        """
         mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
             definition="Test definition", confidence=0.8
         )
@@ -383,8 +387,70 @@ API is an interface.
         call_args = mock_llm_client.generate_structured.call_args
         prompt = call_args[0][0]
 
-        # Should include few-shot examples section
-        assert "Few-shot Examples" in prompt or "few-shot examples" in prompt or "定義の例" in prompt
+        # Prompt should clearly mark examples as examples
+        assert "## Example" in prompt or "<example>" in prompt or "例:" in prompt
+
+        # Prompt should have a clear task section after examples
+        assert "## Your Task" in prompt or "## 実際のタスク" in prompt or "今回の用語:" in prompt
+
+        # The actual term should appear in task section, not just anywhere
+        # Find position of task marker and verify term appears after it
+        task_markers = ["## Your Task", "## 実際のタスク", "今回の用語:"]
+        task_position = -1
+        for marker in task_markers:
+            pos = prompt.find(marker)
+            if pos != -1:
+                task_position = pos
+                break
+
+        assert task_position != -1, "No task section marker found in prompt"
+
+        # The actual term should appear after the task marker
+        task_section = prompt[task_position:]
+        assert "MyTerm" in task_section, "Term should be in task section"
+
+    def test_definition_prompt_example_does_not_appear_in_task_section(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that few-shot example content doesn't leak into task section.
+
+        This prevents the LLM from confusing example content with actual task.
+        """
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.8
+        )
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        occurrences = [
+            TermOccurrence(
+                document_path="/test.md",
+                line_number=1,
+                context="GenGlossary is a tool.",
+            )
+        ]
+
+        generator._generate_definition("GenGlossary", occurrences)
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+
+        # Find task section
+        task_markers = ["## Your Task", "## 実際のタスク", "今回の用語:"]
+        task_position = -1
+        for marker in task_markers:
+            pos = prompt.find(marker)
+            if pos != -1:
+                task_position = pos
+                break
+
+        assert task_position != -1, "No task section marker found"
+
+        # Task section should not contain example-specific content
+        task_section = prompt[task_position:]
+
+        # The example uses "アソリウス島騎士団" - this should NOT appear in task section
+        assert "アソリウス島騎士団" not in task_section, \
+            "Example content should not appear in task section"
 
 
 class TestGlossaryGeneratorClassifiedTerm:
