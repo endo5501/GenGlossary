@@ -601,3 +601,145 @@ class TestGlossaryGeneratorClassifiedTerm:
         assert "量子コンピュータ" in glossary.terms
         assert "計算機" not in glossary.terms
         assert glossary.terms["量子コンピュータ"].name == "量子コンピュータ"
+
+
+class TestGlossaryGeneratorPromptBuilding:
+    """Test suite for GlossaryGenerator prompt building helper methods."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def generator(self, mock_llm_client: MagicMock) -> GlossaryGenerator:
+        """Create a GlossaryGenerator instance."""
+        return GlossaryGenerator(llm_client=mock_llm_client)
+
+    @pytest.fixture
+    def sample_occurrences(self) -> list[TermOccurrence]:
+        """Create sample occurrences for testing."""
+        return [
+            TermOccurrence(
+                document_path="/test1.md",
+                line_number=1,
+                context="量子コンピュータは量子力学を利用します。",
+            ),
+            TermOccurrence(
+                document_path="/test1.md",
+                line_number=5,
+                context="量子コンピュータの特徴は重ね合わせです。",
+            ),
+            TermOccurrence(
+                document_path="/test2.md",
+                line_number=10,
+                context="量子コンピュータは並列計算が得意です。",
+            ),
+        ]
+
+    # Tests for class constants
+    def test_has_max_context_count_constant(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that MAX_CONTEXT_COUNT constant is defined."""
+        assert hasattr(GlossaryGenerator, "MAX_CONTEXT_COUNT")
+        assert isinstance(GlossaryGenerator.MAX_CONTEXT_COUNT, int)
+        assert GlossaryGenerator.MAX_CONTEXT_COUNT == 5
+
+    def test_has_few_shot_example_constant(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that FEW_SHOT_EXAMPLE constant is defined."""
+        assert hasattr(GlossaryGenerator, "FEW_SHOT_EXAMPLE")
+        assert isinstance(GlossaryGenerator.FEW_SHOT_EXAMPLE, str)
+        # Example should use placeholders, not specific terms
+        assert "<TERM>" in GlossaryGenerator.FEW_SHOT_EXAMPLE or \
+            "アソリウス島騎士団" in GlossaryGenerator.FEW_SHOT_EXAMPLE
+
+    # Tests for _build_context_text helper method
+    def test_build_context_text_with_occurrences(
+        self, generator: GlossaryGenerator, sample_occurrences: list[TermOccurrence]
+    ) -> None:
+        """Test that _build_context_text builds context from occurrences."""
+        context_text = generator._build_context_text(sample_occurrences)
+
+        assert "量子コンピュータは量子力学を利用します。" in context_text
+        assert "量子コンピュータの特徴は重ね合わせです。" in context_text
+        assert "量子コンピュータは並列計算が得意です。" in context_text
+
+    def test_build_context_text_empty_occurrences(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that _build_context_text handles empty occurrences."""
+        context_text = generator._build_context_text([])
+
+        assert "出現箇所がありません" in context_text
+
+    def test_build_context_text_limits_to_max_count(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that _build_context_text limits occurrences to MAX_CONTEXT_COUNT."""
+        # Create more occurrences than MAX_CONTEXT_COUNT
+        many_occurrences = [
+            TermOccurrence(
+                document_path=f"/test{i}.md",
+                line_number=i,
+                context=f"Context line {i}",
+            )
+            for i in range(10)
+        ]
+
+        context_text = generator._build_context_text(many_occurrences)
+
+        # Should only include MAX_CONTEXT_COUNT occurrences
+        included_count = sum(
+            1 for i in range(10) if f"Context line {i}" in context_text
+        )
+        assert included_count == GlossaryGenerator.MAX_CONTEXT_COUNT
+
+    # Tests for _build_definition_prompt helper method
+    def test_build_definition_prompt_includes_term(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that _build_definition_prompt includes the term."""
+        prompt = generator._build_definition_prompt("量子コンピュータ", "テストコンテキスト")
+
+        assert "量子コンピュータ" in prompt
+
+    def test_build_definition_prompt_includes_context(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that _build_definition_prompt includes the context text."""
+        prompt = generator._build_definition_prompt("用語", "これはテストコンテキストです")
+
+        assert "これはテストコンテキストです" in prompt
+
+    def test_build_definition_prompt_includes_example(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that _build_definition_prompt includes the few-shot example."""
+        prompt = generator._build_definition_prompt("用語", "コンテキスト")
+
+        # Should have an example section
+        assert "## Example" in prompt or "例" in prompt
+        # Should have example end delimiter
+        assert "## End Example" in prompt or "## 今回の用語" in prompt
+
+    def test_build_definition_prompt_includes_confidence_criteria(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that _build_definition_prompt includes confidence criteria."""
+        prompt = generator._build_definition_prompt("用語", "コンテキスト")
+
+        assert "信頼度" in prompt
+        assert "0.8" in prompt or "明確" in prompt
+
+    def test_build_definition_prompt_includes_json_format_instruction(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that _build_definition_prompt includes JSON format instruction."""
+        prompt = generator._build_definition_prompt("用語", "コンテキスト")
+
+        assert "JSON" in prompt
+        assert "definition" in prompt
+        assert "confidence" in prompt
