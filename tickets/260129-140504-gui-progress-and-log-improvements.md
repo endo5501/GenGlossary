@@ -4,7 +4,7 @@ tags: [enhancement, gui, ux]
 description: "GUI: 進捗表示とログ保持の改善"
 created_at: "2026-01-29T14:05:04Z"
 started_at: 2026-01-29T22:27:18Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-29T23:02:05Z # Do not modify manually
 ---
 
 # GUI: 進捗表示とログ保持の改善
