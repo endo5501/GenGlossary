@@ -1,6 +1,7 @@
 """Pipeline executor for running glossary generation steps."""
 
 import sqlite3
+from pathlib import Path
 from threading import Event
 from typing import Callable
 
@@ -154,7 +155,7 @@ class PipelineExecutor:
                 delete_all_documents(conn)
                 for document in documents:
                     content_hash = compute_content_hash(document.content)
-                    file_name = document.file_path.rsplit("/", 1)[-1]
+                    file_name = Path(document.file_path).name
                     create_document(conn, file_name, document.content, content_hash)
                 return documents
 
