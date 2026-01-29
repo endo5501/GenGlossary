@@ -99,7 +99,7 @@ class TestPipelineExecutorFull:
             mock_list_docs.return_value = []
 
             # Execute should raise RuntimeError (GUI mode with default doc_root=".")
-            with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
+            with pytest.raises(RuntimeError, match="No documents found"):
                 executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".")
 
     def test_full_scope_executes_all_steps(

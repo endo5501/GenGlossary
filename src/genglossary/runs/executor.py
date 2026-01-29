@@ -163,27 +163,38 @@ class PipelineExecutor:
 
         self._log("info", "Loading documents...")
 
-        # CLI mode: doc_root が明示的に指定されている場合はFS優先
-        use_filesystem = doc_root != "."
+        # DB-first approach: まずDBからドキュメント読み込みを試みる
+        # GUIモードではドキュメントはDBに保存されるため、DBを優先
+        doc_rows = list_all_documents(conn)
+        documents: list[Document] = []
 
-        if use_filesystem:
-            # CLI mode: ファイルシステムから読み込み、既存DBドキュメントを置き換え
+        if doc_rows:
+            # DBにドキュメントがある場合はそれを使用（GUIモード）
+            self._log("info", "Loading documents from database...")
+            for row in doc_rows:
+                doc = Document(
+                    file_path=row["file_name"],
+                    content=row["content"],
+                )
+                documents.append(doc)
+        elif doc_root and doc_root != ".":
+            # DBが空でdoc_rootが指定されている場合はファイルシステムから読み込む（CLIモード）
+            self._log("info", f"Loading documents from filesystem: {doc_root}")
             loader = DocumentLoader()
             documents = loader.load_directory(doc_root)
 
-            if not documents:
-                self._log("error", "No documents found")
-                raise RuntimeError("No documents found in doc_root")
+            if documents:
+                # ファイルシステムから読み込んだドキュメントをDBに保存
+                delete_all_documents(conn)
+                for document in documents:
+                    content_hash = compute_content_hash(document.content)
+                    file_name = document.file_path.rsplit("/", 1)[-1]
+                    create_document(conn, file_name, document.content, content_hash)
 
-            # 既存ドキュメントをクリアして新しいものを保存
-            delete_all_documents(conn)
-            for document in documents:
-                content_hash = compute_content_hash(document.content)
-                file_name = document.file_path.rsplit("/", 1)[-1]
-                create_document(conn, file_name, document.content, content_hash)
-        else:
-            # GUI mode: DBドキュメントを使用
-            documents = self._load_documents_from_db(conn)
+        # ドキュメントが見つからない場合はエラー
+        if not documents:
+            self._log("error", "No documents found")
+            raise RuntimeError("No documents found in doc_root")
 
         self._log("info", f"Loaded {len(documents)} documents")
 
