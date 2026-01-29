@@ -3,7 +3,7 @@
 import re
 from typing import cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, confloat
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
@@ -16,7 +16,7 @@ class DefinitionResponse(BaseModel):
     """Response model for definition generation."""
 
     definition: str
-    confidence: float
+    confidence: confloat(ge=0.0, le=1.0)  # type: ignore[valid-type]
 
 
 class GlossaryGenerator:
@@ -126,7 +126,11 @@ Output:
     def _filter_terms(
         self, terms: list[str] | list[ClassifiedTerm], skip_common_nouns: bool
     ) -> list[str] | list[ClassifiedTerm]:
-        """Filter terms based on skip_common_nouns flag.
+        """Filter terms based on skip_common_nouns flag and validity.
+
+        Filters out:
+        - Empty or whitespace-only terms
+        - Common nouns (if skip_common_nouns is True and terms are ClassifiedTerm)
 
         Args:
             terms: List of terms (str or ClassifiedTerm).
@@ -135,21 +139,24 @@ Output:
         Returns:
             Filtered list of terms.
         """
-        # Return early if no filtering needed
-        if not terms or not skip_common_nouns:
+        if not terms:
             return terms
 
-        # If str list, no filtering possible
+        # If str list, filter out empty/whitespace-only terms
         if isinstance(terms[0], str):
-            return terms
+            str_terms = cast(list[str], terms)
+            return [t for t in str_terms if t.strip()]
 
         # Filter ClassifiedTerm list
         classified_terms = cast(list[ClassifiedTerm], terms)
-        return [
-            term
-            for term in classified_terms
-            if term.category != TermCategory.COMMON_NOUN
-        ]
+        filtered = [t for t in classified_terms if t.term.strip()]
+
+        if skip_common_nouns:
+            filtered = [
+                t for t in filtered if t.category != TermCategory.COMMON_NOUN
+            ]
+
+        return filtered
 
     def _build_search_pattern(self, term: str) -> re.Pattern:
         """Build a regex pattern for searching a term.

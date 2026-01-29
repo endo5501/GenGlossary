@@ -603,6 +603,56 @@ class TestGlossaryGeneratorClassifiedTerm:
         assert glossary.terms["量子コンピュータ"].name == "量子コンピュータ"
 
 
+class TestGlossaryGeneratorEdgeCases:
+    """Test suite for GlossaryGenerator edge cases."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = """GenGlossary is a tool.
+LLM is a language model.
+"""
+        return Document(file_path="/path/to/doc.md", content=content)
+
+    def test_generate_skips_empty_terms(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that empty string terms are skipped."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.9
+        )
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        result = generator.generate(["GenGlossary", "", "LLM"], [sample_document])
+
+        # Should skip empty term
+        assert result.term_count == 2
+        assert result.has_term("GenGlossary")
+        assert result.has_term("LLM")
+        assert mock_llm_client.generate_structured.call_count == 2
+
+    def test_generate_skips_whitespace_only_terms(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that whitespace-only terms are skipped."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.9
+        )
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        result = generator.generate(["GenGlossary", "   ", "\t\n"], [sample_document])
+
+        # Should skip whitespace-only terms
+        assert result.term_count == 1
+        assert result.has_term("GenGlossary")
+        assert mock_llm_client.generate_structured.call_count == 1
+
+
 class TestGlossaryGeneratorPromptBuilding:
     """Test suite for GlossaryGenerator prompt building helper methods."""
 
