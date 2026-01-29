@@ -78,7 +78,7 @@ class TestPipelineExecutorFull:
             mock_loader.return_value.load_directory.return_value = []
 
             # Execute should raise RuntimeError (CLI mode with explicit doc_root)
-            with pytest.raises(RuntimeError, match="No documents found"):
+            with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
                 executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/some/path")
 
     def test_full_scope_raises_error_when_no_documents_gui_mode(
@@ -99,7 +99,7 @@ class TestPipelineExecutorFull:
             mock_list_docs.return_value = []
 
             # Execute should raise RuntimeError (GUI mode with default doc_root=".")
-            with pytest.raises(RuntimeError, match="No documents found"):
+            with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
                 executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".")
 
     def test_full_scope_executes_all_steps(
@@ -628,7 +628,7 @@ class TestPipelineExecutorDBFirstApproach:
             mock_loader.return_value.load_directory.return_value = []
 
             # Execute should raise RuntimeError
-            with pytest.raises(RuntimeError, match="No documents found"):
+            with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
                 executor.execute(
                     project_db, "full", cancel_event, log_callback,
                     doc_root="/empty/path"
