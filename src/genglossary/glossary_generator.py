@@ -135,15 +135,15 @@ Output:
         Returns:
             Filtered list of terms.
         """
-        # Early returns for simple cases
-        if not terms:
+        # Return early if no filtering needed
+        if not terms or not skip_common_nouns:
             return terms
 
-        # If str list or not filtering, return as-is
-        if isinstance(terms[0], str) or not skip_common_nouns:
+        # If str list, no filtering possible
+        if isinstance(terms[0], str):
             return terms
 
-        # Filter ClassifiedTerm list (type guaranteed by above check)
+        # Filter ClassifiedTerm list
         classified_terms = cast(list[ClassifiedTerm], terms)
         return [
             term
@@ -250,9 +250,10 @@ Output:
         if not occurrences:
             return "(ドキュメント内に出現箇所がありません)"
 
-        limited_occurrences = occurrences[: self.MAX_CONTEXT_COUNT]
-        contexts = [f"- {occ.context}" for occ in limited_occurrences]
-        return "\n".join(contexts)
+        return "\n".join(
+            f"- {occ.context}"
+            for occ in occurrences[: self.MAX_CONTEXT_COUNT]
+        )
 
     def _build_definition_prompt(self, term: str, context_text: str) -> str:
         """Build the prompt for definition generation.
