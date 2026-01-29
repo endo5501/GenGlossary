@@ -675,6 +675,205 @@ class TestPipelineExecutorDBFirstApproach:
             mock_loader.return_value.load_directory.assert_not_called()
 
 
+class TestPipelineExecutorProgressCallback:
+    """Tests for _create_progress_callback method."""
+
+    def test_create_progress_callback_logs_with_extended_fields(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """_create_progress_callback は拡張フィールド付きでログを出力する"""
+        logs = []
+        callback = lambda msg: logs.append(msg)
+
+        # Set up executor context
+        executor._run_id = 1
+        executor._log_callback = callback
+
+        # Create progress callback
+        progress_cb = executor._create_progress_callback(project_db, "provisional")
+
+        # Call the progress callback
+        progress_cb(5, 20, "量子コンピュータ")
+
+        # Verify log message
+        assert len(logs) == 1
+        log = logs[0]
+        assert log["run_id"] == 1
+        assert log["level"] == "info"
+        assert log["step"] == "provisional"
+        assert log["progress_current"] == 5
+        assert log["progress_total"] == 20
+        assert log["current_term"] == "量子コンピュータ"
+        assert "25%" in log["message"]
+
+    def test_create_progress_callback_calculates_percentage(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+    ) -> None:
+        """進捗パーセントが正しく計算される"""
+        logs = []
+        executor._run_id = 1
+        executor._log_callback = lambda msg: logs.append(msg)
+
+        progress_cb = executor._create_progress_callback(project_db, "refined")
+
+        # Test various percentages
+        progress_cb(1, 10, "term1")  # 10%
+        progress_cb(5, 10, "term5")  # 50%
+        progress_cb(10, 10, "term10")  # 100%
+
+        assert len(logs) == 3
+        assert "10%" in logs[0]["message"]
+        assert "50%" in logs[1]["message"]
+        assert "100%" in logs[2]["message"]
+
+    def test_create_progress_callback_handles_zero_total(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+    ) -> None:
+        """total が 0 の場合も正常に動作する"""
+        logs = []
+        executor._run_id = 1
+        executor._log_callback = lambda msg: logs.append(msg)
+
+        progress_cb = executor._create_progress_callback(project_db, "provisional")
+
+        # Should not raise error
+        progress_cb(0, 0, "")
+
+        assert len(logs) == 1
+        assert "0%" in logs[0]["message"]
+
+
+class TestPipelineExecutorLogExtended:
+    """Tests for extended _log method."""
+
+    def test_log_with_extended_fields(
+        self,
+        executor: PipelineExecutor,
+    ) -> None:
+        """_log は拡張フィールドを含むログを出力する"""
+        logs = []
+        executor._run_id = 1
+        executor._log_callback = lambda msg: logs.append(msg)
+
+        executor._log(
+            "info",
+            "量子コンピュータ: 25%",
+            step="provisional",
+            current=5,
+            total=20,
+            current_term="量子コンピュータ",
+        )
+
+        assert len(logs) == 1
+        log = logs[0]
+        assert log["run_id"] == 1
+        assert log["level"] == "info"
+        assert log["message"] == "量子コンピュータ: 25%"
+        assert log["step"] == "provisional"
+        assert log["progress_current"] == 5
+        assert log["progress_total"] == 20
+        assert log["current_term"] == "量子コンピュータ"
+
+    def test_log_without_extended_fields_backward_compatible(
+        self,
+        executor: PipelineExecutor,
+    ) -> None:
+        """拡張フィールドなしの _log 呼び出しは後方互換性を保つ"""
+        logs = []
+        executor._run_id = 1
+        executor._log_callback = lambda msg: logs.append(msg)
+
+        executor._log("info", "Starting pipeline execution: full")
+
+        assert len(logs) == 1
+        log = logs[0]
+        assert log["run_id"] == 1
+        assert log["level"] == "info"
+        assert log["message"] == "Starting pipeline execution: full"
+        # 拡張フィールドは含まれないはず
+        assert "step" not in log
+        assert "progress_current" not in log
+
+
+class TestPipelineExecutorProgressCallbackIntegration:
+    """Tests for progress callback integration with GlossaryGenerator/Refiner."""
+
+    def test_execute_from_terms_passes_term_progress_callback_to_generator(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """GlossaryGenerator に term_progress_callback が渡される"""
+        logs = []
+        callback = lambda msg: logs.append(msg)
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator_cls, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}, {"term_text": "term2"}]
+
+            mock_glossary = Glossary(terms={})
+            mock_generator_cls.return_value.generate.return_value = mock_glossary
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(project_db, "from_terms", cancel_event, callback, run_id=1)
+
+            # Verify term_progress_callback was passed to generate
+            mock_generator_cls.return_value.generate.assert_called_once()
+            call_kwargs = mock_generator_cls.return_value.generate.call_args.kwargs
+            assert "term_progress_callback" in call_kwargs
+            assert callable(call_kwargs["term_progress_callback"])
+
+    def test_execute_refiner_passes_term_progress_callback_to_refiner(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """GlossaryRefiner に term_progress_callback が渡される"""
+        logs = []
+        callback = lambda msg: logs.append(msg)
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_prov.return_value = [
+                {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
+            ]
+
+            mock_reviewer.return_value.review.return_value = [
+                GlossaryIssue(term_name="term1", issue_type="unclear", description="Issue")
+            ]
+
+            mock_refiner_cls.return_value.refine.return_value = Glossary(terms={})
+
+            executor.execute(project_db, "provisional_to_refined", cancel_event, callback, run_id=1)
+
+            # Verify term_progress_callback was passed to refine
+            mock_refiner_cls.return_value.refine.assert_called_once()
+            call_kwargs = mock_refiner_cls.return_value.refine.call_args.kwargs
+            assert "term_progress_callback" in call_kwargs
+            assert callable(call_kwargs["term_progress_callback"])
+
+
 class TestPipelineExecutorDBDocumentsLegacy:
     """Legacy tests for backward compatibility (doc_root="." case)."""
 

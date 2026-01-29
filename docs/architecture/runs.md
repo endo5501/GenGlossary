@@ -192,6 +192,56 @@ class PipelineExecutor:
             self._execute_provisional_to_refined(conn, cancel_event, log_queue)
 ```
 
+### 進捗コールバック
+
+用語集生成・精査ステップでは、各用語の処理進捗をリアルタイムでログストリームに送信します。
+
+```python
+# types.py
+TermProgressCallback = Callable[[int, int, str], None]  # (current, total, term_name)
+
+# executor.py
+def _create_progress_callback(
+    self,
+    conn: sqlite3.Connection,
+    step_name: str,
+) -> Callable[[int, int, str], None]:
+    """進捗コールバックを生成。ログに拡張フィールドを含める。"""
+    def callback(current: int, total: int, term_name: str = "") -> None:
+        percent = int((current / total) * 100) if total > 0 else 0
+        self._log(
+            "info",
+            f"{term_name}: {percent}%",
+            step=step_name,
+            current=current,
+            total=total,
+            current_term=term_name,
+        )
+    return callback
+```
+
+**拡張ログメッセージフォーマット:**
+```json
+{
+    "run_id": 1,
+    "level": "info",
+    "message": "量子コンピュータ: 25%",
+    "step": "provisional",
+    "progress_current": 5,
+    "progress_total": 20,
+    "current_term": "量子コンピュータ"
+}
+```
+
+**GlossaryGenerator / GlossaryRefiner での使用:**
+```python
+# executor.py
+progress_cb = self._create_progress_callback(conn, "provisional")
+glossary = generator.generate(
+    extracted_terms, documents, term_progress_callback=progress_cb
+)
+```
+
 ## 実行スコープ
 
 | Scope | 実行ステップ | 用途 |

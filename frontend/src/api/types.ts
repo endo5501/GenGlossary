@@ -94,6 +94,11 @@ export interface LogMessage {
   level: 'info' | 'warning' | 'error'
   message: string
   timestamp: string
+  // Progress-related fields (optional)
+  step?: string
+  progress_current?: number
+  progress_total?: number
+  current_term?: string
 }
 
 // Run create request

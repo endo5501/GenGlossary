@@ -9,7 +9,7 @@ from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.models.term import Term
-from genglossary.types import ProgressCallback
+from genglossary.types import ProgressCallback, TermProgressCallback
 
 
 class RefinementResponse(BaseModel):
@@ -40,6 +40,7 @@ class GlossaryRefiner:
         issues: list[GlossaryIssue],
         documents: list[Document],
         progress_callback: ProgressCallback | None = None,
+        term_progress_callback: TermProgressCallback | None = None,
     ) -> Glossary:
         """Refine the glossary based on identified issues.
 
@@ -49,6 +50,8 @@ class GlossaryRefiner:
             documents: List of documents for additional context.
             progress_callback: Optional callback called after each issue is resolved.
                 Receives (current, total) where current is 1-indexed.
+            term_progress_callback: Optional callback called after each issue is resolved.
+                Receives (current, total, term_name) where current is 1-indexed.
 
         Returns:
             A refined Glossary object.
@@ -100,9 +103,11 @@ class GlossaryRefiner:
             except Exception as e:
                 print(f"Warning: Failed to refine '{issue.term_name}': {e}")
             finally:
-                # Call progress callback if provided
+                # Call progress callbacks if provided
                 if progress_callback is not None:
                     progress_callback(idx, total_issues)
+                if term_progress_callback is not None:
+                    term_progress_callback(idx, total_issues, issue.term_name)
 
         refined_glossary.metadata["resolved_issues"] = resolved_count
         return refined_glossary

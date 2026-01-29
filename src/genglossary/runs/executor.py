@@ -49,15 +49,37 @@ class PipelineExecutor:
         self._log_callback: Callable[[dict], None] | None = None
         self._cancel_event: Event | None = None
 
-    def _log(self, level: str, message: str) -> None:
+    def _log(
+        self,
+        level: str,
+        message: str,
+        *,
+        step: str | None = None,
+        current: int | None = None,
+        total: int | None = None,
+        current_term: str | None = None,
+    ) -> None:
         """Log a message using the callback.
 
         Args:
             level: Log level ('info', 'warning', 'error').
             message: Log message.
+            step: Optional current step name (e.g., 'provisional', 'refined').
+            current: Optional current progress count.
+            total: Optional total count.
+            current_term: Optional current term being processed.
         """
         if self._log_callback is not None:
-            self._log_callback({"run_id": self._run_id, "level": level, "message": message})
+            log_entry: dict = {"run_id": self._run_id, "level": level, "message": message}
+            if step is not None:
+                log_entry["step"] = step
+            if current is not None:
+                log_entry["progress_current"] = current
+            if total is not None:
+                log_entry["progress_total"] = total
+            if current_term is not None:
+                log_entry["current_term"] = current_term
+            self._log_callback(log_entry)
 
     def _check_cancellation(self) -> bool:
         """Check if execution is cancelled.
@@ -69,6 +91,34 @@ class PipelineExecutor:
             self._log("info", "Execution cancelled")
             return True
         return False
+
+    def _create_progress_callback(
+        self,
+        conn: sqlite3.Connection,
+        step_name: str,
+    ) -> Callable[[int, int, str], None]:
+        """Create a progress callback for LLM processing steps.
+
+        The callback logs progress with extended fields (step, current, total, term name).
+
+        Args:
+            conn: Project database connection (for future DB progress updates).
+            step_name: Name of the current step (e.g., 'provisional', 'refined').
+
+        Returns:
+            A callback function that takes (current, total, term_name) arguments.
+        """
+        def callback(current: int, total: int, term_name: str = "") -> None:
+            percent = int((current / total) * 100) if total > 0 else 0
+            self._log(
+                "info",
+                f"{term_name}: {percent}%",
+                step=step_name,
+                current=current,
+                total=total,
+                current_term=term_name,
+            )
+        return callback
 
     def execute(
         self,
@@ -236,7 +286,10 @@ class PipelineExecutor:
 
         self._log("info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
-        glossary = generator.generate(extracted_terms, documents)
+        progress_cb = self._create_progress_callback(conn, "provisional")
+        glossary = generator.generate(
+            extracted_terms, documents, term_progress_callback=progress_cb
+        )
 
         # Save provisional glossary
         for term in glossary.terms.values():
@@ -324,7 +377,10 @@ class PipelineExecutor:
 
         self._log("info", "Refining glossary...")
         refiner = GlossaryRefiner(llm_client=self._llm_client)
-        glossary = refiner.refine(glossary, issues, documents)
+        progress_cb = self._create_progress_callback(conn, "refined")
+        glossary = refiner.refine(
+            glossary, issues, documents, term_progress_callback=progress_cb
+        )
 
         # Save refined glossary
         for term in glossary.terms.values():

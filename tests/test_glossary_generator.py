@@ -361,6 +361,29 @@ API is an interface.
 
         assert len(callback_calls) == 0
 
+    def test_generate_calls_term_progress_callback_with_term_name(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate calls TermProgressCallback with term name."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.9
+        )
+
+        callback_calls: list[tuple[int, int, str]] = []
+
+        def term_progress_callback(current: int, total: int, term_name: str) -> None:
+            callback_calls.append((current, total, term_name))
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        terms = ["GenGlossary", "LLM"]
+        generator.generate(
+            terms, [sample_document], term_progress_callback=term_progress_callback
+        )
+
+        assert len(callback_calls) == 2
+        assert callback_calls[0] == (1, 2, "GenGlossary")
+        assert callback_calls[1] == (2, 2, "LLM")
+
     def test_definition_prompt_separates_example_from_task(
         self, mock_llm_client: MagicMock
     ) -> None:
