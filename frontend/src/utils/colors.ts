@@ -1,4 +1,4 @@
-import type { RunStatus } from '../api/types'
+import type { RunStatus, IssueType } from '../api/types'
 
 export const statusColors: Record<RunStatus, string> = {
   pending: 'gray',
@@ -12,11 +12,11 @@ export function getStatusColor(status: string): string {
   return statusColors[status as RunStatus] ?? 'gray'
 }
 
-export type IssueType = 'ambiguous' | 'inconsistent' | 'missing'
 export const issueTypeColors: Record<IssueType, string> = {
-  ambiguous: 'orange',
-  inconsistent: 'grape',
-  missing: 'cyan',
+  unclear: 'orange',
+  contradiction: 'grape',
+  missing_relation: 'cyan',
+  unnecessary: 'gray',
 }
 
 export function getIssueTypeColor(issueType: string): string {

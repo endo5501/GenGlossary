@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { useIssues, useReviewIssues, useCurrentRun } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { getIssueTypeColor } from '../utils/colors'
+import type { IssueType } from '../api/types'
 
 interface IssuesPageProps {
   projectId: number
@@ -20,13 +21,14 @@ interface IssuesPageProps {
 
 const issueTypeOptions = [
   { value: '', label: 'All Types' },
-  { value: 'ambiguous', label: 'Ambiguous' },
-  { value: 'inconsistent', label: 'Inconsistent' },
-  { value: 'missing', label: 'Missing' },
+  { value: 'unclear', label: 'Unclear' },
+  { value: 'contradiction', label: 'Contradiction' },
+  { value: 'missing_relation', label: 'Missing Relation' },
+  { value: 'unnecessary', label: 'Unnecessary' },
 ]
 
 export function IssuesPage({ projectId }: IssuesPageProps) {
-  const [issueTypeFilter, setIssueTypeFilter] = useState<string>('')
+  const [issueTypeFilter, setIssueTypeFilter] = useState<IssueType | ''>('')
   const { data: issues, isLoading } = useIssues(
     projectId,
     issueTypeFilter || undefined
