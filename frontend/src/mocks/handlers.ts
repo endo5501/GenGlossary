@@ -148,7 +148,9 @@ export const mockCurrentRun: RunResponse = {
   current_step: null,
   created_at: '2024-01-15T10:00:00Z',
   started_at: null,
-  completed_at: null,
+  finished_at: null,
+  triggered_by: 'manual',
+  error_message: null,
 }
 
 const BASE_URL = 'http://localhost:8000'
@@ -412,7 +414,9 @@ export const handlers = [
       current_step: 'extracting_terms',
       created_at: new Date().toISOString(),
       started_at: new Date().toISOString(),
-      completed_at: null,
+      finished_at: null,
+      triggered_by: 'manual',
+      error_message: null,
     }
     return HttpResponse.json(newRun, { status: 201 })
   }),

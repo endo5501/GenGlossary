@@ -132,7 +132,9 @@ export interface RunResponse {
   current_step: string | null
   created_at: string
   started_at: string | null
-  completed_at: string | null
+  finished_at: string | null
+  triggered_by: string
+  error_message: string | null
 }
 
 // Settings types

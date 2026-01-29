@@ -118,7 +118,9 @@ const mockRunIdle: RunResponse = {
   current_step: null,
   created_at: '2024-01-15T10:00:00Z',
   started_at: null,
-  completed_at: null,
+  finished_at: null,
+  triggered_by: 'manual',
+  error_message: null,
 }
 
 const mockRunRunning: RunResponse = {
@@ -130,7 +132,9 @@ const mockRunRunning: RunResponse = {
   current_step: 'generating_provisional',
   created_at: '2024-01-15T10:00:00Z',
   started_at: '2024-01-15T10:00:01Z',
-  completed_at: null,
+  finished_at: null,
+  triggered_by: 'manual',
+  error_message: null,
 }
 
 // Test wrapper with providers
