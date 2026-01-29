@@ -417,7 +417,7 @@ export const handlers = [
     return HttpResponse.json(newRun, { status: 201 })
   }),
 
-  http.post(`${BASE_URL}/api/projects/:projectId/runs/:runId/cancel`, () => {
-    return HttpResponse.json({ ...mockCurrentRun, status: 'cancelled' })
+  http.delete(`${BASE_URL}/api/projects/:projectId/runs/:runId`, () => {
+    return HttpResponse.json({ message: 'Run cancelled' })
   }),
 ]

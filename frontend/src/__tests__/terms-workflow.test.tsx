@@ -273,8 +273,8 @@ const runsHandlers = [
       scope: body.scope,
     }, { status: 201 })
   }),
-  http.post(`${BASE_URL}/api/projects/:projectId/runs/:runId/cancel`, () => {
-    return HttpResponse.json({ ...mockRunRunning, status: 'cancelled' })
+  http.delete(`${BASE_URL}/api/projects/:projectId/runs/:runId`, () => {
+    return HttpResponse.json({ message: 'Run cancelled' })
   }),
 ]
 

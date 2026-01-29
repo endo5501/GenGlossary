@@ -6,6 +6,7 @@ from typing import Callable
 
 from genglossary.db.document_repository import (
     create_document,
+    delete_all_documents,
     list_all_documents,
 )
 from genglossary.db.issue_repository import create_issue, delete_all_issues
@@ -161,16 +162,12 @@ class PipelineExecutor:
             return
 
         self._log("info", "Loading documents...")
-        doc_rows = list_all_documents(conn)
 
-        if doc_rows:
-            # GUI mode: use documents already stored in DB
-            documents = [
-                Document(file_path=row["file_name"], content=row["content"])
-                for row in doc_rows
-            ]
-        else:
-            # CLI mode: load from filesystem and save to DB
+        # CLI mode: doc_root が明示的に指定されている場合はFS優先
+        use_filesystem = doc_root != "."
+
+        if use_filesystem:
+            # CLI mode: ファイルシステムから読み込み、既存DBドキュメントを置き換え
             loader = DocumentLoader()
             documents = loader.load_directory(doc_root)
 
@@ -178,10 +175,15 @@ class PipelineExecutor:
                 self._log("error", "No documents found")
                 raise RuntimeError("No documents found in doc_root")
 
+            # 既存ドキュメントをクリアして新しいものを保存
+            delete_all_documents(conn)
             for document in documents:
                 content_hash = compute_content_hash(document.content)
                 file_name = document.file_path.rsplit("/", 1)[-1]
                 create_document(conn, file_name, document.content, content_hash)
+        else:
+            # GUI mode: DBドキュメントを使用
+            documents = self._load_documents_from_db(conn)
 
         self._log("info", f"Loaded {len(documents)} documents")
 

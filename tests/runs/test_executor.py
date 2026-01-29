@@ -60,14 +60,14 @@ def log_callback():
 class TestPipelineExecutorFull:
     """Tests for full scope execution."""
 
-    def test_full_scope_raises_error_when_no_documents(
+    def test_full_scope_raises_error_when_no_documents_cli_mode(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """ドキュメントが見つからない場合はRuntimeErrorを発生させる"""
+        """CLIモード: ドキュメントが見つからない場合はRuntimeErrorを発生させる"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
             # Mock LLM client
@@ -77,9 +77,30 @@ class TestPipelineExecutorFull:
             # Mock document loading to return empty list
             mock_loader.return_value.load_directory.return_value = []
 
-            # Execute should raise RuntimeError
+            # Execute should raise RuntimeError (CLI mode with explicit doc_root)
             with pytest.raises(RuntimeError, match="No documents found"):
-                executor.execute(project_db, "full", cancel_event, log_callback)
+                executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/some/path")
+
+    def test_full_scope_raises_error_when_no_documents_gui_mode(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """GUIモード: DBにドキュメントがない場合はRuntimeErrorを発生させる"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock empty DB
+            mock_list_docs.return_value = []
+
+            # Execute should raise RuntimeError (GUI mode with default doc_root=".")
+            with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
+                executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".")
 
     def test_full_scope_executes_all_steps(
         self,
@@ -88,13 +109,14 @@ class TestPipelineExecutorFull:
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """full scopeは全ステップを実行する"""
+        """full scopeは全ステップを実行する（CLIモード）"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner:
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
+             patch("genglossary.runs.executor.delete_all_documents") as mock_delete_docs:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
@@ -131,11 +153,11 @@ class TestPipelineExecutorFull:
             # Mock review
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute
-            executor.execute(project_db, "full", cancel_event, log_callback)
+            # Execute (CLI mode with explicit doc_root)
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path")
 
             # Verify all components were called
-            mock_loader.return_value.load_directory.assert_called_once()
+            mock_loader.return_value.load_directory.assert_called_once_with("/test/path")
             mock_extractor.return_value.extract_terms.assert_called_once()
             mock_generator.return_value.generate.assert_called_once()
             mock_reviewer.return_value.review.assert_called_once()
@@ -267,7 +289,8 @@ class TestPipelineExecutorProgress:
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.delete_all_documents"):
 
             # Mock LLM client
             mock_llm_client = MagicMock()
@@ -281,7 +304,8 @@ class TestPipelineExecutorProgress:
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "full", cancel_event, log_callback)
+            # Execute (CLI mode with explicit doc_root)
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path")
 
             # Check that log messages were captured
             logs = log_callback.logs  # type: ignore
@@ -308,7 +332,8 @@ class TestPipelineExecutorLogCallback:
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.delete_all_documents"):
 
             # Mock LLM client
             mock_llm_client = MagicMock()
@@ -325,7 +350,8 @@ class TestPipelineExecutorLogCallback:
             mock_reviewer.return_value.review.return_value = []
 
             executor = PipelineExecutor()
-            executor.execute(project_db, "full", cancel_event, callback, doc_root=".", run_id=1)
+            # Execute (CLI mode with explicit doc_root)
+            executor.execute(project_db, "full", cancel_event, callback, doc_root="/test/path", run_id=1)
 
             assert len(logs) > 0
             assert all(log.get("run_id") == 1 for log in logs)
@@ -380,7 +406,8 @@ class TestPipelineExecutorConfiguration:
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.delete_all_documents"):
 
             # Mock LLM client
             mock_llm_client = MagicMock()
@@ -399,8 +426,8 @@ class TestPipelineExecutorConfiguration:
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute
-            executor.execute(project_db, "full", cancel_event, log_callback)
+            # Execute (CLI mode with explicit doc_root)
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path")
 
             # Verify LLM client was created with custom settings
             mock_llm_factory.assert_called_once_with(provider="openai", model="gpt-4")
@@ -422,7 +449,8 @@ class TestPipelineExecutorConfiguration:
              patch("genglossary.runs.executor.delete_all_terms") as mock_delete_terms, \
              patch("genglossary.runs.executor.delete_all_provisional") as mock_delete_prov, \
              patch("genglossary.runs.executor.delete_all_issues") as mock_delete_issues, \
-             patch("genglossary.runs.executor.delete_all_refined") as mock_delete_refined:
+             patch("genglossary.runs.executor.delete_all_refined") as mock_delete_refined, \
+             patch("genglossary.runs.executor.delete_all_documents"):
 
             # Mock LLM client
             mock_llm_client = MagicMock()
@@ -438,10 +466,10 @@ class TestPipelineExecutorConfiguration:
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute with full scope
-            executor.execute(project_db, "full", cancel_event, log_callback)
+            # Execute with full scope (CLI mode with explicit doc_root)
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path")
 
-            # Verify tables were cleared before execution (documents are NOT cleared)
+            # Verify tables were cleared before execution (documents are NOT cleared in _clear_tables_for_scope)
             mock_delete_terms.assert_called_once()
             mock_delete_prov.assert_called_once()
             mock_delete_issues.assert_called_once()
@@ -451,14 +479,14 @@ class TestPipelineExecutorConfiguration:
 class TestPipelineExecutorDBDocuments:
     """Tests for DB-first document loading in full scope."""
 
-    def test_full_scope_uses_db_documents_when_available(
+    def test_full_scope_uses_db_documents_when_doc_root_is_default(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """DBにドキュメントがある場合、DocumentLoaderを使わずDBのドキュメントを使用する"""
+        """doc_root="." (GUI mode) の場合、DBのドキュメントを使用する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
@@ -498,10 +526,10 @@ class TestPipelineExecutorDBDocuments:
             mock_generator.return_value.generate.return_value = mock_glossary
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute full scope
-            executor.execute(project_db, "full", cancel_event, log_callback)
+            # Execute full scope with default doc_root="." (GUI mode)
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".")
 
-            # DocumentLoader.load_directory should NOT be called (DB documents used)
+            # DocumentLoader.load_directory should NOT be called (DB documents used in GUI mode)
             mock_loader.return_value.load_directory.assert_not_called()
 
             # TermExtractor should be called with DB documents
@@ -512,27 +540,24 @@ class TestPipelineExecutorDBDocuments:
             assert documents_arg[0].file_path == "uploaded.txt"
             assert documents_arg[0].content == "uploaded content"
 
-    def test_full_scope_falls_back_to_filesystem_when_db_empty(
+    def test_full_scope_uses_filesystem_when_doc_root_is_explicit(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """DBにドキュメントがない場合、ファイルシステムから読み込む（CLIモード）"""
+        """doc_root が明示的に指定された場合（CLIモード）、ファイルシステムから読み込みDBを上書き"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.delete_all_documents") as mock_delete_docs:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
-
-            # DB is empty (CLI mode)
-            mock_list_docs.return_value = []
 
             # Mock filesystem loading
             mock_loader.return_value.load_directory.return_value = [
@@ -546,8 +571,11 @@ class TestPipelineExecutorDBDocuments:
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute full scope
-            executor.execute(project_db, "full", cancel_event, log_callback)
+            # Execute full scope with explicit doc_root (CLI mode)
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/custom/path")
 
-            # DocumentLoader.load_directory SHOULD be called (fallback to filesystem)
-            mock_loader.return_value.load_directory.assert_called_once()
+            # DocumentLoader.load_directory SHOULD be called with custom path
+            mock_loader.return_value.load_directory.assert_called_once_with("/custom/path")
+
+            # Existing documents should be cleared before adding new ones
+            mock_delete_docs.assert_called_once()

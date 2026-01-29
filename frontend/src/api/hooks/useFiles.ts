@@ -52,6 +52,7 @@ export function useCreateFile(projectId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
     },
   })
 }
@@ -65,6 +66,7 @@ export function useCreateFilesBulk(projectId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
     },
   })
 }
@@ -77,6 +79,7 @@ export function useDeleteFile(projectId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
     },
   })
 }
