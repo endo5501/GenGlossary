@@ -4,7 +4,7 @@ tags: [bug, gui]
 description: "GUI: Run完了後もステータスがRunningのまま更新されない"
 created_at: "2026-01-29T14:05:04Z"
 started_at: 2026-01-29T14:19:28Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-29T14:31:27Z # Do not modify manually
 ---
 
 # GUI: Run完了後もステータスがRunningのまま更新されない
