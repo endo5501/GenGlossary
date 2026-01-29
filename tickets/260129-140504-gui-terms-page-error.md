@@ -4,7 +4,7 @@ tags: [bug, gui]
 description: "GUI: Terms/Issues/Refined画面でエラーまたは何も表示されない"
 created_at: "2026-01-29T14:05:04Z"
 started_at: 2026-01-29T14:39:09Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-29T15:49:44Z # Do not modify manually
 ---
 
 # GUI: Terms/Issues/Refined画面でエラーまたは何も表示されない
