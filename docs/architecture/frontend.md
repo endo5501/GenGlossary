@@ -424,6 +424,7 @@ export const useTerms = (projectId: number) =>
 
 | フック | 説明 |
 |-------|------|
+| `useCreateFile` / `useCreateFilesBulk` / `useDeleteFile` | ファイルの追加/一括追加/削除 |
 | `useExtractTerms` | 用語抽出を実行 |
 | `useCreateTerm` / `useDeleteTerm` | 用語の追加/削除 |
 | `useUpdateProvisional` | 暫定用語集エントリを更新 |
@@ -431,6 +432,15 @@ export const useTerms = (projectId: number) =>
 | `useReviewIssues` | 問題精査を実行 |
 | `useRegenerateRefined` | 最終用語集を再生成 |
 | `useExportMarkdown` | Markdown 形式でエクスポート |
+
+**ファイルミューテーションのキャッシュ無効化:**
+
+ファイル操作（`useCreateFile`, `useCreateFilesBulk`, `useDeleteFile`）の `onSuccess` では以下のクエリを無効化：
+- `fileKeys.list(projectId)` - ファイル一覧の更新
+- `projectKeys.lists()` - プロジェクト一覧の `document_count` 更新
+- `projectKeys.detail(projectId)` - プロジェクト詳細の `document_count` 更新
+
+これにより、ファイル操作後にプロジェクト詳細画面のドキュメント数が正しく反映されます。
 
 #### useLogStream
 
