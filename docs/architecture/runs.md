@@ -208,9 +208,20 @@ class PipelineExecutor:
 5. 改善 (GlossaryRefiner)
 
 **ドキュメント読み込みの方式 (Schema v4):**
-- `full` スコープ: DocumentLoaderでファイルシステムから読み込み後、file_name + content をDBに保存
+
+`full` スコープのドキュメント読み込みは、`doc_root` パラメータに基づいてCLI/GUIモードを判定します：
+
+| モード | 条件 | 動作 |
+|-------|------|------|
+| **GUIモード** | `doc_root == "."` (デフォルト) | DBに保存済みのドキュメントを`_load_documents_from_db()`で読み込み |
+| **CLIモード** | `doc_root != "."` (明示的指定) | ファイルシステムから読み込み、既存DBドキュメントを削除して新規保存 |
+
 - `from_terms` / `provisional_to_refined`: DBから直接contentを取得（`_load_documents_from_db()`）
 - GUIからのファイル追加: HTML5 File APIでブラウザから読み取り、APIを通じてDBに保存
+
+**CLI/GUIモード判定の理由:**
+- GUI: ブラウザからアップロードしたファイルはDBに保存されるため、DB優先
+- CLI: `doc_root` を明示的に指定した場合はファイルシステムの内容を使用したいため、FS優先でDBを上書き
 
 各ステップで:
 - キャンセルイベントをチェック
@@ -366,13 +377,15 @@ get_run_manager(db_path) → RunManager
 **tests/runs/test_manager.py (13 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 
-**tests/runs/test_executor.py (10 tests)**
+**tests/runs/test_executor.py (13 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
 - キャンセル処理
 - 進捗ログ
-- DBからのドキュメント読み込み（v4対応）
+- CLI/GUIモード判定に基づくドキュメント読み込み（v4対応）
+  - GUIモード（`doc_root="."` → DB優先）
+  - CLIモード（`doc_root` 明示指定 → FS優先、DB上書き）
 
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 53 tests** (Repository 20 + Manager 13 + Executor 10 + API 10)
+**合計: 56 tests** (Repository 20 + Manager 13 + Executor 13 + API 10)

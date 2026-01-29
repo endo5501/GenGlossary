@@ -13,7 +13,7 @@ const runApi = {
   start: (projectId: number, data: RunCreateRequest) =>
     apiClient.post<RunResponse>(`/api/projects/${projectId}/runs`, data),
   cancel: (projectId: number, runId: number) =>
-    apiClient.post<RunResponse>(`/api/projects/${projectId}/runs/${runId}/cancel`, {}),
+    apiClient.delete<{ message: string }>(`/api/projects/${projectId}/runs/${runId}`),
 }
 
 export function useCurrentRun(projectId: number | undefined) {

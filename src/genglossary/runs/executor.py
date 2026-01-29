@@ -162,19 +162,28 @@ class PipelineExecutor:
             return
 
         self._log("info", "Loading documents...")
-        loader = DocumentLoader()
-        documents = loader.load_directory(doc_root)
 
-        if not documents:
-            self._log("error", "No documents found")
-            raise RuntimeError("No documents found in doc_root")
+        # CLI mode: doc_root が明示的に指定されている場合はFS優先
+        use_filesystem = doc_root != "."
 
-        # Save documents to database (v4: save file_name and content)
-        for document in documents:
-            content_hash = compute_content_hash(document.content)
-            # Extract file name from path for DB storage
-            file_name = document.file_path.rsplit("/", 1)[-1]
-            create_document(conn, file_name, document.content, content_hash)
+        if use_filesystem:
+            # CLI mode: ファイルシステムから読み込み、既存DBドキュメントを置き換え
+            loader = DocumentLoader()
+            documents = loader.load_directory(doc_root)
+
+            if not documents:
+                self._log("error", "No documents found")
+                raise RuntimeError("No documents found in doc_root")
+
+            # 既存ドキュメントをクリアして新しいものを保存
+            delete_all_documents(conn)
+            for document in documents:
+                content_hash = compute_content_hash(document.content)
+                file_name = document.file_path.rsplit("/", 1)[-1]
+                create_document(conn, file_name, document.content, content_hash)
+        else:
+            # GUI mode: DBドキュメントを使用
+            documents = self._load_documents_from_db(conn)
 
         self._log("info", f"Loaded {len(documents)} documents")
 
@@ -343,8 +352,7 @@ class PipelineExecutor:
             scope: Execution scope.
         """
         if scope == "full":
-            # Clear all tables for full execution
-            delete_all_documents(conn)
+            # Clear all tables for full execution (except documents)
             delete_all_terms(conn)
             delete_all_provisional(conn)
             delete_all_issues(conn)
