@@ -476,8 +476,207 @@ class TestPipelineExecutorConfiguration:
             mock_delete_refined.assert_called_once()
 
 
-class TestPipelineExecutorDBDocuments:
-    """Tests for DB-first document loading in full scope."""
+class TestPipelineExecutorDBFirstApproach:
+    """Tests for DB-first document loading approach.
+
+    The executor should:
+    1. First try to load documents from DB
+    2. If DB is empty and doc_root is specified, try filesystem
+    3. If both are empty, raise error
+    """
+
+    def test_gui_mode_uses_db_documents_even_with_custom_doc_root(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """GUIモード: doc_rootが自動生成パスでもDBにドキュメントがあればDBを使用する
+
+        これがバグ修正の核心テスト。GUIで作成したプロジェクトは
+        doc_root = ~/.genglossary/projects/ProjectName のような値を持つが、
+        ドキュメントはDBに保存されている。
+        """
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB documents (simulating GUI-uploaded files)
+            mock_list_docs.return_value = [
+                {"file_name": "uploaded.txt", "content": "uploaded content from GUI"}
+            ]
+
+            # Mock term extraction
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            # Mock glossary generation
+            mock_glossary = Glossary(terms={
+                "term1": Term(
+                    name="term1",
+                    definition="test definition",
+                    confidence=0.9,
+                    occurrences=[
+                        TermOccurrence(
+                            document_path="uploaded.txt",
+                            line_number=1,
+                            context="uploaded content from GUI"
+                        )
+                    ]
+                )
+            })
+            mock_generator.return_value.generate.return_value = mock_glossary
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute with a custom doc_root (simulating GUI project)
+            # This is the key: doc_root is NOT "." but DB has documents
+            executor.execute(
+                project_db, "full", cancel_event, log_callback,
+                doc_root="/Users/user/.genglossary/projects/MyProject"
+            )
+
+            # DocumentLoader.load_directory should NOT be called (DB has documents)
+            mock_loader.return_value.load_directory.assert_not_called()
+
+            # TermExtractor should be called with DB documents
+            mock_extractor.return_value.extract_terms.assert_called_once()
+            call_args = mock_extractor.return_value.extract_terms.call_args
+            documents_arg = call_args[0][0]
+            assert len(documents_arg) == 1
+            assert documents_arg[0].file_path == "uploaded.txt"
+            assert documents_arg[0].content == "uploaded content from GUI"
+
+    def test_cli_mode_uses_filesystem_when_db_is_empty(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """CLIモード: DBが空でdoc_rootにファイルがある場合はファイルシステムを使用"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.delete_all_documents") as mock_delete_docs:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock empty DB
+            mock_list_docs.return_value = []
+
+            # Mock filesystem loading
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="cli_file.txt", content="cli content")
+            ]
+
+            # Mock term extraction
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute with explicit doc_root (CLI mode, empty DB)
+            executor.execute(
+                project_db, "full", cancel_event, log_callback,
+                doc_root="/custom/cli/path"
+            )
+
+            # list_all_documents should be called first to check DB
+            mock_list_docs.assert_called_once()
+
+            # DocumentLoader.load_directory SHOULD be called (DB was empty)
+            mock_loader.return_value.load_directory.assert_called_once_with("/custom/cli/path")
+
+            # Documents from FS should be saved to DB
+            mock_delete_docs.assert_called_once()
+
+    def test_raises_error_when_both_db_and_filesystem_are_empty(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """DBもファイルシステムも空の場合はエラーを発生"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock empty DB
+            mock_list_docs.return_value = []
+
+            # Mock empty filesystem
+            mock_loader.return_value.load_directory.return_value = []
+
+            # Execute should raise RuntimeError
+            with pytest.raises(RuntimeError, match="No documents found"):
+                executor.execute(
+                    project_db, "full", cancel_event, log_callback,
+                    doc_root="/empty/path"
+                )
+
+    def test_db_documents_take_priority_over_filesystem(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """DBにドキュメントがある場合はファイルシステムをチェックしない（DB優先）"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB with documents
+            mock_list_docs.return_value = [
+                {"file_name": "db_file.txt", "content": "db content"}
+            ]
+
+            # Mock term extraction
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute with doc_root
+            executor.execute(
+                project_db, "full", cancel_event, log_callback,
+                doc_root="/some/path"
+            )
+
+            # DocumentLoader should NOT be called at all (DB has documents)
+            mock_loader.return_value.load_directory.assert_not_called()
+
+
+class TestPipelineExecutorDBDocumentsLegacy:
+    """Legacy tests for backward compatibility (doc_root="." case)."""
 
     def test_full_scope_uses_db_documents_when_doc_root_is_default(
         self,
