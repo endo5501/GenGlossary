@@ -49,15 +49,15 @@ closed_at: null   # Do not modify manually
 - [x] 進捗表示の設計
 - [x] バックエンドの処理中情報送信を実装
 - [x] ログ状態管理の実装
-- [ ] playwright MCPを使用してログに解析中の用語が表示されることを確認
+- [x] playwright MCPを使用してログに解析中の用語が表示されることを確認
 - [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Implementation Summary
 

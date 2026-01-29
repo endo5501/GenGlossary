@@ -15,6 +15,7 @@ React + TypeScript で構築されたシングルページアプリケーショ�
 | アイコン | Tabler Icons | 3.36 |
 | ルーティング | TanStack Router | 1.x |
 | データフェッチ | TanStack Query | 5.x |
+| 状態管理 | Zustand | 5.x |
 | テスト | Vitest + RTL + MSW | - |
 
 ## アプリケーション構造
@@ -25,6 +26,8 @@ frontend/src/
 ├── theme/theme.ts        # Mantineテーマ設定
 ├── api/                  # API通信層
 ├── components/           # Reactコンポーネント
+├── store/                # Zustand 状態管理
+│   └── logStore.ts       # ログと進捗の状態管理
 └── routes/               # ルーティング設定
 ```
 
@@ -54,7 +57,7 @@ Mantine のデフォルトテーマをベースにカスタマイズ。
 | `AppShell` | メインレイアウト。`projectId`の有無に応じて表示要素を切り替え |
 | `GlobalTopBar` | グローバルヘッダー。ホーム画面ではシンプル表示、プロジェクト詳細では完全表示 |
 | `LeftNavRail` | 左サイドナビゲーション。プロジェクト詳細画面でのみ表示 |
-| `LogPanel` | 折りたたみ可能なログビューア。プロジェクト詳細画面でのみ表示 |
+| `LogPanel` | 折りたたみ可能なログビューア。進捗バー表示機能付き。プロジェクト詳細画面でのみ表示 |
 
 #### AppShell レイアウト
 
@@ -100,6 +103,52 @@ navbar={hasProject ? { width: 200, breakpoint: 'sm' } : undefined}
 
 // LogPanelはプロジェクト詳細のみ
 {hasProject && <LogPanel projectId={projectId} runId={runId} />}
+```
+
+#### LogPanel の進捗表示
+
+LogPanel は Zustand ストア（`logStore`）と連携して、パイプライン実行中の進捗情報をリアルタイム表示します。
+
+**UI構成:**
+```
+┌─────────────────────────────────────────────────┐
+│ Logs                                    [▲/▼]   │
+├─────────────────────────────────────────────────┤
+│ provisional: 量子コンピュータ            5/20   │ ← 進捗情報
+│ ████████████░░░░░░░░░░░░░░  25%                 │ ← アニメーションプログレスバー
+├─────────────────────────────────────────────────┤
+│ [INFO] 量子コンピュータ: 25%                    │
+│ [INFO] キュービット: 30%                        │
+│ [INFO] 重ね合わせ: 35%                          │
+└─────────────────────────────────────────────────┘
+```
+
+**進捗表示の要素:**
+- **ステップ名**: 現在実行中のステップ（`provisional`, `refine` など）
+- **処理中の用語**: 現在処理中の用語名
+- **カウント**: `current/total` 形式（例: `5/20`）
+- **プログレスバー**: Mantine の `Progress` コンポーネント（アニメーション付き）
+
+**実装:**
+```typescript
+// Zustand ストアから進捗情報を取得
+const progress = useLogStore((state) => state.latestProgress)
+
+// パーセンテージ計算
+const progressPercent = progress && progress.total > 0
+  ? Math.round((progress.current / progress.total) * 100)
+  : 0
+
+// 進捗表示（進捗データがある場合のみ表示）
+{progress && (
+  <Box>
+    <Group justify="space-between" mb={4}>
+      <Text size="xs" c="dimmed">{progress.step}: {progress.currentTerm}</Text>
+      <Text size="xs" c="dimmed">{progress.current}/{progress.total}</Text>
+    </Group>
+    <Progress data-testid="progress-bar" value={progressPercent} size="sm" animated />
+  </Box>
+)}
 ```
 
 #### GlobalTopBar の機能
@@ -395,6 +444,7 @@ API レスポンスの TypeScript 型定義。
 | `TermOccurrence` | 用語の出現箇所（line_number, context） |
 | `GlossaryTermResponse` | 用語集エントリ（term_name, definition, confidence, occurrences） |
 | `IssueResponse` | 精査で見つかった問題（term_name, issue_type, description） |
+| `LogMessage` | ログメッセージ（run_id, level, message, 進捗フィールド） |
 | `RunResponse` | パイプライン実行状態（scope, status, progress, timestamps） |
 | `SettingsResponse` | 設定（model_name, ollama_base_url, max_retries, timeout_seconds） |
 | `PaginatedResponse<T>` | ページネーション付きレスポンス |
@@ -444,11 +494,11 @@ export const useTerms = (projectId: number) =>
 
 #### useLogStream
 
-SSE（Server-Sent Events）を使用したログストリーミングフック。
+SSE（Server-Sent Events）を使用したログストリーミングフック。Zustand ストアと統合。
 
 ```typescript
 interface UseLogStreamResult {
-  logs: LogMessage[]      // ログメッセージ配列
+  logs: LogMessage[]      // ログメッセージ配列（Zustand ストアから取得）
   isConnected: boolean    // 接続状態
   error: Error | null     // エラー
   clearLogs: () => void   // ログクリア
@@ -462,9 +512,103 @@ export function useLogStream(
 
 **設計ポイント:**
 - `getBaseUrl()` を使用して環境に応じた URL を生成
+- Zustand ストア（`logStore`）にログを保存し、ページ遷移時も保持
 - `runId` 変更時に自動でログをクリア
 - メモリリーク防止のため最大1000件に制限
 - クリーンアップ時に `EventSource.close()` を呼び出し
+
+#### LogMessage 型
+
+バックエンドから送信されるログメッセージ。進捗フィールドはオプショナル。
+
+```typescript
+interface LogMessage {
+  run_id: number
+  level: 'info' | 'warning' | 'error'
+  message: string
+  timestamp: string
+  // 進捗情報（オプショナル）
+  step?: string           // ステップ名（'provisional', 'refine'）
+  progress_current?: number // 処理済み件数
+  progress_total?: number   // 全件数
+  current_term?: string     // 処理中の用語名
+}
+```
+
+**進捗付きログメッセージの例:**
+```json
+{
+  "run_id": 1,
+  "level": "info",
+  "message": "量子コンピュータ: 25%",
+  "timestamp": "2026-01-30T12:00:00Z",
+  "step": "provisional",
+  "progress_current": 5,
+  "progress_total": 20,
+  "current_term": "量子コンピュータ"
+}
+```
+
+## 状態管理（store/）
+
+### Zustand
+
+グローバル状態管理に Zustand を使用。軽量（~1KB）でシンプルな API を提供。
+
+### logStore.ts
+
+ログメッセージと進捗情報をグローバルに管理するストア。ページ遷移時もログを保持。
+
+```typescript
+interface LogProgress {
+  step: string        // 現在のステップ名（'provisional', 'refine' など）
+  current: number     // 処理済み件数
+  total: number       // 全件数
+  currentTerm: string // 処理中の用語名
+}
+
+interface LogStore {
+  logs: LogMessage[]              // ログメッセージ配列（最大1000件）
+  currentRunId: number | null     // 現在の実行ID
+  latestProgress: LogProgress | null  // 最新の進捗情報
+  addLog: (log: LogMessage) => void
+  clearLogs: () => void
+  setCurrentRunId: (runId: number | null) => void
+}
+```
+
+**設計ポイント:**
+- `addLog`: ログ追加時に進捗情報も自動更新。メモリ制限のため最大1000件に制限
+- `setCurrentRunId`: 実行ID変更時にログと進捗情報をクリア（再解析開始時）
+- `latestProgress`: 最新の進捗情報を直接状態として保持（React の再レンダリング最適化）
+
+**進捗情報の抽出:**
+```typescript
+function extractProgress(log: LogMessage): LogProgress | null {
+  if (log.step !== undefined &&
+      log.progress_current !== undefined &&
+      log.progress_total !== undefined) {
+    return {
+      step: log.step,
+      current: log.progress_current,
+      total: log.progress_total,
+      currentTerm: log.current_term ?? '',
+    }
+  }
+  return null
+}
+```
+
+**使用例:**
+```typescript
+// コンポーネントでの使用
+const progress = useLogStore((state) => state.latestProgress)
+const logs = useLogStore((state) => state.logs)
+
+// アクションの呼び出し
+useLogStore.getState().addLog(logMessage)
+useLogStore.getState().setCurrentRunId(newRunId)
+```
 
 ## ユーティリティ（utils/）
 
@@ -569,8 +713,10 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `components/dialogs/AddFileDialog.test.tsx` | 6 | AddFileDialogコンポーネント |
 | `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
 | `terms-workflow.test.tsx` | 43 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel |
+| `logStore.test.ts` | 9 | Zustand ログストアの状態管理、進捗追跡 |
+| `LogPanel.test.tsx` | 5 | LogPanel の進捗表示UI |
 
-**合計**: 138 テスト
+**合計**: 152 テスト
 
 ### テスト実行
 
