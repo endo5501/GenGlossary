@@ -57,3 +57,10 @@ code-simplifier agentによるレビューに基づき、`glossary_generator.py`
 
 - 既存のテストに影響を与えないよう、段階的に適用する
 - 関連チケット: 260129-153456-llm-fewshot-contamination（Few-shot混入問題の修正）
+
+## codex MCPからの追加提案
+
+- 例で具体的な用語（「アソリウス島騎士団」）の代わりにプレースホルダー（`<TERM>`, `<CONTEXT>`）を使用
+- 「## End Example」デリミタを追加して例の終了を明示
+- 例の入力ラベル（「出現箇所」）と実際のタスクラベル（「出現箇所とコンテキスト」）を統一
+- LLM clientがsystem roleをサポートしていれば、システム指示をsystem roleで送信
