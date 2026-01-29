@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { LogMessage } from '../types'
 import { getBaseUrl } from '../client'
+import { useLogStore } from '../../store/logStore'
 
 interface UseLogStreamOptions {
   onComplete?: () => void
@@ -26,16 +27,21 @@ export function useLogStream(
   runId: number | undefined,
   options?: UseLogStreamOptions
 ): UseLogStreamResult {
-  const [logs, setLogs] = useState<LogMessage[]>([])
+  // Use Zustand store for logs (persists across page navigations)
+  const logs = useLogStore((state) => state.logs)
+  const addLog = useLogStore((state) => state.addLog)
+  const clearLogs = useLogStore((state) => state.clearLogs)
+  const setCurrentRunId = useLogStore((state) => state.setCurrentRunId)
+
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
-  const clearLogs = useCallback(() => setLogs([]), [])
+  const handleClearLogs = useCallback(() => clearLogs(), [clearLogs])
 
-  // Clear logs when runId changes
+  // Update currentRunId when runId changes (this clears logs only when runId actually changes)
   useEffect(() => {
-    setLogs([])
-  }, [runId])
+    setCurrentRunId(runId ?? null)
+  }, [runId, setCurrentRunId])
 
   useEffect(() => {
     if (!runId) {
@@ -54,11 +60,7 @@ export function useLogStream(
     eventSource.onmessage = (event) => {
       const log = parseLogMessage(event)
       if (log) {
-        const MAX_LOGS = 1000
-        setLogs((prev) => {
-          const newLogs = [...prev, log]
-          return newLogs.length > MAX_LOGS ? newLogs.slice(-MAX_LOGS) : newLogs
-        })
+        addLog(log)
       }
     }
 
@@ -78,7 +80,7 @@ export function useLogStream(
       eventSource.close()
       setIsConnected(false)
     }
-  }, [projectId, runId])
+  }, [projectId, runId, addLog])
 
-  return { logs, isConnected, error, clearLogs }
+  return { logs, isConnected, error, clearLogs: handleClearLogs }
 }
