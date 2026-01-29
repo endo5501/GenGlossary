@@ -50,7 +50,14 @@ Cannot read properties of undefined (reading 'length')
 - [ ] Terms画面のエラー原因を調査
 - [ ] Issues/Refined画面のデータフローを調査
 - [ ] 修正を実装
-- [ ] 動作確認
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent
+- [ ] Code review by codex MCP
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
 
 ## Notes
 

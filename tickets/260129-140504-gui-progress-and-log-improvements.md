@@ -68,7 +68,14 @@ interface RunProgress {
 - [ ] バックエンドのstep情報送信を実装
 - [ ] フロントエンドの進捗バーを実装
 - [ ] ログ状態管理の実装
-- [ ] 動作確認
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent
+- [ ] Code review by codex MCP
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
 
 ## Notes
 
