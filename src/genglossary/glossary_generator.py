@@ -1,6 +1,7 @@
 """Glossary generator - Step 2: Generate provisional glossary using LLM."""
 
 import re
+from typing import cast
 
 from pydantic import BaseModel
 
@@ -143,10 +144,11 @@ Output:
             return terms
 
         # Filter ClassifiedTerm list (type guaranteed by above check)
+        classified_terms = cast(list[ClassifiedTerm], terms)
         return [
-            term  # type: ignore[misc]
-            for term in terms
-            if term.category != TermCategory.COMMON_NOUN  # type: ignore[union-attr]
+            term
+            for term in classified_terms
+            if term.category != TermCategory.COMMON_NOUN
         ]
 
     def _build_search_pattern(self, term: str) -> re.Pattern:
@@ -214,6 +216,17 @@ Output:
 
         return occurrences
 
+    def _is_cjk_char(self, char: str) -> bool:
+        """Check if a single character is CJK.
+
+        Args:
+            char: A single character to check.
+
+        Returns:
+            True if the character is in a CJK range.
+        """
+        return any(start <= char <= end for start, end in self.CJK_RANGES)
+
     def _contains_cjk(self, text: str) -> bool:
         """Check if text contains CJK (Chinese, Japanese, Korean) characters.
 
@@ -223,11 +236,7 @@ Output:
         Returns:
             True if the text contains CJK characters.
         """
-        return any(
-            start <= char <= end
-            for char in text
-            for start, end in self.CJK_RANGES
-        )
+        return any(self._is_cjk_char(char) for char in text)
 
     def _build_context_text(self, occurrences: list[TermOccurrence]) -> str:
         """Build context text from term occurrences.
