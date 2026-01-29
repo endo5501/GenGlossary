@@ -102,12 +102,12 @@ describe('logStore', () => {
     })
   })
 
-  describe('getLatestProgress', () => {
+  describe('latestProgress', () => {
     it('returns null when no progress logs exist', () => {
-      expect(useLogStore.getState().getLatestProgress()).toBeNull()
+      expect(useLogStore.getState().latestProgress).toBeNull()
     })
 
-    it('returns latest progress from logs with progress data', () => {
+    it('updates latestProgress when log with progress data is added', () => {
       const log1: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -133,7 +133,7 @@ describe('logStore', () => {
       useLogStore.getState().addLog(log1)
       useLogStore.getState().addLog(log2)
 
-      const progress = useLogStore.getState().getLatestProgress()
+      const progress = useLogStore.getState().latestProgress
 
       expect(progress).toEqual({
         step: 'provisional',
@@ -141,6 +141,57 @@ describe('logStore', () => {
         total: 20,
         currentTerm: 'term2',
       })
+    })
+
+    it('preserves latestProgress when non-progress log is added', () => {
+      const progressLog: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'term1: 50%',
+        timestamp: '2025-01-01T00:00:00Z',
+        step: 'provisional',
+        progress_current: 5,
+        progress_total: 10,
+        current_term: 'term1',
+      }
+
+      const regularLog: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Some other message',
+        timestamp: '2025-01-01T00:00:01Z',
+      }
+
+      useLogStore.getState().addLog(progressLog)
+      useLogStore.getState().addLog(regularLog)
+
+      const progress = useLogStore.getState().latestProgress
+
+      expect(progress).toEqual({
+        step: 'provisional',
+        current: 5,
+        total: 10,
+        currentTerm: 'term1',
+      })
+    })
+
+    it('clears latestProgress when logs are cleared', () => {
+      const progressLog: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'term1: 50%',
+        timestamp: '2025-01-01T00:00:00Z',
+        step: 'provisional',
+        progress_current: 5,
+        progress_total: 10,
+        current_term: 'term1',
+      }
+
+      useLogStore.getState().addLog(progressLog)
+      expect(useLogStore.getState().latestProgress).not.toBeNull()
+
+      useLogStore.getState().clearLogs()
+      expect(useLogStore.getState().latestProgress).toBeNull()
     })
   })
 })
