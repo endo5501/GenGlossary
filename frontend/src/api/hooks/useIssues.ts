@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
-import type { IssueResponse } from '../types'
+import type { IssueResponse, IssueType } from '../types'
 import { useResourceList, useResourceDetail } from './useResource'
 
 export const issueKeys = {
   all: ['issues'] as const,
   lists: () => [...issueKeys.all, 'list'] as const,
-  list: (projectId: number, issueType?: string) =>
+  list: (projectId: number, issueType?: IssueType) =>
     issueType
       ? [...issueKeys.lists(), projectId, issueType] as const
       : [...issueKeys.lists(), projectId] as const,
@@ -16,7 +16,7 @@ export const issueKeys = {
 }
 
 const issueApi = {
-  list: (projectId: number, issueType?: string) => {
+  list: (projectId: number, issueType?: IssueType) => {
     const url = issueType
       ? `/api/projects/${projectId}/issues?issue_type=${issueType}`
       : `/api/projects/${projectId}/issues`
@@ -28,7 +28,7 @@ const issueApi = {
     apiClient.post<{ message: string }>(`/api/projects/${projectId}/issues/review`, {}),
 }
 
-export function useIssues(projectId: number | undefined, issueType?: string) {
+export function useIssues(projectId: number | undefined, issueType?: IssueType) {
   return useResourceList({
     queryKey: issueKeys.list(projectId!, issueType),
     queryFn: () => issueApi.list(projectId!, issueType),

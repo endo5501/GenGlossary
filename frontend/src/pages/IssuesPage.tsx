@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { useIssues, useReviewIssues, useCurrentRun } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { getIssueTypeColor } from '../utils/colors'
+import type { IssueType } from '../api/types'
 
 interface IssuesPageProps {
   projectId: number
@@ -27,7 +28,7 @@ const issueTypeOptions = [
 ]
 
 export function IssuesPage({ projectId }: IssuesPageProps) {
-  const [issueTypeFilter, setIssueTypeFilter] = useState<string>('')
+  const [issueTypeFilter, setIssueTypeFilter] = useState<IssueType | ''>('')
   const { data: issues, isLoading } = useIssues(
     projectId,
     issueTypeFilter || undefined

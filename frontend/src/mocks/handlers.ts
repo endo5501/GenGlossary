@@ -23,7 +23,7 @@ export const mockProjects: ProjectResponse[] = [
     status: 'completed',
     document_count: 5,
     term_count: 20,
-    issue_count: 3,
+    issue_count: 4,
   },
   {
     id: 2,
