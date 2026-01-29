@@ -111,10 +111,13 @@ export interface GlossaryTermResponse {
 }
 
 // Issue types - matches actual backend response
+// Backend Issue Types: unclear, contradiction, missing_relation, unnecessary
+export type IssueType = 'unclear' | 'contradiction' | 'missing_relation' | 'unnecessary'
+
 export interface IssueResponse {
   id: number
   term_name: string
-  issue_type: string
+  issue_type: IssueType
   description: string
 }
 
