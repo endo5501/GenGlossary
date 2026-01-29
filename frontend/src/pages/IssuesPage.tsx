@@ -20,9 +20,10 @@ interface IssuesPageProps {
 
 const issueTypeOptions = [
   { value: '', label: 'All Types' },
-  { value: 'ambiguous', label: 'Ambiguous' },
-  { value: 'inconsistent', label: 'Inconsistent' },
-  { value: 'missing', label: 'Missing' },
+  { value: 'unclear', label: 'Unclear' },
+  { value: 'contradiction', label: 'Contradiction' },
+  { value: 'missing_relation', label: 'Missing Relation' },
+  { value: 'unnecessary', label: 'Unnecessary' },
 ]
 
 export function IssuesPage({ projectId }: IssuesPageProps) {

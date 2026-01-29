@@ -12,11 +12,12 @@ export function getStatusColor(status: string): string {
   return statusColors[status as RunStatus] ?? 'gray'
 }
 
-export type IssueType = 'ambiguous' | 'inconsistent' | 'missing'
+export type IssueType = 'unclear' | 'contradiction' | 'missing_relation' | 'unnecessary'
 export const issueTypeColors: Record<IssueType, string> = {
-  ambiguous: 'orange',
-  inconsistent: 'grape',
-  missing: 'cyan',
+  unclear: 'orange',
+  contradiction: 'grape',
+  missing_relation: 'cyan',
+  unnecessary: 'gray',
 }
 
 export function getIssueTypeColor(issueType: string): string {
