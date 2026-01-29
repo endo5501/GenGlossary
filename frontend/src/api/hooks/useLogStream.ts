@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import type { LogMessage } from '../types'
 import { getBaseUrl } from '../client'
 
+interface UseLogStreamOptions {
+  onComplete?: () => void
+}
+
 interface UseLogStreamResult {
   logs: LogMessage[]
   isConnected: boolean
@@ -19,7 +23,8 @@ const parseLogMessage = (event: MessageEvent): LogMessage | null => {
 
 export function useLogStream(
   projectId: number,
-  runId: number | undefined
+  runId: number | undefined,
+  options?: UseLogStreamOptions
 ): UseLogStreamResult {
   const [logs, setLogs] = useState<LogMessage[]>([])
   const [isConnected, setIsConnected] = useState(false)
@@ -60,6 +65,7 @@ export function useLogStream(
     eventSource.addEventListener('complete', () => {
       eventSource.close()
       setIsConnected(false)
+      options?.onComplete?.()
     })
 
     eventSource.onerror = () => {

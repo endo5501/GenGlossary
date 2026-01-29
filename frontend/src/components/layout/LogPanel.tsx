@@ -7,12 +7,13 @@ import { levelColors } from '../../utils/colors'
 interface LogPanelProps {
   projectId?: number
   runId?: number
+  onRunComplete?: () => void
 }
 
-export function LogPanel({ projectId, runId }: LogPanelProps) {
+export function LogPanel({ projectId, runId, onRunComplete }: LogPanelProps) {
   const [opened, setOpened] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const { logs } = useLogStream(projectId ?? 0, runId)
+  const { logs } = useLogStream(projectId ?? 0, runId, { onComplete: onRunComplete })
 
   useEffect(() => {
     if (scrollRef.current) {

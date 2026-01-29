@@ -1,5 +1,7 @@
 import { AppShell as MantineAppShell, Box } from '@mantine/core'
 import { Outlet, useLocation } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import { GlobalTopBar } from './GlobalTopBar'
 import { LeftNavRail } from './LeftNavRail'
 import { LogPanel } from './LogPanel'
@@ -13,10 +15,18 @@ function extractProjectId(pathname: string): number | undefined {
 export function AppShell() {
   const location = useLocation()
   const projectId = extractProjectId(location.pathname)
+  const queryClient = useQueryClient()
 
   // Get current run to pass runId to LogPanel
   const { data: currentRun } = useCurrentRun(projectId)
   const runId = currentRun?.status === 'running' ? currentRun.id : undefined
+
+  // Invalidate current run cache when SSE stream completes
+  const handleRunComplete = useCallback(() => {
+    if (projectId !== undefined) {
+      queryClient.invalidateQueries({ queryKey: ['currentRun', projectId] })
+    }
+  }, [queryClient, projectId])
 
   const hasProject = projectId !== undefined
 
@@ -41,7 +51,7 @@ export function AppShell() {
           <Box style={{ minHeight: hasProject ? 'calc(100vh - 60px - 200px - 32px)' : 'calc(100vh - 60px - 32px)' }}>
             <Outlet />
           </Box>
-          {hasProject && <LogPanel projectId={projectId} runId={runId} />}
+          {hasProject && <LogPanel projectId={projectId} runId={runId} onRunComplete={handleRunComplete} />}
         </Box>
       </MantineAppShell.Main>
     </MantineAppShell>
