@@ -394,7 +394,7 @@ API レスポンスの TypeScript 型定義。
 | `TermResponse` | 抽出された用語（id, term_text, category） |
 | `TermOccurrence` | 用語の出現箇所（line_number, context） |
 | `GlossaryTermResponse` | 用語集エントリ（term_name, definition, confidence, occurrences） |
-| `IssueResponse` | 精査で見つかった問題（issue_type, description, severity） |
+| `IssueResponse` | 精査で見つかった問題（term_name, issue_type, description） |
 | `RunResponse` | パイプライン実行状態（scope, status, progress, timestamps） |
 | `SettingsResponse` | 設定（model_name, ollama_base_url, max_retries, timeout_seconds） |
 | `PaginatedResponse<T>` | ページネーション付きレスポンス |
@@ -475,18 +475,15 @@ export function useLogStream(
 ```typescript
 // 型定義
 export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-export type Severity = 'low' | 'medium' | 'high'
 export type IssueType = 'ambiguous' | 'inconsistent' | 'missing'
 
 // 色マッピング
 export const statusColors: Record<RunStatus, string>
-export const severityColors: Record<Severity, string>
 export const issueTypeColors: Record<IssueType, string>
 export const levelColors: Record<string, string>  // ログレベル用
 
 // ヘルパー関数（型安全でデフォルト値付き）
 export function getStatusColor(status: string): string
-export function getSeverityColor(severity: string): string
 export function getIssueTypeColor(issueType: string): string
 ```
 

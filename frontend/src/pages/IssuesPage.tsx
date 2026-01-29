@@ -12,7 +12,7 @@ import { IconRefresh } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useIssues, useReviewIssues, useCurrentRun } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
-import { getSeverityColor, getIssueTypeColor } from '../utils/colors'
+import { getIssueTypeColor } from '../utils/colors'
 
 interface IssuesPageProps {
   projectId: number
@@ -97,14 +97,12 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
             >
               <Group justify="space-between" mb="xs">
                 <Group gap="xs">
+                  <Text fw={500}>{issue.term_name}</Text>
                   <Badge
                     color={getIssueTypeColor(issue.issue_type)}
                     variant="light"
                   >
                     {issue.issue_type}
-                  </Badge>
-                  <Badge color={getSeverityColor(issue.severity)} variant="outline">
-                    {issue.severity}
                   </Badge>
                 </Group>
               </Group>
@@ -116,34 +114,21 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
 
       {selectedIssue && (
         <Paper data-testid="issue-detail-panel" withBorder p="md">
-          <Group mb="md">
-            <Badge
-              color={getIssueTypeColor(selectedIssue.issue_type)}
-              size="lg"
-            >
-              {selectedIssue.issue_type}
-            </Badge>
-            <Badge
-              color={getSeverityColor(selectedIssue.severity)}
-              size="lg"
-              variant="outline"
-            >
-              {selectedIssue.severity}
-            </Badge>
-          </Group>
+          <Text fw={600} size="lg" mb="md">
+            {selectedIssue.term_name}
+          </Text>
+          <Badge
+            color={getIssueTypeColor(selectedIssue.issue_type)}
+            size="lg"
+            mb="md"
+          >
+            {selectedIssue.issue_type}
+          </Badge>
 
           <Text fw={500} mb="xs">
             Description
           </Text>
           <Text>{selectedIssue.description}</Text>
-
-          {selectedIssue.term_id && (
-            <Box mt="md">
-              <Text size="sm" c="dimmed">
-                Related Term ID: {selectedIssue.term_id}
-              </Text>
-            </Box>
-          )}
         </Paper>
       )}
     </PageContainer>

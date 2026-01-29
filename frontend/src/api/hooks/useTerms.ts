@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import type {
   TermResponse,
-  TermDetailResponse,
   TermCreateRequest,
   TermUpdateRequest,
 } from '../types'
@@ -19,9 +18,9 @@ export const termKeys = {
 
 const termApi = {
   list: (projectId: number) =>
-    apiClient.get<TermDetailResponse[]>(`/api/projects/${projectId}/terms`),
+    apiClient.get<TermResponse[]>(`/api/projects/${projectId}/terms`),
   get: (projectId: number, termId: number) =>
-    apiClient.get<TermDetailResponse>(`/api/projects/${projectId}/terms/${termId}`),
+    apiClient.get<TermResponse>(`/api/projects/${projectId}/terms/${termId}`),
   create: (projectId: number, data: TermCreateRequest) =>
     apiClient.post<TermResponse>(`/api/projects/${projectId}/terms`, data),
   update: (projectId: number, termId: number, data: TermUpdateRequest) =>

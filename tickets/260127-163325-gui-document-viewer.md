@@ -41,6 +41,8 @@ Document Viewer ページをスケルトン実装から完全実装にする。
 - [ ] 右ペイン: 用語カード（定義・出現箇所）
 - [ ] 右ペイン: 除外/編集/ジャンプボタン
 - [ ] バックエンドAPIの確認・追加（必要に応じて）
+- [ ] playwright MCPを使用してDocument Viewerにプロジェクトのテキストが表示されることを確認
+- [ ] playwright MCPを使用してDocument Viewerで用語クリックでハイライト・用語カードが表示されることを確認
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent

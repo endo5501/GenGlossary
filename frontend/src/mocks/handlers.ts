@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import type {
   ProjectResponse,
   FileResponse,
-  TermDetailResponse,
+  TermResponse,
   GlossaryTermResponse,
   IssueResponse,
   RunResponse,
@@ -48,32 +48,22 @@ export const mockFiles: FileResponse[] = [
   { id: 3, file_name: 'doc3.md', content_hash: 'ghi789' },
 ]
 
-// Terms mock data
-export const mockTerms: TermDetailResponse[] = [
+// Terms mock data - matches actual backend response
+export const mockTerms: TermResponse[] = [
   {
     id: 1,
     term_text: '量子コンピュータ',
     category: '技術用語',
-    occurrences: [
-      { document_path: 'doc1.md', line_number: 1, context: '量子コンピュータは、量子力学の原理を利用して...' },
-      { document_path: 'doc1.md', line_number: 5, context: '量子コンピュータの最大の特徴は...' },
-    ],
   },
   {
     id: 2,
     term_text: '量子ビット',
     category: '技術用語',
-    occurrences: [
-      { document_path: 'doc1.md', line_number: 3, context: '量子ビット（キュービット）を使用します。' },
-    ],
   },
   {
     id: 3,
     term_text: '重ね合わせ',
     category: null,
-    occurrences: [
-      { document_path: 'doc1.md', line_number: 4, context: '重ね合わせという性質を持ちます。' },
-    ],
   },
 ]
 
@@ -99,28 +89,25 @@ export const mockProvisionalEntries: GlossaryTermResponse[] = [
   },
 ]
 
-// Issues mock data
+// Issues mock data - matches actual backend response
 export const mockIssues: IssueResponse[] = [
   {
     id: 1,
-    term_id: 1,
+    term_name: '量子コンピュータ',
     issue_type: 'ambiguous',
     description: '「量子コンピュータ」の定義が曖昧です。',
-    severity: 'medium',
   },
   {
     id: 2,
-    term_id: 2,
+    term_name: '量子ビット',
     issue_type: 'inconsistent',
     description: '「量子ビット」と「キュービット」の使い分けが不明確です。',
-    severity: 'high',
   },
   {
     id: 3,
-    term_id: null,
+    term_name: '量子もつれ',
     issue_type: 'missing',
     description: '「量子もつれ」の定義が不足しています。',
-    severity: 'low',
   },
 ]
 
@@ -300,11 +287,10 @@ export const handlers = [
 
   http.post(`${BASE_URL}/api/projects/:projectId/terms`, async ({ request }) => {
     const body = (await request.json()) as { term_text: string; category?: string }
-    const newTerm: TermDetailResponse = {
+    const newTerm: TermResponse = {
       id: mockTerms.length + 1,
       term_text: body.term_text,
       category: body.category ?? null,
-      occurrences: [],
     }
     return HttpResponse.json(newTerm, { status: 201 })
   }),

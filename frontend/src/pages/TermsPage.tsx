@@ -16,7 +16,6 @@ import { IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useTerms, useCreateTerm, useDeleteTerm, useExtractTerms, useCurrentRun } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
-import { OccurrenceList } from '../components/common/OccurrenceList'
 
 interface TermsPageProps {
   projectId: number
@@ -97,7 +96,6 @@ export function TermsPage({ projectId }: TermsPageProps) {
             <Table.Tr>
               <Table.Th>Term</Table.Th>
               <Table.Th>Category</Table.Th>
-              <Table.Th>Occurrences</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -127,7 +125,6 @@ export function TermsPage({ projectId }: TermsPageProps) {
                     </Text>
                   )}
                 </Table.Td>
-                <Table.Td>{term.occurrences.length}</Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
@@ -155,11 +152,6 @@ export function TermsPage({ projectId }: TermsPageProps) {
               {selectedTerm.category}
             </Badge>
           )}
-
-          <Text fw={500} mb="xs">
-            Occurrences ({selectedTerm.occurrences.length})
-          </Text>
-          <OccurrenceList occurrences={selectedTerm.occurrences} />
         </Paper>
       )}
 
