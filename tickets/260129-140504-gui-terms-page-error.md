@@ -88,6 +88,41 @@ Cannot read properties of undefined (reading 'length')
 
 5. **テストの修正**: モックデータをバックエンドの実際のレスポンスに合わせて修正
 
+## 追加調査結果（2026-01-30）
+
+### データベースの状態
+
+実際のプロジェクトDBを調査した結果：
+
+| テーブル | レコード数 |
+|---|---|
+| terms_extracted | 53 |
+| documents | 1 |
+| glossary_provisional | 27 |
+| glossary_issues | **0** |
+| glossary_refined | **0** |
+
+### Issues/Refinedが空の原因
+
+1. **Issuesが0件**: GlossaryReviewerがIssuesを生成していない
+   - パイプラインは`completed`で正常終了
+   - Issuesが0のため、Refinedステップは実行されない（仕様通り）
+
+2. **Provisionalに無関係な定義が混入**
+   - 例：`GenGlossaryプロジェクト`の定義に「アソリウス島騎士団」の説明
+   - 原因：`glossary_generator.py`のFew-shot exampleがLLM出力に混入
+
+3. **Issue Typeスキーマ不一致**
+   - Backend: `unclear`, `contradiction`, `missing_relation`, `unnecessary`
+   - Frontend: `ambiguous`, `inconsistent`, `missing`
+
+### 関連チケット作成
+
+上記の問題は本チケットの範囲を超えるため、別チケットとして作成：
+
+- `260129-153456-llm-fewshot-contamination` - Few-shot exampleがLLM出力に混入
+- `260129-153459-issue-type-schema-mismatch` - Issue Typeスキーマ不一致
+
 ## Notes
 
 - Run状態が更新されない問題と関連している可能性あり
