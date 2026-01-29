@@ -12,17 +12,6 @@ export function getStatusColor(status: string): string {
   return statusColors[status as RunStatus] ?? 'gray'
 }
 
-export type Severity = 'low' | 'medium' | 'high'
-export const severityColors: Record<Severity, string> = {
-  low: 'green',
-  medium: 'yellow',
-  high: 'red',
-}
-
-export function getSeverityColor(severity: string): string {
-  return severityColors[severity as Severity] ?? 'gray'
-}
-
 export type IssueType = 'ambiguous' | 'inconsistent' | 'missing'
 export const issueTypeColors: Record<IssueType, string> = {
   ambiguous: 'orange',

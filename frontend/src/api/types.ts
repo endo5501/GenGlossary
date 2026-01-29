@@ -110,13 +110,12 @@ export interface GlossaryTermResponse {
   occurrences: TermOccurrence[]
 }
 
-// Issue types
+// Issue types - matches actual backend response
 export interface IssueResponse {
   id: number
-  term_id: number | null
+  term_name: string
   issue_type: string
   description: string
-  severity: 'low' | 'medium' | 'high'
 }
 
 // Run types

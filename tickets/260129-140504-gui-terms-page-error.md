@@ -3,7 +3,7 @@ priority: 1
 tags: [bug, gui]
 description: "GUI: Terms/Issues/Refined画面でエラーまたは何も表示されない"
 created_at: "2026-01-29T14:05:04Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-29T14:39:09Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -47,17 +47,46 @@ Cannot read properties of undefined (reading 'length')
 
 ## Tasks
 
-- [ ] Terms画面のエラー原因を調査
-- [ ] Issues/Refined画面のデータフローを調査
-- [ ] 修正を実装
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Terms画面のエラー原因を調査
+- [x] Issues/Refined画面のデータフローを調査
+- [x] 修正を実装
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
+
+## 調査結果
+
+### 根本原因
+
+フロントエンドとバックエンドのスキーマ不一致が原因：
+
+| 画面 | 問題 | フロントエンド期待 | バックエンド実態 |
+|------|------|------------------|-----------------|
+| Terms | `occurrences.length` エラー | `occurrences: TermOccurrence[]` | フィールドなし |
+| Issues | 何も表示されない | `severity`, `term_id` | `severity`なし, `term_name`あり |
+
+### 修正内容
+
+1. **`types.ts`**: `IssueResponse` を実際のバックエンドレスポンスに合わせて修正
+   - `term_id` → `term_name` に変更
+   - `severity` フィールドを削除
+
+2. **`IssuesPage.tsx`**: バックエンドの実際のレスポンスに合わせて修正
+   - `term_name` を表示
+   - `severity` 関連の表示を削除
+
+3. **`TermsPage.tsx`**: バックエンドの実際のレスポンスに合わせて修正
+   - `occurrences` カラムを削除（バックエンドが返さないため）
+   - 詳細パネルから `OccurrenceList` を削除
+
+4. **`useTerms.ts`**: 型を `TermDetailResponse` から `TermResponse` に変更
+
+5. **テストの修正**: モックデータをバックエンドの実際のレスポンスに合わせて修正
 
 ## Notes
 
