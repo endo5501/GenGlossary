@@ -121,31 +121,31 @@ if not documents:
 - [x] DB優先アプローチでドキュメント読み込みロジックを実装
 - [x] テストがパスすることを確認してコミット (3556f42)
 
-### Phase 3: 検証
+### Phase 3: 検証 ✅
 - [x] `uv run pytest` で全テストパス確認 (686 passed)
 - [x] `pnpm test` でフロントエンドテストパス確認 (137 passed)
 - [x] `pyright` で静的解析パス確認 (0 errors)
-- [ ] GUIで実際に動作確認
+- [x] GUIで実際に動作確認（メイン問題は解決、追加問題は別チケット化）
 
-### Phase 4: レビュー・ドキュメント更新
-- [ ] code-simplifier agent でコード簡素化レビュー
-- [ ] codex MCP でコードレビュー
-- [ ] `docs/architecture/*.md` 更新（必要に応じて）
+### Phase 4: レビュー・ドキュメント更新 ✅
+- [x] code-simplifier agent でコード簡素化レビュー（`_load_documents()`に統合）
+- [x] codex MCP でコードレビュー（ポータビリティ問題を修正）
+- [x] `docs/architecture/runs.md` 更新
 
 ## Tasks
 
 - [x] 問題の原因を特定する
 - [x] Phase 1: テスト作成（TDD Red）
 - [x] Phase 2: 実装（TDD Green）
-- [ ] Phase 3: 検証（GUIでの動作確認が残っている）
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Code review by codex MCP
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Phase 3: 検証
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Code review by codex MCP
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
