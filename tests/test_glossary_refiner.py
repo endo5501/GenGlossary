@@ -574,6 +574,39 @@ class TestGlossaryRefinerProgressCallback:
 
         assert len(callback_calls) == 0
 
+    def test_refine_calls_term_progress_callback_with_term_name(
+        self,
+        mock_llm_client: MagicMock,
+        sample_glossary: Glossary,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that refine calls TermProgressCallback with term name."""
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="Improved definition",
+            confidence=0.9,
+        )
+
+        # Use term names that exist in sample_glossary (Term1, Term2, Term3)
+        issues = [
+            GlossaryIssue(term_name="Term1", issue_type="unclear", description="Issue 1"),
+            GlossaryIssue(term_name="Term2", issue_type="unclear", description="Issue 2"),
+        ]
+
+        callback_calls: list[tuple[int, int, str]] = []
+
+        def term_progress_callback(current: int, total: int, term_name: str) -> None:
+            callback_calls.append((current, total, term_name))
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        refiner.refine(
+            sample_glossary, issues, sample_documents,
+            term_progress_callback=term_progress_callback
+        )
+
+        assert len(callback_calls) == 2
+        assert callback_calls[0] == (1, 2, "Term1")
+        assert callback_calls[1] == (2, 2, "Term2")
+
     def test_refinement_prompt_includes_few_shot_examples(
         self, mock_llm_client: MagicMock, sample_glossary: Glossary
     ) -> None:

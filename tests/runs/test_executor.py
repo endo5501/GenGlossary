@@ -802,6 +802,78 @@ class TestPipelineExecutorLogExtended:
         assert "progress_current" not in log
 
 
+class TestPipelineExecutorProgressCallbackIntegration:
+    """Tests for progress callback integration with GlossaryGenerator/Refiner."""
+
+    def test_execute_from_terms_passes_term_progress_callback_to_generator(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """GlossaryGenerator に term_progress_callback が渡される"""
+        logs = []
+        callback = lambda msg: logs.append(msg)
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator_cls, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}, {"term_text": "term2"}]
+
+            mock_glossary = Glossary(terms={})
+            mock_generator_cls.return_value.generate.return_value = mock_glossary
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(project_db, "from_terms", cancel_event, callback, run_id=1)
+
+            # Verify term_progress_callback was passed to generate
+            mock_generator_cls.return_value.generate.assert_called_once()
+            call_kwargs = mock_generator_cls.return_value.generate.call_args.kwargs
+            assert "term_progress_callback" in call_kwargs
+            assert callable(call_kwargs["term_progress_callback"])
+
+    def test_execute_refiner_passes_term_progress_callback_to_refiner(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """GlossaryRefiner に term_progress_callback が渡される"""
+        logs = []
+        callback = lambda msg: logs.append(msg)
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_prov.return_value = [
+                {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
+            ]
+
+            mock_reviewer.return_value.review.return_value = [
+                GlossaryIssue(term_name="term1", issue_type="unclear", description="Issue")
+            ]
+
+            mock_refiner_cls.return_value.refine.return_value = Glossary(terms={})
+
+            executor.execute(project_db, "provisional_to_refined", cancel_event, callback, run_id=1)
+
+            # Verify term_progress_callback was passed to refine
+            mock_refiner_cls.return_value.refine.assert_called_once()
+            call_kwargs = mock_refiner_cls.return_value.refine.call_args.kwargs
+            assert "term_progress_callback" in call_kwargs
+            assert callable(call_kwargs["term_progress_callback"])
+
+
 class TestPipelineExecutorDBDocumentsLegacy:
     """Legacy tests for backward compatibility (doc_root="." case)."""
 

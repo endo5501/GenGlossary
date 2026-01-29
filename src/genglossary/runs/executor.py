@@ -286,7 +286,10 @@ class PipelineExecutor:
 
         self._log("info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
-        glossary = generator.generate(extracted_terms, documents)
+        progress_cb = self._create_progress_callback(conn, "provisional")
+        glossary = generator.generate(
+            extracted_terms, documents, term_progress_callback=progress_cb
+        )
 
         # Save provisional glossary
         for term in glossary.terms.values():
@@ -374,7 +377,10 @@ class PipelineExecutor:
 
         self._log("info", "Refining glossary...")
         refiner = GlossaryRefiner(llm_client=self._llm_client)
-        glossary = refiner.refine(glossary, issues, documents)
+        progress_cb = self._create_progress_callback(conn, "refined")
+        glossary = refiner.refine(
+            glossary, issues, documents, term_progress_callback=progress_cb
+        )
 
         # Save refined glossary
         for term in glossary.terms.values():

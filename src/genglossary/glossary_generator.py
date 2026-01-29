@@ -8,7 +8,7 @@ from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
-from genglossary.types import ProgressCallback
+from genglossary.types import ProgressCallback, TermProgressCallback
 
 
 class DefinitionResponse(BaseModel):
@@ -47,6 +47,7 @@ class GlossaryGenerator:
         documents: list[Document],
         progress_callback: ProgressCallback | None = None,
         skip_common_nouns: bool = True,
+        term_progress_callback: TermProgressCallback | None = None,
     ) -> Glossary:
         """Generate a provisional glossary.
 
@@ -58,6 +59,8 @@ class GlossaryGenerator:
                 Receives (current, total) where current is 1-indexed.
             skip_common_nouns: If True (default), skip terms categorized as common_noun
                 when terms is list[ClassifiedTerm]. Has no effect when terms is list[str].
+            term_progress_callback: Optional callback called after each term is processed.
+                Receives (current, total, term_name) where current is 1-indexed.
 
         Returns:
             A Glossary object with terms and their definitions.
@@ -100,9 +103,11 @@ class GlossaryGenerator:
                 print(f"Warning: Failed to generate definition for '{term_name}': {e}")
                 continue
             finally:
-                # Call progress callback if provided
+                # Call progress callbacks if provided
                 if progress_callback is not None:
                     progress_callback(idx, total_terms)
+                if term_progress_callback is not None:
+                    term_progress_callback(idx, total_terms, term_name)
 
         return glossary
 
