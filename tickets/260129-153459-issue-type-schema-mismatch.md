@@ -87,6 +87,8 @@ const issueTypeOptions = [
 - [ ] スキーマ統一方針を決定（Option A or B）
 - [ ] 選択したオプションに基づいて修正
 - [ ] フィルター機能のテストを追加
+- [ ] Issues画面にアイテムが表示されることを確認
+- [ ] Refined画面にアイテムが表示されることを確認
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent

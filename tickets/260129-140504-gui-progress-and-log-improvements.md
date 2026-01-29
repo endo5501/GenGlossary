@@ -31,43 +31,25 @@ closed_at: null   # Do not modify manually
 
 ### 進捗表示
 
-- プログレスバーで進捗率を表示（例: 25%, 50%, 75%, 100%）
-- 現在のステップを明示（例: "Step 2/5: Generating glossary..."）
-- 各ステップの処理時間や残り時間の目安表示
+- ログ表示に進捗率と処理中の用語を表示（例: "Ollama":25%, "大規模言語モデル":50%, "qwen3":75%, "API":100%）
+- 現在のステップをログに明示（例: "Step 2/5: Generating glossary..."）
 
 ### ログ保持
 
 - ページを切り替えてもログが保持される
-- 過去のログを遡って確認できる
-- ログのエクスポート機能（オプション）
-
-## 実装案
-
-### 進捗表示
-
-```typescript
-interface RunProgress {
-  currentStep: number;
-  totalSteps: number;
-  stepName: string;
-  percentComplete: number;
-}
-```
-
-バックエンドからstep情報を含むログを送信し、フロントエンドで進捗バーを更新する。
+- 再解析時、前回のログはクリアする
 
 ### ログ保持
 
 - React Context または Zustand でログ状態を管理
 - プロジェクト単位でログを保持
-- ログの最大行数を設定可能に
 
 ## Tasks
 
 - [ ] 進捗表示の設計
-- [ ] バックエンドのstep情報送信を実装
-- [ ] フロントエンドの進捗バーを実装
+- [ ] バックエンドの処理中情報送信を実装
 - [ ] ログ状態管理の実装
+- [ ] playwright MCPを使用してログに解析中の用語が表示されることを確認
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent
