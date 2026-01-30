@@ -1202,3 +1202,145 @@ class TestPipelineExecutorBugFixes:
             # File names should be distinguishable
             file_names = [row["file_name"] for row in docs]
             assert len(set(file_names)) == 2  # Both should have unique names
+
+
+class TestPipelineScopeEnum:
+    """Tests for PipelineScope enum."""
+
+    def test_pipeline_scope_enum_exists(self) -> None:
+        """PipelineScope Enum が存在することを確認"""
+        from genglossary.runs.executor import PipelineScope
+
+        assert hasattr(PipelineScope, "FULL")
+        assert hasattr(PipelineScope, "FROM_TERMS")
+        assert hasattr(PipelineScope, "PROVISIONAL_TO_REFINED")
+
+    def test_pipeline_scope_values(self) -> None:
+        """PipelineScope Enum の値が正しいことを確認"""
+        from genglossary.runs.executor import PipelineScope
+
+        assert PipelineScope.FULL.value == "full"
+        assert PipelineScope.FROM_TERMS.value == "from_terms"
+        assert PipelineScope.PROVISIONAL_TO_REFINED.value == "provisional_to_refined"
+
+    def test_execute_accepts_pipeline_scope_enum(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """execute メソッドが PipelineScope Enum を受け付けることを確認"""
+        from genglossary.runs.executor import PipelineScope
+
+        # Set cancellation to skip actual execution
+        cancel_event.set()
+
+        with patch("genglossary.runs.executor.create_llm_client"):
+            # Should not raise TypeError when using enum
+            executor.execute(
+                project_db, PipelineScope.FULL, cancel_event, log_callback, run_id=1
+            )
+
+    def test_scope_clear_functions_use_enum(self) -> None:
+        """_SCOPE_CLEAR_FUNCTIONS が Enum をキーとして使用できることを確認"""
+        from genglossary.runs.executor import PipelineScope, _SCOPE_CLEAR_FUNCTIONS
+
+        # Keys should be PipelineScope enum values or strings that match
+        assert PipelineScope.FULL.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.FULL in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.FROM_TERMS.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.FROM_TERMS in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.PROVISIONAL_TO_REFINED.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_CLEAR_FUNCTIONS
+
+
+class TestCancellationCheckBeforeRefinedSave:
+    """Tests for cancellation check before refined glossary is saved."""
+
+    def test_cancellation_prevents_refined_save_when_no_issues(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """issues が空でもキャンセル時は refined が保存されないことを確認"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.create_refined_term") as mock_create_refined:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_prov.return_value = [
+                {
+                    "term_name": "term1",
+                    "definition": "definition1",
+                    "confidence": 0.9,
+                    "occurrences": [TermOccurrence(document_path="test.txt", line_number=1, context="ctx")]
+                }
+            ]
+
+            # Reviewer returns empty issues list
+            mock_reviewer.return_value.review.return_value = []
+
+            # Set cancel after review completes (simulate user cancel during "no issues" path)
+            original_log = executor._log
+
+            def log_and_cancel(level, message, **kwargs):
+                original_log(level, message, **kwargs)
+                # Cancel after "No issues found" log
+                if "No issues found" in message:
+                    cancel_event.set()
+
+            with patch.object(executor, "_log", log_and_cancel):
+                executor.execute(project_db, "provisional_to_refined", cancel_event, log_callback, run_id=1)
+
+            # Refined term should NOT be saved because of cancellation
+            mock_create_refined.assert_not_called()
+
+
+class TestDuplicateFilteringBeforeGenerate:
+    """Tests for duplicate filtering before passing terms to generator."""
+
+    def test_generator_receives_unique_terms_only(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """GlossaryGenerator に渡される用語リストが重複除去されていることを確認"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.delete_all_documents"):
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="test.txt", content="test content")
+            ]
+
+            # LLM returns duplicate terms
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="duplicate_term", category=TermCategory.TECHNICAL_TERM),
+                ClassifiedTerm(term="duplicate_term", category=TermCategory.TECHNICAL_TERM),  # duplicate
+                ClassifiedTerm(term="unique_term", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+
+            # Verify generator.generate was called with unique terms only
+            mock_generator.return_value.generate.assert_called_once()
+            call_args = mock_generator.return_value.generate.call_args
+            terms_arg = call_args[0][0]  # First positional argument is terms
+
+            # Should have 2 unique terms, not 3
+            assert len(terms_arg) == 2
+            term_names = [t.term if hasattr(t, 'term') else t for t in terms_arg]
+            assert "duplicate_term" in term_names
+            assert "unique_term" in term_names
