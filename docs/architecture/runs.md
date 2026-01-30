@@ -67,7 +67,7 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
 ## manager.py (RunManager - スレッド管理)
 
 ```python
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from queue import Queue
 
 class RunManager:
@@ -89,7 +89,8 @@ class RunManager:
         """
         self.db_path = db_path
         self._thread: Thread | None = None
-        self._cancel_event = Event()
+        self._cancel_events: dict[int, Event] = {}  # Per-run cancellation
+        self._cancel_events_lock = Lock()
         self._log_queue: Queue = Queue()
 
     def start_run(self, scope: str) -> int:
@@ -112,6 +113,11 @@ class RunManager:
         finally:
             conn.close()
 
+        # Create cancel event for this run
+        cancel_event = Event()
+        with self._cancel_events_lock:
+            self._cancel_events[run_id] = cancel_event
+
         # バックグラウンドスレッドを起動
         self._thread = Thread(target=self._execute_run, args=(run_id, scope))
         self._thread.daemon = True
@@ -132,18 +138,22 @@ class RunManager:
         try:
             update_run_status(conn, run_id, "running", started_at=datetime.now())
 
+            # Get cancel event (guaranteed to exist, created in start_run)
+            with self._cancel_events_lock:
+                cancel_event = self._cancel_events[run_id]
+
             # 実行コンテキストを作成
             context = ExecutionContext(
                 run_id=run_id,
                 log_callback=lambda msg: self._broadcast_log(run_id, msg),
-                cancel_event=self._cancel_event,
+                cancel_event=cancel_event,
             )
 
             # パイプライン実行
             executor = PipelineExecutor()
             executor.execute(conn, scope, context, doc_root=self.doc_root)
 
-            if self._cancel_event.is_set():
+            if cancel_event.is_set():
                 cancel_run(conn, run_id)
             else:
                 update_run_status(conn, run_id, "completed", finished_at=datetime.now())
@@ -151,6 +161,9 @@ class RunManager:
         except Exception as e:
             update_run_status(conn, run_id, "failed", finished_at=datetime.now(), error_message=str(e))
         finally:
+            # Cleanup cancel event for this run
+            with self._cancel_events_lock:
+                self._cancel_events.pop(run_id, None)
             # スレッド終了時に接続を閉じる
             conn.close()
 ```
@@ -506,8 +519,9 @@ get_run_manager(db_path) → RunManager
 **tests/db/test_runs_repository.py (20 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
 
-**tests/runs/test_manager.py (13 tests)**
+**tests/runs/test_manager.py (27 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
+- per-run cancellation（各runに個別のキャンセルイベント）
 
 **tests/runs/test_executor.py (43 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -529,4 +543,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 86 tests** (Repository 20 + Manager 13 + Executor 43 + API 10)
+**合計: 100 tests** (Repository 20 + Manager 27 + Executor 43 + API 10)
