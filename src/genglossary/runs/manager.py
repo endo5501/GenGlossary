@@ -1,13 +1,11 @@
 """Run manager for background pipeline execution."""
 
 import sqlite3
-from contextlib import contextmanager
 from datetime import datetime
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
-from typing import Callable
 
-from genglossary.db.connection import get_connection, transaction
+from genglossary.db.connection import database_connection, get_connection, transaction
 from genglossary.db.runs_repository import (
     cancel_run,
     create_run,
@@ -53,19 +51,6 @@ class RunManager:
         self._subscribers: dict[int, set[Queue]] = {}
         self._subscribers_lock = Lock()
 
-    @contextmanager
-    def _db_connection(self):
-        """Provide a database connection with automatic cleanup.
-
-        Yields:
-            sqlite3.Connection: Database connection.
-        """
-        conn = get_connection(self.db_path)
-        try:
-            yield conn
-        finally:
-            conn.close()
-
     def start_run(self, scope: str, triggered_by: str = "api") -> int:
         """Start a new run in the background.
 
@@ -80,7 +65,7 @@ class RunManager:
             RuntimeError: If a run is already running.
         """
         # Check if a run is already active
-        with self._db_connection() as conn:
+        with database_connection(self.db_path) as conn:
             active_run = get_active_run(conn)
             if active_run is not None:
                 raise RuntimeError(f"Run already running: {active_run['id']}")
@@ -179,7 +164,7 @@ class RunManager:
         self._cancel_event.set()
 
         # Update database status
-        with self._db_connection() as conn:
+        with database_connection(self.db_path) as conn:
             with transaction(conn):
                 cancel_run(conn, run_id)
 
@@ -189,7 +174,7 @@ class RunManager:
         Returns:
             sqlite3.Row if found, None otherwise.
         """
-        with self._db_connection() as conn:
+        with database_connection(self.db_path) as conn:
             return get_active_run(conn)
 
     def get_run(self, run_id: int) -> sqlite3.Row | None:
@@ -201,7 +186,7 @@ class RunManager:
         Returns:
             sqlite3.Row if found, None otherwise.
         """
-        with self._db_connection() as conn:
+        with database_connection(self.db_path) as conn:
             return get_run(conn, run_id)
 
     def register_subscriber(self, run_id: int) -> Queue:

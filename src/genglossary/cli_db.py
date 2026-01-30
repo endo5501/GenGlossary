@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from genglossary.llm.factory import create_llm_client
-from genglossary.db.connection import get_connection, transaction
+from genglossary.db.connection import database_connection, transaction
 from genglossary.db.document_repository import list_all_documents
 from genglossary.db.issue_repository import delete_all_issues, list_all_issues, create_issue
 from genglossary.db.models import GlossaryTermRow
@@ -76,7 +76,9 @@ def _initialize_llm_client(llm_provider: str, model: str | None):
 
 @contextmanager
 def _db_operation(db_path: str):
-    """Context manager for database operations with automatic error handling.
+    """Context manager for CLI database operations with error handling.
+
+    Wraps database_connection() with CLI-specific error handling.
 
     Args:
         db_path: Path to database file.
@@ -86,16 +88,14 @@ def _db_operation(db_path: str):
 
     Handles all exceptions and displays error messages.
     """
-    conn = None
     try:
-        conn = get_connection(db_path)
-        yield conn
+        with database_connection(db_path) as conn:
+            yield conn
+    except click.Abort:
+        raise
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
         raise click.Abort()
-    finally:
-        if conn:
-            conn.close()
 
 
 def _reconstruct_documents_from_db(
@@ -312,20 +312,11 @@ def init(path: str) -> None:
         genglossary db init
         genglossary db init --path ./output/glossary.db
     """
-    try:
-        db_path = Path(path)
-
-        # Create connection and initialize schema
-        conn = get_connection(str(db_path))
+    db_path = Path(path)
+    with _db_operation(str(db_path)) as conn:
         initialize_db(conn)
-        conn.close()
-
-        console.print(f"[green]✓[/green] データベースを初期化しました: {db_path}")
-        console.print(f"[dim]  親ディレクトリ: {db_path.parent.absolute()}[/dim]")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    console.print(f"[green]✓[/green] データベースを初期化しました: {db_path}")
+    console.print(f"[dim]  親ディレクトリ: {db_path.parent.absolute()}[/dim]")
 
 
 @db.command()
@@ -341,26 +332,20 @@ def info(db_path: str) -> None:
     Example:
         genglossary db info
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         metadata = get_metadata(conn)
-        conn.close()
 
-        if metadata is None:
-            console.print("[yellow]メタデータがありません[/yellow]")
-            return
+    if metadata is None:
+        console.print("[yellow]メタデータがありません[/yellow]")
+        return
 
-        # Display metadata
-        console.print("\n[bold]メタデータ[/bold]")
-        if metadata["input_path"]:
-            console.print(f"入力パス: {metadata['input_path']}")
-        console.print(f"LLMプロバイダー: {metadata['llm_provider']}")
-        console.print(f"LLMモデル: {metadata['llm_model']}")
-        console.print(f"作成日時: {metadata['created_at']}")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    # Display metadata
+    console.print("\n[bold]メタデータ[/bold]")
+    if metadata["input_path"]:
+        console.print(f"入力パス: {metadata['input_path']}")
+    console.print(f"LLMプロバイダー: {metadata['llm_provider']}")
+    console.print(f"LLMモデル: {metadata['llm_model']}")
+    console.print(f"作成日時: {metadata['created_at']}")
 
 
 @db.group()
@@ -382,33 +367,27 @@ def terms_list(db_path: str) -> None:
     Example:
         genglossary db terms list
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         term_list = list_all_terms(conn)
-        conn.close()
 
-        if not term_list:
-            console.print("[yellow]用語がありません[/yellow]")
-            return
+    if not term_list:
+        console.print("[yellow]用語がありません[/yellow]")
+        return
 
-        # Create table
-        table = Table(title="抽出用語")
-        table.add_column("ID", style="cyan")
-        table.add_column("用語", style="magenta")
-        table.add_column("カテゴリ", style="green")
+    # Create table
+    table = Table(title="抽出用語")
+    table.add_column("ID", style="cyan")
+    table.add_column("用語", style="magenta")
+    table.add_column("カテゴリ", style="green")
 
-        for term in term_list:
-            table.add_row(
-                str(term["id"]),
-                term["term_text"],
-                term["category"] or "[dim]なし[/dim]",
-            )
+    for term in term_list:
+        table.add_row(
+            str(term["id"]),
+            term["term_text"],
+            term["category"] or "[dim]なし[/dim]",
+        )
 
-        console.print(table)
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    console.print(table)
 
 
 @terms.command("show")
@@ -425,23 +404,17 @@ def terms_show(term_id: int, db_path: str) -> None:
     Example:
         genglossary db terms show 1
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         term = get_term(conn, term_id)
-        conn.close()
 
-        if term is None:
-            console.print(f"[red]Term ID {term_id} が見つかりません[/red]")
-            raise click.Abort()
-
-        # Display term details
-        console.print(f"\n[bold]Term #{term['id']}[/bold]")
-        console.print(f"用語: {term['term_text']}")
-        console.print(f"カテゴリ: {term['category'] or '[dim]なし[/dim]'}")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
+    if term is None:
+        console.print(f"[red]Term ID {term_id} が見つかりません[/red]")
         raise click.Abort()
+
+    # Display term details
+    console.print(f"\n[bold]Term #{term['id']}[/bold]")
+    console.print(f"用語: {term['term_text']}")
+    console.print(f"カテゴリ: {term['category'] or '[dim]なし[/dim]'}")
 
 
 @terms.command("update")
@@ -470,17 +443,10 @@ def terms_update(term_id: int, text: str, category: str | None, db_path: str) ->
     Example:
         genglossary db terms update 1 --text "量子計算機" --category "technical"
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         with transaction(conn):
             update_term(conn, term_id, text, category)
-        conn.close()
-
-        console.print(f"[green]✓[/green] Term #{term_id} を更新しました")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    console.print(f"[green]✓[/green] Term #{term_id} を更新しました")
 
 
 @terms.command("delete")
@@ -497,17 +463,10 @@ def terms_delete(term_id: int, db_path: str) -> None:
     Example:
         genglossary db terms delete 1
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         with transaction(conn):
             delete_term(conn, term_id)
-        conn.close()
-
-        console.print(f"[green]✓[/green] Term #{term_id} を削除しました")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    console.print(f"[green]✓[/green] Term #{term_id} を削除しました")
 
 
 @terms.command("import")
@@ -529,25 +488,19 @@ def terms_import(file: str, db_path: str) -> None:
     Example:
         genglossary db terms import --file terms.txt
     """
-    try:
-        # Read terms from file
-        with open(file, "r", encoding="utf-8") as f:
-            term_texts = [line.strip() for line in f if line.strip()]
+    # Read terms from file
+    with open(file, "r", encoding="utf-8") as f:
+        term_texts = [line.strip() for line in f if line.strip()]
 
-        # Import terms
-        conn = get_connection(db_path)
+    # Import terms
+    with _db_operation(db_path) as conn:
         with transaction(conn):
             for term_text in term_texts:
                 create_term(conn, term_text)
-        conn.close()
 
-        console.print(
-            f"[green]✓[/green] {len(term_texts)}件の用語をインポートしました"
-        )
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    console.print(
+        f"[green]✓[/green] {len(term_texts)}件の用語をインポートしました"
+    )
 
 
 @terms.command("regenerate")
@@ -631,21 +584,15 @@ def provisional_list(db_path: str) -> None:
     Example:
         genglossary db provisional list
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         term_list = list_all_provisional(conn)
-        conn.close()
 
-        if not term_list:
-            console.print("[yellow]暫定用語がありません[/yellow]")
-            return
+    if not term_list:
+        console.print("[yellow]暫定用語がありません[/yellow]")
+        return
 
-        table = _create_glossary_term_table(term_list, "暫定用語集")
-        console.print(table)
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    table = _create_glossary_term_table(term_list, "暫定用語集")
+    console.print(table)
 
 
 @provisional.command("show")
@@ -662,20 +609,14 @@ def provisional_show(term_id: int, db_path: str) -> None:
     Example:
         genglossary db provisional show 1
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         term = get_provisional_term(conn, term_id)
-        conn.close()
 
-        if term is None:
-            console.print(f"[red]Provisional Term ID {term_id} が見つかりません[/red]")
-            raise click.Abort()
-
-        _display_glossary_term_details(term, "Provisional")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
+    if term is None:
+        console.print(f"[red]Provisional Term ID {term_id} が見つかりません[/red]")
         raise click.Abort()
+
+    _display_glossary_term_details(term, "Provisional")
 
 
 @provisional.command("update")
@@ -704,16 +645,10 @@ def provisional_update(term_id: int, definition: str, confidence: float, db_path
     Example:
         genglossary db provisional update 1 --definition "新しい定義" --confidence 0.95
     """
-    try:
-        conn = get_connection(db_path)
-        update_provisional_term(conn, term_id, definition, confidence)
-        conn.close()
-
-        console.print(f"[green]✓[/green] Provisional Term #{term_id} を更新しました")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    with _db_operation(db_path) as conn:
+        with transaction(conn):
+            update_provisional_term(conn, term_id, definition, confidence)
+    console.print(f"[green]✓[/green] Provisional Term #{term_id} を更新しました")
 
 
 @provisional.command("regenerate")
@@ -807,21 +742,15 @@ def refined_list(db_path: str) -> None:
     Example:
         genglossary db refined list
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         term_list = list_all_refined(conn)
-        conn.close()
 
-        if not term_list:
-            console.print("[yellow]最終用語がありません[/yellow]")
-            return
+    if not term_list:
+        console.print("[yellow]最終用語がありません[/yellow]")
+        return
 
-        table = _create_glossary_term_table(term_list, "最終用語集")
-        console.print(table)
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    table = _create_glossary_term_table(term_list, "最終用語集")
+    console.print(table)
 
 
 @refined.command("show")
@@ -838,20 +767,14 @@ def refined_show(term_id: int, db_path: str) -> None:
     Example:
         genglossary db refined show 1
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         term = get_refined_term(conn, term_id)
-        conn.close()
 
-        if term is None:
-            console.print(f"[red]Refined Term ID {term_id} が見つかりません[/red]")
-            raise click.Abort()
-
-        _display_glossary_term_details(term, "Refined")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
+    if term is None:
+        console.print(f"[red]Refined Term ID {term_id} が見つかりません[/red]")
         raise click.Abort()
+
+    _display_glossary_term_details(term, "Refined")
 
 
 @refined.command("update")
@@ -880,16 +803,10 @@ def refined_update(term_id: int, definition: str, confidence: float, db_path: st
     Example:
         genglossary db refined update 1 --definition "新しい定義" --confidence 0.98
     """
-    try:
-        conn = get_connection(db_path)
-        update_refined_term(conn, term_id, definition, confidence)
-        conn.close()
-
-        console.print(f"[green]✓[/green] Refined Term #{term_id} を更新しました")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    with _db_operation(db_path) as conn:
+        with transaction(conn):
+            update_refined_term(conn, term_id, definition, confidence)
+    console.print(f"[green]✓[/green] Refined Term #{term_id} を更新しました")
 
 
 @refined.command("export-md")
@@ -911,39 +828,33 @@ def refined_export_md(output: str, db_path: str) -> None:
     Example:
         genglossary db refined export-md --output ./glossary.md
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         term_list = list_all_refined(conn)
-        conn.close()
 
-        if not term_list:
-            console.print("[yellow]エクスポートする用語がありません[/yellow]")
-            return
+    if not term_list:
+        console.print("[yellow]エクスポートする用語がありません[/yellow]")
+        return
 
-        # Generate Markdown
-        md_lines = ["# 用語集\n"]
-        for term in term_list:
-            md_lines.append(f"## {term['term_name']}\n")
-            md_lines.append(f"**定義**: {term['definition']}\n")
-            md_lines.append(f"**信頼度**: {term['confidence']:.2f}\n")
+    # Generate Markdown
+    md_lines = ["# 用語集\n"]
+    for term in term_list:
+        md_lines.append(f"## {term['term_name']}\n")
+        md_lines.append(f"**定義**: {term['definition']}\n")
+        md_lines.append(f"**信頼度**: {term['confidence']:.2f}\n")
 
-            if term["occurrences"]:
-                md_lines.append("\n**出現箇所**:\n")
-                for occ in term["occurrences"]:
-                    md_lines.append(f"- {occ.document_path}:{occ.line_number}\n")
+        if term["occurrences"]:
+            md_lines.append("\n**出現箇所**:\n")
+            for occ in term["occurrences"]:
+                md_lines.append(f"- {occ.document_path}:{occ.line_number}\n")
 
-            md_lines.append("\n---\n\n")
+        md_lines.append("\n---\n\n")
 
-        # Write to file
-        output_path = Path(output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text("".join(md_lines), encoding="utf-8")
+    # Write to file
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("".join(md_lines), encoding="utf-8")
 
-        console.print(f"[green]✓[/green] {len(term_list)}件の用語を {output} にエクスポートしました")
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    console.print(f"[green]✓[/green] {len(term_list)}件の用語を {output} にエクスポートしました")
 
 
 @refined.command("regenerate")
@@ -1027,37 +938,31 @@ def issues_list(db_path: str) -> None:
     Example:
         genglossary db issues list
     """
-    try:
-        conn = get_connection(db_path)
+    with _db_operation(db_path) as conn:
         issue_list = list_all_issues(conn)
-        conn.close()
 
-        if not issue_list:
-            console.print("[yellow]精査結果がありません[/yellow]")
-            return
+    if not issue_list:
+        console.print("[yellow]精査結果がありません[/yellow]")
+        return
 
-        # Create table
-        table = Table(title="精査結果")
-        table.add_column("ID", style="cyan")
-        table.add_column("用語", style="magenta")
-        table.add_column("問題種別", style="yellow")
-        table.add_column("説明", style="white")
+    # Create table
+    table = Table(title="精査結果")
+    table.add_column("ID", style="cyan")
+    table.add_column("用語", style="magenta")
+    table.add_column("問題種別", style="yellow")
+    table.add_column("説明", style="white")
 
-        for issue in issue_list:
-            description = issue["description"]
-            truncated_desc = description[:50] + "..." if len(description) > 50 else description
-            table.add_row(
-                str(issue["id"]),
-                issue["term_name"],
-                issue["issue_type"],
-                truncated_desc,
-            )
+    for issue in issue_list:
+        description = issue["description"]
+        truncated_desc = description[:50] + "..." if len(description) > 50 else description
+        table.add_row(
+            str(issue["id"]),
+            issue["term_name"],
+            issue["issue_type"],
+            truncated_desc,
+        )
 
-        console.print(table)
-
-    except Exception as e:
-        console.print(f"[red]エラー: {e}[/red]")
-        raise click.Abort()
+    console.print(table)
 
 
 @issues.command("regenerate")
