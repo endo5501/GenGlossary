@@ -10,11 +10,13 @@ export interface LogProgress {
 
 interface LogStore {
   logs: LogMessage[]
+  currentProjectId: number | null
   currentRunId: number | null
   latestProgress: LogProgress | null
   addLog: (log: LogMessage) => void
   clearLogs: () => void
   setCurrentRunId: (runId: number | null) => void
+  setCurrentContext: (projectId: number | null, runId: number | null) => void
   getLatestProgress: () => LogProgress | null
 }
 
@@ -38,6 +40,7 @@ function extractProgress(log: LogMessage): LogProgress | null {
 
 export const useLogStore = create<LogStore>((set, get) => ({
   logs: [],
+  currentProjectId: null,
   currentRunId: null,
   latestProgress: null,
 
@@ -60,6 +63,19 @@ export const useLogStore = create<LogStore>((set, get) => ({
         return { currentRunId: runId, logs: [], latestProgress: null }
       }
       return { currentRunId: runId }
+    }),
+
+  setCurrentContext: (projectId, runId) =>
+    set((state) => {
+      if (state.currentProjectId !== projectId || state.currentRunId !== runId) {
+        return {
+          currentProjectId: projectId,
+          currentRunId: runId,
+          logs: [],
+          latestProgress: null,
+        }
+      }
+      return { currentProjectId: projectId, currentRunId: runId }
     }),
 
   // Legacy method for backward compatibility (reads from state directly)

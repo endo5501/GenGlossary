@@ -79,7 +79,7 @@ class TestPipelineExecutorFull:
 
             # Execute should raise RuntimeError (CLI mode with explicit doc_root)
             with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
-                executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/some/path")
+                executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/some/path", run_id=1)
 
     def test_full_scope_raises_error_when_no_documents_gui_mode(
         self,
@@ -100,7 +100,7 @@ class TestPipelineExecutorFull:
 
             # Execute should raise RuntimeError (GUI mode with default doc_root=".")
             with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
-                executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".")
+                executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".", run_id=1)
 
     def test_full_scope_executes_all_steps(
         self,
@@ -154,7 +154,7 @@ class TestPipelineExecutorFull:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path")
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
 
             # Verify all components were called
             mock_loader.return_value.load_directory.assert_called_once_with("/test/path")
@@ -175,7 +175,7 @@ class TestPipelineExecutorFull:
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
-            executor.execute(project_db, "full", cancel_event, log_callback)
+            executor.execute(project_db, "full", cancel_event, log_callback, run_id=1)
 
             # DocumentLoader should not be called when cancelled
             mock_loader.return_value.load_directory.assert_not_called()
@@ -213,7 +213,7 @@ class TestPipelineExecutorFromTerms:
             mock_generator.return_value.generate.return_value = mock_glossary
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "from_terms", cancel_event, log_callback)
+            executor.execute(project_db, "from_terms", cancel_event, log_callback, run_id=1)
 
             # DocumentLoader.load_directory should not be called (we load from DB instead)
             mock_loader.return_value.load_directory.assert_not_called()
@@ -261,7 +261,7 @@ class TestPipelineExecutorProvisionalToRefined:
             # Mock review
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "provisional_to_refined", cancel_event, log_callback)
+            executor.execute(project_db, "provisional_to_refined", cancel_event, log_callback, run_id=1)
 
             # Earlier stages should not be called
             mock_loader.return_value.load_directory.assert_not_called()
@@ -305,7 +305,7 @@ class TestPipelineExecutorProgress:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path")
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
 
             # Check that log messages were captured
             logs = log_callback.logs  # type: ignore
@@ -390,7 +390,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute with custom doc_root
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/custom/path")
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/custom/path", run_id=1)
 
             # Verify load_directory was called with the custom doc_root
             mock_loader.return_value.load_directory.assert_called_once_with("/custom/path")
@@ -427,7 +427,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path")
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
 
             # Verify LLM client was created with custom settings
             mock_llm_factory.assert_called_once_with(provider="openai", model="gpt-4")
@@ -467,7 +467,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute with full scope (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path")
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
 
             # Verify tables were cleared before execution (documents are NOT cleared in _clear_tables_for_scope)
             mock_delete_terms.assert_called_once()
@@ -541,7 +541,8 @@ class TestPipelineExecutorDBFirstApproach:
             # This is the key: doc_root is NOT "." but DB has documents
             executor.execute(
                 project_db, "full", cancel_event, log_callback,
-                doc_root="/Users/user/.genglossary/projects/MyProject"
+                doc_root="/Users/user/.genglossary/projects/MyProject",
+                run_id=1,
             )
 
             # DocumentLoader.load_directory should NOT be called (DB has documents)
@@ -593,7 +594,8 @@ class TestPipelineExecutorDBFirstApproach:
             # Execute with explicit doc_root (CLI mode, empty DB)
             executor.execute(
                 project_db, "full", cancel_event, log_callback,
-                doc_root="/custom/cli/path"
+                doc_root="/custom/cli/path",
+                run_id=1,
             )
 
             # list_all_documents should be called first to check DB
@@ -631,7 +633,8 @@ class TestPipelineExecutorDBFirstApproach:
             with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
                 executor.execute(
                     project_db, "full", cancel_event, log_callback,
-                    doc_root="/empty/path"
+                    doc_root="/empty/path",
+                    run_id=1,
                 )
 
     def test_db_documents_take_priority_over_filesystem(
@@ -668,7 +671,8 @@ class TestPipelineExecutorDBFirstApproach:
             # Execute with doc_root
             executor.execute(
                 project_db, "full", cancel_event, log_callback,
-                doc_root="/some/path"
+                doc_root="/some/path",
+                run_id=1,
             )
 
             # DocumentLoader should NOT be called at all (DB has documents)
@@ -979,7 +983,7 @@ class TestPipelineExecutorDBDocumentsLegacy:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute full scope with default doc_root="." (GUI mode)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".")
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".", run_id=1)
 
             # DocumentLoader.load_directory should NOT be called (DB documents used in GUI mode)
             mock_loader.return_value.load_directory.assert_not_called()
@@ -1024,7 +1028,7 @@ class TestPipelineExecutorDBDocumentsLegacy:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute full scope with explicit doc_root (CLI mode)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/custom/path")
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/custom/path", run_id=1)
 
             # DocumentLoader.load_directory SHOULD be called with custom path
             mock_loader.return_value.load_directory.assert_called_once_with("/custom/path")

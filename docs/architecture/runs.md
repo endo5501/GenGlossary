@@ -174,7 +174,10 @@ class PipelineExecutor:
         conn: sqlite3.Connection,
         scope: str,
         cancel_event: Event,
-        log_queue: Queue,
+        log_callback: Callable[[dict], None],
+        doc_root: str = ".",
+        *,
+        run_id: int,
     ) -> None:
         """指定されたスコープでパイプラインを実行
 
@@ -182,7 +185,9 @@ class PipelineExecutor:
             conn: プロジェクトDB接続（スレッド内で作成されたもの）
             scope: 実行スコープ
             cancel_event: キャンセルシグナル
-            log_queue: ログメッセージキュー
+            log_callback: ログメッセージコールバック
+            doc_root: ドキュメントルートディレクトリ
+            run_id: 実行ID（必須、ログフィルタリング用）
         """
         if scope == "full":
             self._execute_full(conn, cancel_event, log_queue)

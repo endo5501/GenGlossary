@@ -102,6 +102,111 @@ describe('logStore', () => {
     })
   })
 
+  describe('setCurrentContext', () => {
+    beforeEach(() => {
+      // Reset store before each test
+      useLogStore.getState().clearLogs()
+      useLogStore.getState().setCurrentContext(null, null)
+    })
+
+    it('sets both project ID and run ID', () => {
+      useLogStore.getState().setCurrentContext(1, 42)
+
+      expect(useLogStore.getState().currentProjectId).toBe(1)
+      expect(useLogStore.getState().currentRunId).toBe(42)
+    })
+
+    it('clears logs when project ID changes', () => {
+      useLogStore.getState().setCurrentContext(1, 1)
+
+      const log: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Test message',
+        timestamp: '2025-01-01T00:00:00Z',
+      }
+
+      useLogStore.getState().addLog(log)
+      expect(useLogStore.getState().logs).toHaveLength(1)
+
+      // Change project ID only
+      useLogStore.getState().setCurrentContext(2, 1)
+
+      expect(useLogStore.getState().logs).toHaveLength(0)
+      expect(useLogStore.getState().currentProjectId).toBe(2)
+    })
+
+    it('clears logs when run ID changes within same project', () => {
+      useLogStore.getState().setCurrentContext(1, 1)
+
+      const log: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Test message',
+        timestamp: '2025-01-01T00:00:00Z',
+      }
+
+      useLogStore.getState().addLog(log)
+      expect(useLogStore.getState().logs).toHaveLength(1)
+
+      // Change run ID only
+      useLogStore.getState().setCurrentContext(1, 2)
+
+      expect(useLogStore.getState().logs).toHaveLength(0)
+      expect(useLogStore.getState().currentRunId).toBe(2)
+    })
+
+    it('does not clear logs when both project ID and run ID are the same', () => {
+      useLogStore.getState().setCurrentContext(1, 1)
+
+      const log: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Test message',
+        timestamp: '2025-01-01T00:00:00Z',
+      }
+
+      useLogStore.getState().addLog(log)
+      expect(useLogStore.getState().logs).toHaveLength(1)
+
+      // Set same context again
+      useLogStore.getState().setCurrentContext(1, 1)
+
+      expect(useLogStore.getState().logs).toHaveLength(1)
+    })
+
+    it('prevents log collision between different projects with same run ID', () => {
+      // Project 1, Run 1 - add log
+      useLogStore.getState().setCurrentContext(1, 1)
+      const log1: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Project 1 log',
+        timestamp: '2025-01-01T00:00:00Z',
+      }
+      useLogStore.getState().addLog(log1)
+      expect(useLogStore.getState().logs).toHaveLength(1)
+      expect(useLogStore.getState().logs[0].message).toBe('Project 1 log')
+
+      // Switch to Project 2, Run 1 (same run ID, different project)
+      useLogStore.getState().setCurrentContext(2, 1)
+
+      // Logs should be cleared to prevent collision
+      expect(useLogStore.getState().logs).toHaveLength(0)
+
+      // Add new log for Project 2
+      const log2: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Project 2 log',
+        timestamp: '2025-01-01T00:00:01Z',
+      }
+      useLogStore.getState().addLog(log2)
+      expect(useLogStore.getState().logs).toHaveLength(1)
+      expect(useLogStore.getState().logs[0].message).toBe('Project 2 log')
+    })
+  })
+
   describe('latestProgress', () => {
     it('returns null when no progress logs exist', () => {
       expect(useLogStore.getState().latestProgress).toBeNull()
