@@ -174,12 +174,9 @@ class RunManager:
                 complete_run_if_not_cancelled(conn, run_id)
 
         except Exception as e:
-            # 接続エラー時はフォールバック接続でステータス更新
-            if conn is not None:
-                update_run_status(conn, run_id, "failed", ...)
-            else:
-                with database_connection(self.db_path) as fallback_conn:
-                    update_run_status(fallback_conn, run_id, "failed", ...)
+            # ヘルパーメソッドで堅牢なステータス更新
+            self._update_failed_status(conn, run_id, str(e))
+            self._broadcast_log(run_id, {"run_id": run_id, "level": "error", ...})
         finally:
             # Cleanup cancel event for this run
             with self._cancel_events_lock:
@@ -189,6 +186,32 @@ class RunManager:
             # スレッド終了時に接続を閉じる（接続があれば）
             if conn is not None:
                 conn.close()
+
+    def _try_update_status(self, conn, run_id, error_message) -> bool:
+        """ステータス更新を試行し、成功時にTrueを返す
+
+        失敗時はwarningログをブロードキャストして False を返す。
+        """
+        ...
+
+    def _update_failed_status(self, conn, run_id, error_message) -> None:
+        """フォールバック接続付きでステータスを 'failed' に更新
+
+        1. 既存の conn でステータス更新を試行
+        2. 失敗した場合、新しい接続を作成してフォールバック
+        3. フォールバックも失敗した場合、warningログを出力
+
+        Note:
+            両方の接続が失敗しても、エラーログのブロードキャストは保証される。
+        """
+        if conn is not None and self._try_update_status(conn, run_id, error_message):
+            return
+
+        try:
+            with database_connection(self.db_path) as fallback_conn:
+                self._try_update_status(fallback_conn, run_id, error_message)
+        except Exception as e:
+            self._broadcast_log(run_id, {"level": "warning", "message": f"Failed to create fallback connection: {e}"})
 ```
 
 ## SQLite スレッディング戦略
@@ -543,11 +566,12 @@ get_run_manager(db_path) → RunManager
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 
-**tests/runs/test_manager.py (31 tests)**
+**tests/runs/test_manager.py (39 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - per-run cancellation（各runに個別のキャンセルイベント）
 - cancellation race condition（キャンセルとステータス更新の競合防止）
-- connection error handling（接続エラー時のクリーンアップ）
+- connection error handling（接続エラー時のクリーンアップとフォールバック）
+- warning log broadcast（ステータス更新失敗時の警告ログ）
 
 **tests/runs/test_executor.py (43 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -569,4 +593,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 109 tests** (Repository 25 + Manager 31 + Executor 43 + API 10)
+**合計: 117 tests** (Repository 25 + Manager 39 + Executor 43 + API 10)
