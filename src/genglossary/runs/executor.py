@@ -1,6 +1,7 @@
 """Pipeline executor for running glossary generation steps."""
 
 import sqlite3
+from enum import Enum
 from threading import Event
 from typing import Any, Callable
 
@@ -25,9 +26,17 @@ from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.factory import create_llm_client
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
-from genglossary.models.term import Term, TermOccurrence
+from genglossary.models.term import ClassifiedTerm, Term, TermOccurrence
 from genglossary.term_extractor import TermExtractor
 from genglossary.utils.hash import compute_content_hash
+
+
+class PipelineScope(Enum):
+    """Enumeration of pipeline execution scopes."""
+
+    FULL = "full"
+    FROM_TERMS = "from_terms"
+    PROVISIONAL_TO_REFINED = "provisional_to_refined"
 
 # Map of scope to clear functions for table cleanup
 _SCOPE_CLEAR_FUNCTIONS: dict[str, list[Callable[[sqlite3.Connection], None]]] = {
@@ -158,7 +167,6 @@ class PipelineExecutor:
 
     def _create_progress_callback(
         self,
-        conn: sqlite3.Connection,
         step_name: str,
     ) -> Callable[[int, int, str], None]:
         """Create a progress callback for LLM processing steps.
@@ -166,7 +174,6 @@ class PipelineExecutor:
         The callback logs progress with extended fields (step, current, total, term name).
 
         Args:
-            conn: Project database connection (for future DB progress updates).
             step_name: Name of the current step (e.g., 'provisional', 'refined').
 
         Returns:
@@ -187,7 +194,7 @@ class PipelineExecutor:
     def execute(
         self,
         conn: sqlite3.Connection,
-        scope: str,
+        scope: str | PipelineScope,
         cancel_event: Event,
         log_callback: Callable[[dict], None],
         doc_root: str = ".",
@@ -198,7 +205,7 @@ class PipelineExecutor:
 
         Args:
             conn: Project database connection.
-            scope: Execution scope ('full', 'from_terms', 'provisional_to_refined').
+            scope: Execution scope (PipelineScope enum or string).
             cancel_event: Event to signal cancellation.
             log_callback: Callback function for log messages.
             doc_root: Root directory for documents (default: ".").
@@ -209,23 +216,26 @@ class PipelineExecutor:
         self._log_callback = log_callback
         self._cancel_event = cancel_event
 
-        self._log("info", f"Starting pipeline execution: {scope}")
+        # Convert PipelineScope enum to string value
+        scope_value = scope.value if isinstance(scope, PipelineScope) else scope
+
+        self._log("info", f"Starting pipeline execution: {scope_value}")
 
         if self._check_cancellation():
             return
 
         # Clear tables before execution
-        self._clear_tables_for_scope(conn, scope)
+        self._clear_tables_for_scope(conn, scope_value)
 
         # Execute based on scope
-        if scope == "full":
+        if scope_value == PipelineScope.FULL.value:
             self._execute_full(conn, doc_root)
-        elif scope == "from_terms":
+        elif scope_value == PipelineScope.FROM_TERMS.value:
             self._execute_from_terms(conn)
-        elif scope == "provisional_to_refined":
+        elif scope_value == PipelineScope.PROVISIONAL_TO_REFINED.value:
             self._execute_provisional_to_refined(conn)
         else:
-            self._log("error", f"Unknown scope: {scope}")
+            self._log("error", f"Unknown scope: {scope_value}")
             return
 
         self._log("info", "Pipeline execution completed")
@@ -297,36 +307,40 @@ class PipelineExecutor:
         extractor = TermExtractor(llm_client=self._llm_client)
         extracted_terms = extractor.extract_terms(documents, return_categories=True)
 
-        # Save extracted terms (skip duplicates)
+        # Save extracted terms and build unique list (skip duplicates)
+        # Note: extracted_terms is list[ClassifiedTerm] here (return_categories=True)
         seen_terms: set[str] = set()
+        unique_terms: list[ClassifiedTerm] = []
         for classified_term in extracted_terms:  # type: ignore[union-attr]
+            classified_term: ClassifiedTerm  # type: ignore[no-redef]
             term_text = classified_term.term  # type: ignore[union-attr]
             if term_text in seen_terms:
                 continue
             seen_terms.add(term_text)
+            unique_terms.append(classified_term)
             create_term(
                 conn,
                 term_text,
                 category=classified_term.category.value,  # type: ignore[union-attr]
             )
 
-        self._log("info", f"Extracted {len(extracted_terms)} terms")
+        self._log("info", f"Extracted {len(unique_terms)} unique terms (from {len(extracted_terms)} total)")
 
-        # Continue with steps 3-5
-        self._execute_from_terms(conn, documents, extracted_terms)
+        # Continue with steps 3-5 (pass unique terms to avoid duplicate LLM calls)
+        self._execute_from_terms(conn, documents, unique_terms)
 
     def _execute_from_terms(
         self,
         conn: sqlite3.Connection,
         documents: list[Document] | None = None,
-        extracted_terms: list | None = None,
+        extracted_terms: list[str] | list[ClassifiedTerm] | None = None,
     ) -> None:
         """Execute from terms (steps 3-5).
 
         Args:
             conn: Project database connection.
             documents: Pre-loaded documents (None to load from DB).
-            extracted_terms: Pre-extracted terms (None to load from DB).
+            extracted_terms: Pre-extracted terms as strings or ClassifiedTerms (None to load from DB).
         """
         # Load documents from DB if not provided
         if documents is None:
@@ -349,7 +363,7 @@ class PipelineExecutor:
 
         self._log("info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
-        progress_cb = self._create_progress_callback(conn, "provisional")
+        progress_cb = self._create_progress_callback( "provisional")
         glossary = generator.generate(
             extracted_terms, documents, term_progress_callback=progress_cb
         )
@@ -423,13 +437,17 @@ class PipelineExecutor:
 
             self._log("info", "Refining glossary...")
             refiner = GlossaryRefiner(llm_client=self._llm_client)
-            progress_cb = self._create_progress_callback(conn, "refined")
+            progress_cb = self._create_progress_callback( "refined")
             glossary = refiner.refine(
                 glossary, issues, documents, term_progress_callback=progress_cb
             )
             self._log("info", f"Refined {len(glossary.terms)} terms")
         else:
             self._log("info", "No issues found, copying provisional to refined")
+
+        # Check cancellation before saving refined glossary
+        if self._check_cancellation():
+            return
 
         # Save refined glossary (either refined or copied from provisional)
         self._save_glossary_terms(conn, glossary, create_refined_term)

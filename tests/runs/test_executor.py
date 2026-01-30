@@ -695,8 +695,6 @@ class TestPipelineExecutorProgressCallback:
     def test_create_progress_callback_logs_with_extended_fields(
         self,
         executor: PipelineExecutor,
-        project_db: sqlite3.Connection,
-        cancel_event: Event,
     ) -> None:
         """_create_progress_callback は拡張フィールド付きでログを出力する"""
         logs = []
@@ -707,7 +705,7 @@ class TestPipelineExecutorProgressCallback:
         executor._log_callback = callback
 
         # Create progress callback
-        progress_cb = executor._create_progress_callback(project_db, "provisional")
+        progress_cb = executor._create_progress_callback("provisional")
 
         # Call the progress callback
         progress_cb(5, 20, "量子コンピュータ")
@@ -726,14 +724,13 @@ class TestPipelineExecutorProgressCallback:
     def test_create_progress_callback_calculates_percentage(
         self,
         executor: PipelineExecutor,
-        project_db: sqlite3.Connection,
     ) -> None:
         """進捗パーセントが正しく計算される"""
         logs = []
         executor._run_id = 1
         executor._log_callback = lambda msg: logs.append(msg)
 
-        progress_cb = executor._create_progress_callback(project_db, "refined")
+        progress_cb = executor._create_progress_callback("refined")
 
         # Test various percentages
         progress_cb(1, 10, "term1")  # 10%
@@ -748,14 +745,13 @@ class TestPipelineExecutorProgressCallback:
     def test_create_progress_callback_handles_zero_total(
         self,
         executor: PipelineExecutor,
-        project_db: sqlite3.Connection,
     ) -> None:
         """total が 0 の場合も正常に動作する"""
         logs = []
         executor._run_id = 1
         executor._log_callback = lambda msg: logs.append(msg)
 
-        progress_cb = executor._create_progress_callback(project_db, "provisional")
+        progress_cb = executor._create_progress_callback("provisional")
 
         # Should not raise error
         progress_cb(0, 0, "")
