@@ -62,6 +62,17 @@ def update_run_status(
 def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
     """Runをキャンセル（status='cancelled', finished_at設定）"""
     ...
+
+def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool:
+    """Runを原子的に完了（キャンセル済みまたは終了済みでなければ）
+
+    レースコンディション防止: キャンセルチェックとステータス更新の間に
+    別スレッドからキャンセルされても、completedに上書きしない。
+
+    Returns:
+        bool: completedに更新できればTrue、既に終了状態ならFalse
+    """
+    ...
 ```
 
 ## manager.py (RunManager - スレッド管理)
@@ -153,10 +164,12 @@ class RunManager:
             executor = PipelineExecutor()
             executor.execute(conn, scope, context, doc_root=self.doc_root)
 
+            # Race condition safe: complete_run_if_not_cancelled prevents
+            # completing a run that was cancelled between is_set() and update
             if cancel_event.is_set():
                 cancel_run(conn, run_id)
             else:
-                update_run_status(conn, run_id, "completed", finished_at=datetime.now())
+                complete_run_if_not_cancelled(conn, run_id)
 
         except Exception as e:
             update_run_status(conn, run_id, "failed", finished_at=datetime.now(), error_message=str(e))
@@ -516,12 +529,14 @@ get_run_manager(db_path) → RunManager
 
 ## テスト構成
 
-**tests/db/test_runs_repository.py (20 tests)**
+**tests/db/test_runs_repository.py (25 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
+- complete_run_if_not_cancelled（レースコンディション防止）
 
-**tests/runs/test_manager.py (27 tests)**
+**tests/runs/test_manager.py (28 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - per-run cancellation（各runに個別のキャンセルイベント）
+- cancellation race condition（キャンセルとステータス更新の競合防止）
 
 **tests/runs/test_executor.py (43 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -543,4 +558,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 100 tests** (Repository 20 + Manager 27 + Executor 43 + API 10)
+**合計: 106 tests** (Repository 25 + Manager 28 + Executor 43 + API 10)

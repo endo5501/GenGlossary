@@ -8,6 +8,7 @@ from threading import Event, Lock, Thread
 from genglossary.db.connection import database_connection, get_connection, transaction
 from genglossary.db.runs_repository import (
     cancel_run,
+    complete_run_if_not_cancelled,
     create_run,
     get_active_run,
     get_run,
@@ -133,16 +134,16 @@ class RunManager:
                 doc_root=self.doc_root,
             )
 
-            # Check if cancelled
+            # Check if cancelled first, then try atomic completion
             if cancel_event.is_set():
                 with transaction(conn):
                     cancel_run(conn, run_id)
             else:
-                # Update status to completed
+                # Use atomic update to prevent race condition:
+                # If cancelled between is_set() check and this update,
+                # complete_run_if_not_cancelled will detect it and return False
                 with transaction(conn):
-                    update_run_status(
-                        conn, run_id, "completed", finished_at=datetime.now()
-                    )
+                    complete_run_if_not_cancelled(conn, run_id)
 
         except Exception as e:
             # Update status to failed
