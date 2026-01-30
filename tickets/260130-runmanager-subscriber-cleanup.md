@@ -4,7 +4,7 @@ tags: [improvement, backend, memory-leak]
 description: "RunManager: Clean up subscribers after run completion"
 created_at: "2026-01-30T23:30:00+09:00"
 started_at: 2026-01-30T15:00:54Z
-closed_at: null
+closed_at: 2026-01-30T15:06:24Z
 ---
 
 # RunManager: Clean up subscribers after run completion
