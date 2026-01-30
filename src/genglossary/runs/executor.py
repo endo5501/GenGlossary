@@ -340,12 +340,10 @@ class PipelineExecutor:
         # Note: extracted_terms is list[ClassifiedTerm] here (return_categories=True)
         seen_terms: set[str] = set()
         unique_terms: list[ClassifiedTerm] = []
-        for classified_term in extracted_terms:  # type: ignore[union-attr]
-            classified_term: ClassifiedTerm  # type: ignore[no-redef]
-            term_text = classified_term.term  # type: ignore[union-attr]
-            if term_text in seen_terms:
+        for classified_term in extracted_terms:
+            if classified_term.term in seen_terms:
                 continue
-            seen_terms.add(term_text)
+            seen_terms.add(classified_term.term)
             unique_terms.append(classified_term)
 
         # Save all unique terms in a single transaction

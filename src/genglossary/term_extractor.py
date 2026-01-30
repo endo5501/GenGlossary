@@ -1,6 +1,6 @@
 """Term extractor - SudachiPy morphological analysis + LLM judgment."""
 
-from typing import overload
+from typing import Literal, overload
 
 from pydantic import BaseModel
 
@@ -136,7 +136,7 @@ class TermExtractor:
         progress_callback: ProgressCallback | None = None,
         batch_size: int = 10,
         *,
-        return_categories: bool = False,
+        return_categories: Literal[False] = ...,
     ) -> list[str]: ...
 
     @overload
@@ -146,7 +146,7 @@ class TermExtractor:
         progress_callback: ProgressCallback | None = None,
         batch_size: int = 10,
         *,
-        return_categories: bool = True,
+        return_categories: Literal[True],
     ) -> list[ClassifiedTerm]: ...
 
     def extract_terms(
