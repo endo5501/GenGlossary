@@ -36,8 +36,28 @@ def main(input_file: str, output: str) -> None:
 ```
 
 ## cli_db.py (DBサブコマンド)
+
+CLIコマンドは `_db_operation()` コンテキストマネージャを使用して統一された接続・エラー管理を行います。
+
 ```python
 import click
+from contextlib import contextmanager
+from genglossary.db.connection import database_connection, transaction
+
+@contextmanager
+def _db_operation(db_path: str):
+    """CLI-specific database connection with error handling.
+
+    Wraps database_connection() with CLI-specific error handling.
+    """
+    try:
+        with database_connection(db_path) as conn:
+            yield conn
+    except click.Abort:
+        raise
+    except Exception as e:
+        console.print(f"[red]エラー: {e}[/red]")
+        raise click.Abort()
 
 @click.group()
 def db() -> None:
@@ -48,8 +68,8 @@ def db() -> None:
 @click.option("--db-path", default="./genglossary.db")
 def info(db_path: str) -> None:
     """メタデータを表示"""
-    conn = get_connection(db_path)
-    metadata = get_metadata(conn)
+    with _db_operation(db_path) as conn:
+        metadata = get_metadata(conn)
     # Rich tableで表示
     ...
 
@@ -61,13 +81,24 @@ def terms() -> None:
 @terms.command("list")
 @click.option("--db-path", default="./genglossary.db")
 def terms_list(db_path: str) -> None:
-    """用語一覧を表示（run_id不要）"""
-    conn = get_connection(db_path)
-    term_list = list_all_terms(conn)
+    """用語一覧を表示"""
+    with _db_operation(db_path) as conn:
+        term_list = list_all_terms(conn)
     # Rich tableで表示
     ...
 
-# provisional, refined コマンド群も同様（run_id削除）
+@terms.command("update")
+@click.argument("term_id", type=int)
+@click.option("--text", required=True)
+@click.option("--db-path", default="./genglossary.db")
+def terms_update(term_id: int, text: str, db_path: str) -> None:
+    """用語を更新（transactionで変更をコミット）"""
+    with _db_operation(db_path) as conn:
+        with transaction(conn):
+            update_term(conn, term_id, text)
+    console.print(f"[green]✓[/green] Term #{term_id} を更新しました")
+
+# provisional, refined コマンド群も同様のパターン
 ```
 
 ## 利用可能なDBコマンド (Schema v2)
