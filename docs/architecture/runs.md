@@ -255,6 +255,13 @@ glossary = generator.generate(
 | `from_terms` | 3→4→5 | 既存の抽出用語から用語集生成 |
 | `provisional_to_refined` | 4→5 | 既存の暫定用語集から精査・改善 |
 
+**重複用語の処理:**
+- 用語抽出ステップ（ステップ2）で LLM が同じ用語を複数回返した場合、重複はスキップされ、ユニークな用語のみが DB に保存されます
+
+**issues がない場合の動作:**
+- GlossaryReviewer が問題点を検出しなかった場合（`issues == []`）、GlossaryRefiner は呼び出されません
+- 代わりに、provisional glossary がそのまま refined glossary としてコピー保存されます
+
 **パイプラインステップ:**
 1. ドキュメント読み込み (DocumentLoader / DBから直接読み込み)
 2. 用語抽出 (TermExtractor)
@@ -283,6 +290,10 @@ glossary = generator.generate(
 | DBにドキュメントあり | DBから読み込み（GUIモード） |
 | DBが空 + `doc_root` 指定あり | ファイルシステムから読み込み、DBに保存（CLIモード） |
 | DBが空 + `doc_root` 未指定/`"."` | エラー |
+
+**ファイル名の保存:**
+- CLIモードでファイルシステムから読み込む場合、`file_name` には `document.file_path`（フルパスまたは相対パス）が保存されます
+- これにより、異なるディレクトリにある同名ファイル（例: `docs/README.md` と `examples/README.md`）の衝突を回避します
 
 - `full` / `from_terms` / `provisional_to_refined`: すべて `_load_documents()` を使用
 - GUIからのファイル追加: HTML5 File APIでブラウザから読み取り、APIを通じてDBに保存
@@ -446,7 +457,7 @@ get_run_manager(db_path) → RunManager
 **tests/runs/test_manager.py (13 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 
-**tests/runs/test_executor.py (17 tests)**
+**tests/runs/test_executor.py (29 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
 - キャンセル処理
 - 進捗ログ
@@ -454,8 +465,12 @@ get_run_manager(db_path) → RunManager
   - GUIモード: DBにドキュメントがあればDBから読み込み
   - CLIモード: DBが空なら `doc_root` から読み込み
   - 両方空ならエラー
+- バグ修正テスト
+  - issues なしでの refined 保存
+  - 重複用語のスキップ
+  - 同名ファイルの衝突回避
 
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 60 tests** (Repository 20 + Manager 13 + Executor 17 + API 10)
+**合計: 72 tests** (Repository 20 + Manager 13 + Executor 29 + API 10)
