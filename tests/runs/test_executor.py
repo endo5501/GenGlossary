@@ -1622,3 +1622,125 @@ class TestPipelineExecutorThreadSafety:
         # All logs in logs_2 should have run_id=2
         for log in logs_2:
             assert log.get("run_id") == 2, f"Log in logs_2 has wrong run_id: {log}"
+
+
+class TestDocumentFilePathStorage:
+    """Tests for document file path storage.
+
+    Documents should be stored with relative paths (from doc_root)
+    instead of absolute paths for:
+    - Security: Prevent server path leakage via API/logs
+    - Portability: DB can be moved between environments
+    - Consistency: API/schema expects file_name, not full path
+    """
+
+    def test_documents_stored_with_relative_path_not_absolute(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """ドキュメントは絶対パスではなく相対パスで保存される
+
+        DocumentLoader は絶対パスを返すが、DB保存時に doc_root からの
+        相対パスに変換される必要がある。
+        """
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            mock_llm_factory.return_value = MagicMock()
+
+            # DB is empty (CLI mode)
+            mock_list_docs.return_value = []
+
+            # DocumentLoader returns absolute paths (simulating real behavior)
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(
+                    file_path="/home/user/project/docs/chapter1/intro.md",
+                    content="intro content"
+                ),
+                MagicMock(
+                    file_path="/home/user/project/docs/chapter2/summary.md",
+                    content="summary content"
+                ),
+            ]
+
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute with doc_root=/home/user/project/docs
+            executor.execute(
+                project_db, "full", execution_context,
+                doc_root="/home/user/project/docs"
+            )
+
+            # Verify stored file names are relative paths, not absolute
+            from genglossary.db.document_repository import list_all_documents
+            docs = list_all_documents(project_db)
+            file_names = [row["file_name"] for row in docs]
+
+            # Should be relative paths from doc_root
+            assert "chapter1/intro.md" in file_names
+            assert "chapter2/summary.md" in file_names
+
+            # Should NOT contain absolute paths
+            for file_name in file_names:
+                assert not file_name.startswith("/"), \
+                    f"file_name should not be absolute path: {file_name}"
+
+    def test_relative_path_preserves_directory_structure(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """相対パスがディレクトリ構造を保持する（同名ファイル衝突回避）"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = []
+
+            # Same basename in different directories (absolute paths)
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(
+                    file_path="/project/docs/README.md",
+                    content="docs readme"
+                ),
+                MagicMock(
+                    file_path="/project/examples/README.md",
+                    content="examples readme"
+                ),
+            ]
+
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute with doc_root=/project
+            executor.execute(
+                project_db, "full", execution_context,
+                doc_root="/project"
+            )
+
+            # Verify both files saved with distinct relative paths
+            from genglossary.db.document_repository import list_all_documents
+            docs = list_all_documents(project_db)
+            file_names = [row["file_name"] for row in docs]
+
+            assert len(file_names) == 2
+            assert "docs/README.md" in file_names
+            assert "examples/README.md" in file_names
