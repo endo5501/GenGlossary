@@ -1,5 +1,5 @@
 ---
-priority: 5
+priority: 1
 tags: [improvement, backend, memory-leak]
 description: "RunManager: Clean up subscribers after run completion"
 created_at: "2026-01-30T23:30:00+09:00"
@@ -47,4 +47,11 @@ finally:
 - [ ] 実装
 - [ ] テストの更新
 - [ ] Commit
-- [ ] Run static analysis (`pyright`) and tests before closing
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
