@@ -597,6 +597,133 @@ class TestRunManagerPerRunCancellation:
 class TestRunManagerConnectionErrorHandling:
     """Tests for connection error handling in _execute_run."""
 
+    def test_fallback_to_new_connection_when_conn_update_fails(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """connでのステータス更新が失敗した場合、新しい接続にフォールバックする"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # First call succeeds (status update to running)
+            # Executor raises error
+            mock_executor.return_value.execute.side_effect = RuntimeError("Test error")
+
+            # Patch update_run_status to fail on first call in except block,
+            # succeed on second call with fallback
+            original_update_run_status = __import__(
+                "genglossary.db.runs_repository", fromlist=["update_run_status"]
+            ).update_run_status
+
+            call_count = {"value": 0}
+
+            def mock_update_run_status(conn, run_id, status, **kwargs):
+                call_count["value"] += 1
+                # First call is "running" status, let it pass
+                if status == "running":
+                    return original_update_run_status(conn, run_id, status, **kwargs)
+                # For "failed" status: fail first, succeed second (fallback)
+                if status == "failed":
+                    if call_count["value"] == 2:
+                        raise sqlite3.OperationalError("database is locked")
+                    return original_update_run_status(conn, run_id, status, **kwargs)
+                return original_update_run_status(conn, run_id, status, **kwargs)
+
+            with patch(
+                "genglossary.runs.manager.update_run_status",
+                side_effect=mock_update_run_status,
+            ):
+                run_id = manager.start_run(scope="full")
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Status should be updated via fallback connection
+                run = get_run(project_db, run_id)
+                assert run is not None
+                assert run["status"] == "failed", (
+                    f"Expected status 'failed' but got '{run['status']}'. "
+                    "Fallback connection should have updated the status."
+                )
+
+    def test_error_log_broadcast_even_when_fallback_connection_fails(
+        self, manager: RunManager
+    ) -> None:
+        """fallback接続が失敗しても、エラーログはブロードキャストされる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = RuntimeError("Test error")
+
+            # Make both primary and fallback connections fail for status update
+            with patch(
+                "genglossary.runs.manager.update_run_status"
+            ) as mock_update_run_status:
+                # First call succeeds (running status)
+                # Second call fails (failed status with original conn)
+                # Third call (fallback) also fails
+                mock_update_run_status.side_effect = [
+                    None,  # running status
+                    sqlite3.OperationalError("database is locked"),  # first failed
+                    sqlite3.OperationalError("database is locked"),  # fallback failed
+                ]
+
+                # Subscribe to logs before starting run
+                queue = manager.register_subscriber(run_id=1)
+
+                run_id = manager.start_run(scope="full")
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Error log should still be broadcast
+                error_log_found = False
+                while not queue.empty():
+                    log = queue.get_nowait()
+                    if log is not None and log.get("level") == "error":
+                        error_log_found = True
+                        assert "Test error" in log.get("message", "")
+                        break
+
+                assert error_log_found, (
+                    "Error log should be broadcast even when all status updates fail"
+                )
+
+    def test_completion_signal_sent_even_when_fallback_connection_fails(
+        self, manager: RunManager
+    ) -> None:
+        """fallback接続が失敗しても、完了シグナルが送信される"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = RuntimeError("Test error")
+
+            # Make fallback connection fail
+            with patch(
+                "genglossary.runs.manager.update_run_status"
+            ) as mock_update_run_status:
+                mock_update_run_status.side_effect = [
+                    None,  # running status
+                    sqlite3.OperationalError("database is locked"),  # first failed
+                    sqlite3.OperationalError("database is locked"),  # fallback failed
+                ]
+
+                # Subscribe to logs before starting run
+                queue = manager.register_subscriber(run_id=1)
+
+                run_id = manager.start_run(scope="full")
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Completion signal should still be sent
+                completion_signal_found = False
+                while not queue.empty():
+                    log = queue.get_nowait()
+                    if log is not None and log.get("complete"):
+                        completion_signal_found = True
+                        break
+
+                assert completion_signal_found, (
+                    "Completion signal should be sent even when all status updates fail"
+                )
+
     def test_cancel_event_cleaned_up_when_get_connection_fails(
         self, manager: RunManager
     ) -> None:
