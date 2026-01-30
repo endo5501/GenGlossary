@@ -27,7 +27,7 @@ closed_at: null
    - 場所: `executor.py`
    - 辞書内包表記を使用してより簡潔に書ける
 
-### Code Quality Issues
+### Code Quality Issues (Backend)
 
 3. **`conn` 未使用パラメータの対応**
    - 場所: `executor.py:_create_progress_callback`
@@ -44,6 +44,28 @@ closed_at: null
 5. **空の term_name メッセージフォーマット**
    - `term_name=""` の場合、`: 0%` というメッセージになる
    - フォールバックラベルを使用するか、`current_term` を省略することを検討
+
+### Code Quality Issues (Frontend)
+
+6. **グローバルログ状態のプロジェクト衝突**
+   - 場所: `logStore.ts:11`, `useLogStream.ts:41`
+   - runId のみでキーイングしているため、異なるプロジェクトで同じ runId があると衝突
+   - 対策: `(projectId, runId)` でキーイング
+
+7. **`run_id` の型不整合**
+   - バックエンド: None の可能性
+   - フロントエンド: 必須
+   - 対策: 型定義の統一
+
+8. **`runId = 0` の falsy 問題**
+   - 場所: `useLogStream.ts:46`
+   - `if (!runId)` で 0 が "no run" 扱い
+   - 対策: `runId === undefined` に変更
+
+9. **`onComplete` の stale closure**
+   - 場所: `useLogStream.ts:67`
+   - 依存配列に含まれていない
+   - 対策: 依存配列に追加
 
 ## Tasks
 
