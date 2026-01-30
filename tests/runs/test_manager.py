@@ -594,6 +594,86 @@ class TestRunManagerPerRunCancellation:
                 manager._thread.join(timeout=2)
 
 
+class TestRunManagerConnectionErrorHandling:
+    """Tests for connection error handling in _execute_run."""
+
+    def test_cancel_event_cleaned_up_when_get_connection_fails(
+        self, manager: RunManager
+    ) -> None:
+        """get_connectionが失敗してもcancel_eventがクリーンアップされる"""
+        with patch("genglossary.runs.manager.get_connection") as mock_get_connection:
+            # Mock get_connection to raise an error
+            mock_get_connection.side_effect = sqlite3.OperationalError(
+                "Unable to connect to database"
+            )
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for thread to complete (it should fail quickly)
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Cancel event should be cleaned up even though connection failed
+            assert run_id not in manager._cancel_events, (
+                "Cancel event should be cleaned up even when get_connection fails"
+            )
+
+    def test_completion_signal_sent_when_get_connection_fails(
+        self, manager: RunManager
+    ) -> None:
+        """get_connectionが失敗しても完了シグナルが送信される"""
+        with patch("genglossary.runs.manager.get_connection") as mock_get_connection:
+            # Mock get_connection to raise an error
+            mock_get_connection.side_effect = sqlite3.OperationalError(
+                "Unable to connect to database"
+            )
+
+            # Subscribe to logs before starting run
+            queue = manager.register_subscriber(run_id=1)
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that completion signal was sent
+            completion_signal_found = False
+            while not queue.empty():
+                log = queue.get_nowait()
+                if log is not None and log.get("complete"):
+                    completion_signal_found = True
+                    break
+
+            assert completion_signal_found, (
+                "Completion signal should be sent even when get_connection fails"
+            )
+
+    def test_status_updated_to_failed_when_get_connection_fails(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """get_connectionが失敗した場合、ステータスがfailedに更新される"""
+        with patch("genglossary.runs.manager.get_connection") as mock_get_connection:
+            # Mock get_connection to raise an error
+            mock_get_connection.side_effect = sqlite3.OperationalError(
+                "Unable to connect to database"
+            )
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that run status is failed
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "failed", (
+                f"Expected status 'failed' but got '{run['status']}'"
+            )
+            assert "Unable to connect" in (run["error_message"] or "")
+
+
 class TestRunManagerCancellationRaceCondition:
     """Tests for race condition between cancellation and completion."""
 

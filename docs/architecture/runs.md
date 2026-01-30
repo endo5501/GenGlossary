@@ -142,11 +142,13 @@ class RunManager:
         Note:
             このメソッドは別スレッドで実行されるため、
             独自のDB接続を作成します。
+            接続作成が失敗した場合もクリーンアップと完了シグナルを保証します。
         """
-        # スレッド内で新しい接続を作成
-        conn = get_connection(self.db_path)
-
+        conn = None
         try:
+            # スレッド内で新しい接続を作成
+            conn = get_connection(self.db_path)
+
             update_run_status(conn, run_id, "running", started_at=datetime.now())
 
             # Get cancel event (guaranteed to exist, created in start_run)
@@ -172,13 +174,21 @@ class RunManager:
                 complete_run_if_not_cancelled(conn, run_id)
 
         except Exception as e:
-            update_run_status(conn, run_id, "failed", finished_at=datetime.now(), error_message=str(e))
+            # 接続エラー時はフォールバック接続でステータス更新
+            if conn is not None:
+                update_run_status(conn, run_id, "failed", ...)
+            else:
+                with database_connection(self.db_path) as fallback_conn:
+                    update_run_status(fallback_conn, run_id, "failed", ...)
         finally:
             # Cleanup cancel event for this run
             with self._cancel_events_lock:
                 self._cancel_events.pop(run_id, None)
-            # スレッド終了時に接続を閉じる
-            conn.close()
+            # 完了シグナルを送信
+            self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
+            # スレッド終了時に接続を閉じる（接続があれば）
+            if conn is not None:
+                conn.close()
 ```
 
 ## SQLite スレッディング戦略
@@ -533,10 +543,11 @@ get_run_manager(db_path) → RunManager
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 
-**tests/runs/test_manager.py (28 tests)**
+**tests/runs/test_manager.py (31 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - per-run cancellation（各runに個別のキャンセルイベント）
 - cancellation race condition（キャンセルとステータス更新の競合防止）
+- connection error handling（接続エラー時のクリーンアップ）
 
 **tests/runs/test_executor.py (43 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -558,4 +569,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 106 tests** (Repository 25 + Manager 28 + Executor 43 + API 10)
+**合計: 109 tests** (Repository 25 + Manager 31 + Executor 43 + API 10)
