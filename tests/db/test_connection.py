@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 
 
 class TestGetConnection:
@@ -76,3 +76,67 @@ class TestGetConnection:
         cursor.execute("SELECT COUNT(*) FROM test")
         assert cursor.fetchone()[0] == 1
         conn.close()
+
+
+class TestTransaction:
+    """Test transaction context manager."""
+
+    def test_transaction_commits_on_success(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that transaction commits changes on successful completion."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+
+        with transaction(in_memory_db):
+            in_memory_db.execute("INSERT INTO test VALUES (1, 'test')")
+
+        # Verify data was committed
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test")
+        assert cursor.fetchone()[0] == 1
+
+    def test_transaction_rollback_on_exception(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that transaction rolls back changes when exception occurs."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+        in_memory_db.commit()
+
+        with pytest.raises(ValueError):
+            with transaction(in_memory_db):
+                in_memory_db.execute("INSERT INTO test VALUES (1, 'test')")
+                raise ValueError("Test error")
+
+        # Verify data was rolled back
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test")
+        assert cursor.fetchone()[0] == 0
+
+    def test_transaction_re_raises_exception(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that transaction re-raises the original exception."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER)")
+
+        with pytest.raises(RuntimeError, match="Original error"):
+            with transaction(in_memory_db):
+                raise RuntimeError("Original error")
+
+    def test_transaction_with_multiple_operations(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that transaction handles multiple operations atomically."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+        in_memory_db.commit()
+
+        with pytest.raises(ValueError):
+            with transaction(in_memory_db):
+                in_memory_db.execute("INSERT INTO test VALUES (1, 'first')")
+                in_memory_db.execute("INSERT INTO test VALUES (2, 'second')")
+                in_memory_db.execute("INSERT INTO test VALUES (3, 'third')")
+                raise ValueError("Error after multiple inserts")
+
+        # All operations should be rolled back
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test")
+        assert cursor.fetchone()[0] == 0

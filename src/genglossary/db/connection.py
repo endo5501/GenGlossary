@@ -37,6 +37,36 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 
 @contextmanager
+def transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """Context manager for database transactions.
+
+    Commits the transaction on successful completion, or rolls back
+    if an exception occurs.
+
+    Args:
+        conn: Database connection to manage transaction for.
+
+    Yields:
+        None
+
+    Raises:
+        Exception: Re-raises any exception that occurs within the transaction.
+
+    Example:
+        with transaction(conn):
+            create_document(conn, path, content, hash)
+            create_term(conn, "term1", "category")
+            # Both operations committed together, or rolled back on error
+    """
+    try:
+        yield
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+@contextmanager
 def database_connection(db_path: str) -> Iterator[sqlite3.Connection]:
     """Context manager for database connections.
 
