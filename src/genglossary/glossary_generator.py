@@ -119,6 +119,7 @@ Output:
                     "Failed to generate definition for '%s': %s",
                     term_name,
                     e,
+                    exc_info=True,
                 )
                 continue
             finally:
