@@ -277,7 +277,15 @@ class RunManager:
                     error_message=error_message,
                 )
             return True
-        except Exception:
+        except Exception as e:
+            self._broadcast_log(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "level": "warning",
+                    "message": f"Failed to update run status: {e}",
+                },
+            )
             return False
 
     def _update_failed_status(
@@ -304,6 +312,13 @@ class RunManager:
         try:
             with database_connection(self.db_path) as fallback_conn:
                 self._try_update_status(fallback_conn, run_id, error_message)
-        except Exception:
+        except Exception as e:
             # Both failed, status update is lost but error log will still be broadcast
-            pass
+            self._broadcast_log(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "level": "warning",
+                    "message": f"Failed to create fallback connection: {e}",
+                },
+            )

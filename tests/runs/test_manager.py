@@ -686,6 +686,45 @@ class TestRunManagerConnectionErrorHandling:
                     "Error log should be broadcast even when all status updates fail"
                 )
 
+    def test_warning_log_broadcast_when_status_update_fails(
+        self, manager: RunManager
+    ) -> None:
+        """ステータス更新が失敗した場合、warningログがブロードキャストされる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = RuntimeError("Test error")
+
+            # Make primary connection fail, fallback succeeds
+            with patch(
+                "genglossary.runs.manager.update_run_status"
+            ) as mock_update_run_status:
+                mock_update_run_status.side_effect = [
+                    None,  # running status
+                    sqlite3.OperationalError("database is locked"),  # first failed
+                    None,  # fallback succeeds
+                ]
+
+                # Subscribe to logs before starting run
+                queue = manager.register_subscriber(run_id=1)
+
+                run_id = manager.start_run(scope="full")
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Warning log should be broadcast for failed status update
+                warning_log_found = False
+                while not queue.empty():
+                    log = queue.get_nowait()
+                    if log is not None and log.get("level") == "warning":
+                        warning_log_found = True
+                        assert "Failed to update run status" in log.get("message", "")
+                        break
+
+                assert warning_log_found, (
+                    "Warning log should be broadcast when status update fails"
+                )
+
     def test_completion_signal_sent_even_when_fallback_connection_fails(
         self, manager: RunManager
     ) -> None:
