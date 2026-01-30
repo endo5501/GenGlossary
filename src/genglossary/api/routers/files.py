@@ -5,6 +5,7 @@ import sqlite3
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
 from genglossary.api.dependencies import get_project_db
+from genglossary.db.connection import transaction
 from genglossary.api.schemas.file_schemas import (
     FileCreateBulkRequest,
     FileCreateRequest,
@@ -127,9 +128,10 @@ async def create_file(
 
     # Create document
     try:
-        doc_id = create_document(
-            project_db, request.file_name, request.content, content_hash
-        )
+        with transaction(project_db):
+            doc_id = create_document(
+                project_db, request.file_name, request.content, content_hash
+            )
     except sqlite3.IntegrityError:
         raise HTTPException(
             status_code=409, detail=f"File already exists: {request.file_name}"
@@ -188,12 +190,13 @@ async def create_files_bulk(
 
     # Create all documents
     created_ids = []
-    for file_req in request.files:
-        content_hash = compute_content_hash(file_req.content)
-        doc_id = create_document(
-            project_db, file_req.file_name, file_req.content, content_hash
-        )
-        created_ids.append(doc_id)
+    with transaction(project_db):
+        for file_req in request.files:
+            content_hash = compute_content_hash(file_req.content)
+            doc_id = create_document(
+                project_db, file_req.file_name, file_req.content, content_hash
+            )
+            created_ids.append(doc_id)
 
     # Return created documents
     responses = []
@@ -226,4 +229,5 @@ async def delete_file(
     if row is None:
         raise HTTPException(status_code=404, detail=f"File {file_id} not found")
 
-    delete_document(project_db, file_id)
+    with transaction(project_db):
+        delete_document(project_db, file_id)

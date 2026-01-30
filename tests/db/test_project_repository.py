@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from genglossary.db.connection import transaction
 from genglossary.db.project_repository import (
     clone_project,
     create_project,
@@ -37,12 +38,13 @@ class TestCreateProject:
         self, registry_conn: sqlite3.Connection, tmp_path: Path
     ) -> None:
         """プロジェクト作成は生成されたIDを返す"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
         assert project_id > 0
 
@@ -50,16 +52,17 @@ class TestCreateProject:
         self, registry_conn: sqlite3.Connection, tmp_path: Path
     ) -> None:
         """全フィールドを指定してプロジェクトを作成できる"""
-        project_id = create_project(
-            registry_conn,
-            name="my-novel",
-            doc_root=str(tmp_path / "novels" / "mynovel"),
-            db_path=str(tmp_path / "novels" / "mynovel" / "project.db"),
-            llm_provider="openai",
-            llm_model="gpt-4",
-            llm_base_url="https://api.openai.com/v1",
-            status=ProjectStatus.COMPLETED,
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="my-novel",
+                doc_root=str(tmp_path / "novels" / "mynovel"),
+                db_path=str(tmp_path / "novels" / "mynovel" / "project.db"),
+                llm_provider="openai",
+                llm_model="gpt-4",
+                llm_base_url="https://api.openai.com/v1",
+                status=ProjectStatus.COMPLETED,
+            )
 
         project = get_project(registry_conn, project_id)
         assert project is not None
@@ -73,12 +76,13 @@ class TestCreateProject:
         self, registry_conn: sqlite3.Connection, tmp_path: Path
     ) -> None:
         """llm_base_urlを指定しない場合は空文字列がデフォルト"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
         project = get_project(registry_conn, project_id)
         assert project is not None
@@ -88,12 +92,13 @@ class TestCreateProject:
         self, registry_conn: sqlite3.Connection, tmp_path: Path
     ) -> None:
         """プロジェクト作成時にタイムスタンプが設定される"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
         project = get_project(registry_conn, project_id)
         assert project is not None
@@ -106,39 +111,43 @@ class TestCreateProject:
         self, registry_conn: sqlite3.Connection, tmp_path: Path
     ) -> None:
         """重複する名前でプロジェクトを作成しようとすると例外が発生する"""
-        create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
-
-        with pytest.raises(sqlite3.IntegrityError):
+        with transaction(registry_conn):
             create_project(
                 registry_conn,
                 name="test-project",
-                doc_root=str(tmp_path / "docs2"),
-                db_path=str(tmp_path / "project2.db"),
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
             )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            with transaction(registry_conn):
+                create_project(
+                    registry_conn,
+                    name="test-project",
+                    doc_root=str(tmp_path / "docs2"),
+                    db_path=str(tmp_path / "project2.db"),
+                )
 
     def test_create_duplicate_db_path_raises(
         self, registry_conn: sqlite3.Connection, tmp_path: Path
     ) -> None:
         """重複するdb_pathでプロジェクトを作成しようとすると例外が発生する"""
-        create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
-
-        with pytest.raises(sqlite3.IntegrityError):
+        with transaction(registry_conn):
             create_project(
                 registry_conn,
-                name="test-project-2",
-                doc_root=str(tmp_path / "docs2"),
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
                 db_path=str(tmp_path / "project.db"),
             )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            with transaction(registry_conn):
+                create_project(
+                    registry_conn,
+                    name="test-project-2",
+                    doc_root=str(tmp_path / "docs2"),
+                    db_path=str(tmp_path / "project.db"),
+                )
 
     def test_create_project_db_init_failure_does_not_pollute_registry(
         self, registry_conn: sqlite3.Connection, tmp_path: Path
@@ -150,12 +159,13 @@ class TestCreateProject:
 
             # Attempt to create project should fail
             with pytest.raises(RuntimeError, match="DB initialization failed"):
-                create_project(
-                    registry_conn,
-                    name="test-project",
-                    doc_root=str(tmp_path / "docs"),
-                    db_path=str(tmp_path / "project.db"),
-                )
+                with transaction(registry_conn):
+                    create_project(
+                        registry_conn,
+                        name="test-project",
+                        doc_root=str(tmp_path / "docs"),
+                        db_path=str(tmp_path / "project.db"),
+                    )
 
         # Registry should not have any projects
         projects = list_projects(registry_conn)
@@ -167,12 +177,13 @@ class TestGetProject:
 
     def test_get_project_by_id(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """IDでプロジェクトを取得できる"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
         project = get_project(registry_conn, project_id)
         assert project is not None
@@ -192,12 +203,13 @@ class TestGetProjectByName:
 
     def test_get_by_name(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """名前でプロジェクトを取得できる"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
         project = get_project_by_name(registry_conn, "test-project")
         assert project is not None
@@ -220,24 +232,25 @@ class TestListProjects:
 
     def test_list_multiple(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """複数のプロジェクトをリストできる"""
-        id1 = create_project(
-            registry_conn,
-            "project-1",
-            str(tmp_path / "docs1"),
-            str(tmp_path / "project1.db"),
-        )
-        id2 = create_project(
-            registry_conn,
-            "project-2",
-            str(tmp_path / "docs2"),
-            str(tmp_path / "project2.db"),
-        )
-        id3 = create_project(
-            registry_conn,
-            "project-3",
-            str(tmp_path / "docs3"),
-            str(tmp_path / "project3.db"),
-        )
+        with transaction(registry_conn):
+            id1 = create_project(
+                registry_conn,
+                "project-1",
+                str(tmp_path / "docs1"),
+                str(tmp_path / "project1.db"),
+            )
+            id2 = create_project(
+                registry_conn,
+                "project-2",
+                str(tmp_path / "docs2"),
+                str(tmp_path / "project2.db"),
+            )
+            id3 = create_project(
+                registry_conn,
+                "project-3",
+                str(tmp_path / "docs3"),
+                str(tmp_path / "project3.db"),
+            )
 
         projects = list_projects(registry_conn)
         assert len(projects) == 3
@@ -254,26 +267,29 @@ class TestListProjects:
         """プロジェクトはcreated_atの降順でリストされる"""
         import time
 
-        create_project(
-            registry_conn,
-            "project-old",
-            str(tmp_path / "docs1"),
-            str(tmp_path / "project1.db"),
-        )
+        with transaction(registry_conn):
+            create_project(
+                registry_conn,
+                "project-old",
+                str(tmp_path / "docs1"),
+                str(tmp_path / "project1.db"),
+            )
         time.sleep(1.1)  # SQLite datetime('now') is second-precision
-        create_project(
-            registry_conn,
-            "project-mid",
-            str(tmp_path / "docs2"),
-            str(tmp_path / "project2.db"),
-        )
+        with transaction(registry_conn):
+            create_project(
+                registry_conn,
+                "project-mid",
+                str(tmp_path / "docs2"),
+                str(tmp_path / "project2.db"),
+            )
         time.sleep(1.1)
-        create_project(
-            registry_conn,
-            "project-new",
-            str(tmp_path / "docs3"),
-            str(tmp_path / "project3.db"),
-        )
+        with transaction(registry_conn):
+            create_project(
+                registry_conn,
+                "project-new",
+                str(tmp_path / "docs3"),
+                str(tmp_path / "project3.db"),
+            )
 
         projects = list_projects(registry_conn)
         # Most recent first
@@ -287,19 +303,21 @@ class TestUpdateProject:
 
     def test_update_llm_settings(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """LLM設定を更新できる"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
-        update_project(
-            registry_conn,
-            project_id,
-            llm_provider="openai",
-            llm_model="gpt-4",
-        )
+        with transaction(registry_conn):
+            update_project(
+                registry_conn,
+                project_id,
+                llm_provider="openai",
+                llm_model="gpt-4",
+            )
 
         project = get_project(registry_conn, project_id)
         assert project is not None
@@ -308,18 +326,20 @@ class TestUpdateProject:
 
     def test_update_llm_base_url(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """llm_base_urlを更新できる"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
-        update_project(
-            registry_conn,
-            project_id,
-            llm_base_url="https://api.openai.com/v1",
-        )
+        with transaction(registry_conn):
+            update_project(
+                registry_conn,
+                project_id,
+                llm_base_url="https://api.openai.com/v1",
+            )
 
         project = get_project(registry_conn, project_id)
         assert project is not None
@@ -327,14 +347,16 @@ class TestUpdateProject:
 
     def test_update_status(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """ステータスを更新できる"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
-        update_project(registry_conn, project_id, status=ProjectStatus.RUNNING)
+        with transaction(registry_conn):
+            update_project(registry_conn, project_id, status=ProjectStatus.RUNNING)
 
         project = get_project(registry_conn, project_id)
         assert project is not None
@@ -342,15 +364,17 @@ class TestUpdateProject:
 
     def test_update_last_run_at(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """last_run_atを更新できる"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
         run_time = datetime.now()
-        update_project(registry_conn, project_id, last_run_at=run_time)
+        with transaction(registry_conn):
+            update_project(registry_conn, project_id, last_run_at=run_time)
 
         project = get_project(registry_conn, project_id)
         assert project is not None
@@ -363,12 +387,13 @@ class TestUpdateProject:
         """更新時にupdated_atタイムスタンプが更新される"""
         import time
 
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
         original_project = get_project(registry_conn, project_id)
         assert original_project is not None
@@ -377,7 +402,8 @@ class TestUpdateProject:
         # Delay to ensure timestamp difference (SQLite datetime is second-precision)
         time.sleep(1.1)
 
-        update_project(registry_conn, project_id, llm_provider="openai")
+        with transaction(registry_conn):
+            update_project(registry_conn, project_id, llm_provider="openai")
 
         updated_project = get_project(registry_conn, project_id)
         assert updated_project is not None
@@ -388,7 +414,8 @@ class TestUpdateProject:
     ) -> None:
         """存在しないプロジェクトを更新しようとすると例外が発生する"""
         with pytest.raises(ValueError, match="Project with id 999 not found"):
-            update_project(registry_conn, 999, llm_provider="openai")
+            with transaction(registry_conn):
+                update_project(registry_conn, 999, llm_provider="openai")
 
 
 class TestDeleteProject:
@@ -396,14 +423,16 @@ class TestDeleteProject:
 
     def test_delete_removes_project(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """プロジェクトを削除できる"""
-        project_id = create_project(
-            registry_conn,
-            name="test-project",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "project.db"),
-        )
+        with transaction(registry_conn):
+            project_id = create_project(
+                registry_conn,
+                name="test-project",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "project.db"),
+            )
 
-        delete_project(registry_conn, project_id)
+        with transaction(registry_conn):
+            delete_project(registry_conn, project_id)
 
         project = get_project(registry_conn, project_id)
         assert project is None
@@ -412,7 +441,8 @@ class TestDeleteProject:
         self, registry_conn: sqlite3.Connection
     ) -> None:
         """存在しないプロジェクトを削除しようとしても失敗しない"""
-        delete_project(registry_conn, 999)  # Should not raise
+        with transaction(registry_conn):
+            delete_project(registry_conn, 999)  # Should not raise
 
 
 class TestCloneProject:
@@ -420,21 +450,23 @@ class TestCloneProject:
 
     def test_clone_creates_copy(self, registry_conn: sqlite3.Connection, tmp_path: Path) -> None:
         """プロジェクトを複製できる"""
-        original_id = create_project(
-            registry_conn,
-            name="original",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "original.db"),
-            llm_provider="openai",
-            llm_model="gpt-4",
-        )
+        with transaction(registry_conn):
+            original_id = create_project(
+                registry_conn,
+                name="original",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "original.db"),
+                llm_provider="openai",
+                llm_model="gpt-4",
+            )
 
-        clone_id = clone_project(
-            registry_conn,
-            original_id,
-            new_name="clone",
-            new_db_path=str(tmp_path / "clone.db"),
-        )
+        with transaction(registry_conn):
+            clone_id = clone_project(
+                registry_conn,
+                original_id,
+                new_name="clone",
+                new_db_path=str(tmp_path / "clone.db"),
+            )
 
         assert clone_id != original_id
 
@@ -459,27 +491,30 @@ class TestCloneProject:
         self, registry_conn: sqlite3.Connection, tmp_path: Path
     ) -> None:
         """複製時にstatusとlast_run_atがリセットされる"""
-        original_id = create_project(
-            registry_conn,
-            name="original",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "original.db"),
-        )
+        with transaction(registry_conn):
+            original_id = create_project(
+                registry_conn,
+                name="original",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "original.db"),
+            )
 
         # Update original to completed status with last_run_at
-        update_project(
-            registry_conn,
-            original_id,
-            status=ProjectStatus.COMPLETED,
-            last_run_at=datetime.now(),
-        )
+        with transaction(registry_conn):
+            update_project(
+                registry_conn,
+                original_id,
+                status=ProjectStatus.COMPLETED,
+                last_run_at=datetime.now(),
+            )
 
-        clone_id = clone_project(
-            registry_conn,
-            original_id,
-            new_name="clone",
-            new_db_path=str(tmp_path / "clone.db"),
-        )
+        with transaction(registry_conn):
+            clone_id = clone_project(
+                registry_conn,
+                original_id,
+                new_name="clone",
+                new_db_path=str(tmp_path / "clone.db"),
+            )
 
         clone = get_project(registry_conn, clone_id)
         assert clone is not None
@@ -491,37 +526,40 @@ class TestCloneProject:
     ) -> None:
         """存在しないプロジェクトを複製しようとすると例外が発生する"""
         with pytest.raises(ValueError, match="Project with id 999 not found"):
-            clone_project(
-                registry_conn,
-                999,
-                new_name="clone",
-                new_db_path=str(tmp_path / "clone.db"),
-            )
+            with transaction(registry_conn):
+                clone_project(
+                    registry_conn,
+                    999,
+                    new_name="clone",
+                    new_db_path=str(tmp_path / "clone.db"),
+                )
 
     def test_clone_with_duplicate_name_raises(
         self, registry_conn: sqlite3.Connection, tmp_path: Path
     ) -> None:
         """既存の名前で複製しようとすると例外が発生する"""
-        original_id = create_project(
-            registry_conn,
-            name="original",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "original.db"),
-        )
-        create_project(
-            registry_conn,
-            name="existing",
-            doc_root=str(tmp_path / "docs2"),
-            db_path=str(tmp_path / "existing.db"),
-        )
+        with transaction(registry_conn):
+            original_id = create_project(
+                registry_conn,
+                name="original",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "original.db"),
+            )
+            create_project(
+                registry_conn,
+                name="existing",
+                doc_root=str(tmp_path / "docs2"),
+                db_path=str(tmp_path / "existing.db"),
+            )
 
         with pytest.raises(sqlite3.IntegrityError):
-            clone_project(
-                registry_conn,
-                original_id,
-                new_name="existing",
-                new_db_path=str(tmp_path / "clone.db"),
-            )
+            with transaction(registry_conn):
+                clone_project(
+                    registry_conn,
+                    original_id,
+                    new_name="existing",
+                    new_db_path=str(tmp_path / "clone.db"),
+                )
 
     def test_clone_copies_database_content(
         self, registry_conn: sqlite3.Connection, tmp_path: Path
@@ -530,12 +568,13 @@ class TestCloneProject:
         from genglossary.db.connection import get_connection
 
         # Create original project
-        original_id = create_project(
-            registry_conn,
-            name="original",
-            doc_root=str(tmp_path / "docs"),
-            db_path=str(tmp_path / "original.db"),
-        )
+        with transaction(registry_conn):
+            original_id = create_project(
+                registry_conn,
+                name="original",
+                doc_root=str(tmp_path / "docs"),
+                db_path=str(tmp_path / "original.db"),
+            )
 
         # Insert test data into source DB (v4: file_name and content)
         source_conn = get_connection(str(tmp_path / "original.db"))
@@ -547,12 +586,13 @@ class TestCloneProject:
         source_conn.close()
 
         # Clone project
-        clone_id = clone_project(
-            registry_conn,
-            original_id,
-            new_name="clone",
-            new_db_path=str(tmp_path / "clone.db"),
-        )
+        with transaction(registry_conn):
+            clone_id = clone_project(
+                registry_conn,
+                original_id,
+                new_name="clone",
+                new_db_path=str(tmp_path / "clone.db"),
+            )
 
         # Verify cloned DB has the same data
         clone_conn = get_connection(str(tmp_path / "clone.db"))

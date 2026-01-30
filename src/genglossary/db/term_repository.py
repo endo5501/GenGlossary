@@ -30,7 +30,6 @@ def create_term(
         """,
         (term_text, category),
     )
-    conn.commit()
     return cast(int, cursor.lastrowid)
 
 
@@ -91,7 +90,6 @@ def update_term(
     )
     if cursor.rowcount == 0:
         raise ValueError(f"Term with id {term_id} not found")
-    conn.commit()
 
 
 def delete_term(conn: sqlite3.Connection, term_id: int) -> None:
@@ -103,7 +101,6 @@ def delete_term(conn: sqlite3.Connection, term_id: int) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM terms_extracted WHERE id = ?", (term_id,))
-    conn.commit()
 
 
 def delete_all_terms(conn: sqlite3.Connection) -> None:
@@ -114,4 +111,3 @@ def delete_all_terms(conn: sqlite3.Connection) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM terms_extracted")
-    conn.commit()

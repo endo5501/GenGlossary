@@ -6,6 +6,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from genglossary.cli_project import project
+from genglossary.db.connection import transaction
 from genglossary.db.project_repository import create_project, get_project_by_name
 from genglossary.db.registry_connection import get_registry_connection
 from genglossary.db.registry_schema import initialize_registry
@@ -214,20 +215,21 @@ class TestProjectList:
         initialize_registry(conn)
 
         # Create projects
-        create_project(
-            conn,
-            "project-1",
-            str(doc_root),
-            str(tmp_path / "project1.db"),
-        )
-        create_project(
-            conn,
-            "project-2",
-            str(doc_root),
-            str(tmp_path / "project2.db"),
-            llm_provider="openai",
-            llm_model="gpt-4",
-        )
+        with transaction(conn):
+            create_project(
+                conn,
+                "project-1",
+                str(doc_root),
+                str(tmp_path / "project1.db"),
+            )
+            create_project(
+                conn,
+                "project-2",
+                str(doc_root),
+                str(tmp_path / "project2.db"),
+                llm_provider="openai",
+                llm_model="gpt-4",
+            )
         conn.close()
 
         result = runner.invoke(project, ["list", "--registry", str(registry_path)])
@@ -248,15 +250,16 @@ class TestProjectList:
         initialize_registry(conn)
 
         # Create project with details
-        create_project(
-            conn,
-            "my-novel",
-            str(doc_root),
-            str(tmp_path / "mynovel.db"),
-            llm_provider="openai",
-            llm_model="gpt-4",
-            status=ProjectStatus.COMPLETED,
-        )
+        with transaction(conn):
+            create_project(
+                conn,
+                "my-novel",
+                str(doc_root),
+                str(tmp_path / "mynovel.db"),
+                llm_provider="openai",
+                llm_model="gpt-4",
+                status=ProjectStatus.COMPLETED,
+            )
         conn.close()
 
         result = runner.invoke(project, ["list", "--registry", str(registry_path)])
@@ -280,9 +283,10 @@ class TestProjectDelete:
         # Initialize and create project
         conn = get_registry_connection(str(registry_path))
         initialize_registry(conn)
-        create_project(
-            conn, "test-project", str(doc_root), str(tmp_path / "test.db")
-        )
+        with transaction(conn):
+            create_project(
+                conn, "test-project", str(doc_root), str(tmp_path / "test.db")
+            )
         conn.close()
 
         # Delete project
@@ -331,14 +335,15 @@ class TestProjectClone:
         # Initialize and create project
         conn = get_registry_connection(str(registry_path))
         initialize_registry(conn)
-        create_project(
-            conn,
-            "original",
-            str(doc_root),
-            str(tmp_path / "original.db"),
-            llm_provider="openai",
-            llm_model="gpt-4",
-        )
+        with transaction(conn):
+            create_project(
+                conn,
+                "original",
+                str(doc_root),
+                str(tmp_path / "original.db"),
+                llm_provider="openai",
+                llm_model="gpt-4",
+            )
         conn.close()
 
         # Clone project

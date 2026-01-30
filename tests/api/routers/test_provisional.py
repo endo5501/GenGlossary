@@ -7,7 +7,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.project_repository import create_project
 from genglossary.db.provisional_repository import create_provisional_term
 from genglossary.db.registry_schema import initialize_registry
@@ -34,13 +34,14 @@ def test_project_setup(tmp_path: Path, monkeypatch):
     initialize_registry(registry_conn)
 
     # Create project with LLM provider
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=str(doc_root),
-        db_path=str(project_db_path),
-        llm_provider="ollama",
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=str(doc_root),
+            db_path=str(project_db_path),
+            llm_provider="ollama",
+        )
 
     registry_conn.close()
 
@@ -73,12 +74,13 @@ def test_list_provisional_returns_all_terms(test_project_setup, client: TestClie
     occ1 = TermOccurrence(document_path="doc1.txt", line_number=1, context="context1")
     occ2 = TermOccurrence(document_path="doc2.txt", line_number=5, context="context2")
 
-    term1_id = create_provisional_term(
-        conn, "量子コンピュータ", "量子力学を利用したコンピュータ", 0.9, [occ1]
-    )
-    term2_id = create_provisional_term(
-        conn, "量子ビット", "量子情報の基本単位", 0.85, [occ2]
-    )
+    with transaction(conn):
+        term1_id = create_provisional_term(
+            conn, "量子コンピュータ", "量子力学を利用したコンピュータ", 0.9, [occ1]
+        )
+        term2_id = create_provisional_term(
+            conn, "量子ビット", "量子情報の基本単位", 0.85, [occ2]
+        )
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/provisional")
@@ -102,9 +104,10 @@ def test_get_provisional_by_id_returns_term(test_project_setup, client: TestClie
 
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=3, context="context")
-    term_id = create_provisional_term(
-        conn, "量子もつれ", "量子力学の現象", 0.95, [occ]
-    )
+    with transaction(conn):
+        term_id = create_provisional_term(
+            conn, "量子もつれ", "量子力学の現象", 0.95, [occ]
+        )
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/provisional/{term_id}")
@@ -138,7 +141,8 @@ def test_update_provisional_modifies_term(test_project_setup, client: TestClient
 
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
     conn.close()
 
     payload = {"definition": "新定義", "confidence": 0.95}
@@ -178,7 +182,8 @@ def test_regenerate_provisional_updates_definition(
 
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
     conn.close()
 
     # Mock GlossaryGenerator
@@ -228,7 +233,8 @@ def test_regenerate_provisional_changes_definition_with_mock(
     # Setup provisional term
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
     conn.close()
 
     # Mock GlossaryGenerator
@@ -259,7 +265,8 @@ def test_regenerate_provisional_updates_confidence_with_mock(
     # Setup provisional term
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
     conn.close()
 
     # Mock GlossaryGenerator
@@ -288,7 +295,8 @@ def test_regenerate_provisional_persists_to_db(
     # Setup provisional term
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "旧定義", 0.5, [occ])
     conn.close()
 
     # Mock GlossaryGenerator
@@ -319,7 +327,8 @@ def test_regenerate_provisional_llm_timeout_returns_503(
     # Setup provisional term
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
     conn.close()
 
     # Mock GlossaryGenerator to raise TimeoutException
@@ -346,7 +355,8 @@ def test_regenerate_provisional_llm_unavailable_returns_503(
     # Setup provisional term
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
     conn.close()
 
     # Mock GlossaryGenerator to raise HTTPError
@@ -373,7 +383,8 @@ def test_regenerate_provisional_invalid_doc_root_returns_400(
     # Setup provisional term
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
     conn.close()
 
     # Mock DocumentLoader to raise FileNotFoundError
@@ -399,7 +410,8 @@ def test_regenerate_provisional_invalid_llm_provider_returns_400(
     # Setup provisional term
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
-    term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "用語", "定義", 0.5, [occ])
     conn.close()
 
     # Mock create_llm_client to raise ValueError

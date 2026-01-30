@@ -22,6 +22,7 @@
 ```python
 import sqlite3
 from contextlib import contextmanager
+from typing import Iterator
 
 def get_connection(db_path: str) -> sqlite3.Connection:
     """データベース接続を取得"""
@@ -38,6 +39,26 @@ def database_connection(db_path: str):
         yield conn
     finally:
         conn.close()
+
+@contextmanager
+def transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """トランザクション管理のコンテキストマネージャー
+
+    正常終了時にcommit、例外発生時にrollbackを行います。
+
+    Usage:
+        with database_connection(db_path) as conn:
+            with transaction(conn):
+                create_term(conn, "term1", ...)
+                create_term(conn, "term2", ...)
+                # 両方の操作が成功した場合のみcommit
+    """
+    try:
+        yield
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 ```
 
 ## schema.py
@@ -507,9 +528,25 @@ def clone_project(
 - 接続管理はrepositoryの外で行う（呼び出し元の責任）
 
 ### トランザクション管理
-- 各repository関数は`conn.commit()`を実行
-- エラー時のロールバックは呼び出し元で処理
-- 複数のrepository操作をまとめる場合はCLI層でトランザクション管理
+- **Repository関数はcommit/rollbackを行わない**（呼び出し元の責任）
+- 書き込み操作には`transaction()`コンテキストマネージャを使用
+- 複数の操作を1つのトランザクションにまとめて原子性を保証
+
+```python
+# 正しいパターン: 呼び出し元がトランザクションを管理
+from genglossary.db.connection import transaction
+
+with database_connection(db_path) as conn:
+    with transaction(conn):
+        create_term(conn, "term1", ...)
+        create_term(conn, "term2", ...)
+        # 両方成功 → commit、どちらか失敗 → rollback
+
+# アンチパターン: repository関数内でのcommit（廃止）
+# def create_term(conn, ...):
+#     conn.execute(...)
+#     conn.commit()  # これはやらない
+```
 
 ### 型安全性
 - `sqlite3.Row`を使用してカラム名でアクセス

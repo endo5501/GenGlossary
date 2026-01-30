@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.document_repository import create_document
 from genglossary.db.project_repository import create_project
 from genglossary.db.registry_schema import initialize_registry
@@ -27,12 +27,13 @@ def test_project_setup(tmp_path: Path, monkeypatch):
     initialize_registry(registry_conn)
 
     # Create project
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=str(doc_root),
-        db_path=str(project_db_path),
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=str(doc_root),
+            db_path=str(project_db_path),
+        )
 
     registry_conn.close()
 
@@ -62,8 +63,9 @@ def test_list_files_returns_all_documents(test_project_setup, client: TestClient
 
     # Add some documents
     conn = get_connection(project_db_path)
-    doc1_id = create_document(conn, "doc1.txt", "Content 1", "hash1")
-    doc2_id = create_document(conn, "doc2.md", "Content 2", "hash2")
+    with transaction(conn):
+        doc1_id = create_document(conn, "doc1.txt", "Content 1", "hash1")
+        doc2_id = create_document(conn, "doc2.md", "Content 2", "hash2")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/files")
@@ -84,7 +86,8 @@ def test_get_file_by_id_returns_document(test_project_setup, client: TestClient)
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
-    doc_id = create_document(conn, "test.txt", "Test content", "test_hash")
+    with transaction(conn):
+        doc_id = create_document(conn, "test.txt", "Test content", "test_hash")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/files/{doc_id}")
@@ -236,7 +239,8 @@ def test_delete_file_removes_document(test_project_setup, client: TestClient):
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
-    doc_id = create_document(conn, "delete_me.txt", "To be deleted", "hash")
+    with transaction(conn):
+        doc_id = create_document(conn, "delete_me.txt", "To be deleted", "hash")
     conn.close()
 
     response = client.delete(f"/api/projects/{project_id}/files/{doc_id}")

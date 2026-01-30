@@ -28,7 +28,6 @@ def create_run(
         """,
         (scope, triggered_by),
     )
-    conn.commit()
 
     run_id = cursor.lastrowid
     if run_id is None:
@@ -125,7 +124,6 @@ def update_run_status(
 
     cursor = conn.cursor()
     cursor.execute(query, values)
-    conn.commit()
 
 
 def update_run_progress(
@@ -155,7 +153,6 @@ def update_run_progress(
         """,
         (current, total, current_step, run_id),
     )
-    conn.commit()
 
 
 def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
@@ -177,4 +174,3 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
         """,
         (run_id,),
     )
-    conn.commit()

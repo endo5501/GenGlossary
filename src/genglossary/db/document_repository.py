@@ -29,7 +29,6 @@ def create_document(
         """,
         (file_name, content, content_hash),
     )
-    conn.commit()
     # lastrowid is guaranteed to be non-None after INSERT
     return cast(int, cursor.lastrowid)
 
@@ -92,7 +91,6 @@ def delete_document(conn: sqlite3.Connection, document_id: int) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))
-    conn.commit()
 
 
 def delete_all_documents(conn: sqlite3.Connection) -> None:
@@ -103,4 +101,3 @@ def delete_all_documents(conn: sqlite3.Connection) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM documents")
-    conn.commit()

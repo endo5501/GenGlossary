@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.project_repository import create_project
 from genglossary.db.refined_repository import create_refined_term
 from genglossary.db.registry_schema import initialize_registry
@@ -28,12 +28,13 @@ def test_project_setup(tmp_path: Path, monkeypatch):
     initialize_registry(registry_conn)
 
     # Create project
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=str(doc_root),
-        db_path=str(project_db_path),
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=str(doc_root),
+            db_path=str(project_db_path),
+        )
 
     registry_conn.close()
 
@@ -65,12 +66,13 @@ def test_list_refined_returns_all_terms(test_project_setup, client: TestClient):
     occ1 = TermOccurrence(document_path="doc1.txt", line_number=1, context="context1")
     occ2 = TermOccurrence(document_path="doc2.txt", line_number=5, context="context2")
 
-    term1_id = create_refined_term(
-        conn, "量子コンピュータ", "量子力学を利用したコンピュータ", 0.95, [occ1]
-    )
-    term2_id = create_refined_term(
-        conn, "量子ビット", "量子情報の基本単位", 0.92, [occ2]
-    )
+    with transaction(conn):
+        term1_id = create_refined_term(
+            conn, "量子コンピュータ", "量子力学を利用したコンピュータ", 0.95, [occ1]
+        )
+        term2_id = create_refined_term(
+            conn, "量子ビット", "量子情報の基本単位", 0.92, [occ2]
+        )
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/refined")
@@ -93,7 +95,8 @@ def test_get_refined_by_id_returns_term(test_project_setup, client: TestClient):
 
     conn = get_connection(project_db_path)
     occ = TermOccurrence(document_path="doc.txt", line_number=3, context="context")
-    term_id = create_refined_term(conn, "量子もつれ", "量子力学の現象", 0.98, [occ])
+    with transaction(conn):
+        term_id = create_refined_term(conn, "量子もつれ", "量子力学の現象", 0.98, [occ])
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/refined/{term_id}")
@@ -129,7 +132,8 @@ def test_export_markdown_returns_markdown_content(
     occ1 = TermOccurrence(
         document_path="doc1.txt", line_number=1, context="量子コンピュータは..."
     )
-    create_refined_term(conn, "量子コンピュータ", "量子力学を利用したコンピュータ", 0.95, [occ1])
+    with transaction(conn):
+        create_refined_term(conn, "量子コンピュータ", "量子力学を利用したコンピュータ", 0.95, [occ1])
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/refined/export-md")

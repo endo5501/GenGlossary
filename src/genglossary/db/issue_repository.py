@@ -34,7 +34,6 @@ def create_issue(
             description,
         ),
     )
-    conn.commit()
     return cast(int, cursor.lastrowid)
 
 
@@ -75,4 +74,3 @@ def delete_all_issues(conn: sqlite3.Connection) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM glossary_issues")
-    conn.commit()

@@ -15,7 +15,7 @@ from genglossary.api.schemas.project_schemas import (
     ProjectStatistics,
     ProjectUpdateRequest,
 )
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.project_repository import (
     clone_project,
     create_project,
@@ -218,15 +218,16 @@ def _create_project_with_cleanup(
         HTTPException: 409 if project name already exists.
     """
     try:
-        return create_project(
-            registry_conn,
-            name=request.name,
-            doc_root=doc_root,
-            db_path=db_path,
-            llm_provider=request.llm_provider,
-            llm_model=request.llm_model,
-            llm_base_url=request.llm_base_url,
-        )
+        with transaction(registry_conn):
+            return create_project(
+                registry_conn,
+                name=request.name,
+                doc_root=doc_root,
+                db_path=db_path,
+                llm_provider=request.llm_provider,
+                llm_model=request.llm_model,
+                llm_base_url=request.llm_base_url,
+            )
     except sqlite3.IntegrityError:
         _cleanup_db_file(db_path)
         if doc_root_auto_generated:
@@ -285,12 +286,13 @@ def _clone_project_with_cleanup(
         HTTPException: 404 if source project not found, 409 if name exists.
     """
     try:
-        return clone_project(
-            registry_conn,
-            source_id=project_id,
-            new_name=new_name,
-            new_db_path=new_db_path,
-        )
+        with transaction(registry_conn):
+            return clone_project(
+                registry_conn,
+                source_id=project_id,
+                new_name=new_name,
+                new_db_path=new_db_path,
+            )
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
     except sqlite3.IntegrityError:
@@ -348,7 +350,8 @@ async def delete_existing_project(
         HTTPException: 404 if project not found.
     """
     _get_project_or_404(registry_conn, project_id)
-    delete_project(registry_conn, project_id)
+    with transaction(registry_conn):
+        delete_project(registry_conn, project_id)
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
@@ -374,14 +377,15 @@ async def update_existing_project(
     _get_project_or_404(registry_conn, project_id)
 
     try:
-        update_project(
-            registry_conn,
-            project_id,
-            name=request.name,
-            llm_provider=request.llm_provider,
-            llm_model=request.llm_model,
-            llm_base_url=request.llm_base_url,
-        )
+        with transaction(registry_conn):
+            update_project(
+                registry_conn,
+                project_id,
+                name=request.name,
+                llm_provider=request.llm_provider,
+                llm_model=request.llm_model,
+                llm_base_url=request.llm_base_url,
+            )
     except sqlite3.IntegrityError:
         raise HTTPException(
             status_code=409, detail=f"Project name already exists: {request.name}"

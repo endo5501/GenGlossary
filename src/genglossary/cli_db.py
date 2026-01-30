@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from genglossary.llm.factory import create_llm_client
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.document_repository import list_all_documents
 from genglossary.db.issue_repository import delete_all_issues, list_all_issues, create_issue
 from genglossary.db.models import GlossaryTermRow
@@ -217,9 +217,10 @@ def _save_glossary_terms(
     Returns:
         Number of terms saved.
     """
-    delete_func(conn)
-    for term in glossary.terms.values():
-        create_func(conn, term.name, term.definition, term.confidence, term.occurrences)
+    with transaction(conn):
+        delete_func(conn)
+        for term in glossary.terms.values():
+            create_func(conn, term.name, term.definition, term.confidence, term.occurrences)
     return len(glossary.terms)
 
 
@@ -236,9 +237,10 @@ def _save_issues(
     Returns:
         Number of issues saved.
     """
-    delete_all_issues(conn)
-    for issue in issues:
-        create_issue(conn, issue.term_name, issue.issue_type, issue.description)
+    with transaction(conn):
+        delete_all_issues(conn)
+        for issue in issues:
+            create_issue(conn, issue.term_name, issue.issue_type, issue.description)
     return len(issues)
 
 
@@ -470,7 +472,8 @@ def terms_update(term_id: int, text: str, category: str | None, db_path: str) ->
     """
     try:
         conn = get_connection(db_path)
-        update_term(conn, term_id, text, category)
+        with transaction(conn):
+            update_term(conn, term_id, text, category)
         conn.close()
 
         console.print(f"[green]✓[/green] Term #{term_id} を更新しました")
@@ -496,7 +499,8 @@ def terms_delete(term_id: int, db_path: str) -> None:
     """
     try:
         conn = get_connection(db_path)
-        delete_term(conn, term_id)
+        with transaction(conn):
+            delete_term(conn, term_id)
         conn.close()
 
         console.print(f"[green]✓[/green] Term #{term_id} を削除しました")
@@ -532,8 +536,9 @@ def terms_import(file: str, db_path: str) -> None:
 
         # Import terms
         conn = get_connection(db_path)
-        for term_text in term_texts:
-            create_term(conn, term_text)
+        with transaction(conn):
+            for term_text in term_texts:
+                create_term(conn, term_text)
         conn.close()
 
         console.print(
@@ -595,14 +600,15 @@ def terms_regenerate(input: str, llm_provider: str, model: str | None, db_path: 
 
     # Save to database with categories
     with _db_operation(db_path) as conn:
-        delete_all_terms(conn)
-        # Type is list[ClassifiedTerm] when return_categories=True
-        for term in classified_terms:  # type: ignore[union-attr]
-            create_term(
-                conn,
-                term.term,  # type: ignore[union-attr]
-                category=term.category.value,  # type: ignore[union-attr]
-            )
+        with transaction(conn):
+            delete_all_terms(conn)
+            # Type is list[ClassifiedTerm] when return_categories=True
+            for term in classified_terms:  # type: ignore[union-attr]
+                create_term(
+                    conn,
+                    term.term,  # type: ignore[union-attr]
+                    category=term.category.value,  # type: ignore[union-attr]
+                )
         console.print(f"[green]✓[/green] {len(classified_terms)}件の用語を保存しました（カテゴリ付き）")
 
 

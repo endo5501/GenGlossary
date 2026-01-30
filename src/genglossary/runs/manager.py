@@ -7,7 +7,7 @@ from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
 from typing import Callable
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.runs_repository import (
     cancel_run,
     create_run,
@@ -86,7 +86,8 @@ class RunManager:
                 raise RuntimeError(f"Run already running: {active_run['id']}")
 
             # Create run record
-            run_id = create_run(conn, scope=scope, triggered_by=triggered_by)
+            with transaction(conn):
+                run_id = create_run(conn, scope=scope, triggered_by=triggered_by)
 
         self._current_run_id = run_id
 
@@ -112,9 +113,10 @@ class RunManager:
 
         try:
             # Update status to running
-            update_run_status(
-                conn, run_id, "running", started_at=datetime.now()
-            )
+            with transaction(conn):
+                update_run_status(
+                    conn, run_id, "running", started_at=datetime.now()
+                )
 
             # ログコールバックを作成
             def log_callback(msg: dict) -> None:
@@ -141,22 +143,25 @@ class RunManager:
 
             # Check if cancelled
             if self._cancel_event.is_set():
-                cancel_run(conn, run_id)
+                with transaction(conn):
+                    cancel_run(conn, run_id)
             else:
                 # Update status to completed
-                update_run_status(
-                    conn, run_id, "completed", finished_at=datetime.now()
-                )
+                with transaction(conn):
+                    update_run_status(
+                        conn, run_id, "completed", finished_at=datetime.now()
+                    )
 
         except Exception as e:
             # Update status to failed
-            update_run_status(
-                conn,
-                run_id,
-                "failed",
-                finished_at=datetime.now(),
-                error_message=str(e),
-            )
+            with transaction(conn):
+                update_run_status(
+                    conn,
+                    run_id,
+                    "failed",
+                    finished_at=datetime.now(),
+                    error_message=str(e),
+                )
             self._broadcast_log(run_id, {"run_id": run_id, "level": "error", "message": f"Run failed: {str(e)}"})
         finally:
             # Send completion signal to close SSE stream
@@ -175,7 +180,8 @@ class RunManager:
 
         # Update database status
         with self._db_connection() as conn:
-            cancel_run(conn, run_id)
+            with transaction(conn):
+                cancel_run(conn, run_id)
 
     def get_active_run(self) -> sqlite3.Row | None:
         """Get the currently active run.

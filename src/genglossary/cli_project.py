@@ -9,6 +9,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from genglossary.db.connection import transaction
 from genglossary.db.project_repository import (
     clone_project,
     create_project,
@@ -145,14 +146,15 @@ def init(
             project_db_path = _get_project_db_path(registry, name)
 
             # Create project
-            project_id = create_project(
-                conn,
-                name=name,
-                doc_root=str(doc_root.absolute()),
-                db_path=str(project_db_path),
-                llm_provider=llm_provider,
-                llm_model=llm_model,
-            )
+            with transaction(conn):
+                project_id = create_project(
+                    conn,
+                    name=name,
+                    doc_root=str(doc_root.absolute()),
+                    db_path=str(project_db_path),
+                    llm_provider=llm_provider,
+                    llm_model=llm_model,
+                )
 
             console.print(f"[green]✓[/green] プロジェクトを作成しました: {name}")
             console.print(f"  ID: {project_id}")
@@ -237,7 +239,8 @@ def delete(name: str, registry: Path | None):
 
             # Delete project
             assert proj.id is not None, "Project ID must exist for deletion"
-            delete_project(conn, proj.id)
+            with transaction(conn):
+                delete_project(conn, proj.id)
 
             console.print(f"[green]✓[/green] プロジェクトを削除しました: {name}")
 
@@ -269,12 +272,13 @@ def clone(source_name: str, new_name: str, registry: Path | None):
 
             # Clone project
             assert source.id is not None, "Source project must have an ID"
-            new_id = clone_project(
-                conn,
-                source.id,
-                new_name=new_name,
-                new_db_path=str(new_db_path),
-            )
+            with transaction(conn):
+                new_id = clone_project(
+                    conn,
+                    source.id,
+                    new_name=new_name,
+                    new_db_path=str(new_db_path),
+                )
 
             console.print(
                 f"[green]✓[/green] プロジェクトを複製しました: {source_name} → {new_name}"

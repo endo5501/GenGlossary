@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.issue_repository import create_issue
 from genglossary.db.project_repository import create_project
 from genglossary.db.registry_schema import initialize_registry
@@ -27,12 +27,13 @@ def test_project_setup(tmp_path: Path, monkeypatch):
     initialize_registry(registry_conn)
 
     # Create project
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=str(doc_root),
-        db_path=str(project_db_path),
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=str(doc_root),
+            db_path=str(project_db_path),
+        )
 
     registry_conn.close()
 
@@ -61,8 +62,9 @@ def test_list_issues_returns_all_issues(test_project_setup, client: TestClient):
 
     # Add some issues
     conn = get_connection(project_db_path)
-    issue1_id = create_issue(conn, "量子コンピュータ", "unclear", "定義が不明確")
-    issue2_id = create_issue(conn, "量子ビット", "contradiction", "矛盾がある")
+    with transaction(conn):
+        issue1_id = create_issue(conn, "量子コンピュータ", "unclear", "定義が不明確")
+        issue2_id = create_issue(conn, "量子ビット", "contradiction", "矛盾がある")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/issues")
@@ -84,9 +86,10 @@ def test_list_issues_filters_by_issue_type(test_project_setup, client: TestClien
 
     # Add issues with different types
     conn = get_connection(project_db_path)
-    issue1_id = create_issue(conn, "用語1", "unclear", "説明1")
-    create_issue(conn, "用語2", "contradiction", "説明2")
-    issue3_id = create_issue(conn, "用語3", "unclear", "説明3")
+    with transaction(conn):
+        issue1_id = create_issue(conn, "用語1", "unclear", "説明1")
+        create_issue(conn, "用語2", "contradiction", "説明2")
+        issue3_id = create_issue(conn, "用語3", "unclear", "説明3")
     conn.close()
 
     response = client.get(
@@ -108,7 +111,8 @@ def test_get_issue_by_id_returns_issue(test_project_setup, client: TestClient):
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
-    issue_id = create_issue(conn, "用語", "missing", "説明")
+    with transaction(conn):
+        issue_id = create_issue(conn, "用語", "missing", "説明")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/issues/{issue_id}")

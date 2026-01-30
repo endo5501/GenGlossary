@@ -6,7 +6,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from genglossary.cli_db import db
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import create_term
 
@@ -110,7 +110,8 @@ class TestDbInfo:
         initialize_db(conn)
         from genglossary.db.metadata_repository import upsert_metadata
 
-        upsert_metadata(conn, "./docs", "ollama", "llama3.2")
+        with transaction(conn):
+            upsert_metadata(conn, "./docs", "ollama", "llama3.2")
         conn.close()
 
         result = runner.invoke(db, ["info", "--db-path", str(db_path)])
@@ -147,8 +148,9 @@ class TestDbTermsList:
         # Initialize database and create terms
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        create_term(conn, "量子コンピュータ", "technical_term")
-        create_term(conn, "量子ビット", "technical_term")
+        with transaction(conn):
+            create_term(conn, "量子コンピュータ", "technical_term")
+            create_term(conn, "量子ビット", "technical_term")
         conn.close()
 
         result = runner.invoke(db, ["terms", "list", "--db-path", str(db_path)])
@@ -169,7 +171,8 @@ class TestDbTermsShow:
         # Initialize database and create a term
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        term_id = create_term(conn, "量子コンピュータ", "technical_term")
+        with transaction(conn):
+            term_id = create_term(conn, "量子コンピュータ", "technical_term")
         conn.close()
 
         result = runner.invoke(
@@ -208,7 +211,8 @@ class TestDbTermsUpdate:
         # Initialize database and create a term
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        term_id = create_term(conn, "量子コンピュータ", "technical_term")
+        with transaction(conn):
+            term_id = create_term(conn, "量子コンピュータ", "technical_term")
         conn.close()
 
         result = runner.invoke(
@@ -252,7 +256,8 @@ class TestDbTermsDelete:
         # Initialize database and create a term
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        term_id = create_term(conn, "量子コンピュータ", "technical_term")
+        with transaction(conn):
+            term_id = create_term(conn, "量子コンピュータ", "technical_term")
         conn.close()
 
         result = runner.invoke(
@@ -332,14 +337,15 @@ class TestDbProvisionalList:
         from genglossary.db.provisional_repository import create_provisional_term
         from genglossary.models.term import TermOccurrence
 
-        occurrences = [
-            TermOccurrence(
-                document_path="/path/to/doc.txt", line_number=1, context="Context"
+        with transaction(conn):
+            occurrences = [
+                TermOccurrence(
+                    document_path="/path/to/doc.txt", line_number=1, context="Context"
+                )
+            ]
+            create_provisional_term(
+                conn, "量子コンピュータ", "定義", 0.95, occurrences
             )
-        ]
-        create_provisional_term(
-            conn, "量子コンピュータ", "定義", 0.95, occurrences
-        )
         conn.close()
 
         result = runner.invoke(
@@ -365,14 +371,15 @@ class TestDbRefinedList:
         from genglossary.db.refined_repository import create_refined_term
         from genglossary.models.term import TermOccurrence
 
-        occurrences = [
-            TermOccurrence(
-                document_path="/path/to/doc.txt", line_number=1, context="Context"
+        with transaction(conn):
+            occurrences = [
+                TermOccurrence(
+                    document_path="/path/to/doc.txt", line_number=1, context="Context"
+                )
+            ]
+            create_refined_term(
+                conn, "量子コンピュータ", "定義", 0.98, occurrences
             )
-        ]
-        create_refined_term(
-            conn, "量子コンピュータ", "定義", 0.98, occurrences
-        )
         conn.close()
 
         result = runner.invoke(
@@ -399,14 +406,15 @@ class TestDbRefinedExportMd:
         from genglossary.db.refined_repository import create_refined_term
         from genglossary.models.term import TermOccurrence
 
-        occurrences = [
-            TermOccurrence(
-                document_path="/path/to/doc.txt", line_number=1, context="Context"
+        with transaction(conn):
+            occurrences = [
+                TermOccurrence(
+                    document_path="/path/to/doc.txt", line_number=1, context="Context"
+                )
+            ]
+            create_refined_term(
+                conn, "量子コンピュータ", "量子力学の原理を利用したコンピュータ", 0.98, occurrences
             )
-        ]
-        create_refined_term(
-            conn, "量子コンピュータ", "量子力学の原理を利用したコンピュータ", 0.98, occurrences
-        )
         conn.close()
 
         result = runner.invoke(
