@@ -646,7 +646,8 @@ def provisional_update(term_id: int, definition: str, confidence: float, db_path
         genglossary db provisional update 1 --definition "新しい定義" --confidence 0.95
     """
     with _db_operation(db_path) as conn:
-        update_provisional_term(conn, term_id, definition, confidence)
+        with transaction(conn):
+            update_provisional_term(conn, term_id, definition, confidence)
     console.print(f"[green]✓[/green] Provisional Term #{term_id} を更新しました")
 
 
@@ -803,7 +804,8 @@ def refined_update(term_id: int, definition: str, confidence: float, db_path: st
         genglossary db refined update 1 --definition "新しい定義" --confidence 0.98
     """
     with _db_operation(db_path) as conn:
-        update_refined_term(conn, term_id, definition, confidence)
+        with transaction(conn):
+            update_refined_term(conn, term_id, definition, confidence)
     console.print(f"[green]✓[/green] Refined Term #{term_id} を更新しました")
 
 
