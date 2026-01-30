@@ -1,7 +1,10 @@
 """Glossary generator - Step 2: Generate provisional glossary using LLM."""
 
+import logging
 import re
 from typing import cast
+
+logger = logging.getLogger(__name__)
 
 from pydantic import BaseModel, confloat
 
@@ -112,7 +115,11 @@ Output:
                 glossary.add_term(term)
             except Exception as e:
                 # Skip this term and continue with the next one
-                print(f"Warning: Failed to generate definition for '{term_name}': {e}")
+                logger.warning(
+                    "Failed to generate definition for '%s': %s",
+                    term_name,
+                    e,
+                )
                 continue
             finally:
                 # Call progress callbacks if provided (guarded to prevent pipeline interruption)
