@@ -4,7 +4,7 @@ tags: [improvement, backend, race-condition]
 description: "RunManager: Fix race condition between cancellation check and status update"
 created_at: "2026-01-30T23:30:00+09:00"
 started_at: 2026-01-30T14:35:57Z
-closed_at: null
+closed_at: 2026-01-30T14:48:20Z
 ---
 
 # RunManager: Fix race condition between cancellation check and status update
