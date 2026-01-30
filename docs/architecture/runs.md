@@ -132,9 +132,16 @@ class RunManager:
         try:
             update_run_status(conn, run_id, "running", started_at=datetime.now())
 
+            # 実行コンテキストを作成
+            context = ExecutionContext(
+                run_id=run_id,
+                log_callback=lambda msg: self._broadcast_log(run_id, msg),
+                cancel_event=self._cancel_event,
+            )
+
             # パイプライン実行
             executor = PipelineExecutor()
-            executor.execute(conn, scope, self._cancel_event, self._log_queue)
+            executor.execute(conn, scope, context, doc_root=self.doc_root)
 
             if self._cancel_event.is_set():
                 cancel_run(conn, run_id)
@@ -173,6 +180,25 @@ class PipelineScope(Enum):
     PROVISIONAL_TO_REFINED = "provisional_to_refined" # 暫定用語集から精査
 ```
 
+### ExecutionContext (スレッドセーフティ)
+
+実行固有の状態をカプセル化するイミュータブルなdataclass。各実行が独立した状態を持つことを保証し、同一の `PipelineExecutor` インスタンスで並行実行可能にします。
+
+```python
+@dataclass(frozen=True)
+class ExecutionContext:
+    """実行コンテキスト（スレッドセーフ）
+
+    各実行の状態を明示的に管理:
+    - run_id: ログフィルタリング用の実行ID
+    - log_callback: ログメッセージ送信用コールバック
+    - cancel_event: キャンセルシグナル
+    """
+    run_id: int
+    log_callback: Callable[[dict], None]
+    cancel_event: Event
+```
+
 ### PipelineExecutor クラス
 
 ```python
@@ -181,37 +207,41 @@ class PipelineExecutor:
 
     CLIのパイプラインコンポーネント（DocumentLoader, TermExtractor等）を
     再利用し、キャンセルと進捗レポートをサポートします。
+
+    Thread Safety:
+        ExecutionContext を使用することで、LLMクライアントを共有しつつ
+        各実行の状態（run_id, log_callback, cancel_event）を分離します。
     """
 
     def execute(
         self,
         conn: sqlite3.Connection,
         scope: str | PipelineScope,  # Enum または文字列を受け付け
-        cancel_event: Event,
-        log_callback: Callable[[dict], None],
+        context: ExecutionContext,   # 実行コンテキスト
         doc_root: str = ".",
-        *,
-        run_id: int,
     ) -> None:
         """指定されたスコープでパイプラインを実行
 
         Args:
             conn: プロジェクトDB接続（スレッド内で作成されたもの）
             scope: 実行スコープ（PipelineScope または文字列）
-            cancel_event: キャンセルシグナル
-            log_callback: ログメッセージコールバック
+            context: 実行コンテキスト（run_id, log_callback, cancel_event）
             doc_root: ドキュメントルートディレクトリ
-            run_id: 実行ID（必須、ログフィルタリング用）
+
+        Raises:
+            ValueError: 不明なスコープが指定された場合
         """
         # Enum を文字列値に変換
         scope_value = scope.value if isinstance(scope, PipelineScope) else scope
 
         if scope_value == PipelineScope.FULL.value:
-            self._execute_full(conn, doc_root)
+            self._execute_full(conn, context, doc_root)
         elif scope_value == PipelineScope.FROM_TERMS.value:
-            self._execute_from_terms(conn)
+            self._execute_from_terms(conn, context)
         elif scope_value == PipelineScope.PROVISIONAL_TO_REFINED.value:
-            self._execute_provisional_to_refined(conn)
+            self._execute_provisional_to_refined(conn, context)
+        else:
+            raise ValueError(f"Unknown scope: {scope_value}")
 ```
 
 ### 進捗コールバック
@@ -225,12 +255,14 @@ TermProgressCallback = Callable[[int, int, str], None]  # (current, total, term_
 # executor.py
 def _create_progress_callback(
     self,
+    context: ExecutionContext,  # コンテキストを使用
     step_name: str,
 ) -> Callable[[int, int, str], None]:
     """進捗コールバックを生成。ログに拡張フィールドを含める。"""
     def callback(current: int, total: int, term_name: str = "") -> None:
         percent = int((current / total) * 100) if total > 0 else 0
         self._log(
+            context,  # コンテキスト経由でログ
             "info",
             f"{term_name}: {percent}%",
             step=step_name,
@@ -473,7 +505,7 @@ get_run_manager(db_path) → RunManager
 **tests/runs/test_manager.py (13 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 
-**tests/runs/test_executor.py (29 tests)**
+**tests/runs/test_executor.py (43 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
 - キャンセル処理
 - 進捗ログ
@@ -485,8 +517,12 @@ get_run_manager(db_path) → RunManager
   - issues なしでの refined 保存
   - 重複用語のスキップ
   - 同名ファイルの衝突回避
+- ExecutionContext とスレッドセーフティテスト
+  - コンテキスト経由の状態管理
+  - 並行実行時の状態分離
+  - 不明スコープのエラー処理
 
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 72 tests** (Repository 20 + Manager 13 + Executor 29 + API 10)
+**合計: 86 tests** (Repository 20 + Manager 13 + Executor 43 + API 10)
