@@ -4,7 +4,7 @@ tags: [improvement, backend, database, security]
 description: "Document storage: Fix file_name storing full path instead of relative"
 created_at: "2026-01-30T20:40:00Z"
 started_at: 2026-01-30T13:40:45Z
-closed_at: null
+closed_at: 2026-01-30T13:54:04Z
 ---
 
 # Document storage: Fix file_name storing full path
