@@ -3,7 +3,7 @@
 import sqlite3
 import time
 from pathlib import Path
-from threading import Event
+from threading import Event, Thread
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,7 +12,7 @@ from genglossary.db.connection import get_connection
 from genglossary.db.schema import initialize_db
 from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
-from genglossary.runs.executor import PipelineExecutor
+from genglossary.runs.executor import ExecutionContext, PipelineExecutor
 
 
 @pytest.fixture
@@ -48,13 +48,23 @@ def cancel_event() -> Event:
 @pytest.fixture
 def log_callback():
     """Create a log callback that captures messages."""
-    logs = []
+    logs: list[dict] = []
 
     def callback(msg: dict) -> None:
         logs.append(msg)
 
     callback.logs = logs  # type: ignore
     return callback
+
+
+@pytest.fixture
+def execution_context(cancel_event: Event, log_callback) -> ExecutionContext:
+    """Create an ExecutionContext with default settings."""
+    return ExecutionContext(
+        run_id=1,
+        log_callback=log_callback,
+        cancel_event=cancel_event,
+    )
 
 
 class TestPipelineExecutorFull:
@@ -64,8 +74,7 @@ class TestPipelineExecutorFull:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """CLIモード: ドキュメントが見つからない場合はRuntimeErrorを発生させる"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -79,14 +88,13 @@ class TestPipelineExecutorFull:
 
             # Execute should raise RuntimeError (CLI mode with explicit doc_root)
             with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
-                executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/some/path", run_id=1)
+                executor.execute(project_db, "full", execution_context, doc_root="/some/path")
 
     def test_full_scope_raises_error_when_no_documents_gui_mode(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """GUIモード: DBにドキュメントがない場合はRuntimeErrorを発生させる"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -100,14 +108,13 @@ class TestPipelineExecutorFull:
 
             # Execute should raise RuntimeError (GUI mode with default doc_root=".")
             with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
-                executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".", run_id=1)
+                executor.execute(project_db, "full", execution_context, doc_root=".")
 
     def test_full_scope_executes_all_steps(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """full scopeは全ステップを実行する（CLIモード）"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -154,7 +161,7 @@ class TestPipelineExecutorFull:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
 
             # Verify all components were called
             mock_loader.return_value.load_directory.assert_called_once_with("/test/path")
@@ -173,9 +180,15 @@ class TestPipelineExecutorFull:
         # Set cancellation before execution
         cancel_event.set()
 
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
-            executor.execute(project_db, "full", cancel_event, log_callback, run_id=1)
+            executor.execute(project_db, "full", context)
 
             # DocumentLoader should not be called when cancelled
             mock_loader.return_value.load_directory.assert_not_called()
@@ -188,8 +201,7 @@ class TestPipelineExecutorFromTerms:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """from_termsはファイルシステムからの読み込みをスキップし、DBから取得する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -213,7 +225,7 @@ class TestPipelineExecutorFromTerms:
             mock_generator.return_value.generate.return_value = mock_glossary
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "from_terms", cancel_event, log_callback, run_id=1)
+            executor.execute(project_db, "from_terms", execution_context)
 
             # DocumentLoader.load_directory should not be called (we load from DB instead)
             mock_loader.return_value.load_directory.assert_not_called()
@@ -230,8 +242,7 @@ class TestPipelineExecutorProvisionalToRefined:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """provisional_to_refinedは精査から開始する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -261,7 +272,7 @@ class TestPipelineExecutorProvisionalToRefined:
             # Mock review
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "provisional_to_refined", cancel_event, log_callback, run_id=1)
+            executor.execute(project_db, "provisional_to_refined", execution_context)
 
             # Earlier stages should not be called
             mock_loader.return_value.load_directory.assert_not_called()
@@ -281,7 +292,7 @@ class TestPipelineExecutorProgress:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
+        execution_context: ExecutionContext,
         log_callback,
     ) -> None:
         """進捗がlog_callbackに送信される"""
@@ -305,7 +316,7 @@ class TestPipelineExecutorProgress:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
 
             # Check that log messages were captured
             logs = log_callback.logs  # type: ignore
@@ -325,8 +336,14 @@ class TestPipelineExecutorLogCallback:
         cancel_event: Event,
     ) -> None:
         """executorがlog_callbackを使ってログを出力する"""
-        logs = []
+        logs: list[dict] = []
         callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
@@ -351,7 +368,7 @@ class TestPipelineExecutorLogCallback:
 
             executor = PipelineExecutor()
             # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, callback, doc_root="/test/path", run_id=1)
+            executor.execute(project_db, "full", context, doc_root="/test/path")
 
             assert len(logs) > 0
             assert all(log.get("run_id") == 1 for log in logs)
@@ -363,8 +380,7 @@ class TestPipelineExecutorConfiguration:
     def test_executor_uses_doc_root(
         self,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """executorがdoc_rootパラメータを使用することを確認"""
         executor = PipelineExecutor(provider="ollama")
@@ -390,7 +406,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute with custom doc_root
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/custom/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/custom/path")
 
             # Verify load_directory was called with the custom doc_root
             mock_loader.return_value.load_directory.assert_called_once_with("/custom/path")
@@ -398,8 +414,7 @@ class TestPipelineExecutorConfiguration:
     def test_executor_uses_llm_settings(
         self,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """executorがllm_provider/llm_modelを使用することを確認"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -427,7 +442,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
 
             # Verify LLM client was created with custom settings
             mock_llm_factory.assert_called_once_with(provider="openai", model="gpt-4")
@@ -435,8 +450,7 @@ class TestPipelineExecutorConfiguration:
     def test_re_execution_clears_tables(
         self,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """再実行時にテーブルがクリアされることを確認"""
         executor = PipelineExecutor(provider="ollama")
@@ -477,7 +491,7 @@ class TestPipelineExecutorConfiguration:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute with full scope (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
 
             # Verify tables were cleared before execution (documents are NOT cleared in _clear_tables_for_scope)
             mock_delete_terms.assert_called_once()
@@ -499,8 +513,7 @@ class TestPipelineExecutorDBFirstApproach:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """GUIモード: doc_rootが自動生成パスでもDBにドキュメントがあればDBを使用する
 
@@ -550,9 +563,8 @@ class TestPipelineExecutorDBFirstApproach:
             # Execute with a custom doc_root (simulating GUI project)
             # This is the key: doc_root is NOT "." but DB has documents
             executor.execute(
-                project_db, "full", cancel_event, log_callback,
+                project_db, "full", execution_context,
                 doc_root="/Users/user/.genglossary/projects/MyProject",
-                run_id=1,
             )
 
             # DocumentLoader.load_directory should NOT be called (DB has documents)
@@ -570,8 +582,7 @@ class TestPipelineExecutorDBFirstApproach:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """CLIモード: DBが空でdoc_rootにファイルがある場合はファイルシステムを使用"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -603,9 +614,8 @@ class TestPipelineExecutorDBFirstApproach:
 
             # Execute with explicit doc_root (CLI mode, empty DB)
             executor.execute(
-                project_db, "full", cancel_event, log_callback,
+                project_db, "full", execution_context,
                 doc_root="/custom/cli/path",
-                run_id=1,
             )
 
             # list_all_documents should be called first to check DB
@@ -621,8 +631,7 @@ class TestPipelineExecutorDBFirstApproach:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """DBもファイルシステムも空の場合はエラーを発生"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -642,17 +651,15 @@ class TestPipelineExecutorDBFirstApproach:
             # Execute should raise RuntimeError
             with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
                 executor.execute(
-                    project_db, "full", cancel_event, log_callback,
+                    project_db, "full", execution_context,
                     doc_root="/empty/path",
-                    run_id=1,
                 )
 
     def test_db_documents_take_priority_over_filesystem(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """DBにドキュメントがある場合はファイルシステムをチェックしない（DB優先）"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -680,9 +687,8 @@ class TestPipelineExecutorDBFirstApproach:
 
             # Execute with doc_root
             executor.execute(
-                project_db, "full", cancel_event, log_callback,
+                project_db, "full", execution_context,
                 doc_root="/some/path",
-                run_id=1,
             )
 
             # DocumentLoader should NOT be called at all (DB has documents)
@@ -695,17 +701,21 @@ class TestPipelineExecutorProgressCallback:
     def test_create_progress_callback_logs_with_extended_fields(
         self,
         executor: PipelineExecutor,
+        cancel_event: Event,
     ) -> None:
         """_create_progress_callback は拡張フィールド付きでログを出力する"""
-        logs = []
+        logs: list[dict] = []
         callback = lambda msg: logs.append(msg)
 
-        # Set up executor context
-        executor._run_id = 1
-        executor._log_callback = callback
+        # Create context
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
 
         # Create progress callback
-        progress_cb = executor._create_progress_callback("provisional")
+        progress_cb = executor._create_progress_callback(context, "provisional")
 
         # Call the progress callback
         progress_cb(5, 20, "量子コンピュータ")
@@ -724,13 +734,17 @@ class TestPipelineExecutorProgressCallback:
     def test_create_progress_callback_calculates_percentage(
         self,
         executor: PipelineExecutor,
+        cancel_event: Event,
     ) -> None:
         """進捗パーセントが正しく計算される"""
-        logs = []
-        executor._run_id = 1
-        executor._log_callback = lambda msg: logs.append(msg)
+        logs: list[dict] = []
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
 
-        progress_cb = executor._create_progress_callback("refined")
+        progress_cb = executor._create_progress_callback(context, "refined")
 
         # Test various percentages
         progress_cb(1, 10, "term1")  # 10%
@@ -745,13 +759,17 @@ class TestPipelineExecutorProgressCallback:
     def test_create_progress_callback_handles_zero_total(
         self,
         executor: PipelineExecutor,
+        cancel_event: Event,
     ) -> None:
         """total が 0 の場合も正常に動作する"""
-        logs = []
-        executor._run_id = 1
-        executor._log_callback = lambda msg: logs.append(msg)
+        logs: list[dict] = []
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
 
-        progress_cb = executor._create_progress_callback("provisional")
+        progress_cb = executor._create_progress_callback(context, "provisional")
 
         # Should not raise error
         progress_cb(0, 0, "")
@@ -766,13 +784,18 @@ class TestPipelineExecutorLogExtended:
     def test_log_with_extended_fields(
         self,
         executor: PipelineExecutor,
+        cancel_event: Event,
     ) -> None:
         """_log は拡張フィールドを含むログを出力する"""
-        logs = []
-        executor._run_id = 1
-        executor._log_callback = lambda msg: logs.append(msg)
+        logs: list[dict] = []
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
 
         executor._log(
+            context,
             "info",
             "量子コンピュータ: 25%",
             step="provisional",
@@ -794,13 +817,17 @@ class TestPipelineExecutorLogExtended:
     def test_log_without_extended_fields_backward_compatible(
         self,
         executor: PipelineExecutor,
+        cancel_event: Event,
     ) -> None:
         """拡張フィールドなしの _log 呼び出しは後方互換性を保つ"""
-        logs = []
-        executor._run_id = 1
-        executor._log_callback = lambda msg: logs.append(msg)
+        logs: list[dict] = []
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
 
-        executor._log("info", "Starting pipeline execution: full")
+        executor._log(context, "info", "Starting pipeline execution: full")
 
         assert len(logs) == 1
         log = logs[0]
@@ -822,8 +849,14 @@ class TestPipelineExecutorProgressCallbackIntegration:
         cancel_event: Event,
     ) -> None:
         """GlossaryGenerator に term_progress_callback が渡される"""
-        logs = []
+        logs: list[dict] = []
         callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
@@ -839,7 +872,7 @@ class TestPipelineExecutorProgressCallbackIntegration:
             mock_generator_cls.return_value.generate.return_value = mock_glossary
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "from_terms", cancel_event, callback, run_id=1)
+            executor.execute(project_db, "from_terms", context)
 
             # Verify term_progress_callback was passed to generate
             mock_generator_cls.return_value.generate.assert_called_once()
@@ -854,8 +887,14 @@ class TestPipelineExecutorProgressCallbackIntegration:
         cancel_event: Event,
     ) -> None:
         """GlossaryRefiner に term_progress_callback が渡される"""
-        logs = []
+        logs: list[dict] = []
         callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
@@ -875,7 +914,7 @@ class TestPipelineExecutorProgressCallbackIntegration:
 
             mock_refiner_cls.return_value.refine.return_value = Glossary(terms={})
 
-            executor.execute(project_db, "provisional_to_refined", cancel_event, callback, run_id=1)
+            executor.execute(project_db, "provisional_to_refined", context)
 
             # Verify term_progress_callback was passed to refine
             mock_refiner_cls.return_value.refine.assert_called_once()
@@ -890,6 +929,7 @@ class TestPipelineExecutorLogCallbackExceptionHandling:
     def test_log_continues_when_callback_raises_exception(
         self,
         executor: PipelineExecutor,
+        cancel_event: Event,
     ) -> None:
         """_log は callback が例外を投げても継続する"""
         exception_count = 0
@@ -899,13 +939,16 @@ class TestPipelineExecutorLogCallbackExceptionHandling:
             exception_count += 1
             raise RuntimeError("Callback error")
 
-        executor._run_id = 1
-        executor._log_callback = failing_callback
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=failing_callback,
+            cancel_event=cancel_event,
+        )
 
         # Should NOT raise exception even though callback fails
-        executor._log("info", "Test message 1")
-        executor._log("info", "Test message 2")
-        executor._log("info", "Test message 3")
+        executor._log(context, "info", "Test message 1")
+        executor._log(context, "info", "Test message 2")
+        executor._log(context, "info", "Test message 3")
 
         # All three calls should have been attempted
         assert exception_count == 3
@@ -913,6 +956,7 @@ class TestPipelineExecutorLogCallbackExceptionHandling:
     def test_log_with_extended_fields_continues_when_callback_raises_exception(
         self,
         executor: PipelineExecutor,
+        cancel_event: Event,
     ) -> None:
         """拡張フィールド付き _log も callback 例外で継続する"""
         exception_count = 0
@@ -922,11 +966,15 @@ class TestPipelineExecutorLogCallbackExceptionHandling:
             exception_count += 1
             raise RuntimeError("Callback error")
 
-        executor._run_id = 1
-        executor._log_callback = failing_callback
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=failing_callback,
+            cancel_event=cancel_event,
+        )
 
         # Should NOT raise exception even though callback fails
         executor._log(
+            context,
             "info",
             "量子コンピュータ: 25%",
             step="provisional",
@@ -945,8 +993,7 @@ class TestPipelineExecutorDBDocumentsLegacy:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """doc_root="." (GUI mode) の場合、DBのドキュメントを使用する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -989,7 +1036,7 @@ class TestPipelineExecutorDBDocumentsLegacy:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute full scope with default doc_root="." (GUI mode)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root=".", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root=".")
 
             # DocumentLoader.load_directory should NOT be called (DB documents used in GUI mode)
             mock_loader.return_value.load_directory.assert_not_called()
@@ -1006,8 +1053,7 @@ class TestPipelineExecutorDBDocumentsLegacy:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """doc_root が明示的に指定された場合（CLIモード）、ファイルシステムから読み込みDBを上書き"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -1034,7 +1080,7 @@ class TestPipelineExecutorDBDocumentsLegacy:
             mock_reviewer.return_value.review.return_value = []
 
             # Execute full scope with explicit doc_root (CLI mode)
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/custom/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/custom/path")
 
             # DocumentLoader.load_directory SHOULD be called with custom path
             mock_loader.return_value.load_directory.assert_called_once_with("/custom/path")
@@ -1056,8 +1102,7 @@ class TestPipelineExecutorBugFixes:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """Bug A: issues がない場合でも refined glossary が保存される
 
@@ -1087,7 +1132,7 @@ class TestPipelineExecutorBugFixes:
             # Reviewer returns empty issues list
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "provisional_to_refined", cancel_event, log_callback, run_id=1)
+            executor.execute(project_db, "provisional_to_refined", execution_context)
 
             # Refiner should NOT be called (no issues to refine)
             mock_refiner.return_value.refine.assert_not_called()
@@ -1105,8 +1150,7 @@ class TestPipelineExecutorBugFixes:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """Bug B: LLM が重複用語を返してもパイプラインがクラッシュしない
 
@@ -1138,7 +1182,7 @@ class TestPipelineExecutorBugFixes:
             mock_reviewer.return_value.review.return_value = []
 
             # Should NOT raise IntegrityError
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
 
             # Verify only unique terms were saved (no crash)
             from genglossary.db.term_repository import list_all_terms
@@ -1153,8 +1197,7 @@ class TestPipelineExecutorBugFixes:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """Bug C: 異なるディレクトリの同名ファイルでもクラッシュしない
 
@@ -1189,7 +1232,7 @@ class TestPipelineExecutorBugFixes:
             mock_reviewer.return_value.review.return_value = []
 
             # Should NOT raise IntegrityError
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
 
             # Verify both documents were saved (no crash)
             from genglossary.db.document_repository import list_all_documents
@@ -1232,11 +1275,15 @@ class TestPipelineScopeEnum:
         # Set cancellation to skip actual execution
         cancel_event.set()
 
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
         with patch("genglossary.runs.executor.create_llm_client"):
             # Should not raise TypeError when using enum
-            executor.execute(
-                project_db, PipelineScope.FULL, cancel_event, log_callback, run_id=1
-            )
+            executor.execute(project_db, PipelineScope.FULL, context)
 
     def test_scope_clear_functions_use_enum(self) -> None:
         """_SCOPE_CLEAR_FUNCTIONS が Enum をキーとして使用できることを確認"""
@@ -1259,6 +1306,12 @@ class TestCancellationCheckBeforeRefinedSave:
         log_callback,
     ) -> None:
         """issues が空でもキャンセル時は refined が保存されないことを確認"""
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
@@ -1282,14 +1335,14 @@ class TestCancellationCheckBeforeRefinedSave:
             # Set cancel after review completes (simulate user cancel during "no issues" path)
             original_log = executor._log
 
-            def log_and_cancel(level, message, **kwargs):
-                original_log(level, message, **kwargs)
+            def log_and_cancel(ctx, level, message, **kwargs):
+                original_log(ctx, level, message, **kwargs)
                 # Cancel after "No issues found" log
                 if "No issues found" in message:
                     cancel_event.set()
 
             with patch.object(executor, "_log", log_and_cancel):
-                executor.execute(project_db, "provisional_to_refined", cancel_event, log_callback, run_id=1)
+                executor.execute(project_db, "provisional_to_refined", context)
 
             # Refined term should NOT be saved because of cancellation
             mock_create_refined.assert_not_called()
@@ -1302,8 +1355,7 @@ class TestDuplicateFilteringBeforeGenerate:
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
-        cancel_event: Event,
-        log_callback,
+        execution_context: ExecutionContext,
     ) -> None:
         """GlossaryGenerator に渡される用語リストが重複除去されていることを確認"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -1328,7 +1380,7 @@ class TestDuplicateFilteringBeforeGenerate:
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
 
             # Verify generator.generate was called with unique terms only
             mock_generator.return_value.generate.assert_called_once()
@@ -1340,3 +1392,218 @@ class TestDuplicateFilteringBeforeGenerate:
             term_names = [t.term if hasattr(t, 'term') else t for t in terms_arg]
             assert "duplicate_term" in term_names
             assert "unique_term" in term_names
+
+
+class TestExecutionContext:
+    """Tests for ExecutionContext dataclass."""
+
+    def test_execution_context_exists(self) -> None:
+        """ExecutionContext dataclass が存在することを確認"""
+        from genglossary.runs.executor import ExecutionContext
+
+        cancel_event = Event()
+        log_callback = lambda msg: None
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        assert context.run_id == 1
+        assert context.log_callback is log_callback
+        assert context.cancel_event is cancel_event
+
+    def test_execution_context_is_immutable(self) -> None:
+        """ExecutionContext は frozen=True でイミュータブルであることを確認"""
+        from genglossary.runs.executor import ExecutionContext
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: None,
+            cancel_event=Event(),
+        )
+
+        # Should raise FrozenInstanceError (subclass of AttributeError)
+        with pytest.raises(AttributeError):
+            context.run_id = 2  # type: ignore
+
+
+class TestPipelineExecutorWithContext:
+    """Tests for PipelineExecutor with ExecutionContext."""
+
+    def test_execute_accepts_execution_context(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+    ) -> None:
+        """execute メソッドが ExecutionContext を受け付けることを確認"""
+        logs = []
+        cancel_event = Event()
+        cancel_event.set()  # Cancel immediately to skip actual execution
+
+        context = ExecutionContext(
+            run_id=42,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client"):
+            # Should not raise TypeError when using ExecutionContext
+            executor.execute(
+                project_db, "full", context, doc_root="."
+            )
+
+    def test_execute_logs_use_context_run_id(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+    ) -> None:
+        """execute のログが context.run_id を使用することを確認"""
+        logs = []
+        cancel_event = Event()
+
+        context = ExecutionContext(
+            run_id=99,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.delete_all_documents"):
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="test.txt", content="test")
+            ]
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(project_db, "full", context, doc_root="/test/path")
+
+        # All logs should have run_id=99
+        assert len(logs) > 0
+        assert all(log.get("run_id") == 99 for log in logs)
+
+    def test_execute_respects_context_cancel_event(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+    ) -> None:
+        """execute が context.cancel_event を正しく使用することを確認"""
+        logs = []
+        cancel_event = Event()
+        cancel_event.set()  # Set before execution
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client"), \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+
+            executor.execute(project_db, "full", context, doc_root="/test/path")
+
+            # DocumentLoader should not be called when cancelled
+            mock_loader.return_value.load_directory.assert_not_called()
+
+    def test_executor_no_longer_has_instance_state_after_context(
+        self,
+        executor: PipelineExecutor,
+    ) -> None:
+        """PipelineExecutor が _run_id, _log_callback, _cancel_event を持たないことを確認
+
+        これらの状態は ExecutionContext に移動されるべき
+        """
+        # After refactoring, these should not exist as instance attributes
+        assert not hasattr(executor, "_run_id") or executor._run_id is None
+        assert not hasattr(executor, "_log_callback") or executor._log_callback is None
+        assert not hasattr(executor, "_cancel_event") or executor._cancel_event is None
+
+
+class TestPipelineExecutorThreadSafety:
+    """Tests for thread safety with ExecutionContext."""
+
+    def test_same_executor_can_handle_multiple_contexts_concurrently(
+        self,
+        project_db_path: str,
+    ) -> None:
+        """同一 PipelineExecutor インスタンスで複数コンテキストを並行実行できることを確認
+
+        各実行は独立した ExecutionContext を持ち、状態が混在しない
+        """
+        logs_1: list[dict] = []
+        logs_2: list[dict] = []
+
+        cancel_1 = Event()
+        cancel_2 = Event()
+
+        context_1 = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: logs_1.append(msg),
+            cancel_event=cancel_1,
+        )
+
+        context_2 = ExecutionContext(
+            run_id=2,
+            log_callback=lambda msg: logs_2.append(msg),
+            cancel_event=cancel_2,
+        )
+
+        # Create shared executor
+        executor = PipelineExecutor()
+
+        def run_with_context(context: ExecutionContext, db_path: str) -> None:
+            conn = get_connection(db_path)
+            try:
+                with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+                     patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+                     patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+                     patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+                     patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+                     patch("genglossary.runs.executor.delete_all_documents"):
+
+                    mock_llm_factory.return_value = MagicMock()
+                    mock_loader.return_value.load_directory.return_value = [
+                        MagicMock(file_path="test.txt", content="test")
+                    ]
+                    mock_extractor.return_value.extract_terms.return_value = [
+                        ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
+                    ]
+                    mock_generator.return_value.generate.return_value = Glossary(terms={})
+                    mock_reviewer.return_value.review.return_value = []
+
+                    executor.execute(conn, "full", context, doc_root="/test/path")
+            finally:
+                conn.close()
+
+        # Run two executions concurrently with the same executor
+        thread_1 = Thread(target=run_with_context, args=(context_1, project_db_path))
+        thread_2 = Thread(target=run_with_context, args=(context_2, project_db_path))
+
+        thread_1.start()
+        thread_2.start()
+
+        thread_1.join(timeout=10)
+        thread_2.join(timeout=10)
+
+        # Verify logs are separated by run_id
+        assert len(logs_1) > 0, "Context 1 should have logs"
+        assert len(logs_2) > 0, "Context 2 should have logs"
+
+        # All logs in logs_1 should have run_id=1
+        for log in logs_1:
+            assert log.get("run_id") == 1, f"Log in logs_1 has wrong run_id: {log}"
+
+        # All logs in logs_2 should have run_id=2
+        for log in logs_2:
+            assert log.get("run_id") == 2, f"Log in logs_2 has wrong run_id: {log}"

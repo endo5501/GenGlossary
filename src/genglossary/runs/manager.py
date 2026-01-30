@@ -15,7 +15,7 @@ from genglossary.db.runs_repository import (
     get_run,
     update_run_status,
 )
-from genglossary.runs.executor import PipelineExecutor
+from genglossary.runs.executor import ExecutionContext, PipelineExecutor
 
 
 class RunManager:
@@ -120,6 +120,13 @@ class RunManager:
             def log_callback(msg: dict) -> None:
                 self._broadcast_log(run_id, msg)
 
+            # Create execution context
+            context = ExecutionContext(
+                run_id=run_id,
+                log_callback=log_callback,
+                cancel_event=self._cancel_event,
+            )
+
             # Execute pipeline with project settings
             executor = PipelineExecutor(
                 provider=self.llm_provider,
@@ -128,10 +135,8 @@ class RunManager:
             executor.execute(
                 conn,
                 scope,
-                self._cancel_event,
-                log_callback,
+                context,
                 doc_root=self.doc_root,
-                run_id=run_id,
             )
 
             # Check if cancelled

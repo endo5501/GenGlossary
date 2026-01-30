@@ -1,6 +1,7 @@
 """Pipeline executor for running glossary generation steps."""
 
 import sqlite3
+from dataclasses import dataclass
 from enum import Enum
 from threading import Event
 from typing import Any, Callable
@@ -46,11 +47,33 @@ _SCOPE_CLEAR_FUNCTIONS: dict[str, list[Callable[[sqlite3.Connection], None]]] = 
 }
 
 
+@dataclass(frozen=True)
+class ExecutionContext:
+    """Immutable execution context for thread-safe pipeline execution.
+
+    This dataclass holds all execution-specific state that was previously
+    stored as instance variables. Using a frozen dataclass ensures:
+    1. Thread safety - each execution gets its own context
+    2. Immutability - context cannot be accidentally modified
+    3. Clear API - execution state is explicitly passed, not hidden in instance
+    """
+
+    run_id: int
+    log_callback: Callable[[dict], None]
+    cancel_event: Event
+
+
 class PipelineExecutor:
     """Executes glossary generation pipeline steps.
 
     This class handles the execution of the pipeline steps in a background thread,
     with support for cancellation and progress reporting.
+
+    Thread Safety:
+        This class is designed to be thread-safe through the use of ExecutionContext.
+        The LLM client is shared across executions (for efficiency), but all
+        execution-specific state is contained in the ExecutionContext passed to
+        each execute() call.
     """
 
     def __init__(self, provider: str = "ollama", model: str = ""):
@@ -61,12 +84,10 @@ class PipelineExecutor:
             model: LLM model name (default: '').
         """
         self._llm_client = create_llm_client(provider=provider, model=model)
-        self._run_id: int | None = None
-        self._log_callback: Callable[[dict], None] | None = None
-        self._cancel_event: Event | None = None
 
     def _log(
         self,
+        context: ExecutionContext,
         level: str,
         message: str,
         *,
@@ -78,6 +99,7 @@ class PipelineExecutor:
         """Log a message using the callback.
 
         Args:
+            context: Execution context containing run_id and log_callback.
             level: Log level ('info', 'warning', 'error').
             message: Log message.
             step: Optional current step name (e.g., 'provisional', 'refined').
@@ -85,29 +107,31 @@ class PipelineExecutor:
             total: Optional total count.
             current_term: Optional current term being processed.
         """
-        if self._log_callback is not None:
-            log_entry: dict = {"run_id": self._run_id, "level": level, "message": message}
-            if step is not None:
-                log_entry["step"] = step
-            if current is not None:
-                log_entry["progress_current"] = current
-            if total is not None:
-                log_entry["progress_total"] = total
-            if current_term is not None:
-                log_entry["current_term"] = current_term
-            try:
-                self._log_callback(log_entry)
-            except Exception:
-                pass  # Ignore callback errors to prevent pipeline interruption
+        log_entry: dict = {"run_id": context.run_id, "level": level, "message": message}
+        if step is not None:
+            log_entry["step"] = step
+        if current is not None:
+            log_entry["progress_current"] = current
+        if total is not None:
+            log_entry["progress_total"] = total
+        if current_term is not None:
+            log_entry["current_term"] = current_term
+        try:
+            context.log_callback(log_entry)
+        except Exception:
+            pass  # Ignore callback errors to prevent pipeline interruption
 
-    def _check_cancellation(self) -> bool:
+    def _check_cancellation(self, context: ExecutionContext) -> bool:
         """Check if execution is cancelled.
+
+        Args:
+            context: Execution context containing cancel_event.
 
         Returns:
             bool: True if cancelled, False otherwise.
         """
-        if self._cancel_event is not None and self._cancel_event.is_set():
-            self._log("info", "Execution cancelled")
+        if context.cancel_event.is_set():
+            self._log(context, "info", "Execution cancelled")
             return True
         return False
 
@@ -167,6 +191,7 @@ class PipelineExecutor:
 
     def _create_progress_callback(
         self,
+        context: ExecutionContext,
         step_name: str,
     ) -> Callable[[int, int, str], None]:
         """Create a progress callback for LLM processing steps.
@@ -174,6 +199,7 @@ class PipelineExecutor:
         The callback logs progress with extended fields (step, current, total, term name).
 
         Args:
+            context: Execution context for logging.
             step_name: Name of the current step (e.g., 'provisional', 'refined').
 
         Returns:
@@ -182,6 +208,7 @@ class PipelineExecutor:
         def callback(current: int, total: int, term_name: str = "") -> None:
             percent = int((current / total) * 100) if total > 0 else 0
             self._log(
+                context,
                 "info",
                 f"{term_name}: {percent}%",
                 step=step_name,
@@ -195,33 +222,23 @@ class PipelineExecutor:
         self,
         conn: sqlite3.Connection,
         scope: str | PipelineScope,
-        cancel_event: Event,
-        log_callback: Callable[[dict], None],
+        context: ExecutionContext,
         doc_root: str = ".",
-        *,
-        run_id: int,
     ) -> None:
         """Execute the pipeline for the given scope.
 
         Args:
             conn: Project database connection.
             scope: Execution scope (PipelineScope enum or string).
-            cancel_event: Event to signal cancellation.
-            log_callback: Callback function for log messages.
+            context: Execution context containing run_id, log_callback, and cancel_event.
             doc_root: Root directory for documents (default: ".").
-            run_id: Run ID for log filtering (required).
         """
-        # Set execution context
-        self._run_id = run_id
-        self._log_callback = log_callback
-        self._cancel_event = cancel_event
-
         # Convert PipelineScope enum to string value
         scope_value = scope.value if isinstance(scope, PipelineScope) else scope
 
-        self._log("info", f"Starting pipeline execution: {scope_value}")
+        self._log(context, "info", f"Starting pipeline execution: {scope_value}")
 
-        if self._check_cancellation():
+        if self._check_cancellation(context):
             return
 
         # Clear tables before execution
@@ -229,18 +246,20 @@ class PipelineExecutor:
 
         # Execute based on scope
         if scope_value == PipelineScope.FULL.value:
-            self._execute_full(conn, doc_root)
+            self._execute_full(conn, context, doc_root)
         elif scope_value == PipelineScope.FROM_TERMS.value:
-            self._execute_from_terms(conn)
+            self._execute_from_terms(conn, context)
         elif scope_value == PipelineScope.PROVISIONAL_TO_REFINED.value:
-            self._execute_provisional_to_refined(conn)
+            self._execute_provisional_to_refined(conn, context)
         else:
-            self._log("error", f"Unknown scope: {scope_value}")
+            self._log(context, "error", f"Unknown scope: {scope_value}")
             return
 
-        self._log("info", "Pipeline execution completed")
+        self._log(context, "info", "Pipeline execution completed")
 
-    def _load_documents(self, conn: sqlite3.Connection, doc_root: str = ".") -> list[Document]:
+    def _load_documents(
+        self, conn: sqlite3.Connection, context: ExecutionContext, doc_root: str = "."
+    ) -> list[Document]:
         """Load documents from database or filesystem.
 
         DB-first approach: Try to load from DB first (GUI mode), fall back to
@@ -248,6 +267,7 @@ class PipelineExecutor:
 
         Args:
             conn: Project database connection.
+            context: Execution context for logging.
             doc_root: Root directory for documents (default: ".").
 
         Returns:
@@ -259,12 +279,12 @@ class PipelineExecutor:
         # Try loading from database first (GUI mode)
         doc_rows = list_all_documents(conn)
         if doc_rows:
-            self._log("info", "Loading documents from database...")
+            self._log(context, "info", "Loading documents from database...")
             return self._documents_from_db_rows(doc_rows)
 
         # Fall back to filesystem if DB is empty (CLI mode)
         if doc_root and doc_root != ".":
-            self._log("info", f"Loading documents from filesystem: {doc_root}")
+            self._log(context, "info", f"Loading documents from filesystem: {doc_root}")
             loader = DocumentLoader()
             documents = loader.load_directory(doc_root)
 
@@ -278,32 +298,34 @@ class PipelineExecutor:
                 return documents
 
         # No documents found
-        self._log("error", "No documents found")
+        self._log(context, "error", "No documents found")
         raise RuntimeError("Cannot execute pipeline without documents")
 
     def _execute_full(
         self,
         conn: sqlite3.Connection,
+        context: ExecutionContext,
         doc_root: str = ".",
     ) -> None:
         """Execute full pipeline (steps 1-5).
 
         Args:
             conn: Project database connection.
+            context: Execution context for logging and cancellation.
             doc_root: Root directory for documents (default: ".").
         """
         # Step 1: Load documents
-        if self._check_cancellation():
+        if self._check_cancellation(context):
             return
 
-        documents = self._load_documents(conn, doc_root)
-        self._log("info", f"Loaded {len(documents)} documents")
+        documents = self._load_documents(conn, context, doc_root)
+        self._log(context, "info", f"Loaded {len(documents)} documents")
 
         # Step 2: Extract terms
-        if self._check_cancellation():
+        if self._check_cancellation(context):
             return
 
-        self._log("info", "Extracting terms...")
+        self._log(context, "info", "Extracting terms...")
         extractor = TermExtractor(llm_client=self._llm_client)
         extracted_terms = extractor.extract_terms(documents, return_categories=True)
 
@@ -324,14 +346,15 @@ class PipelineExecutor:
                 category=classified_term.category.value,  # type: ignore[union-attr]
             )
 
-        self._log("info", f"Extracted {len(unique_terms)} unique terms (from {len(extracted_terms)} total)")
+        self._log(context, "info", f"Extracted {len(unique_terms)} unique terms (from {len(extracted_terms)} total)")
 
         # Continue with steps 3-5 (pass unique terms to avoid duplicate LLM calls)
-        self._execute_from_terms(conn, documents, unique_terms)
+        self._execute_from_terms(conn, context, documents, unique_terms)
 
     def _execute_from_terms(
         self,
         conn: sqlite3.Connection,
+        context: ExecutionContext,
         documents: list[Document] | None = None,
         extracted_terms: list[str] | list[ClassifiedTerm] | None = None,
     ) -> None:
@@ -339,31 +362,32 @@ class PipelineExecutor:
 
         Args:
             conn: Project database connection.
+            context: Execution context for logging and cancellation.
             documents: Pre-loaded documents (None to load from DB).
             extracted_terms: Pre-extracted terms as strings or ClassifiedTerms (None to load from DB).
         """
         # Load documents from DB if not provided
         if documents is None:
-            if self._check_cancellation():
+            if self._check_cancellation(context):
                 return
-            documents = self._load_documents(conn)
+            documents = self._load_documents(conn, context)
 
         # Load terms from DB if not provided
         if extracted_terms is None:
-            if self._check_cancellation():
+            if self._check_cancellation(context):
                 return
 
-            self._log("info", "Loading terms from database...")
+            self._log(context, "info", "Loading terms from database...")
             term_rows = list_all_terms(conn)
             extracted_terms = [row["term_text"] for row in term_rows]
 
         # Step 3: Generate glossary
-        if self._check_cancellation():
+        if self._check_cancellation(context):
             return
 
-        self._log("info", "Generating glossary...")
+        self._log(context, "info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
-        progress_cb = self._create_progress_callback( "provisional")
+        progress_cb = self._create_progress_callback(context, "provisional")
         glossary = generator.generate(
             extracted_terms, documents, term_progress_callback=progress_cb
         )
@@ -371,14 +395,15 @@ class PipelineExecutor:
         # Save provisional glossary
         self._save_glossary_terms(conn, glossary, create_provisional_term)
 
-        self._log("info", f"Generated {len(glossary.terms)} terms")
+        self._log(context, "info", f"Generated {len(glossary.terms)} terms")
 
         # Continue with steps 4-5
-        self._execute_provisional_to_refined(conn, glossary, documents)
+        self._execute_provisional_to_refined(conn, context, glossary, documents)
 
     def _execute_provisional_to_refined(
         self,
         conn: sqlite3.Connection,
+        context: ExecutionContext,
         glossary: Glossary | None = None,
         documents: list[Document] | None = None,
     ) -> None:
@@ -386,36 +411,37 @@ class PipelineExecutor:
 
         Args:
             conn: Project database connection.
+            context: Execution context for logging and cancellation.
             glossary: Pre-generated provisional glossary (None to load from DB).
             documents: Pre-loaded documents (None to load from DB).
         """
         # Load glossary from DB if not provided
         if glossary is None:
-            if self._check_cancellation():
+            if self._check_cancellation(context):
                 return
 
-            self._log("info", "Loading provisional glossary from database...")
+            self._log(context, "info", "Loading provisional glossary from database...")
             provisional_rows = list_all_provisional(conn)
             if not provisional_rows:
-                self._log("error", "No provisional terms found in database")
+                self._log(context, "error", "No provisional terms found in database")
                 raise RuntimeError("Cannot execute provisional_to_refined without provisional glossary")
 
             # Reconstruct Glossary from DB rows
             glossary = self._glossary_from_db_rows(provisional_rows)
 
-            self._log("info", f"Loaded {len(provisional_rows)} provisional terms")
+            self._log(context, "info", f"Loaded {len(provisional_rows)} provisional terms")
 
         # Load documents from DB if not provided
         if documents is None:
-            if self._check_cancellation():
+            if self._check_cancellation(context):
                 return
-            documents = self._load_documents(conn)
+            documents = self._load_documents(conn, context)
 
         # Step 4: Review glossary
-        if self._check_cancellation():
+        if self._check_cancellation(context):
             return
 
-        self._log("info", "Reviewing glossary...")
+        self._log(context, "info", "Reviewing glossary...")
         reviewer = GlossaryReviewer(llm_client=self._llm_client)
         issues = reviewer.review(glossary)
 
@@ -428,25 +454,25 @@ class PipelineExecutor:
                 issue.description,
             )
 
-        self._log("info", f"Found {len(issues)} issues")
+        self._log(context, "info", f"Found {len(issues)} issues")
 
         # Step 5: Refine glossary
         if issues:
-            if self._check_cancellation():
+            if self._check_cancellation(context):
                 return
 
-            self._log("info", "Refining glossary...")
+            self._log(context, "info", "Refining glossary...")
             refiner = GlossaryRefiner(llm_client=self._llm_client)
-            progress_cb = self._create_progress_callback( "refined")
+            progress_cb = self._create_progress_callback(context, "refined")
             glossary = refiner.refine(
                 glossary, issues, documents, term_progress_callback=progress_cb
             )
-            self._log("info", f"Refined {len(glossary.terms)} terms")
+            self._log(context, "info", f"Refined {len(glossary.terms)} terms")
         else:
-            self._log("info", "No issues found, copying provisional to refined")
+            self._log(context, "info", "No issues found, copying provisional to refined")
 
         # Check cancellation before saving refined glossary
-        if self._check_cancellation():
+        if self._check_cancellation(context):
             return
 
         # Save refined glossary (either refined or copied from provisional)
