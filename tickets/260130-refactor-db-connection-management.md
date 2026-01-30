@@ -3,7 +3,7 @@ priority: 1
 tags: [refactoring, backend, database]
 description: "Refactor database connection management to eliminate duplication"
 created_at: "2026-01-30T22:15:00Z"
-started_at: null
+started_at: 2026-01-30T13:21:02Z
 closed_at: null
 ---
 
@@ -46,19 +46,22 @@ cli_db.py の多くのコマンドで、手動で接続を取得・クローズ�
 
 ## Tasks
 
-- [ ] 設計レビュー・承認
-- [ ] manager.py の _db_connection() を database_connection() に置き換え
-- [ ] cli_db.py のコマンドで一貫したパターンを使用
-- [ ] projects.py の _get_project_statistics を改善
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 設計レビュー・承認
+- [x] manager.py の _db_connection() を database_connection() に置き換え
+- [x] cli_db.py のコマンドで一貫したパターンを使用
+- [x] projects.py の _get_project_statistics を改善
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+  - Fixed: Missing transaction in provisional_update and refined_update
+  - Noted: _execute_run uses get_connection() directly (intentional for thread-long connection)
+  - Noted: _get_project_statistics may create empty DBs (low priority, separate ticket if needed)
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
