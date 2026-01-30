@@ -79,7 +79,10 @@ class PipelineExecutor:
                 log_entry["progress_total"] = total
             if current_term is not None:
                 log_entry["current_term"] = current_term
-            self._log_callback(log_entry)
+            try:
+                self._log_callback(log_entry)
+            except Exception:
+                pass  # Ignore callback errors to prevent pipeline interruption
 
     def _check_cancellation(self) -> bool:
         """Check if execution is cancelled.
