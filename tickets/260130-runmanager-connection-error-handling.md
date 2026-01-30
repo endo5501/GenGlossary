@@ -4,7 +4,7 @@ tags: [improvement, backend, error-handling]
 description: "RunManager: Improve connection error handling in _execute_run"
 created_at: "2026-01-30T23:30:00+09:00"
 started_at: 2026-01-30T14:49:08Z
-closed_at: null
+closed_at: 2026-01-30T15:00:06Z
 ---
 
 # RunManager: Improve connection error handling in _execute_run
