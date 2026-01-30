@@ -34,9 +34,9 @@ TestingLibraryElementError: Unable to find an element by: [data-testid="progress
 
 ## Tasks
 
-- [ ] LogPanelコンポーネントを確認
-- [ ] テストまたはコンポーネントを修正
-- [ ] Run tests before closing
+- [x] LogPanelコンポーネントを確認
+- [x] テストまたはコンポーネントを修正
+- [x] Run tests before closing
 
 ## Notes
 
