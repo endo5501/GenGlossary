@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from genglossary.llm.factory import create_llm_client
-from genglossary.db.connection import get_connection, transaction
+from genglossary.db.connection import database_connection, transaction
 from genglossary.db.document_repository import list_all_documents
 from genglossary.db.issue_repository import delete_all_issues, list_all_issues, create_issue
 from genglossary.db.models import GlossaryTermRow
@@ -76,7 +76,9 @@ def _initialize_llm_client(llm_provider: str, model: str | None):
 
 @contextmanager
 def _db_operation(db_path: str):
-    """Context manager for database operations with automatic error handling.
+    """Context manager for CLI database operations with error handling.
+
+    Wraps database_connection() with CLI-specific error handling.
 
     Args:
         db_path: Path to database file.
@@ -86,16 +88,14 @@ def _db_operation(db_path: str):
 
     Handles all exceptions and displays error messages.
     """
-    conn = None
     try:
-        conn = get_connection(db_path)
-        yield conn
+        with database_connection(db_path) as conn:
+            yield conn
+    except click.Abort:
+        raise
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
         raise click.Abort()
-    finally:
-        if conn:
-            conn.close()
 
 
 def _reconstruct_documents_from_db(
