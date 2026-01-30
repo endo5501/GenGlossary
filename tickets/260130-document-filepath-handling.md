@@ -3,7 +3,7 @@ priority: 2
 tags: [improvement, backend, database, security]
 description: "Document storage: Fix file_name storing full path instead of relative"
 created_at: "2026-01-30T20:40:00Z"
-started_at: null
+started_at: 2026-01-30T13:40:45Z
 closed_at: null
 ---
 
