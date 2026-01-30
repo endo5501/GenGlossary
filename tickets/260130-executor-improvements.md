@@ -137,7 +137,7 @@ create_document(conn, document.file_path, ...)  # 完全パスが file_name に
 - [x] Run tests (`uv run pytest`) before reviewing - 736 passed
 - [x] Code simplification review using code-simplifier agent - 完了（詳細は Notes 参照）
 - [x] Code review by codex MCP - 完了（詳細は Notes 参照）
-- [ ] Update docs/architecture/*.md
+- [x] Update docs/architecture/*.md - runs.md に PipelineScope 追加
 - [x] Run static analysis (`pyright`) before closing - pass
 - [x] Run tests (`uv run pytest` & `pnpm test`) before closing - 736 + 162 passed
 - [ ] Get developer approval before closing
