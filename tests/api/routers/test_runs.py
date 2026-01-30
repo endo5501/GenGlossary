@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.project_repository import create_project
 from genglossary.db.registry_schema import initialize_registry
 from genglossary.db.runs_repository import create_run, update_run_status
@@ -29,12 +29,13 @@ def test_project_setup(tmp_path: Path, monkeypatch):
     initialize_registry(registry_conn)
 
     # Create project
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=str(doc_root),
-        db_path=str(project_db_path),
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=str(doc_root),
+            db_path=str(project_db_path),
+        )
 
     registry_conn.close()
 
@@ -180,8 +181,9 @@ class TestListRuns:
 
         # Create some runs directly in database
         conn = get_connection(project_db_path)
-        run1_id = create_run(conn, scope="full")
-        run2_id = create_run(conn, scope="from_terms")
+        with transaction(conn):
+            run1_id = create_run(conn, scope="full")
+            run2_id = create_run(conn, scope="from_terms")
         conn.close()
 
         response = client.get(f"/api/projects/{project_id}/runs")
@@ -206,7 +208,8 @@ class TestGetRun:
         project_db_path = test_project_setup["project_db_path"]
 
         conn = get_connection(project_db_path)
-        run_id = create_run(conn, scope="full")
+        with transaction(conn):
+            run_id = create_run(conn, scope="full")
         conn.close()
 
         response = client.get(f"/api/projects/{project_id}/runs/{run_id}")
@@ -280,8 +283,9 @@ class TestRunLogs:
         project_db_path = test_project_setup["project_db_path"]
 
         conn = get_connection(project_db_path)
-        run_id = create_run(conn, scope="full")
-        update_run_status(conn, run_id, "completed")
+        with transaction(conn):
+            run_id = create_run(conn, scope="full")
+            update_run_status(conn, run_id, "completed")
         conn.close()
 
         response = client.get(f"/api/projects/{project_id}/runs/{run_id}/logs")

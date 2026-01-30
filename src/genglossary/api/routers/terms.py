@@ -5,6 +5,7 @@ import sqlite3
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
 from genglossary.api.dependencies import get_project_db
+from genglossary.db.connection import transaction
 from genglossary.api.schemas.term_schemas import (
     TermCreateRequest,
     TermResponse,
@@ -85,7 +86,8 @@ async def create_new_term(
         HTTPException: 409 if term already exists.
     """
     try:
-        term_id = create_term(project_db, request.term_text, request.category)
+        with transaction(project_db):
+            term_id = create_term(project_db, request.term_text, request.category)
     except sqlite3.IntegrityError:
         raise HTTPException(
             status_code=409, detail=f"Term already exists: {request.term_text}"
@@ -119,7 +121,8 @@ async def update_existing_term(
         HTTPException: 404 if term not found.
     """
     try:
-        update_term(project_db, term_id, request.term_text, request.category)
+        with transaction(project_db):
+            update_term(project_db, term_id, request.term_text, request.category)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
 
@@ -150,4 +153,5 @@ async def delete_existing_term(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
 
-    delete_term(project_db, term_id)
+    with transaction(project_db):
+        delete_term(project_db, term_id)

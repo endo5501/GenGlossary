@@ -6,6 +6,7 @@ import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
 from genglossary.api.dependencies import get_project_by_id, get_project_db
+from genglossary.db.connection import transaction
 from genglossary.api.schemas.provisional_schemas import (
     ProvisionalResponse,
     ProvisionalUpdateRequest,
@@ -149,7 +150,8 @@ async def update_provisional(
         HTTPException: 404 if term not found.
     """
     _ensure_term_exists(project_db, entry_id)
-    update_provisional_term(project_db, entry_id, request.definition, request.confidence)
+    with transaction(project_db):
+        update_provisional_term(project_db, entry_id, request.definition, request.confidence)
     return _get_term_response(project_db, entry_id)
 
 
@@ -179,7 +181,8 @@ async def regenerate_provisional(
 
     try:
         definition, confidence = _regenerate_definition(row, project)
-        update_provisional_term(project_db, entry_id, definition, confidence)
+        with transaction(project_db):
+            update_provisional_term(project_db, entry_id, definition, confidence)
         return _get_term_response(project_db, entry_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid LLM provider: {e}")

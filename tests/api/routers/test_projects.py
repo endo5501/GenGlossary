@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.document_repository import create_document
 from genglossary.db.issue_repository import create_issue
 from genglossary.db.project_repository import create_project
@@ -45,14 +45,15 @@ def test_project_in_registry(test_registry_setup, tmp_path: Path):
     project_db_path.parent.mkdir(parents=True, exist_ok=True)
 
     registry_conn = get_connection(registry_path)
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=doc_root,
-        db_path=str(project_db_path),
-        llm_provider="ollama",
-        llm_model="llama3.2",
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=doc_root,
+            db_path=str(project_db_path),
+            llm_provider="ollama",
+            llm_model="llama3.2",
+        )
     registry_conn.close()
 
     return {
@@ -115,20 +116,21 @@ class TestListProjects:
 
         # Add data to project database
         project_conn = get_connection(project_db_path)
-        # Add 2 documents (v4: file_name and content)
-        create_document(project_conn, "doc1.md", "Content 1", "hash1")
-        create_document(project_conn, "doc2.md", "Content 2", "hash2")
-        # Add 3 provisional terms
-        occurrence = TermOccurrence(
-            document_path="/path/to/doc1.md",
-            line_number=1,
-            context="Test context",
-        )
-        create_provisional_term(project_conn, "term1", "def1", 0.9, [occurrence])
-        create_provisional_term(project_conn, "term2", "def2", 0.8, [occurrence])
-        create_provisional_term(project_conn, "term3", "def3", 0.7, [occurrence])
-        # Add 1 issue
-        create_issue(project_conn, "term1", "unclear", "Test issue description")
+        with transaction(project_conn):
+            # Add 2 documents (v4: file_name and content)
+            create_document(project_conn, "doc1.md", "Content 1", "hash1")
+            create_document(project_conn, "doc2.md", "Content 2", "hash2")
+            # Add 3 provisional terms
+            occurrence = TermOccurrence(
+                document_path="/path/to/doc1.md",
+                line_number=1,
+                context="Test context",
+            )
+            create_provisional_term(project_conn, "term1", "def1", 0.9, [occurrence])
+            create_provisional_term(project_conn, "term2", "def2", 0.8, [occurrence])
+            create_provisional_term(project_conn, "term3", "def3", 0.7, [occurrence])
+            # Add 1 issue
+            create_issue(project_conn, "term1", "unclear", "Test issue description")
         project_conn.close()
 
         # Verify statistics
@@ -152,20 +154,20 @@ class TestListProjects:
         # Create multiple projects
         db_path1 = tmp_path / "projects" / "project1.db"
         db_path1.parent.mkdir(parents=True, exist_ok=True)
-        create_project(
-            registry_conn,
-            name="First Project",
-            doc_root=doc_root,
-            db_path=str(db_path1),
-        )
-
         db_path2 = tmp_path / "projects" / "project2.db"
-        create_project(
-            registry_conn,
-            name="Second Project",
-            doc_root=doc_root,
-            db_path=str(db_path2),
-        )
+        with transaction(registry_conn):
+            create_project(
+                registry_conn,
+                name="First Project",
+                doc_root=doc_root,
+                db_path=str(db_path1),
+            )
+            create_project(
+                registry_conn,
+                name="Second Project",
+                doc_root=doc_root,
+                db_path=str(db_path2),
+            )
         registry_conn.close()
 
         response = client.get("/api/projects")
@@ -464,12 +466,13 @@ class TestUpdateProject:
         db_path2 = tmp_path / "projects" / "project2.db"
         db_path2.parent.mkdir(parents=True, exist_ok=True)
         registry_conn = get_connection(registry_path)
-        create_project(
-            registry_conn,
-            name="Other Project",
-            doc_root=doc_root,
-            db_path=str(db_path2),
-        )
+        with transaction(registry_conn):
+            create_project(
+                registry_conn,
+                name="Other Project",
+                doc_root=doc_root,
+                db_path=str(db_path2),
+            )
         registry_conn.close()
 
         # Try to update to the other project's name

@@ -82,7 +82,6 @@ def create_project(
         """,
         (name, doc_root, db_path, llm_provider, llm_model, llm_base_url, status.value),
     )
-    conn.commit()
 
     project_id = cursor.lastrowid
     assert project_id is not None
@@ -198,7 +197,6 @@ def update_project(
 
     cursor = conn.cursor()
     cursor.execute(query, values)
-    conn.commit()
 
 
 def delete_project(conn: sqlite3.Connection, project_id: int) -> None:
@@ -213,7 +211,6 @@ def delete_project(conn: sqlite3.Connection, project_id: int) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-    conn.commit()
 
 
 def clone_project(
@@ -262,7 +259,6 @@ def clone_project(
         """,
         (new_name, source.doc_root, new_db_path, source.llm_provider, source.llm_model, source.llm_base_url, ProjectStatus.CREATED.value),
     )
-    conn.commit()
 
     project_id = cursor.lastrowid
     assert project_id is not None

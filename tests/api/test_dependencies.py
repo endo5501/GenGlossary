@@ -10,7 +10,7 @@ from genglossary.api.dependencies import (
     get_project_db,
     get_registry_db,
 )
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.project_repository import create_project
 from genglossary.db.registry_schema import initialize_registry
 
@@ -43,12 +43,13 @@ def test_get_project_by_id_returns_project(tmp_path: Path):
     registry_conn = get_connection(str(registry_path))
     initialize_registry(registry_conn)
 
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=str(tmp_path / "docs"),
-        db_path=str(project_db_path),
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=str(tmp_path / "docs"),
+            db_path=str(project_db_path),
+        )
 
     project = get_project_by_id(project_id, registry_conn)
 
@@ -84,12 +85,13 @@ def test_get_project_db_returns_connection(tmp_path: Path):
     registry_conn = get_connection(str(registry_path))
     initialize_registry(registry_conn)
 
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=str(tmp_path / "docs"),
-        db_path=str(project_db_path),
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=str(tmp_path / "docs"),
+            db_path=str(project_db_path),
+        )
 
     project = get_project_by_id(project_id, registry_conn)
     registry_conn.close()

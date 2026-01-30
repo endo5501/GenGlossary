@@ -3,7 +3,7 @@ priority: 1
 tags: [improvement, backend, database, architecture]
 description: "Repository layer: Transaction safety improvement"
 created_at: "2026-01-30T20:40:00Z"
-started_at: null
+started_at: 2026-01-30T12:44:41Z
 closed_at: null
 ---
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.project_repository import create_project
 from genglossary.db.registry_schema import initialize_registry
 from genglossary.db.term_repository import create_term
@@ -27,12 +27,13 @@ def test_project_setup(tmp_path: Path, monkeypatch):
     initialize_registry(registry_conn)
 
     # Create project
-    project_id = create_project(
-        registry_conn,
-        name="Test Project",
-        doc_root=str(doc_root),
-        db_path=str(project_db_path),
-    )
+    with transaction(registry_conn):
+        project_id = create_project(
+            registry_conn,
+            name="Test Project",
+            doc_root=str(doc_root),
+            db_path=str(project_db_path),
+        )
 
     registry_conn.close()
 
@@ -61,8 +62,9 @@ def test_list_terms_returns_all_terms(test_project_setup, client: TestClient):
 
     # Add some terms
     conn = get_connection(project_db_path)
-    term1_id = create_term(conn, "量子コンピュータ", "技術")
-    term2_id = create_term(conn, "量子ビット", "技術")
+    with transaction(conn):
+        term1_id = create_term(conn, "量子コンピュータ", "技術")
+        term2_id = create_term(conn, "量子ビット", "技術")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/terms")
@@ -83,7 +85,8 @@ def test_get_term_by_id_returns_term(test_project_setup, client: TestClient):
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
-    term_id = create_term(conn, "量子もつれ", "技術")
+    with transaction(conn):
+        term_id = create_term(conn, "量子もつれ", "技術")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/terms/{term_id}")
@@ -127,7 +130,8 @@ def test_update_term_modifies_existing_term(test_project_setup, client: TestClie
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
-    term_id = create_term(conn, "旧用語", "旧カテゴリ")
+    with transaction(conn):
+        term_id = create_term(conn, "旧用語", "旧カテゴリ")
     conn.close()
 
     payload = {"term_text": "新用語", "category": "新カテゴリ"}
@@ -149,7 +153,8 @@ def test_delete_term_removes_term(test_project_setup, client: TestClient):
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
-    term_id = create_term(conn, "削除対象", "技術")
+    with transaction(conn):
+        term_id = create_term(conn, "削除対象", "技術")
     conn.close()
 
     response = client.delete(f"/api/projects/{project_id}/terms/{term_id}")

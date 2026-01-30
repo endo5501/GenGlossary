@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
 from genglossary.cli_db import db
-from genglossary.db.connection import get_connection
+from genglossary.db.connection import get_connection, transaction
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import create_term, list_all_terms
 from genglossary.db.provisional_repository import list_all_provisional
@@ -91,7 +91,8 @@ class TestTermsRegenerate:
         # Initialize database with existing term
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        create_term(conn, "古い用語")
+        with transaction(conn):
+            create_term(conn, "古い用語")
         conn.close()
 
         # Setup mocks
@@ -164,12 +165,13 @@ class TestProvisionalRegenerate:
         # Initialize database with terms (with categories)
         conn = get_connection(str(db_path))
         initialize_db(conn)
-        create_term(conn, "量子コンピュータ", category="technical_term")
-        create_term(conn, "量子力学", category="technical_term")
+        with transaction(conn):
+            create_term(conn, "量子コンピュータ", category="technical_term")
+            create_term(conn, "量子力学", category="technical_term")
 
-        # Note: Need to add documents for GlossaryGenerator
-        from genglossary.db.document_repository import create_document
-        create_document(conn, "test.txt", "test content", "abc123")
+            # Note: Need to add documents for GlossaryGenerator
+            from genglossary.db.document_repository import create_document
+            create_document(conn, "test.txt", "test content", "abc123")
         conn.close()
 
         # Setup mocks
@@ -246,13 +248,14 @@ class TestIssuesRegenerate:
         from genglossary.db.provisional_repository import create_provisional_term
         from genglossary.models.term import TermOccurrence
 
-        create_provisional_term(
-            conn,
-            "量子コンピュータ",
-            "定義が不明瞭",
-            0.5,
-            [TermOccurrence(document_path="/tmp/test.txt", line_number=1, context="text")]
-        )
+        with transaction(conn):
+            create_provisional_term(
+                conn,
+                "量子コンピュータ",
+                "定義が不明瞭",
+                0.5,
+                [TermOccurrence(document_path="/tmp/test.txt", line_number=1, context="text")]
+            )
         conn.close()
 
         # Setup mocks
@@ -316,20 +319,21 @@ class TestRefinedRegenerate:
         from genglossary.db.document_repository import create_document
         from genglossary.models.term import TermOccurrence
 
-        create_provisional_term(
-            conn,
-            "量子コンピュータ",
-            "定義が不明瞭",
-            0.5,
-            [TermOccurrence(document_path="/tmp/test.txt", line_number=1, context="text")]
-        )
-        create_issue(
-            conn,
-            "量子コンピュータ",
-            "unclear",
-            "定義を改善する必要がある"
-        )
-        create_document(conn, "test.txt", "test content", "abc123")
+        with transaction(conn):
+            create_provisional_term(
+                conn,
+                "量子コンピュータ",
+                "定義が不明瞭",
+                0.5,
+                [TermOccurrence(document_path="/tmp/test.txt", line_number=1, context="text")]
+            )
+            create_issue(
+                conn,
+                "量子コンピュータ",
+                "unclear",
+                "定義を改善する必要がある"
+            )
+            create_document(conn, "test.txt", "test content", "abc123")
         conn.close()
 
         # Setup mocks
