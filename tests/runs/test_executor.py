@@ -1243,6 +1243,21 @@ class TestPipelineExecutorBugFixes:
             assert len(set(file_names)) == 2  # Both should have unique names
 
 
+class TestPipelineExecutorUnknownScope:
+    """Tests for unknown scope handling."""
+
+    def test_unknown_scope_raises_value_error(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """不明なスコープはValueErrorを発生させる"""
+        with patch("genglossary.runs.executor.create_llm_client"):
+            with pytest.raises(ValueError, match="Unknown scope"):
+                executor.execute(project_db, "invalid_scope", execution_context)
+
+
 class TestPipelineScopeEnum:
     """Tests for PipelineScope enum."""
 

@@ -253,7 +253,7 @@ class PipelineExecutor:
             self._execute_provisional_to_refined(conn, context)
         else:
             self._log(context, "error", f"Unknown scope: {scope_value}")
-            return
+            raise ValueError(f"Unknown scope: {scope_value}")
 
         self._log(context, "info", "Pipeline execution completed")
 
