@@ -3,7 +3,7 @@ priority: 1
 tags: [improvement, backend, race-condition]
 description: "RunManager: Fix race condition between cancellation check and status update"
 created_at: "2026-01-30T23:30:00+09:00"
-started_at: null
+started_at: 2026-01-30T14:35:57Z
 closed_at: null
 ---
 
@@ -54,15 +54,17 @@ cursor.execute("""
 
 ## Tasks
 
-- [ ] 設計レビュー・承認
-- [ ] 実装
-- [ ] テストの更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] 設計レビュー・承認 → Option B: Conditional DB update を採用
+- [x] 実装 → `complete_run_if_not_cancelled` 関数を追加
+- [x] テストの更新 → 6 tests 追加（repository 5 + manager 1）
+- [x] Commit → 5 commits
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+  - 結果: 変更不要と評価
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+  - 指摘: ステータスガードを強化（`status IN ('pending', 'running')` に変更）→ 対応済み
+- [x] Update docs/architecture/*.md → runs.md 更新
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions) → 786 passed
 - [ ] Get developer approval before closing
