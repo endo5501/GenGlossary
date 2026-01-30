@@ -11,6 +11,9 @@ describe('logStore', () => {
 
   describe('addLog', () => {
     it('adds a log message to the store', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const log: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -25,6 +28,9 @@ describe('logStore', () => {
     })
 
     it('limits logs to 1000 entries', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const logs: LogMessage[] = Array.from({ length: 1100 }, (_, i) => ({
         run_id: 1,
         level: 'info' as const,
@@ -43,6 +49,9 @@ describe('logStore', () => {
 
   describe('clearLogs', () => {
     it('clears all logs', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const log: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -66,6 +75,9 @@ describe('logStore', () => {
     })
 
     it('clears logs when run ID changes', () => {
+      // Set initial run ID
+      useLogStore.getState().setCurrentRunId(1)
+
       const log: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -331,6 +343,9 @@ describe('logStore', () => {
     })
 
     it('updates latestProgress when log with progress data is added', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const log1: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -367,6 +382,9 @@ describe('logStore', () => {
     })
 
     it('preserves latestProgress when non-progress log is added', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const progressLog: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -399,6 +417,9 @@ describe('logStore', () => {
     })
 
     it('clears latestProgress when logs are cleared', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const progressLog: LogMessage = {
         run_id: 1,
         level: 'info',

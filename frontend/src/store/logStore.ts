@@ -46,6 +46,11 @@ export const useLogStore = create<LogStore>((set, get) => ({
 
   addLog: (log) =>
     set((state) => {
+      // Validate context: ignore logs with mismatched run_id
+      if (state.currentRunId === null || log.run_id !== state.currentRunId) {
+        return state // No state change
+      }
+
       const newLogs = [...state.logs, log]
       const progress = extractProgress(log)
       return {
