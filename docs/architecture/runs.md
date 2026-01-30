@@ -161,6 +161,20 @@ class RunManager:
 
 ## executor.py (PipelineExecutor - パイプライン実行)
 
+### PipelineScope Enum
+
+実行スコープを定義する列挙型。マジックストリングを排除し、型安全性を向上。
+
+```python
+class PipelineScope(Enum):
+    """パイプライン実行スコープの列挙型"""
+    FULL = "full"                                    # 全ステップ実行
+    FROM_TERMS = "from_terms"                        # 用語抽出済みから再開
+    PROVISIONAL_TO_REFINED = "provisional_to_refined" # 暫定用語集から精査
+```
+
+### PipelineExecutor クラス
+
 ```python
 class PipelineExecutor:
     """用語集生成パイプラインステップを実行
@@ -172,7 +186,7 @@ class PipelineExecutor:
     def execute(
         self,
         conn: sqlite3.Connection,
-        scope: str,
+        scope: str | PipelineScope,  # Enum または文字列を受け付け
         cancel_event: Event,
         log_callback: Callable[[dict], None],
         doc_root: str = ".",
@@ -183,18 +197,21 @@ class PipelineExecutor:
 
         Args:
             conn: プロジェクトDB接続（スレッド内で作成されたもの）
-            scope: 実行スコープ
+            scope: 実行スコープ（PipelineScope または文字列）
             cancel_event: キャンセルシグナル
             log_callback: ログメッセージコールバック
             doc_root: ドキュメントルートディレクトリ
             run_id: 実行ID（必須、ログフィルタリング用）
         """
-        if scope == "full":
-            self._execute_full(conn, cancel_event, log_queue)
-        elif scope == "from_terms":
-            self._execute_from_terms(conn, cancel_event, log_queue)
-        elif scope == "provisional_to_refined":
-            self._execute_provisional_to_refined(conn, cancel_event, log_queue)
+        # Enum を文字列値に変換
+        scope_value = scope.value if isinstance(scope, PipelineScope) else scope
+
+        if scope_value == PipelineScope.FULL.value:
+            self._execute_full(conn, doc_root)
+        elif scope_value == PipelineScope.FROM_TERMS.value:
+            self._execute_from_terms(conn)
+        elif scope_value == PipelineScope.PROVISIONAL_TO_REFINED.value:
+            self._execute_provisional_to_refined(conn)
 ```
 
 ### 進捗コールバック
@@ -208,7 +225,6 @@ TermProgressCallback = Callable[[int, int, str], None]  # (current, total, term_
 # executor.py
 def _create_progress_callback(
     self,
-    conn: sqlite3.Connection,
     step_name: str,
 ) -> Callable[[int, int, str], None]:
     """進捗コールバックを生成。ログに拡張フィールドを含める。"""
