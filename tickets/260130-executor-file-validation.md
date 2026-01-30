@@ -4,7 +4,7 @@ tags: [improvement, backend, executor, security]
 description: "PipelineExecutor: Add file validation and size limits for document loading"
 created_at: "2026-01-30T20:50:00Z"
 started_at: 2026-01-30T13:55:28Z
-closed_at: null
+closed_at: 2026-01-30T14:08:05Z
 ---
 
 # PipelineExecutor: File validation and size limits
