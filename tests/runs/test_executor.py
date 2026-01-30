@@ -441,15 +441,25 @@ class TestPipelineExecutorConfiguration:
         """再実行時にテーブルがクリアされることを確認"""
         executor = PipelineExecutor(provider="ollama")
 
+        # Create mock clear functions
+        mock_delete_terms = MagicMock()
+        mock_delete_prov = MagicMock()
+        mock_delete_issues = MagicMock()
+        mock_delete_refined = MagicMock()
+
+        # Patch _SCOPE_CLEAR_FUNCTIONS to use our mocks
+        mock_scope_clear_functions = {
+            "full": [mock_delete_terms, mock_delete_prov, mock_delete_issues, mock_delete_refined],
+            "from_terms": [mock_delete_prov, mock_delete_issues, mock_delete_refined],
+            "provisional_to_refined": [mock_delete_issues, mock_delete_refined],
+        }
+
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.delete_all_terms") as mock_delete_terms, \
-             patch("genglossary.runs.executor.delete_all_provisional") as mock_delete_prov, \
-             patch("genglossary.runs.executor.delete_all_issues") as mock_delete_issues, \
-             patch("genglossary.runs.executor.delete_all_refined") as mock_delete_refined, \
+             patch("genglossary.runs.executor._SCOPE_CLEAR_FUNCTIONS", mock_scope_clear_functions), \
              patch("genglossary.runs.executor.delete_all_documents"):
 
             # Mock LLM client
