@@ -3,7 +3,7 @@ priority: 2
 tags: [bugfix, backend, executor]
 description: "PipelineExecutor: Bug fixes from code review"
 created_at: "2026-01-30T19:45:00Z"
-started_at: null
+started_at: 2026-01-30T10:59:16Z
 closed_at: null
 ---
 
@@ -59,17 +59,17 @@ create_document(conn, file_name, ...)  # file_name は UNIQUE
 
 ## Tasks
 
-- [ ] テストを書いて問題を再現
-- [ ] Refined glossary が issues なし時に保存されない問題を修正
-- [ ] 重複用語挿入でパイプラインがクラッシュする問題を修正
-- [ ] ドキュメントファイル名衝突で挿入失敗する問題を修正
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] テストを書いて問題を再現
+- [x] Refined glossary が issues なし時に保存されない問題を修正
+- [x] 重複用語挿入でパイプラインがクラッシュする問題を修正
+- [x] ドキュメントファイル名衝突で挿入失敗する問題を修正
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 
@@ -77,3 +77,14 @@ create_document(conn, file_name, ...)  # file_name は UNIQUE
 
 - 260130-executor-code-simplification チケットのレビューで発見
 - codex MCP レビューからの指摘
+
+## レビュー結果サマリー
+
+### code-simplifier agent
+- 3つのバグ修正は適切に実装されている
+- 型アノテーションの改善（`type: ignore` 削除）を推奨 → `260130-executor-improvements` チケットで対応予定
+
+### codex MCP
+- Medium: `file_name` に完全パスを保存する件 → `260130-executor-improvements` に追加
+- Low: 重複フィルタリングが DB 挿入のみ → `260130-executor-improvements` に追加
+- Low: issues 空時のキャンセルチェック欠如 → `260130-executor-improvements` に追加
