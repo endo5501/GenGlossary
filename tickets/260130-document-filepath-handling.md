@@ -3,8 +3,8 @@ priority: 2
 tags: [improvement, backend, database, security]
 description: "Document storage: Fix file_name storing full path instead of relative"
 created_at: "2026-01-30T20:40:00Z"
-started_at: null
-closed_at: null
+started_at: 2026-01-30T13:40:45Z
+closed_at: 2026-01-30T13:54:04Z
 ---
 
 # Document storage: Fix file_name storing full path
@@ -76,21 +76,24 @@ create_document(conn, os.path.basename(document.file_path), ...)
 
 ## Tasks
 
-- [ ] 設計レビュー・承認
-- [ ] 実装
-- [ ] スキーママイグレーション（必要な場合）
-- [ ] テストの更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 設計レビュー・承認 → オプション1（相対パス使用）を採用
+- [x] 実装 → `os.path.relpath(document.file_path, doc_root)` を使用
+- [x] スキーママイグレーション（必要な場合） → 不要
+- [x] テストの更新 → `TestDocumentFilePathStorage` クラス追加
+- [x] Commit → 693f317, d91c3ef
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+  - pathlib統一の提案 → 260130-filepath-handling-improvements チケットに記録
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+  - Windows互換性、OSセパレータ統一の提案 → 260130-filepath-handling-improvements チケットに記録
+- [x] Update docs/architecture/*.md → database.md, runs.md 更新
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
 - 260130-executor-improvements チケットから延期
 - codex MCP レビューで Medium 優先度として指摘
+- 追加改善点は 260130-filepath-handling-improvements チケットに記録

@@ -340,8 +340,12 @@ glossary = generator.generate(
 | DBが空 + `doc_root` 未指定/`"."` | エラー |
 
 **ファイル名の保存:**
-- CLIモードでファイルシステムから読み込む場合、`file_name` には `document.file_path`（フルパスまたは相対パス）が保存されます
-- これにより、異なるディレクトリにある同名ファイル（例: `docs/README.md` と `examples/README.md`）の衝突を回避します
+- CLIモードでファイルシステムから読み込む場合、`file_name` には `doc_root` からの相対パスが保存されます
+  - 例: `doc_root=/project/docs` で `/project/docs/chapter1/intro.md` を読み込むと、`file_name` は `chapter1/intro.md`
+- これにより:
+  - 異なるディレクトリにある同名ファイル（例: `docs/README.md` と `examples/README.md`）の衝突を回避
+  - サーバーの絶対パス漏洩を防止（セキュリティ）
+  - DBの環境間移動時の互換性を向上（ポータビリティ）
 
 - `full` / `from_terms` / `provisional_to_refined`: すべて `_load_documents()` を使用
 - GUIからのファイル追加: HTML5 File APIでブラウザから読み取り、APIを通じてDBに保存
