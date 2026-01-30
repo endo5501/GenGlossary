@@ -3,8 +3,8 @@ priority: 1
 tags: [bug, frontend, testing]
 description: "Fix LogPanel.test.tsx progress-bar test failure"
 created_at: "2026-01-30T10:22:00Z"
-started_at: null
-closed_at: null
+started_at: 2026-01-30T10:53:44Z
+closed_at: 2026-01-30T10:57:49Z
 ---
 
 # Fix LogPanel.test.tsx progress-bar test failure
@@ -34,9 +34,9 @@ TestingLibraryElementError: Unable to find an element by: [data-testid="progress
 
 ## Tasks
 
-- [ ] LogPanelコンポーネントを確認
-- [ ] テストまたはコンポーネントを修正
-- [ ] Run tests before closing
+- [x] LogPanelコンポーネントを確認
+- [x] テストまたはコンポーネントを修正
+- [x] Run tests before closing
 
 ## Notes
 
