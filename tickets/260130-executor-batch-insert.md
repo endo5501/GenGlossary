@@ -1,5 +1,5 @@
 ---
-priority: 8
+priority: 3
 tags: [improvement, backend, executor, performance]
 description: "PipelineExecutor: Batch database inserts for better performance"
 created_at: "2026-01-30T20:50:00Z"
@@ -67,7 +67,15 @@ def create_terms_batch(
 - [ ] リポジトリにバッチ関数追加
 - [ ] executor でバッチ関数を使用
 - [ ] パフォーマンステスト
-- [ ] テスト更新
+- [ ] Commit
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
 
 ## Notes
 

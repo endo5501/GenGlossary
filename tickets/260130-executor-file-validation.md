@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [improvement, backend, executor, security]
 description: "PipelineExecutor: Add file validation and size limits for document loading"
 created_at: "2026-01-30T20:50:00Z"
@@ -77,7 +77,15 @@ ALLOWED_EXTENSIONS = ['.txt', '.md', '.rst', '.html']
 - [ ] DocumentLoader にバリデーション追加
 - [ ] 設定可能な制限値
 - [ ] テスト更新
-- [ ] ドキュメント更新
+- [ ] Commit
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
 
 ## Notes
 

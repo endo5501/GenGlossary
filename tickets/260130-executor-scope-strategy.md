@@ -1,5 +1,5 @@
 ---
-priority: 9
+priority: 4
 tags: [improvement, backend, executor, refactoring]
 description: "PipelineExecutor: Replace if-elif chain with Strategy pattern for scope handling"
 created_at: "2026-01-30T20:50:00Z"

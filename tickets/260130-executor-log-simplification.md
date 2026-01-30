@@ -1,5 +1,5 @@
 ---
-priority: 9
+priority: 4
 tags: [improvement, backend, executor, refactoring]
 description: "PipelineExecutor: Simplify _log method using dict comprehension"
 created_at: "2026-01-30T20:50:00Z"

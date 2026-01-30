@@ -1,5 +1,5 @@
 ---
-priority: 8
+priority: 3
 tags: [improvement, backend, executor, ux]
 description: "PipelineExecutor: Improve cancellation responsiveness during long operations"
 created_at: "2026-01-30T20:50:00Z"
@@ -66,6 +66,15 @@ generator.generate(
 - [ ] ループ内キャンセルチェック追加
 - [ ] LLM 処理クラスへの cancel_event 対応
 - [ ] テスト更新
+- [ ] Commit
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
 
 ## Notes
 

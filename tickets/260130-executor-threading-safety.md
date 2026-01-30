@@ -1,5 +1,5 @@
 ---
-priority: 5
+priority: 1
 tags: [improvement, backend, threading, architecture]
 description: "PipelineExecutor: Threading safety improvements"
 created_at: "2026-01-30T20:40:00Z"
@@ -92,7 +92,15 @@ def execute(self, context: ExecutionContext, ...):
 - [ ] 設計レビュー・承認
 - [ ] 実装
 - [ ] テストの更新（並行実行テストの追加）
-- [ ] ドキュメント更新
+- [ ] Commit
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
 
 ## Notes
 

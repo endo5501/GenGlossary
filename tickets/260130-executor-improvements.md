@@ -123,13 +123,13 @@ create_document(conn, document.file_path, ...)  # 完全パスが file_name に
 - [x] 設計検討
 - [x] 型ヒントの明確化 - `list[str] | list[ClassifiedTerm] | None` を使用
 - [x] マジックストリングの定数化 - `PipelineScope` Enum を追加
-- [ ] ~~トランザクション安全性の追加~~ → 別チケット: リポジトリ層が内部でcommitするため変更が大きい
+- [x] ~~トランザクション安全性の追加~~ → 別チケット: リポジトリ層が内部でcommitするため変更が大きい
 - [x] 進捗コールバックパターンの統一 - 既に `_create_progress_callback` で統一済み
 - [x] データベース読み込みロジックの統一 - 現状で十分、過度な抽象化は避ける
 - [x] 未使用パラメータの削除 - `conn` パラメータを削除
 - [x] 用語集保存とログの統合 - 現状で十分、オーバーエンジニアリングを避ける
-- [ ] ~~共通名詞フィルタリングの一貫性~~ → 現状で問題なし
-- [ ] ~~file_name に完全パスを保存する問題~~ → 別チケット: API/スキーマ変更を伴う
+- [x] ~~共通名詞フィルタリングの一貫性~~ → 現状で問題なし
+- [x] ~~file_name に完全パスを保存する問題~~ → 別チケット: API/スキーマ変更を伴う
 - [x] 重複フィルタリングの適用範囲 - generator に渡す前に重複除去
 - [x] issues が空の場合のキャンセルチェック - 保存前にキャンセルチェックを追加
 - [x] Commit
@@ -140,7 +140,7 @@ create_document(conn, document.file_path, ...)  # 完全パスが file_name に
 - [x] Update docs/architecture/*.md - runs.md に PipelineScope 追加
 - [x] Run static analysis (`pyright`) before closing - pass
 - [x] Run tests (`uv run pytest` & `pnpm test`) before closing - 736 + 162 passed
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 ## Notes
 

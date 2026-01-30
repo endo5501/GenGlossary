@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [improvement, backend, executor, type-safety]
 description: "PipelineExecutor: Improve type safety and reduce type: ignore comments"
 created_at: "2026-01-30T20:50:00Z"
