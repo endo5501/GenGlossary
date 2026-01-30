@@ -294,3 +294,49 @@ class TestCancelRun:
     ) -> None:
         """存在しないRunをキャンセルしようとしても失敗しない"""
         cancel_run(project_db, 999)  # Should not raise
+
+
+class TestCompleteRunIfNotCancelled:
+    """Tests for complete_run_if_not_cancelled function."""
+
+    def test_complete_running_run(self, project_db: sqlite3.Connection) -> None:
+        """実行中のRunをcompletedに更新できる"""
+        from genglossary.db.runs_repository import complete_run_if_not_cancelled
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+
+        result = complete_run_if_not_cancelled(project_db, run_id)
+
+        assert result is True
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "completed"
+        assert run["finished_at"] is not None
+
+    def test_does_not_complete_cancelled_run(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """cancelledのRunは更新されない"""
+        from genglossary.db.runs_repository import complete_run_if_not_cancelled
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        cancel_run(project_db, run_id)
+
+        result = complete_run_if_not_cancelled(project_db, run_id)
+
+        assert result is False
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "cancelled"
+
+    def test_returns_false_for_nonexistent_run(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """存在しないRunに対してはFalseを返す"""
+        from genglossary.db.runs_repository import complete_run_if_not_cancelled
+
+        result = complete_run_if_not_cancelled(project_db, 999)
+
+        assert result is False
