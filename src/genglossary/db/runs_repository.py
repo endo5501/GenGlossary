@@ -174,3 +174,31 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
         """,
         (run_id,),
     )
+
+
+def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool:
+    """Complete a run only if it has not been cancelled.
+
+    This function atomically checks if the run is cancelled before updating
+    to completed status, preventing race conditions between cancellation
+    and completion.
+
+    Args:
+        conn: Project database connection.
+        run_id: Run ID to complete.
+
+    Returns:
+        bool: True if the run was updated to completed, False if already
+              cancelled or not found.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE runs
+        SET status = 'completed',
+            finished_at = datetime('now')
+        WHERE id = ? AND status != 'cancelled'
+        """,
+        (run_id,),
+    )
+    return cursor.rowcount > 0
