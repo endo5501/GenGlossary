@@ -11,6 +11,9 @@ describe('logStore', () => {
 
   describe('addLog', () => {
     it('adds a log message to the store', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const log: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -25,6 +28,9 @@ describe('logStore', () => {
     })
 
     it('limits logs to 1000 entries', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const logs: LogMessage[] = Array.from({ length: 1100 }, (_, i) => ({
         run_id: 1,
         level: 'info' as const,
@@ -43,6 +49,9 @@ describe('logStore', () => {
 
   describe('clearLogs', () => {
     it('clears all logs', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const log: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -66,6 +75,9 @@ describe('logStore', () => {
     })
 
     it('clears logs when run ID changes', () => {
+      // Set initial run ID
+      useLogStore.getState().setCurrentRunId(1)
+
       const log: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -207,12 +219,133 @@ describe('logStore', () => {
     })
   })
 
+  describe('addLog context validation', () => {
+    beforeEach(() => {
+      useLogStore.getState().clearLogs()
+      useLogStore.getState().setCurrentContext(null, null)
+    })
+
+    it('ignores logs when currentRunId is null', () => {
+      // currentRunId is null (not set)
+      const log: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Test message',
+        timestamp: '2025-01-01T00:00:00Z',
+      }
+
+      useLogStore.getState().addLog(log)
+
+      // Log should be ignored because currentRunId is null
+      expect(useLogStore.getState().logs).toHaveLength(0)
+    })
+
+    it('adds logs when run_id matches currentRunId', () => {
+      useLogStore.getState().setCurrentContext(1, 42)
+
+      const log: LogMessage = {
+        run_id: 42,
+        level: 'info',
+        message: 'Test message',
+        timestamp: '2025-01-01T00:00:00Z',
+      }
+
+      useLogStore.getState().addLog(log)
+
+      expect(useLogStore.getState().logs).toHaveLength(1)
+      expect(useLogStore.getState().logs[0]).toEqual(log)
+    })
+
+    it('ignores logs when run_id does not match currentRunId', () => {
+      useLogStore.getState().setCurrentContext(1, 42)
+
+      const staleLog: LogMessage = {
+        run_id: 41, // Different run_id (stale SSE message)
+        level: 'info',
+        message: 'Stale message from old run',
+        timestamp: '2025-01-01T00:00:00Z',
+      }
+
+      useLogStore.getState().addLog(staleLog)
+
+      // Stale log should be ignored
+      expect(useLogStore.getState().logs).toHaveLength(0)
+    })
+
+    it('does not update latestProgress when log run_id does not match', () => {
+      useLogStore.getState().setCurrentContext(1, 42)
+
+      const staleProgressLog: LogMessage = {
+        run_id: 41, // Different run_id
+        level: 'info',
+        message: 'Stale progress',
+        timestamp: '2025-01-01T00:00:00Z',
+        step: 'provisional',
+        progress_current: 5,
+        progress_total: 20,
+        current_term: 'term1',
+      }
+
+      useLogStore.getState().addLog(staleProgressLog)
+
+      // latestProgress should not be updated
+      expect(useLogStore.getState().latestProgress).toBeNull()
+    })
+
+    it('handles context switch with stale messages correctly', () => {
+      // Start with run 1
+      useLogStore.getState().setCurrentContext(1, 1)
+
+      const log1: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Run 1 message',
+        timestamp: '2025-01-01T00:00:00Z',
+      }
+
+      useLogStore.getState().addLog(log1)
+      expect(useLogStore.getState().logs).toHaveLength(1)
+
+      // Switch to run 2 (this clears logs)
+      useLogStore.getState().setCurrentContext(1, 2)
+      expect(useLogStore.getState().logs).toHaveLength(0)
+
+      // Stale message from run 1 arrives (simulating slow SSE)
+      const staleLog: LogMessage = {
+        run_id: 1,
+        level: 'info',
+        message: 'Stale message from run 1',
+        timestamp: '2025-01-01T00:00:01Z',
+      }
+
+      useLogStore.getState().addLog(staleLog)
+
+      // Stale log should be ignored
+      expect(useLogStore.getState().logs).toHaveLength(0)
+
+      // New message from run 2 should be added
+      const newLog: LogMessage = {
+        run_id: 2,
+        level: 'info',
+        message: 'Run 2 message',
+        timestamp: '2025-01-01T00:00:02Z',
+      }
+
+      useLogStore.getState().addLog(newLog)
+      expect(useLogStore.getState().logs).toHaveLength(1)
+      expect(useLogStore.getState().logs[0].message).toBe('Run 2 message')
+    })
+  })
+
   describe('latestProgress', () => {
     it('returns null when no progress logs exist', () => {
       expect(useLogStore.getState().latestProgress).toBeNull()
     })
 
     it('updates latestProgress when log with progress data is added', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const log1: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -249,6 +382,9 @@ describe('logStore', () => {
     })
 
     it('preserves latestProgress when non-progress log is added', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const progressLog: LogMessage = {
         run_id: 1,
         level: 'info',
@@ -281,6 +417,9 @@ describe('logStore', () => {
     })
 
     it('clears latestProgress when logs are cleared', () => {
+      // Set currentRunId to match log run_id
+      useLogStore.getState().setCurrentRunId(1)
+
       const progressLog: LogMessage = {
         run_id: 1,
         level: 'info',
