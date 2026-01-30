@@ -795,6 +795,97 @@ class TestGlossaryGeneratorPromptBuilding:
         assert "confidence" in prompt
 
 
+class TestGlossaryGeneratorErrorLogging:
+    """Test suite for error logging in GlossaryGenerator."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = """GenGlossary is a tool.
+LLM is a language model.
+API is an interface.
+"""
+        return Document(file_path="/path/to/doc.md", content=content)
+
+    def test_logs_warning_when_definition_generation_fails(
+        self,
+        mock_llm_client: MagicMock,
+        sample_document: Document,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that a warning is logged when definition generation fails."""
+        import logging
+
+        mock_llm_client.generate_structured.side_effect = RuntimeError(
+            "LLM connection failed"
+        )
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+
+        with caplog.at_level(logging.WARNING):
+            generator.generate(["GenGlossary"], [sample_document])
+
+        # Should have logged a warning
+        assert len(caplog.records) >= 1
+        warning_record = caplog.records[0]
+        assert warning_record.levelno == logging.WARNING
+        assert "GenGlossary" in warning_record.message
+        assert "LLM connection failed" in warning_record.message
+
+    def test_continues_processing_after_error(
+        self,
+        mock_llm_client: MagicMock,
+        sample_document: Document,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that processing continues for remaining terms after an error."""
+        import logging
+
+        # First call fails, second succeeds
+        mock_llm_client.generate_structured.side_effect = [
+            RuntimeError("Failed for first term"),
+            MockDefinitionResponse(definition="Test definition", confidence=0.9),
+        ]
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+
+        with caplog.at_level(logging.WARNING):
+            result = generator.generate(["GenGlossary", "LLM"], [sample_document])
+
+        # Should have processed second term despite first failing
+        assert result.term_count == 1
+        assert result.has_term("LLM")
+        assert not result.has_term("GenGlossary")
+
+        # Should have logged warning for failed term
+        assert any("GenGlossary" in r.message for r in caplog.records)
+
+    def test_logs_from_correct_module(
+        self,
+        mock_llm_client: MagicMock,
+        sample_document: Document,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that warning is logged from the glossary_generator module."""
+        import logging
+
+        mock_llm_client.generate_structured.side_effect = RuntimeError("Test error")
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+
+        with caplog.at_level(logging.WARNING):
+            generator.generate(["TestTerm"], [sample_document])
+
+        # Should log from glossary_generator module
+        assert len(caplog.records) >= 1
+        assert "glossary_generator" in caplog.records[0].name
+
+
 class TestGlossaryGeneratorCallbackExceptionHandling:
     """Test suite for callback exception handling in GlossaryGenerator."""
 
