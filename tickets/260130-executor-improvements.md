@@ -129,6 +129,9 @@ create_document(conn, document.file_path, ...)  # 完全パスが file_name に
 - [ ] 未使用パラメータの削除
 - [ ] 用語集保存とログの統合
 - [ ] 共通名詞フィルタリングの一貫性
+- [ ] file_name に完全パスを保存する問題
+- [ ] 重複フィルタリングの適用範囲 
+- [ ] issues が空の場合のキャンセルチェック
 - [ ] Commit
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
