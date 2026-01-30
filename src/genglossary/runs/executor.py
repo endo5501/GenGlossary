@@ -6,6 +6,7 @@ from enum import Enum
 from threading import Event
 from typing import Any, Callable
 
+from genglossary.db.connection import transaction
 from genglossary.db.document_repository import (
     create_document,
     delete_all_documents,
@@ -291,10 +292,11 @@ class PipelineExecutor:
             if documents:
                 # Save loaded documents to DB
                 # Use file_path as file_name to avoid collisions with same basename
-                delete_all_documents(conn)
-                for document in documents:
-                    content_hash = compute_content_hash(document.content)
-                    create_document(conn, document.file_path, document.content, content_hash)
+                with transaction(conn):
+                    delete_all_documents(conn)
+                    for document in documents:
+                        content_hash = compute_content_hash(document.content)
+                        create_document(conn, document.file_path, document.content, content_hash)
                 return documents
 
         # No documents found
@@ -340,11 +342,15 @@ class PipelineExecutor:
                 continue
             seen_terms.add(term_text)
             unique_terms.append(classified_term)
-            create_term(
-                conn,
-                term_text,
-                category=classified_term.category.value,  # type: ignore[union-attr]
-            )
+
+        # Save all unique terms in a single transaction
+        with transaction(conn):
+            for classified_term in unique_terms:
+                create_term(
+                    conn,
+                    classified_term.term,
+                    category=classified_term.category.value,
+                )
 
         self._log(context, "info", f"Extracted {len(unique_terms)} unique terms (from {len(extracted_terms)} total)")
 
@@ -393,7 +399,8 @@ class PipelineExecutor:
         )
 
         # Save provisional glossary
-        self._save_glossary_terms(conn, glossary, create_provisional_term)
+        with transaction(conn):
+            self._save_glossary_terms(conn, glossary, create_provisional_term)
 
         self._log(context, "info", f"Generated {len(glossary.terms)} terms")
 
@@ -446,13 +453,14 @@ class PipelineExecutor:
         issues = reviewer.review(glossary)
 
         # Save issues
-        for issue in issues:
-            create_issue(
-                conn,
-                issue.term_name,
-                issue.issue_type,
-                issue.description,
-            )
+        with transaction(conn):
+            for issue in issues:
+                create_issue(
+                    conn,
+                    issue.term_name,
+                    issue.issue_type,
+                    issue.description,
+                )
 
         self._log(context, "info", f"Found {len(issues)} issues")
 
@@ -476,7 +484,8 @@ class PipelineExecutor:
             return
 
         # Save refined glossary (either refined or copied from provisional)
-        self._save_glossary_terms(conn, glossary, create_refined_term)
+        with transaction(conn):
+            self._save_glossary_terms(conn, glossary, create_refined_term)
 
     def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: str) -> None:
         """Clear relevant tables before execution.
@@ -486,5 +495,6 @@ class PipelineExecutor:
             scope: Execution scope.
         """
         clear_funcs = _SCOPE_CLEAR_FUNCTIONS.get(scope, [])
-        for clear_func in clear_funcs:
-            clear_func(conn)
+        with transaction(conn):
+            for clear_func in clear_funcs:
+                clear_func(conn)
