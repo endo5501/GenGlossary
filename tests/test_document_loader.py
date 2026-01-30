@@ -406,6 +406,45 @@ class TestDocumentLoaderValidation:
         assert len(docs) == 1
         assert docs[0].file_path.endswith("readme.txt")
 
+    def test_load_directory_excludes_files_in_git_directory(
+        self, tmp_path: Path
+    ) -> None:
+        """Test files inside .git directory are excluded."""
+        # Create .git directory with files
+        git_dir = tmp_path / ".git"
+        git_dir.mkdir()
+        (git_dir / "config").write_text("git config content")
+        (git_dir / "HEAD").write_text("ref: refs/heads/main")
+
+        # Create normal files
+        (tmp_path / "readme.txt").write_text("readme")
+
+        # Support files without extension to test exclusion
+        loader = DocumentLoader(supported_extensions=[".txt", ""])
+        docs = loader.load_directory(str(tmp_path))
+
+        # Only readme.txt should be loaded, .git/* should be excluded
+        assert len(docs) == 1
+        assert docs[0].file_path.endswith("readme.txt")
+
+    def test_load_directory_excludes_files_in_nested_excluded_dir(
+        self, tmp_path: Path
+    ) -> None:
+        """Test files inside nested excluded directories are excluded."""
+        # Create deeply nested .git directory
+        nested = tmp_path / "subdir" / ".git" / "objects"
+        nested.mkdir(parents=True)
+        (nested / "abc123").write_text("pack content")
+
+        # Create normal file
+        (tmp_path / "readme.txt").write_text("readme")
+
+        loader = DocumentLoader(supported_extensions=[".txt", ""])
+        docs = loader.load_directory(str(tmp_path))
+
+        assert len(docs) == 1
+        assert docs[0].file_path.endswith("readme.txt")
+
     def test_load_file_raises_for_excluded_file(self, tmp_path: Path) -> None:
         """Test load_file raises error for excluded file."""
         from genglossary.exceptions import ExcludedFileError

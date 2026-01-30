@@ -66,19 +66,36 @@ class DocumentLoader:
         )
         self.validate_path = validate_path
 
-    def _is_excluded(self, file_path: Path) -> str | None:
-        """Check if a file matches any exclusion pattern.
+    def _is_excluded(self, file_path: Path, base_path: Path | None = None) -> str | None:
+        """Check if a file or any of its parent directories matches exclusion pattern.
+
+        This checks both the filename and all path components relative to base_path
+        to ensure files inside excluded directories (e.g., .git/config) are also excluded.
 
         Args:
             file_path: The file path to check.
+            base_path: Optional base path to check relative path components.
 
         Returns:
             The matching pattern if excluded, None otherwise.
         """
+        # Check filename
         filename = file_path.name
         for pattern in self.excluded_patterns:
             if fnmatch.fnmatch(filename, pattern):
                 return pattern
+
+        # Check path components (for excluding entire directories like .git/)
+        if base_path:
+            try:
+                relative_path = file_path.resolve().relative_to(base_path.resolve())
+                for part in relative_path.parts:
+                    for pattern in self.excluded_patterns:
+                        if fnmatch.fnmatch(part, pattern):
+                            return pattern
+            except ValueError:
+                pass
+
         return None
 
     def _exceeds_file_size(self, file_path: Path) -> bool:
@@ -122,7 +139,8 @@ class DocumentLoader:
     ) -> None:
         """Validate that file_path is within base_path.
 
-        Uses realpath to resolve symlinks and detect directory traversal.
+        Uses Path.is_relative_to() after resolving symlinks to detect
+        directory traversal attacks.
 
         Args:
             file_path: The file path to validate.
@@ -134,10 +152,12 @@ class DocumentLoader:
         if not self.validate_path:
             return
 
-        real_base = os.path.realpath(base_path)
-        real_file = os.path.realpath(file_path)
+        resolved_base = Path(os.path.realpath(base_path))
+        resolved_file = Path(os.path.realpath(file_path))
 
-        if not real_file.startswith(real_base + os.sep) and real_file != real_base:
+        try:
+            resolved_file.relative_to(resolved_base)
+        except ValueError:
             raise PathTraversalError(str(file_path), str(base_path))
 
     def load_file(self, path: str, base_path: str | None = None) -> Document:
@@ -222,7 +242,7 @@ class DocumentLoader:
                 continue
 
             # Skip excluded or oversized files silently
-            if self._is_excluded(file_path):
+            if self._is_excluded(file_path, dir_path):
                 continue
 
             if self._exceeds_file_size(file_path):
