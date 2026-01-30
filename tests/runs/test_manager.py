@@ -592,3 +592,55 @@ class TestRunManagerPerRunCancellation:
             execution_barrier.set()
             if manager._thread:
                 manager._thread.join(timeout=2)
+
+
+class TestRunManagerCancellationRaceCondition:
+    """Tests for race condition between cancellation and completion."""
+
+    def test_run_not_completed_when_cancelled_after_execution(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """実行完了後にキャンセルされた場合、ステータスはcancelledのまま"""
+        from genglossary.db.connection import database_connection, transaction
+        from genglossary.db.runs_repository import cancel_run as db_cancel_run
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor that simulates completion, then cancel happens
+            # before status update
+            cancel_after_execute = Event()
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                # Simulate some work
+                context.log_callback(
+                    {"run_id": context.run_id, "level": "info", "message": "Done"}
+                )
+                # Signal that execution is complete, triggering cancellation
+                cancel_after_execute.set()
+                # Small delay to allow cancellation to happen before status update
+                time.sleep(0.2)
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            cancel_after_execute.wait(timeout=5)
+
+            # Cancel immediately after execute completes (race condition scenario)
+            # This simulates the race: cancel happens between is_set() check
+            # and status update
+            with database_connection(manager.db_path) as conn:
+                with transaction(conn):
+                    db_cancel_run(conn, run_id)
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=3)
+
+            # Status should be cancelled, not completed
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "cancelled", (
+                f"Expected status 'cancelled' but got '{run['status']}'. "
+                "Race condition: run was completed despite cancellation."
+            )
