@@ -15,7 +15,7 @@ from genglossary.api.schemas.project_schemas import (
     ProjectStatistics,
     ProjectUpdateRequest,
 )
-from genglossary.db.connection import get_connection, transaction
+from genglossary.db.connection import database_connection, transaction
 from genglossary.db.project_repository import (
     clone_project,
     create_project,
@@ -126,14 +126,12 @@ def _get_project_statistics(db_path: str) -> ProjectStatistics:
         ProjectStatistics: Statistics for the project.
     """
     try:
-        project_conn = get_connection(db_path)
-        stats = ProjectStatistics(
-            document_count=count_documents(project_conn),
-            term_count=count_provisional_terms(project_conn),
-            issue_count=count_issues(project_conn),
-        )
-        project_conn.close()
-        return stats
+        with database_connection(db_path) as project_conn:
+            return ProjectStatistics(
+                document_count=count_documents(project_conn),
+                term_count=count_provisional_terms(project_conn),
+                issue_count=count_issues(project_conn),
+            )
     except Exception:
         return ProjectStatistics()
 
