@@ -104,7 +104,11 @@ GUI進捗表示機能実装時のコードレビューで特定された改善�
 - [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
 - [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [x] Create follow-up tickets for deferred items → `260130-progress-callback-follow-up.md`
+- [x] Create follow-up tickets for deferred items:
+  - `260130-backend-callback-refactoring.md` (priority 7)
+  - `260130-db-progress-update.md` (priority 8)
+  - `260130-frontend-small-fixes.md` (priority 7)
+  - `260130-log-state-architecture.md` (priority 8)
 - [x] Update docs/architecture/*.md (not required - no architecture changes)
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
