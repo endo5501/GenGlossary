@@ -4,7 +4,7 @@ tags: [improvement, code-quality]
 description: "GlossaryGenerator: print()をloggingに置き換え"
 created_at: "2026-01-30T08:20:00Z"
 started_at: 2026-01-30T09:48:56Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-30T10:01:46Z # Do not modify manually
 ---
 
 # GlossaryGenerator: print()をloggingに置き換え
