@@ -3,7 +3,7 @@ priority: 1
 tags: [bug, frontend, testing]
 description: "Fix LogPanel.test.tsx progress-bar test failure"
 created_at: "2026-01-30T10:22:00Z"
-started_at: null
+started_at: 2026-01-30T10:53:44Z
 closed_at: null
 ---
 
