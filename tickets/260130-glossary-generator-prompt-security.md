@@ -3,7 +3,7 @@ priority: 4
 tags: [security, improvement]
 description: "GlossaryGenerator: プロンプトインジェクション対策"
 created_at: "2026-01-30T08:21:00Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-30T10:02:31Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -32,8 +32,8 @@ context_text = f"""<context>
 
 ## Tasks
 
-- [ ] プロンプトの安全性を向上
-- [ ] テスト追加（悪意のあるコンテキストを含むケース）
+- [x] プロンプトの安全性を向上
+- [x] テスト追加（悪意のあるコンテキストを含むケース）
 
 ## 関連
 
