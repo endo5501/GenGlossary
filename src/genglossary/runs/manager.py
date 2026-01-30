@@ -97,10 +97,10 @@ class RunManager:
             run_id: Run ID.
             scope: Run scope.
         """
-        # Create a new connection for this thread
-        conn = get_connection(self.db_path)
-
+        conn = None
         try:
+            # Create a new connection for this thread
+            conn = get_connection(self.db_path)
             # Update status to running
             with transaction(conn):
                 update_run_status(
@@ -147,14 +147,27 @@ class RunManager:
 
         except Exception as e:
             # Update status to failed
-            with transaction(conn):
-                update_run_status(
-                    conn,
-                    run_id,
-                    "failed",
-                    finished_at=datetime.now(),
-                    error_message=str(e),
-                )
+            # If conn is None (connection failed), use database_connection for update
+            if conn is not None:
+                with transaction(conn):
+                    update_run_status(
+                        conn,
+                        run_id,
+                        "failed",
+                        finished_at=datetime.now(),
+                        error_message=str(e),
+                    )
+            else:
+                # Connection failed, try to update status with a new connection
+                with database_connection(self.db_path) as fallback_conn:
+                    with transaction(fallback_conn):
+                        update_run_status(
+                            fallback_conn,
+                            run_id,
+                            "failed",
+                            finished_at=datetime.now(),
+                            error_message=str(e),
+                        )
             self._broadcast_log(run_id, {"run_id": run_id, "level": "error", "message": f"Run failed: {str(e)}"})
         finally:
             # Cleanup cancel event for this run
@@ -163,7 +176,8 @@ class RunManager:
             # Send completion signal to close SSE stream
             self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
             # Close the connection when thread completes
-            conn.close()
+            if conn is not None:
+                conn.close()
 
     def cancel_run(self, run_id: int) -> None:
         """Cancel a running run by setting its cancellation event.
