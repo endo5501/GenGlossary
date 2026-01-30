@@ -1,7 +1,6 @@
 """Pipeline executor for running glossary generation steps."""
 
 import sqlite3
-from pathlib import Path
 from threading import Event
 from typing import Any, Callable
 
@@ -261,11 +260,11 @@ class PipelineExecutor:
 
             if documents:
                 # Save loaded documents to DB
+                # Use file_path as file_name to avoid collisions with same basename
                 delete_all_documents(conn)
                 for document in documents:
                     content_hash = compute_content_hash(document.content)
-                    file_name = Path(document.file_path).name
-                    create_document(conn, file_name, document.content, content_hash)
+                    create_document(conn, document.file_path, document.content, content_hash)
                 return documents
 
         # No documents found
@@ -298,11 +297,16 @@ class PipelineExecutor:
         extractor = TermExtractor(llm_client=self._llm_client)
         extracted_terms = extractor.extract_terms(documents, return_categories=True)
 
-        # Save extracted terms
+        # Save extracted terms (skip duplicates)
+        seen_terms: set[str] = set()
         for classified_term in extracted_terms:  # type: ignore[union-attr]
+            term_text = classified_term.term  # type: ignore[union-attr]
+            if term_text in seen_terms:
+                continue
+            seen_terms.add(term_text)
             create_term(
                 conn,
-                classified_term.term,  # type: ignore[union-attr]
+                term_text,
                 category=classified_term.category.value,  # type: ignore[union-attr]
             )
 
@@ -412,24 +416,23 @@ class PipelineExecutor:
 
         self._log("info", f"Found {len(issues)} issues")
 
-        # Step 5: Refine glossary (only if issues exist)
-        if not issues:
-            return
+        # Step 5: Refine glossary
+        if issues:
+            if self._check_cancellation():
+                return
 
-        if self._check_cancellation():
-            return
+            self._log("info", "Refining glossary...")
+            refiner = GlossaryRefiner(llm_client=self._llm_client)
+            progress_cb = self._create_progress_callback(conn, "refined")
+            glossary = refiner.refine(
+                glossary, issues, documents, term_progress_callback=progress_cb
+            )
+            self._log("info", f"Refined {len(glossary.terms)} terms")
+        else:
+            self._log("info", "No issues found, copying provisional to refined")
 
-        self._log("info", "Refining glossary...")
-        refiner = GlossaryRefiner(llm_client=self._llm_client)
-        progress_cb = self._create_progress_callback(conn, "refined")
-        glossary = refiner.refine(
-            glossary, issues, documents, term_progress_callback=progress_cb
-        )
-
-        # Save refined glossary
+        # Save refined glossary (either refined or copied from provisional)
         self._save_glossary_terms(conn, glossary, create_refined_term)
-
-        self._log("info", f"Refined {len(glossary.terms)} terms")
 
     def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: str) -> None:
         """Clear relevant tables before execution.
