@@ -11,9 +11,9 @@ function renderWithMantine(ui: React.ReactElement) {
 
 describe('LogPanel Progress Display', () => {
   beforeEach(() => {
-    // Reset store before each test
+    // Reset store before each test (must use setCurrentContext to reset both projectId and runId)
     useLogStore.getState().clearLogs()
-    useLogStore.getState().setCurrentRunId(null)
+    useLogStore.getState().setCurrentContext(null, null)
   })
 
   it('displays progress bar when progress data exists', () => {
@@ -29,7 +29,9 @@ describe('LogPanel Progress Display', () => {
       current_term: 'term1',
     }
 
-    useLogStore.getState().setCurrentRunId(1)
+    // Must use setCurrentContext to match what useLogStream will call during render
+    // Otherwise, useLogStream's setCurrentContext call will reset latestProgress
+    useLogStore.getState().setCurrentContext(1, 1)
     useLogStore.getState().addLog(logWithProgress)
 
     renderWithMantine(<LogPanel projectId={1} runId={1} />)
@@ -50,7 +52,7 @@ describe('LogPanel Progress Display', () => {
       current_term: 'term1',
     }
 
-    useLogStore.getState().setCurrentRunId(1)
+    useLogStore.getState().setCurrentContext(1, 1)
     useLogStore.getState().addLog(logWithProgress)
 
     renderWithMantine(<LogPanel projectId={1} runId={1} />)
@@ -71,7 +73,7 @@ describe('LogPanel Progress Display', () => {
       current_term: 'quantum computer',
     }
 
-    useLogStore.getState().setCurrentRunId(1)
+    useLogStore.getState().setCurrentContext(1, 1)
     useLogStore.getState().addLog(logWithProgress)
 
     renderWithMantine(<LogPanel projectId={1} runId={1} />)
@@ -93,7 +95,7 @@ describe('LogPanel Progress Display', () => {
       current_term: 'term1',
     }
 
-    useLogStore.getState().setCurrentRunId(1)
+    useLogStore.getState().setCurrentContext(1, 1)
     useLogStore.getState().addLog(logWithProgress)
 
     renderWithMantine(<LogPanel projectId={1} runId={1} />)
@@ -110,7 +112,7 @@ describe('LogPanel Progress Display', () => {
       timestamp: '2025-01-01T00:00:00Z',
     }
 
-    useLogStore.getState().setCurrentRunId(1)
+    useLogStore.getState().setCurrentContext(1, 1)
     useLogStore.getState().addLog(logWithoutProgress)
 
     renderWithMantine(<LogPanel projectId={1} runId={1} />)
