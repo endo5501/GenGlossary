@@ -81,6 +81,24 @@ class DocumentLoader:
                 return pattern
         return None
 
+    def _exceeds_file_size(self, file_path: Path) -> bool:
+        """Check if file size exceeds the limit.
+
+        Args:
+            file_path: The file path to check.
+
+        Returns:
+            True if the file exceeds the limit, False otherwise.
+        """
+        if self.max_file_size is None:
+            return False
+
+        try:
+            file_size = file_path.stat().st_size
+            return file_size > self.max_file_size
+        except OSError:
+            return True
+
     def _check_file_size(self, file_path: Path) -> None:
         """Check if file size is within limits.
 
@@ -194,10 +212,7 @@ class DocumentLoader:
 
         documents: list[Document] = []
 
-        if recursive:
-            files = dir_path.rglob("*")
-        else:
-            files = dir_path.glob("*")
+        files = dir_path.rglob("*") if recursive else dir_path.glob("*")
 
         for file_path in files:
             if not file_path.is_file():
@@ -206,20 +221,13 @@ class DocumentLoader:
             if file_path.suffix not in self.supported_extensions:
                 continue
 
-            # Check exclusion pattern (skip silently)
+            # Skip excluded or oversized files silently
             if self._is_excluded(file_path):
                 continue
 
-            # Check file size (skip silently for directory loading)
-            if self.max_file_size is not None:
-                try:
-                    file_size = file_path.stat().st_size
-                    if file_size > self.max_file_size:
-                        continue
-                except OSError:
-                    continue
+            if self._exceeds_file_size(file_path):
+                continue
 
-            # Validate path (raise error for directory loading)
             self._validate_path_in_directory(file_path, dir_path)
 
             try:
