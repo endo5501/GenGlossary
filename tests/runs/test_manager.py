@@ -304,9 +304,9 @@ class TestRunManagerLogStreaming:
         """実行中のログがキャプチャされる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
-                log_callback({"run_id": run_id, "level": "info", "message": "Starting execution"})
-                log_callback({"run_id": run_id, "level": "info", "message": "Completed"})
+            def mock_execute(conn, scope, context, doc_root="."):
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting execution"})
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Completed"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
 
@@ -332,16 +332,16 @@ class TestRunManagerLogStreaming:
             # Mock executor that checks cancellation event
             cancel_detected = []
 
-            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
-                log_callback({"run_id": run_id, "level": "info", "message": "Starting"})
+            def mock_execute(conn, scope, context, doc_root="."):
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting"})
                 # Simulate some work, checking for cancellation
                 for i in range(10):
-                    if cancel_event.is_set():
+                    if context.cancel_event.is_set():
                         cancel_detected.append(True)
-                        log_callback({"run_id": run_id, "level": "info", "message": "Cancelled"})
+                        context.log_callback({"run_id": context.run_id, "level": "info", "message": "Cancelled"})
                         return
                     time.sleep(0.1)
-                log_callback({"run_id": run_id, "level": "info", "message": "Completed"})
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Completed"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
 
@@ -375,9 +375,9 @@ class TestRunManagerLogStreaming:
         """ログメッセージにrun_idが含まれることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
-                log_callback({"run_id": run_id, "level": "info", "message": "Starting"})
-                log_callback({"run_id": run_id, "level": "info", "message": "Completed"})
+            def mock_execute(conn, scope, context, doc_root="."):
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting"})
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Completed"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
 
@@ -405,8 +405,8 @@ class TestRunManagerLogStreaming:
         """完了シグナルにrun_idが含まれることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
-                log_callback({"run_id": run_id, "level": "info", "message": "Starting"})
+            def mock_execute(conn, scope, context, doc_root="."):
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
 
@@ -436,9 +436,9 @@ class TestRunManagerLogStreaming:
         """SSEストリームが完了シグナルを受け取ることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, cancel_event, log_callback, doc_root=".", run_id=None):
-                log_callback({"run_id": run_id, "level": "info", "message": "Starting"})
-                log_callback({"run_id": run_id, "level": "info", "message": "Completed"})
+            def mock_execute(conn, scope, context, doc_root="."):
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting"})
+                context.log_callback({"run_id": context.run_id, "level": "info", "message": "Completed"})
                 # Completion signal should be sent by manager, not executor
 
             mock_executor.return_value.execute.side_effect = mock_execute
