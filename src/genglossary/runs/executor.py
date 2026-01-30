@@ -130,7 +130,8 @@ class PipelineExecutor:
         cancel_event: Event,
         log_callback: Callable[[dict], None],
         doc_root: str = ".",
-        run_id: int | None = None,
+        *,
+        run_id: int,
     ) -> None:
         """Execute the pipeline for the given scope.
 
@@ -140,7 +141,7 @@ class PipelineExecutor:
             cancel_event: Event to signal cancellation.
             log_callback: Callback function for log messages.
             doc_root: Root directory for documents (default: ".").
-            run_id: Run ID for log filtering (default: None).
+            run_id: Run ID for log filtering (required).
         """
         # Set execution context
         self._run_id = run_id

@@ -31,17 +31,17 @@ export function useLogStream(
   const logs = useLogStore((state) => state.logs)
   const addLog = useLogStore((state) => state.addLog)
   const clearLogs = useLogStore((state) => state.clearLogs)
-  const setCurrentRunId = useLogStore((state) => state.setCurrentRunId)
+  const setCurrentContext = useLogStore((state) => state.setCurrentContext)
 
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
   const handleClearLogs = useCallback(() => clearLogs(), [clearLogs])
 
-  // Update currentRunId when runId changes (this clears logs only when runId actually changes)
+  // Update context when projectId or runId changes (clears logs when either changes)
   useEffect(() => {
-    setCurrentRunId(runId ?? null)
-  }, [runId, setCurrentRunId])
+    setCurrentContext(projectId, runId ?? null)
+  }, [projectId, runId, setCurrentContext])
 
   useEffect(() => {
     if (!runId) {

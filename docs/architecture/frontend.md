@@ -513,7 +513,8 @@ export function useLogStream(
 **設計ポイント:**
 - `getBaseUrl()` を使用して環境に応じた URL を生成
 - Zustand ストア（`logStore`）にログを保存し、ページ遷移時も保持
-- `runId` 変更時に自動でログをクリア
+- `projectId` または `runId` 変更時に自動でログをクリア（`setCurrentContext`を使用）
+- プロジェクト間でのログ衝突を防止（同じrunIdでも異なるプロジェクトなら別扱い）
 - メモリリーク防止のため最大1000件に制限
 - クリーンアップ時に `EventSource.close()` を呼び出し
 
@@ -569,17 +570,20 @@ interface LogProgress {
 
 interface LogStore {
   logs: LogMessage[]              // ログメッセージ配列（最大1000件）
+  currentProjectId: number | null // 現在のプロジェクトID
   currentRunId: number | null     // 現在の実行ID
   latestProgress: LogProgress | null  // 最新の進捗情報
   addLog: (log: LogMessage) => void
   clearLogs: () => void
   setCurrentRunId: (runId: number | null) => void
+  setCurrentContext: (projectId: number | null, runId: number | null) => void
 }
 ```
 
 **設計ポイント:**
 - `addLog`: ログ追加時に進捗情報も自動更新。メモリ制限のため最大1000件に制限
-- `setCurrentRunId`: 実行ID変更時にログと進捗情報をクリア（再解析開始時）
+- `setCurrentContext`: プロジェクトIDまたは実行IDが変更されたときにログと進捗情報をクリア。異なるプロジェクト間でのログ衝突を防止
+- `setCurrentRunId`: 実行ID変更時にログと進捗情報をクリア（レガシーサポート）
 - `latestProgress`: 最新の進捗情報を直接状態として保持（React の再レンダリング最適化）
 
 **進捗情報の抽出:**
@@ -607,7 +611,8 @@ const logs = useLogStore((state) => state.logs)
 
 // アクションの呼び出し
 useLogStore.getState().addLog(logMessage)
-useLogStore.getState().setCurrentRunId(newRunId)
+useLogStore.getState().setCurrentContext(projectId, runId)  // 推奨
+useLogStore.getState().setCurrentRunId(newRunId)  // レガシー
 ```
 
 ## ユーティリティ（utils/）
