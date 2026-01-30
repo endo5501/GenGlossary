@@ -1,8 +1,9 @@
 """Glossary generator - Step 2: Generate provisional glossary using LLM."""
 
 import re
+from typing import cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, confloat
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
@@ -15,7 +16,7 @@ class DefinitionResponse(BaseModel):
     """Response model for definition generation."""
 
     definition: str
-    confidence: float
+    confidence: confloat(ge=0.0, le=1.0)  # type: ignore[valid-type]
 
 
 class GlossaryGenerator:
@@ -32,6 +33,17 @@ class GlossaryGenerator:
         ("\u30a0", "\u30ff"),  # Katakana
         ("\uac00", "\ud7af"),  # Korean Hangul
     ]
+
+    # Maximum number of context occurrences to include in prompt
+    MAX_CONTEXT_COUNT = 5
+
+    # Few-shot example for definition generation
+    FEW_SHOT_EXAMPLE = """Input:
+用語: アソリウス島騎士団
+出現箇所: 「アソリウス島騎士団は魔神討伐の最前線で戦っている。」
+
+Output:
+{"definition": "エデルト王国の辺境、アソリウス島を守る騎士団。魔神討伐の最前線として重要な役割を担う。", "confidence": 0.9}"""
 
     def __init__(self, llm_client: BaseLLMClient) -> None:
         """Initialize the GlossaryGenerator.
@@ -114,7 +126,11 @@ class GlossaryGenerator:
     def _filter_terms(
         self, terms: list[str] | list[ClassifiedTerm], skip_common_nouns: bool
     ) -> list[str] | list[ClassifiedTerm]:
-        """Filter terms based on skip_common_nouns flag.
+        """Filter terms based on skip_common_nouns flag and validity.
+
+        Filters out:
+        - Empty or whitespace-only terms
+        - Common nouns (if skip_common_nouns is True and terms are ClassifiedTerm)
 
         Args:
             terms: List of terms (str or ClassifiedTerm).
@@ -123,20 +139,24 @@ class GlossaryGenerator:
         Returns:
             Filtered list of terms.
         """
-        # Early returns for simple cases
         if not terms:
             return terms
 
-        # If str list or not filtering, return as-is
-        if isinstance(terms[0], str) or not skip_common_nouns:
-            return terms
+        # If str list, filter out empty/whitespace-only terms
+        if isinstance(terms[0], str):
+            str_terms = cast(list[str], terms)
+            return [t for t in str_terms if t.strip()]
 
-        # Filter ClassifiedTerm list (type guaranteed by above check)
-        return [
-            term  # type: ignore[misc]
-            for term in terms
-            if term.category != TermCategory.COMMON_NOUN  # type: ignore[union-attr]
-        ]
+        # Filter ClassifiedTerm list
+        classified_terms = cast(list[ClassifiedTerm], terms)
+        filtered = [t for t in classified_terms if t.term.strip()]
+
+        if skip_common_nouns:
+            filtered = [
+                t for t in filtered if t.category != TermCategory.COMMON_NOUN
+            ]
+
+        return filtered
 
     def _build_search_pattern(self, term: str) -> re.Pattern:
         """Build a regex pattern for searching a term.
@@ -203,6 +223,17 @@ class GlossaryGenerator:
 
         return occurrences
 
+    def _is_cjk_char(self, char: str) -> bool:
+        """Check if a single character is CJK.
+
+        Args:
+            char: A single character to check.
+
+        Returns:
+            True if the character is in a CJK range.
+        """
+        return any(start <= char <= end for start, end in self.CJK_RANGES)
+
     def _contains_cjk(self, text: str) -> bool:
         """Check if text contains CJK (Chinese, Japanese, Korean) characters.
 
@@ -212,11 +243,54 @@ class GlossaryGenerator:
         Returns:
             True if the text contains CJK characters.
         """
-        return any(
-            start <= char <= end
-            for char in text
-            for start, end in self.CJK_RANGES
+        return any(self._is_cjk_char(char) for char in text)
+
+    def _build_context_text(self, occurrences: list[TermOccurrence]) -> str:
+        """Build context text from term occurrences.
+
+        Args:
+            occurrences: List of term occurrences with context.
+
+        Returns:
+            Formatted context text for prompt.
+        """
+        if not occurrences:
+            return "(ドキュメント内に出現箇所がありません)"
+
+        return "\n".join(
+            f"- {occ.context}"
+            for occ in occurrences[: self.MAX_CONTEXT_COUNT]
         )
+
+    def _build_definition_prompt(self, term: str, context_text: str) -> str:
+        """Build the prompt for definition generation.
+
+        Args:
+            term: The term to define.
+            context_text: Formatted context text from occurrences.
+
+        Returns:
+            Complete prompt for LLM.
+        """
+        return f"""あなたは用語集を作成するアシスタントです。
+与えられた用語について、出現箇所のコンテキストから文脈固有の意味を1-2文で説明してください。
+
+## Example
+
+以下は出力形式の例です。この例の内容をそのまま使わないでください。
+
+{self.FEW_SHOT_EXAMPLE}
+
+## End Example
+
+## 今回の用語:
+
+用語: {term}
+出現箇所とコンテキスト:
+{context_text}
+
+信頼度の基準: 明確=0.8+, 推測可能=0.5-0.7, 不明確=0.0-0.4
+JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-1.0}}"""
 
     def _generate_definition(
         self, term: str, occurrences: list[TermOccurrence]
@@ -230,37 +304,8 @@ class GlossaryGenerator:
         Returns:
             Tuple of (definition, confidence).
         """
-        # Build context from occurrences
-        if occurrences:
-            contexts = [
-                f"- {occ.context}" for occ in occurrences[:5]  # Limit to 5
-            ]
-            context_text = "\n".join(contexts)
-        else:
-            context_text = "(ドキュメント内に出現箇所がありません)"
-
-        prompt = f"""あなたは用語集を作成するアシスタントです。
-与えられた用語について、出現箇所のコンテキストから文脈固有の意味を1-2文で説明してください。
-
-## Example
-
-以下は出力形式の例です。この例の内容をそのまま使わないでください。
-
-Input:
-用語: アソリウス島騎士団
-出現箇所: 「アソリウス島騎士団は魔神討伐の最前線で戦っている。」
-
-Output:
-{{"definition": "エデルト王国の辺境、アソリウス島を守る騎士団。魔神討伐の最前線として重要な役割を担う。", "confidence": 0.9}}
-
-## 今回の用語:
-
-用語: {term}
-出現箇所とコンテキスト:
-{context_text}
-
-信頼度の基準: 明確=0.8+, 推測可能=0.5-0.7, 不明確=0.0-0.4
-JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-1.0}}"""
+        context_text = self._build_context_text(occurrences)
+        prompt = self._build_definition_prompt(term, context_text)
 
         response = self.llm_client.generate_structured(
             prompt, DefinitionResponse
