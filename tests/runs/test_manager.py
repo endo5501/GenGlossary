@@ -40,7 +40,10 @@ def manager(project_db_path: str) -> RunManager:
     yield mgr
     # Ensure thread is stopped before fixture cleanup
     if mgr._thread and mgr._thread.is_alive():
-        mgr._cancel_event.set()
+        # Cancel all running runs
+        with mgr._cancel_events_lock:
+            for cancel_event in mgr._cancel_events.values():
+                cancel_event.set()
         mgr._thread.join(timeout=2)
 
 
@@ -139,11 +142,15 @@ class TestRunManagerCancel:
     ) -> None:
         """cancel_runはRunのステータスをcancelledに設定する"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock long-running executor
-            def slow_execute(*args, **kwargs):
-                time.sleep(0.5)
+            # Mock executor that checks cancel event
+            def cancellable_execute(conn, scope, context, doc_root="."):
+                # Wait for cancellation, checking the event
+                for _ in range(50):  # 5 seconds max
+                    if context.cancel_event.is_set():
+                        return
+                    time.sleep(0.1)
 
-            mock_executor.return_value.execute.side_effect = slow_execute
+            mock_executor.return_value.execute.side_effect = cancellable_execute
 
             run_id = manager.start_run(scope="full")
             time.sleep(0.1)  # Allow thread to start
@@ -151,7 +158,8 @@ class TestRunManagerCancel:
             manager.cancel_run(run_id)
 
             # Wait for thread to complete
-            time.sleep(0.3)
+            if manager._thread:
+                manager._thread.join(timeout=2)
 
             run = get_run(project_db, run_id)
             assert run is not None
@@ -162,15 +170,25 @@ class TestRunManagerCancel:
     ) -> None:
         """cancel_runはキャンセルイベントをシグナルする"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            mock_executor.return_value.execute.return_value = None
+            execution_barrier = Event()
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                # Wait to keep run "active" until we cancel
+                execution_barrier.wait(timeout=5)
+
+            mock_executor.return_value.execute.side_effect = mock_execute
 
             run_id = manager.start_run(scope="full")
             time.sleep(0.1)
 
+            # Cancel event should be set for this run
             manager.cancel_run(run_id)
+            assert manager._cancel_events[run_id].is_set()
 
-            # Cancellation event should be set
-            assert manager._cancel_event.is_set()
+            # Cleanup
+            execution_barrier.set()
+            if manager._thread:
+                manager._thread.join(timeout=2)
 
     def test_cancel_nonexistent_run_does_not_fail(
         self, manager: RunManager
@@ -464,3 +482,113 @@ class TestRunManagerLogStreaming:
                     logs.append(log)
 
             assert completion_signal_found, "Completion signal should be sent to log queue"
+
+
+class TestRunManagerPerRunCancellation:
+    """Tests for per-run cancellation functionality."""
+
+    def test_each_run_gets_individual_cancel_event(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """各runが個別のキャンセルイベントを持つことを確認"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            captured_events = []
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                captured_events.append(context.cancel_event)
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            run_id = manager.start_run(scope="full")
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Cancel event should be stored in _cancel_events dict
+            assert hasattr(manager, "_cancel_events")
+            assert len(captured_events) == 1
+
+    def test_cancel_only_affects_specific_run(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """キャンセルが特定のrunのみに影響することを確認"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            captured_events: dict[int, Event] = {}
+            execution_barrier = Event()
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                captured_events[context.run_id] = context.cancel_event
+                # Wait to keep first run "active" until we cancel
+                if context.run_id == 1:
+                    execution_barrier.wait(timeout=2)
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            # Start first run
+            run_id1 = manager.start_run(scope="full")
+            time.sleep(0.1)
+
+            # Cancel run_id1
+            manager.cancel_run(run_id1)
+
+            # Release the barrier to let execution complete
+            execution_barrier.set()
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Only the cancelled run's event should be set
+            assert run_id1 in captured_events
+            assert captured_events[run_id1].is_set()
+
+    def test_cancel_nonexistent_run_is_safe(
+        self, manager: RunManager
+    ) -> None:
+        """存在しないrunをキャンセルしても安全"""
+        # Should not raise any exception
+        manager.cancel_run(9999)
+
+    def test_cancel_event_is_cleaned_up_after_run_completes(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """runが完了するとキャンセルイベントがクリーンアップされる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            run_id = manager.start_run(scope="full")
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # After completion, the cancel event should be cleaned up
+            assert hasattr(manager, "_cancel_events")
+            assert run_id not in manager._cancel_events
+
+    def test_cancel_run_updates_specific_run_event(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """cancel_runが指定したrun_idのイベントのみをセットする"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            execution_barrier = Event()
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                # Keep running until barrier is released
+                execution_barrier.wait(timeout=5)
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            run_id = manager.start_run(scope="full")
+            time.sleep(0.1)
+
+            # Verify the event exists and is not set
+            assert run_id in manager._cancel_events
+            assert not manager._cancel_events[run_id].is_set()
+
+            # Cancel the run
+            manager.cancel_run(run_id)
+
+            # Verify the specific run's event is now set
+            assert manager._cancel_events[run_id].is_set()
+
+            # Cleanup
+            execution_barrier.set()
+            if manager._thread:
+                manager._thread.join(timeout=2)

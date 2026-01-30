@@ -45,7 +45,8 @@ class RunManager:
         self.llm_provider = llm_provider
         self.llm_model = llm_model
         self._thread: Thread | None = None
-        self._cancel_event = Event()
+        self._cancel_events: dict[int, Event] = {}
+        self._cancel_events_lock = Lock()
         self._current_run_id: int | None = None
         # Subscriber管理
         self._subscribers: dict[int, set[Queue]] = {}
@@ -76,8 +77,10 @@ class RunManager:
 
         self._current_run_id = run_id
 
-        # Clear previous cancel event
-        self._cancel_event.clear()
+        # Create cancel event for this run
+        cancel_event = Event()
+        with self._cancel_events_lock:
+            self._cancel_events[run_id] = cancel_event
 
         # Start background thread
         self._thread = Thread(target=self._execute_run, args=(run_id, scope))
@@ -107,11 +110,15 @@ class RunManager:
             def log_callback(msg: dict) -> None:
                 self._broadcast_log(run_id, msg)
 
+            # Get cancel event (guaranteed to exist, created in start_run)
+            with self._cancel_events_lock:
+                cancel_event = self._cancel_events[run_id]
+
             # Create execution context
             context = ExecutionContext(
                 run_id=run_id,
                 log_callback=log_callback,
-                cancel_event=self._cancel_event,
+                cancel_event=cancel_event,
             )
 
             # Execute pipeline with project settings
@@ -127,7 +134,7 @@ class RunManager:
             )
 
             # Check if cancelled
-            if self._cancel_event.is_set():
+            if cancel_event.is_set():
                 with transaction(conn):
                     cancel_run(conn, run_id)
             else:
@@ -149,24 +156,27 @@ class RunManager:
                 )
             self._broadcast_log(run_id, {"run_id": run_id, "level": "error", "message": f"Run failed: {str(e)}"})
         finally:
+            # Cleanup cancel event for this run
+            with self._cancel_events_lock:
+                self._cancel_events.pop(run_id, None)
             # Send completion signal to close SSE stream
             self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
             # Close the connection when thread completes
             conn.close()
 
     def cancel_run(self, run_id: int) -> None:
-        """Cancel a running run.
+        """Cancel a running run by setting its cancellation event.
+
+        Note: The database status will be updated by the execution thread
+        when it detects the cancellation.
 
         Args:
             run_id: Run ID to cancel.
         """
-        # Set cancellation event
-        self._cancel_event.set()
-
-        # Update database status
-        with database_connection(self.db_path) as conn:
-            with transaction(conn):
-                cancel_run(conn, run_id)
+        with self._cancel_events_lock:
+            cancel_event = self._cancel_events.get(run_id)
+            if cancel_event is not None:
+                cancel_event.set()
 
     def get_active_run(self) -> sqlite3.Row | None:
         """Get the currently active run.

@@ -131,10 +131,14 @@ class TestCancelRun:
         project_id = test_project_setup["project_id"]
 
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            def slow_execute(*args, **kwargs):
-                time.sleep(1.0)
+            def cancellable_execute(conn, scope, context, doc_root="."):
+                # Wait for cancellation, checking the event
+                for _ in range(50):  # 5 seconds max
+                    if context.cancel_event.is_set():
+                        return
+                    time.sleep(0.1)
 
-            mock_executor.return_value.execute.side_effect = slow_execute
+            mock_executor.return_value.execute.side_effect = cancellable_execute
 
             # Start run
             response = client.post(
@@ -151,8 +155,8 @@ class TestCancelRun:
             response = client.delete(f"/api/projects/{project_id}/runs/{run_id}")
             assert response.status_code == 200
 
-            # Wait for cancellation to complete
-            time.sleep(0.3)
+            # Wait for cancellation to complete (thread needs to detect and update DB)
+            time.sleep(0.5)
 
             # Verify run was cancelled
             response = client.get(f"/api/projects/{project_id}/runs/{run_id}")
