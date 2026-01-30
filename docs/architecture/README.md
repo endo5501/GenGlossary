@@ -9,7 +9,7 @@
 | [フロントエンド](./frontend.md) | React SPA、コンポーネント設計、APIクライアント |
 | [ディレクトリ構成](./directory-structure.md) | プロジェクトのファイル構造 |
 | [モデル・処理・出力](./models.md) | データモデル層、LLMクライアント層、処理レイヤー、出力層 |
-| [データベース](./database.md) | データベース層（Schema v3）、Repository パターン |
+| [データベース](./database.md) | データベース層（Schema v4）、Repository パターン、トランザクション管理 |
 | [API](./api.md) | FastAPI バックエンド、エンドポイント、スキーマ |
 | [Run管理](./runs.md) | バックグラウンドパイプライン実行、スレッディング |
 | [CLI](./cli.md) | コマンドラインインターフェース |
