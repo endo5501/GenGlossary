@@ -178,12 +178,32 @@ def create_llm_client(
 
 ### document_loader.py
 ```python
-def load_document(file_path: str) -> Document:
-    """ファイルからドキュメントを読み込む"""
-    with open(file_path, "r", encoding="utf-8") as f:
-        content = f.read()
-    return Document(file_path=file_path, content=content)
+class DocumentLoader:
+    """ドキュメント読み込みとセキュリティバリデーション"""
+
+    def __init__(
+        self,
+        supported_extensions: list[str] | None = None,  # デフォルト: [".txt", ".md"]
+        max_file_size: int | None = 10 * 1024 * 1024,   # デフォルト: 10MB
+        excluded_patterns: list[str] | None = None,     # デフォルト: セキュリティパターン
+        validate_path: bool = True,                      # ディレクトリトラバーサル防止
+    ):
+        ...
+
+    def load_file(self, path: str) -> Document: ...
+    def load_directory(self, path: str) -> list[Document]: ...
+    def load_documents(self, paths: list[str]) -> list[Document]: ...
 ```
+
+**セキュリティ機能:**
+- **ファイルサイズ制限**: 巨大ファイルによるリソース枯渇を防止
+- **パス検証**: シンボリックリンクを解決してディレクトリトラバーサルを検出
+- **機密ファイル除外**: `.env`, `*.key`, `*.pem`, `credentials*`, `.git*` 等を自動除外
+
+**例外:**
+- `FileSizeExceededError`: ファイルサイズ超過
+- `PathTraversalError`: ディレクトリトラバーサル検出
+- `ExcludedFileError`: 除外ファイルへのアクセス試行
 
 ### term_extractor.py (ステップ1)
 ```python
