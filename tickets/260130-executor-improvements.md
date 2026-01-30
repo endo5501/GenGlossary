@@ -1,5 +1,5 @@
 ---
-priority: 5
+priority: 3
 tags: [improvement, backend, executor, code-quality]
 description: "PipelineExecutor: Code quality improvements from review"
 created_at: "2026-01-30T19:45:00Z"
@@ -92,10 +92,23 @@ conn: sqlite3.Connection,  # 使用されていない
 ## Tasks
 
 - [ ] 設計検討
-- [ ] 実装
-- [ ] Run static analysis (`pyright`)
-- [ ] Run tests (`uv run pytest`)
-- [ ] Get developer approval
+- [ ] 型ヒントの明確化
+- [ ] マジックストリングの定数化
+- [ ] トランザクション安全性の追加
+- [ ] 進捗コールバックパターンの統一
+- [ ] データベース読み込みロジックの統一
+- [ ] 未使用パラメータの削除
+- [ ] 用語集保存とログの統合
+- [ ] 共通名詞フィルタリングの一貫性
+- [ ] Commit
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
 
 ## Notes
 
