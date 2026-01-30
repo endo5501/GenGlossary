@@ -110,11 +110,9 @@ class RunManager:
             def log_callback(msg: dict) -> None:
                 self._broadcast_log(run_id, msg)
 
-            # Get cancel event for this run
+            # Get cancel event (guaranteed to exist, created in start_run)
             with self._cancel_events_lock:
-                cancel_event = self._cancel_events.get(run_id)
-            if cancel_event is None:
-                cancel_event = Event()
+                cancel_event = self._cancel_events[run_id]
 
             # Create execution context
             context = ExecutionContext(
@@ -167,21 +165,18 @@ class RunManager:
             conn.close()
 
     def cancel_run(self, run_id: int) -> None:
-        """Cancel a running run.
+        """Cancel a running run by setting its cancellation event.
+
+        Note: The database status will be updated by the execution thread
+        when it detects the cancellation.
 
         Args:
             run_id: Run ID to cancel.
         """
-        # Set cancellation event for specific run
         with self._cancel_events_lock:
             cancel_event = self._cancel_events.get(run_id)
             if cancel_event is not None:
                 cancel_event.set()
-
-        # Update database status
-        with database_connection(self.db_path) as conn:
-            with transaction(conn):
-                cancel_run(conn, run_id)
 
     def get_active_run(self) -> sqlite3.Row | None:
         """Get the currently active run.

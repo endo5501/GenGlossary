@@ -142,11 +142,15 @@ class TestRunManagerCancel:
     ) -> None:
         """cancel_runはRunのステータスをcancelledに設定する"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock long-running executor
-            def slow_execute(*args, **kwargs):
-                time.sleep(0.5)
+            # Mock executor that checks cancel event
+            def cancellable_execute(conn, scope, context, doc_root="."):
+                # Wait for cancellation, checking the event
+                for _ in range(50):  # 5 seconds max
+                    if context.cancel_event.is_set():
+                        return
+                    time.sleep(0.1)
 
-            mock_executor.return_value.execute.side_effect = slow_execute
+            mock_executor.return_value.execute.side_effect = cancellable_execute
 
             run_id = manager.start_run(scope="full")
             time.sleep(0.1)  # Allow thread to start
@@ -154,7 +158,8 @@ class TestRunManagerCancel:
             manager.cancel_run(run_id)
 
             # Wait for thread to complete
-            time.sleep(0.3)
+            if manager._thread:
+                manager._thread.join(timeout=2)
 
             run = get_run(project_db, run_id)
             assert run is not None
