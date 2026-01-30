@@ -175,6 +175,9 @@ class RunManager:
                 self._cancel_events.pop(run_id, None)
             # Send completion signal to close SSE stream
             self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
+            # Clear subscribers for this run to prevent memory leak
+            with self._subscribers_lock:
+                self._subscribers.pop(run_id, None)
             # Close the connection when thread completes
             if conn is not None:
                 conn.close()

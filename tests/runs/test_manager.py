@@ -724,3 +724,113 @@ class TestRunManagerCancellationRaceCondition:
                 f"Expected status 'cancelled' but got '{run['status']}'. "
                 "Race condition: run was completed despite cancellation."
             )
+
+
+class TestRunManagerSubscriberCleanup:
+    """Tests for subscriber cleanup after run completion."""
+
+    def test_subscribers_cleaned_up_after_run_completes(
+        self, manager: RunManager
+    ) -> None:
+        """run完了後にsubscribersがクリーンアップされる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            # Register subscriber before starting run
+            # Note: We register for run_id=1 assuming it will be the first run
+            queue = manager.register_subscriber(run_id=1)
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # After completion, the subscribers should be cleaned up
+            with manager._subscribers_lock:
+                assert run_id not in manager._subscribers, (
+                    "Subscribers should be cleaned up after run completion"
+                )
+
+    def test_subscribers_cleaned_up_after_run_fails(
+        self, manager: RunManager
+    ) -> None:
+        """run失敗後にsubscribersがクリーンアップされる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = RuntimeError("Test error")
+
+            # Register subscriber before starting run
+            queue = manager.register_subscriber(run_id=1)
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # After failure, the subscribers should be cleaned up
+            with manager._subscribers_lock:
+                assert run_id not in manager._subscribers, (
+                    "Subscribers should be cleaned up after run failure"
+                )
+
+    def test_subscribers_cleaned_up_after_run_cancelled(
+        self, manager: RunManager
+    ) -> None:
+        """runキャンセル後にsubscribersがクリーンアップされる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+
+            def cancellable_execute(conn, scope, context, doc_root="."):
+                # Wait for cancellation
+                for _ in range(50):
+                    if context.cancel_event.is_set():
+                        return
+                    time.sleep(0.1)
+
+            mock_executor.return_value.execute.side_effect = cancellable_execute
+
+            # Register subscriber before starting run
+            queue = manager.register_subscriber(run_id=1)
+
+            run_id = manager.start_run(scope="full")
+            time.sleep(0.1)  # Allow thread to start
+
+            manager.cancel_run(run_id)
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # After cancellation, the subscribers should be cleaned up
+            with manager._subscribers_lock:
+                assert run_id not in manager._subscribers, (
+                    "Subscribers should be cleaned up after run cancellation"
+                )
+
+    def test_completion_signal_sent_before_subscriber_cleanup(
+        self, manager: RunManager
+    ) -> None:
+        """subscriberクリーンアップ前に完了シグナルが送信される"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            # Register subscriber before starting run
+            queue = manager.register_subscriber(run_id=1)
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Completion signal should have been sent before cleanup
+            completion_signal_found = False
+            while not queue.empty():
+                log = queue.get_nowait()
+                if log is not None and log.get("complete"):
+                    completion_signal_found = True
+                    break
+
+            assert completion_signal_found, (
+                "Completion signal should be sent before subscriber cleanup"
+            )
