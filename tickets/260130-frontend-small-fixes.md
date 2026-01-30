@@ -28,9 +28,15 @@ closed_at: null
 ## Tasks
 
 - [ ] テストを追加・更新
-- [ ] 実装
-- [ ] Run tests (`pnpm test`) and pass all tests
+- [ ] `runId = 0` の falsy 問題修正
+- [ ] `onComplete` の stale closure実装
+- [ ] Run tests (`pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
+
 
 ## Notes
 

@@ -1,5 +1,5 @@
 ---
-priority: 8
+priority: 5
 tags: [refactoring, architecture, frontend, backend]
 description: "Log state architecture improvement"
 created_at: "2026-01-30T09:45:00Z"
@@ -40,9 +40,15 @@ closed_at: null
 
 - [ ] 設計検討
 - [ ] テストを追加・更新
-- [ ] 実装
-- [ ] Run static analysis and pass all tests
-- [ ] Run tests (`uv run pytest` & `pnpm test`) and pass all tests
+- [ ] グローバルログ状態のプロジェクト衝突を解決
+- [ ] `run_id` の型不整合修正
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
