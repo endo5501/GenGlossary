@@ -1,5 +1,5 @@
 ---
-priority: 9
+priority: 2
 tags: [enhancement, frontend, log-system]
 description: "LogStore: Add context validation in addLog"
 created_at: "2026-01-30T10:20:00Z"
