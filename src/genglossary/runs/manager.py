@@ -260,6 +260,26 @@ class RunManager:
                 for queue in self._subscribers[run_id]:
                     self._put_to_queue(queue, message)
 
+    def _try_update_status(
+        self,
+        conn: sqlite3.Connection,
+        run_id: int,
+        error_message: str,
+    ) -> bool:
+        """Try to update run status to failed, return True if successful."""
+        try:
+            with transaction(conn):
+                update_run_status(
+                    conn,
+                    run_id,
+                    "failed",
+                    finished_at=datetime.now(),
+                    error_message=error_message,
+                )
+            return True
+        except Exception:
+            return False
+
     def _update_failed_status(
         self,
         conn: sqlite3.Connection | None,
@@ -276,33 +296,14 @@ class RunManager:
             run_id: Run ID to update.
             error_message: Error message to store.
         """
-        # Try with primary connection first
-        if conn is not None:
-            try:
-                with transaction(conn):
-                    update_run_status(
-                        conn,
-                        run_id,
-                        "failed",
-                        finished_at=datetime.now(),
-                        error_message=error_message,
-                    )
-                return
-            except Exception:
-                # Primary connection failed, try fallback
-                pass
+        # Try primary connection
+        if conn is not None and self._try_update_status(conn, run_id, error_message):
+            return
 
         # Fallback to new connection
         try:
             with database_connection(self.db_path) as fallback_conn:
-                with transaction(fallback_conn):
-                    update_run_status(
-                        fallback_conn,
-                        run_id,
-                        "failed",
-                        finished_at=datetime.now(),
-                        error_message=error_message,
-                    )
+                self._try_update_status(fallback_conn, run_id, error_message)
         except Exception:
-            # Both connections failed, status update is lost but error log will still be broadcast
+            # Both failed, status update is lost but error log will still be broadcast
             pass
