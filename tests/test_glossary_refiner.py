@@ -639,3 +639,191 @@ class TestGlossaryRefinerProgressCallback:
 
         # Should include few-shot examples section
         assert "Few-shot Examples" in prompt or "few-shot examples" in prompt or "改善例" in prompt
+
+
+class TestGlossaryRefinerCallbackExceptionHandling:
+    """Test suite for callback exception handling in GlossaryRefiner."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_glossary(self) -> Glossary:
+        """Create a sample glossary for testing."""
+        glossary = Glossary()
+        glossary.add_term(
+            Term(name="Term1", definition="Definition 1", confidence=0.8)
+        )
+        glossary.add_term(
+            Term(name="Term2", definition="Definition 2", confidence=0.7)
+        )
+        glossary.add_term(
+            Term(name="Term3", definition="Definition 3", confidence=0.9)
+        )
+        return glossary
+
+    @pytest.fixture
+    def sample_documents(self) -> list[Document]:
+        """Create sample documents for testing."""
+        return [
+            Document(
+                file_path="/test.md",
+                content="Term1 and Term2 and Term3 are all here.",
+            )
+        ]
+
+    def test_refine_continues_when_progress_callback_raises_exception(
+        self,
+        mock_llm_client: MagicMock,
+        sample_glossary: Glossary,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that refine continues when progress_callback raises an exception."""
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="Improved definition",
+            confidence=0.9,
+        )
+
+        issues = [
+            GlossaryIssue(term_name="Term1", issue_type="unclear", description="Issue 1"),
+            GlossaryIssue(term_name="Term2", issue_type="unclear", description="Issue 2"),
+        ]
+
+        def failing_callback(current: int, total: int) -> None:
+            raise RuntimeError("Callback error")
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+
+        # Should NOT raise exception even though callback fails
+        result = refiner.refine(
+            sample_glossary, issues, sample_documents, progress_callback=failing_callback
+        )
+
+        # All issues should be processed
+        assert result.has_term("Term1")
+        assert result.has_term("Term2")
+        assert mock_llm_client.generate_structured.call_count == 2
+
+    def test_refine_continues_when_term_progress_callback_raises_exception(
+        self,
+        mock_llm_client: MagicMock,
+        sample_glossary: Glossary,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that refine continues when term_progress_callback raises an exception."""
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="Improved definition",
+            confidence=0.9,
+        )
+
+        issues = [
+            GlossaryIssue(term_name="Term1", issue_type="unclear", description="Issue 1"),
+            GlossaryIssue(term_name="Term2", issue_type="unclear", description="Issue 2"),
+        ]
+
+        def failing_callback(current: int, total: int, term_name: str) -> None:
+            raise RuntimeError("Callback error")
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+
+        # Should NOT raise exception even though callback fails
+        result = refiner.refine(
+            sample_glossary, issues, sample_documents, term_progress_callback=failing_callback
+        )
+
+        # All issues should be processed
+        assert result.has_term("Term1")
+        assert result.has_term("Term2")
+        assert mock_llm_client.generate_structured.call_count == 2
+
+
+class TestGlossaryRefinerMissingTermProgressCallback:
+    """Test suite for progress callback when term is missing in GlossaryRefiner."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_documents(self) -> list[Document]:
+        """Create sample documents for testing."""
+        return [
+            Document(
+                file_path="/test.md",
+                content="Term1 content here.",
+            )
+        ]
+
+    def test_progress_callback_called_even_when_term_is_missing(
+        self,
+        mock_llm_client: MagicMock,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that progress_callback is called even when term is not found in glossary."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="Term1", definition="Definition 1", confidence=0.8))
+        # Note: Term2 is NOT in the glossary
+
+        issues = [
+            GlossaryIssue(term_name="Term1", issue_type="unclear", description="Issue 1"),
+            GlossaryIssue(term_name="NonExistentTerm", issue_type="unclear", description="Issue 2"),
+            GlossaryIssue(term_name="AnotherMissing", issue_type="unclear", description="Issue 3"),
+        ]
+
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="Improved definition",
+            confidence=0.9,
+        )
+
+        callback_calls: list[tuple[int, int]] = []
+
+        def progress_callback(current: int, total: int) -> None:
+            callback_calls.append((current, total))
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        refiner.refine(
+            glossary, issues, sample_documents, progress_callback=progress_callback
+        )
+
+        # Callback should be called for ALL issues, even missing terms
+        assert len(callback_calls) == 3
+        assert callback_calls[0] == (1, 3)
+        assert callback_calls[1] == (2, 3)
+        assert callback_calls[2] == (3, 3)
+
+    def test_term_progress_callback_called_even_when_term_is_missing(
+        self,
+        mock_llm_client: MagicMock,
+        sample_documents: list[Document],
+    ) -> None:
+        """Test that term_progress_callback is called even when term is not found."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="Term1", definition="Definition 1", confidence=0.8))
+
+        issues = [
+            GlossaryIssue(term_name="Term1", issue_type="unclear", description="Issue 1"),
+            GlossaryIssue(term_name="MissingTerm", issue_type="unclear", description="Issue 2"),
+        ]
+
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="Improved definition",
+            confidence=0.9,
+        )
+
+        callback_calls: list[tuple[int, int, str]] = []
+
+        def term_progress_callback(current: int, total: int, term_name: str) -> None:
+            callback_calls.append((current, total, term_name))
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        refiner.refine(
+            glossary, issues, sample_documents, term_progress_callback=term_progress_callback
+        )
+
+        # Callback should be called for ALL issues, including missing terms
+        assert len(callback_calls) == 2
+        assert callback_calls[0] == (1, 2, "Term1")
+        assert callback_calls[1] == (2, 2, "MissingTerm")

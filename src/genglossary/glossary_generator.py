@@ -115,11 +115,17 @@ Output:
                 print(f"Warning: Failed to generate definition for '{term_name}': {e}")
                 continue
             finally:
-                # Call progress callbacks if provided
+                # Call progress callbacks if provided (guarded to prevent pipeline interruption)
                 if progress_callback is not None:
-                    progress_callback(idx, total_terms)
+                    try:
+                        progress_callback(idx, total_terms)
+                    except Exception:
+                        pass  # Ignore callback errors to prevent pipeline interruption
                 if term_progress_callback is not None:
-                    term_progress_callback(idx, total_terms, term_name)
+                    try:
+                        term_progress_callback(idx, total_terms, term_name)
+                    except Exception:
+                        pass  # Ignore callback errors to prevent pipeline interruption
 
         return glossary
 

@@ -793,3 +793,98 @@ class TestGlossaryGeneratorPromptBuilding:
         assert "JSON" in prompt
         assert "definition" in prompt
         assert "confidence" in prompt
+
+
+class TestGlossaryGeneratorCallbackExceptionHandling:
+    """Test suite for callback exception handling in GlossaryGenerator."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_document(self) -> Document:
+        """Create a sample document for testing."""
+        content = """GenGlossary is a tool.
+LLM is a language model.
+API is an interface.
+"""
+        return Document(file_path="/path/to/doc.md", content=content)
+
+    def test_generate_continues_when_progress_callback_raises_exception(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate continues when progress_callback raises an exception."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.9
+        )
+
+        def failing_callback(current: int, total: int) -> None:
+            raise RuntimeError("Callback error")
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        terms = ["GenGlossary", "LLM", "API"]
+
+        # Should NOT raise exception even though callback fails
+        result = generator.generate(
+            terms, [sample_document], progress_callback=failing_callback
+        )
+
+        # All terms should be processed
+        assert result.term_count == 3
+        assert result.has_term("GenGlossary")
+        assert result.has_term("LLM")
+        assert result.has_term("API")
+
+    def test_generate_continues_when_term_progress_callback_raises_exception(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate continues when term_progress_callback raises an exception."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.9
+        )
+
+        def failing_callback(current: int, total: int, term_name: str) -> None:
+            raise RuntimeError("Callback error")
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        terms = ["GenGlossary", "LLM"]
+
+        # Should NOT raise exception even though callback fails
+        result = generator.generate(
+            terms, [sample_document], term_progress_callback=failing_callback
+        )
+
+        # All terms should be processed
+        assert result.term_count == 2
+        assert result.has_term("GenGlossary")
+        assert result.has_term("LLM")
+
+    def test_generate_continues_when_both_callbacks_raise_exceptions(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that generate continues when both callbacks raise exceptions."""
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="Test definition", confidence=0.9
+        )
+
+        def failing_progress_callback(current: int, total: int) -> None:
+            raise RuntimeError("Progress callback error")
+
+        def failing_term_callback(current: int, total: int, term_name: str) -> None:
+            raise RuntimeError("Term callback error")
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        terms = ["GenGlossary", "LLM"]
+
+        # Should NOT raise exception even though both callbacks fail
+        result = generator.generate(
+            terms,
+            [sample_document],
+            progress_callback=failing_progress_callback,
+            term_progress_callback=failing_term_callback,
+        )
+
+        # All terms should be processed
+        assert result.term_count == 2

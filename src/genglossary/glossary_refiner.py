@@ -93,21 +93,29 @@ class GlossaryRefiner:
         total_issues = len(refine_issues)
         for idx, issue in enumerate(refine_issues, start=1):
             term = refined_glossary.get_term(issue.term_name)
-            if term is None:
-                continue
 
             try:
+                if term is None:
+                    continue
+
                 refined_term = self._resolve_issue(term, issue, context_index)
                 refined_glossary.terms[issue.term_name] = refined_term
                 resolved_count += 1
             except Exception as e:
                 print(f"Warning: Failed to refine '{issue.term_name}': {e}")
             finally:
-                # Call progress callbacks if provided
+                # Call progress callbacks if provided (always, even for missing terms)
+                # Guarded to prevent pipeline interruption from callback errors
                 if progress_callback is not None:
-                    progress_callback(idx, total_issues)
+                    try:
+                        progress_callback(idx, total_issues)
+                    except Exception:
+                        pass  # Ignore callback errors to prevent pipeline interruption
                 if term_progress_callback is not None:
-                    term_progress_callback(idx, total_issues, issue.term_name)
+                    try:
+                        term_progress_callback(idx, total_issues, issue.term_name)
+                    except Exception:
+                        pass  # Ignore callback errors to prevent pipeline interruption
 
         refined_glossary.metadata["resolved_issues"] = resolved_count
         return refined_glossary

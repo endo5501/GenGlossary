@@ -874,6 +874,60 @@ class TestPipelineExecutorProgressCallbackIntegration:
             assert callable(call_kwargs["term_progress_callback"])
 
 
+class TestPipelineExecutorLogCallbackExceptionHandling:
+    """Tests for log callback exception handling."""
+
+    def test_log_continues_when_callback_raises_exception(
+        self,
+        executor: PipelineExecutor,
+    ) -> None:
+        """_log は callback が例外を投げても継続する"""
+        exception_count = 0
+
+        def failing_callback(msg: dict) -> None:
+            nonlocal exception_count
+            exception_count += 1
+            raise RuntimeError("Callback error")
+
+        executor._run_id = 1
+        executor._log_callback = failing_callback
+
+        # Should NOT raise exception even though callback fails
+        executor._log("info", "Test message 1")
+        executor._log("info", "Test message 2")
+        executor._log("info", "Test message 3")
+
+        # All three calls should have been attempted
+        assert exception_count == 3
+
+    def test_log_with_extended_fields_continues_when_callback_raises_exception(
+        self,
+        executor: PipelineExecutor,
+    ) -> None:
+        """拡張フィールド付き _log も callback 例外で継続する"""
+        exception_count = 0
+
+        def failing_callback(msg: dict) -> None:
+            nonlocal exception_count
+            exception_count += 1
+            raise RuntimeError("Callback error")
+
+        executor._run_id = 1
+        executor._log_callback = failing_callback
+
+        # Should NOT raise exception even though callback fails
+        executor._log(
+            "info",
+            "量子コンピュータ: 25%",
+            step="provisional",
+            current=5,
+            total=20,
+            current_term="量子コンピュータ",
+        )
+
+        assert exception_count == 1
+
+
 class TestPipelineExecutorDBDocumentsLegacy:
     """Legacy tests for backward compatibility (doc_root="." case)."""
 
