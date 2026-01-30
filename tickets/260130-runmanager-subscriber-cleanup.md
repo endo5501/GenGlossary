@@ -3,7 +3,7 @@ priority: 1
 tags: [improvement, backend, memory-leak]
 description: "RunManager: Clean up subscribers after run completion"
 created_at: "2026-01-30T23:30:00+09:00"
-started_at: null
+started_at: 2026-01-30T15:00:54Z
 closed_at: null
 ---
 
@@ -43,15 +43,29 @@ finally:
 
 ## Tasks
 
-- [ ] 設計レビュー・承認
-- [ ] 実装
-- [ ] テストの更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 設計レビュー・承認
+- [x] 実装
+- [x] テストの更新
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [x] Update docs/architecture/*.md (N/A - 内部実装の修正のため不要)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## 実装結果
+
+### 変更ファイル
+- `src/genglossary/runs/manager.py`: `_execute_run` の finally ブロックで subscribers をクリーンアップ
+- `tests/runs/test_manager.py`: 4つのテストを追加（TestRunManagerSubscriberCleanup）
+
+### コミット
+1. `5797e8d` - Add tests for subscriber cleanup after run completion
+2. `4ed8d21` - Fix memory leak by cleaning up subscribers after run completion
+
+### レビュー結果
+- **code-simplifier**: 例外発生時のクリーンアップ強化を提案 → 別チケット（260130-runmanager-execute-run-refactoring）で対応予定
+- **codex MCP**: Approve
