@@ -1,5 +1,5 @@
 ---
-priority: 5
+priority: 4
 tags: [security, improvement]
 description: "GlossaryGenerator: プロンプトインジェクション対策"
 created_at: "2026-01-30T08:21:00Z"

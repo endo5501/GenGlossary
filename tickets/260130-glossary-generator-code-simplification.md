@@ -98,6 +98,7 @@ classified_terms = cast(list[ClassifiedTerm], terms)
 - [ ] 型判定ロジックの簡素化を検討・実装
 - [ ] CJK関連ロジックをユーティリティに抽出（オプション）
 - [ ] マジックナンバーの定数化
+- [ ] 例外処理の具体化
 - [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
