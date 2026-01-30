@@ -1,5 +1,6 @@
 """Pipeline executor for running glossary generation steps."""
 
+import os
 import sqlite3
 from dataclasses import dataclass
 from enum import Enum
@@ -291,12 +292,16 @@ class PipelineExecutor:
 
             if documents:
                 # Save loaded documents to DB
-                # Use file_path as file_name to avoid collisions with same basename
+                # Use relative path from doc_root as file_name to:
+                # - Avoid same basename collisions (e.g., docs/README.md vs examples/README.md)
+                # - Prevent server path leakage via API/logs (security)
+                # - Improve portability when moving DB between environments
                 with transaction(conn):
                     delete_all_documents(conn)
                     for document in documents:
                         content_hash = compute_content_hash(document.content)
-                        create_document(conn, document.file_path, document.content, content_hash)
+                        relative_path = os.path.relpath(document.file_path, doc_root)
+                        create_document(conn, relative_path, document.content, content_hash)
                 return documents
 
         # No documents found
