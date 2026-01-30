@@ -3,7 +3,7 @@ priority: 2
 tags: [improvement, backend, threading]
 description: "RunManager: Implement per-run cancellation instead of global"
 created_at: "2026-01-30T21:15:00Z"
-started_at: null
+started_at: 2026-01-30T14:14:05Z
 closed_at: null
 ---
 

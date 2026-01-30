@@ -40,7 +40,10 @@ def manager(project_db_path: str) -> RunManager:
     yield mgr
     # Ensure thread is stopped before fixture cleanup
     if mgr._thread and mgr._thread.is_alive():
-        mgr._cancel_event.set()
+        # Cancel all running runs
+        with mgr._cancel_events_lock:
+            for cancel_event in mgr._cancel_events.values():
+                cancel_event.set()
         mgr._thread.join(timeout=2)
 
 
@@ -162,15 +165,25 @@ class TestRunManagerCancel:
     ) -> None:
         """cancel_runはキャンセルイベントをシグナルする"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            mock_executor.return_value.execute.return_value = None
+            execution_barrier = Event()
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                # Wait to keep run "active" until we cancel
+                execution_barrier.wait(timeout=5)
+
+            mock_executor.return_value.execute.side_effect = mock_execute
 
             run_id = manager.start_run(scope="full")
             time.sleep(0.1)
 
+            # Cancel event should be set for this run
             manager.cancel_run(run_id)
+            assert manager._cancel_events[run_id].is_set()
 
-            # Cancellation event should be set
-            assert manager._cancel_event.is_set()
+            # Cleanup
+            execution_barrier.set()
+            if manager._thread:
+                manager._thread.join(timeout=2)
 
     def test_cancel_nonexistent_run_does_not_fail(
         self, manager: RunManager
