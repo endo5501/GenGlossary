@@ -1045,3 +1045,160 @@ class TestPipelineExecutorDBDocumentsLegacy:
 
             # Existing documents should be cleared before adding new ones
             mock_delete_docs.assert_called_once()
+
+
+class TestPipelineExecutorBugFixes:
+    """Tests for bug fixes discovered during code review.
+
+    These tests reproduce the bugs before fixing:
+    - A: Refined glossary is not saved when no issues exist
+    - B: Duplicate terms cause IntegrityError crash
+    - C: Same filename from different directories causes IntegrityError
+    """
+
+    def test_refined_glossary_saved_when_no_issues_exist(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """Bug A: issues がない場合でも refined glossary が保存される
+
+        期待する動作:
+        - Reviewer が空の issues を返した場合
+        - Refiner は呼ばれない（改善する問題がないため）
+        - しかし provisional glossary は refined として保存されるべき
+        """
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
+             patch("genglossary.runs.executor.create_refined_term") as mock_create_refined:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_prov.return_value = [
+                {
+                    "term_name": "term1",
+                    "definition": "definition1",
+                    "confidence": 0.9,
+                    "occurrences": [TermOccurrence(document_path="test.txt", line_number=1, context="ctx")]
+                }
+            ]
+
+            # Reviewer returns empty issues list
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(project_db, "provisional_to_refined", cancel_event, log_callback, run_id=1)
+
+            # Refiner should NOT be called (no issues to refine)
+            mock_refiner.return_value.refine.assert_not_called()
+
+            # But refined term should be saved (provisional copied to refined)
+            mock_create_refined.assert_called_once_with(
+                project_db,
+                "term1",
+                "definition1",
+                0.9,
+                [TermOccurrence(document_path="test.txt", line_number=1, context="ctx")]
+            )
+
+    def test_duplicate_terms_from_llm_do_not_crash_pipeline(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """Bug B: LLM が重複用語を返してもパイプラインがクラッシュしない
+
+        期待する動作:
+        - TermExtractor が同じ用語を複数回返した場合
+        - IntegrityError は発生しない
+        - 重複は無視され、ユニークな用語のみ保存される
+        """
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.delete_all_documents"):
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="test.txt", content="test content")
+            ]
+
+            # LLM returns duplicate terms
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="duplicate_term", category=TermCategory.TECHNICAL_TERM),
+                ClassifiedTerm(term="duplicate_term", category=TermCategory.TECHNICAL_TERM),  # duplicate
+                ClassifiedTerm(term="unique_term", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Should NOT raise IntegrityError
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+
+            # Verify only unique terms were saved (no crash)
+            from genglossary.db.term_repository import list_all_terms
+            terms = list_all_terms(project_db)
+            term_texts = [row["term_text"] for row in terms]
+            assert "duplicate_term" in term_texts
+            assert "unique_term" in term_texts
+            # Should have exactly 2 unique terms, not 3
+            assert len(term_texts) == 2
+
+    def test_same_filename_from_different_directories_does_not_crash(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """Bug C: 異なるディレクトリの同名ファイルでもクラッシュしない
+
+        期待する動作:
+        - docs/README.md と examples/README.md を読み込んだ場合
+        - IntegrityError は発生しない
+        - ファイル名に相対パスを含めるか、衝突回避処理を行う
+        """
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            mock_llm_factory.return_value = MagicMock()
+
+            # DB is empty (CLI mode)
+            mock_list_docs.return_value = []
+
+            # Multiple files with same basename from different directories
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="docs/README.md", content="docs readme content"),
+                MagicMock(file_path="examples/README.md", content="examples readme content"),
+            ]
+
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Should NOT raise IntegrityError
+            executor.execute(project_db, "full", cancel_event, log_callback, doc_root="/test/path", run_id=1)
+
+            # Verify both documents were saved (no crash)
+            from genglossary.db.document_repository import list_all_documents
+            docs = list_all_documents(project_db)
+            assert len(docs) == 2
+            # File names should be distinguishable
+            file_names = [row["file_name"] for row in docs]
+            assert len(set(file_names)) == 2  # Both should have unique names
