@@ -3,7 +3,7 @@ priority: 2
 tags: [improvement, backend, executor, type-safety]
 description: "PipelineExecutor: Improve type safety and reduce type: ignore comments"
 created_at: "2026-01-30T20:50:00Z"
-started_at: null
+started_at: 2026-01-30T14:08:52Z
 closed_at: null
 ---
 
@@ -64,11 +64,12 @@ def _normalize_terms(
 
 ## Tasks
 
-- [ ] 設計選択
-- [ ] 実装
-- [ ] テスト更新
+- [x] 設計選択 - Literal オーバーロード修正を採用
+- [x] 実装 - term_extractor.py のオーバーロードを Literal[True/False] に修正
+- [x] テスト更新 - 既存テストが全て通過（775 tests passed）
 
 ## Notes
 
 - code-simplifier レビューで指摘
 - 型の混在はバグの温床になりやすい
+- 採用したアプローチ: TermExtractor.extract_terms のオーバーロードを Literal[True/False] に修正し、型チェッカーが正しく戻り値の型を推論できるように改善
