@@ -3,7 +3,7 @@
 import sqlite3
 from pathlib import Path
 from threading import Event
-from typing import Callable
+from typing import Any, Callable
 
 from genglossary.db.document_repository import (
     create_document,
@@ -11,6 +11,7 @@ from genglossary.db.document_repository import (
     list_all_documents,
 )
 from genglossary.db.issue_repository import create_issue, delete_all_issues
+from genglossary.db.models import GlossaryTermRow
 from genglossary.db.provisional_repository import (
     create_provisional_term,
     delete_all_provisional,
@@ -25,9 +26,16 @@ from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.factory import create_llm_client
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
-from genglossary.models.term import Term
+from genglossary.models.term import Term, TermOccurrence
 from genglossary.term_extractor import TermExtractor
 from genglossary.utils.hash import compute_content_hash
+
+# Map of scope to clear functions for table cleanup
+_SCOPE_CLEAR_FUNCTIONS: dict[str, list[Callable[[sqlite3.Connection], None]]] = {
+    "full": [delete_all_terms, delete_all_provisional, delete_all_issues, delete_all_refined],
+    "from_terms": [delete_all_provisional, delete_all_issues, delete_all_refined],
+    "provisional_to_refined": [delete_all_issues, delete_all_refined],
+}
 
 
 class PipelineExecutor:
@@ -94,6 +102,60 @@ class PipelineExecutor:
             self._log("info", "Execution cancelled")
             return True
         return False
+
+    @staticmethod
+    def _documents_from_db_rows(rows: list[sqlite3.Row]) -> list[Document]:
+        """Convert DB rows to Document objects.
+
+        Args:
+            rows: List of sqlite3.Row with 'file_name' and 'content' keys.
+
+        Returns:
+            list[Document]: List of Document objects.
+        """
+        return [
+            Document(file_path=row["file_name"], content=row["content"])
+            for row in rows
+        ]
+
+    @staticmethod
+    def _glossary_from_db_rows(rows: list[GlossaryTermRow]) -> Glossary:
+        """Convert provisional DB rows to Glossary object.
+
+        Args:
+            rows: List of GlossaryTermRow with term data.
+
+        Returns:
+            Glossary: Reconstructed Glossary object.
+        """
+        glossary = Glossary()
+        for row in rows:
+            term = Term(
+                name=row["term_name"],
+                definition=row["definition"],
+                confidence=row["confidence"],
+                occurrences=row["occurrences"],
+            )
+            glossary.add_term(term)
+        return glossary
+
+    @staticmethod
+    def _save_glossary_terms(
+        conn: sqlite3.Connection,
+        glossary: Glossary,
+        save_func: Callable[
+            [sqlite3.Connection, str, str, float, list[TermOccurrence]], Any
+        ],
+    ) -> None:
+        """Save glossary terms to database using the provided save function.
+
+        Args:
+            conn: Project database connection.
+            glossary: Glossary to save.
+            save_func: Function to save individual terms (e.g., create_provisional_term).
+        """
+        for term in glossary.terms.values():
+            save_func(conn, term.name, term.definition, term.confidence, term.occurrences)
 
     def _create_progress_callback(
         self,
@@ -189,14 +251,7 @@ class PipelineExecutor:
         doc_rows = list_all_documents(conn)
         if doc_rows:
             self._log("info", "Loading documents from database...")
-            documents = []
-            for row in doc_rows:
-                doc = Document(
-                    file_path=row["file_name"],
-                    content=row["content"],
-                )
-                documents.append(doc)
-            return documents
+            return self._documents_from_db_rows(doc_rows)
 
         # Fall back to filesystem if DB is empty (CLI mode)
         if doc_root and doc_root != ".":
@@ -296,14 +351,7 @@ class PipelineExecutor:
         )
 
         # Save provisional glossary
-        for term in glossary.terms.values():
-            create_provisional_term(
-                conn,
-                term.name,
-                term.definition,
-                term.confidence,
-                term.occurrences,
-            )
+        self._save_glossary_terms(conn, glossary, create_provisional_term)
 
         self._log("info", f"Generated {len(glossary.terms)} terms")
 
@@ -335,15 +383,7 @@ class PipelineExecutor:
                 raise RuntimeError("Cannot execute provisional_to_refined without provisional glossary")
 
             # Reconstruct Glossary from DB rows
-            glossary = Glossary()
-            for row in provisional_rows:
-                term = Term(
-                    name=row["term_name"],
-                    definition=row["definition"],
-                    confidence=row["confidence"],
-                    occurrences=row["occurrences"],
-                )
-                glossary.add_term(term)
+            glossary = self._glossary_from_db_rows(provisional_rows)
 
             self._log("info", f"Loaded {len(provisional_rows)} provisional terms")
 
@@ -387,14 +427,7 @@ class PipelineExecutor:
         )
 
         # Save refined glossary
-        for term in glossary.terms.values():
-            create_refined_term(
-                conn,
-                term.name,
-                term.definition,
-                term.confidence,
-                term.occurrences,
-            )
+        self._save_glossary_terms(conn, glossary, create_refined_term)
 
         self._log("info", f"Refined {len(glossary.terms)} terms")
 
@@ -405,18 +438,6 @@ class PipelineExecutor:
             conn: Project database connection.
             scope: Execution scope.
         """
-        if scope == "full":
-            # Clear all tables for full execution (except documents)
-            delete_all_terms(conn)
-            delete_all_provisional(conn)
-            delete_all_issues(conn)
-            delete_all_refined(conn)
-        elif scope == "from_terms":
-            # Clear only glossary-related tables
-            delete_all_provisional(conn)
-            delete_all_issues(conn)
-            delete_all_refined(conn)
-        elif scope == "provisional_to_refined":
-            # Clear only review and refinement tables
-            delete_all_issues(conn)
-            delete_all_refined(conn)
+        clear_funcs = _SCOPE_CLEAR_FUNCTIONS.get(scope, [])
+        for clear_func in clear_funcs:
+            clear_func(conn)
