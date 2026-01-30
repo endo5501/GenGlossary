@@ -72,7 +72,6 @@ def create_glossary_term(
         """,
         (term_name, definition, confidence, occurrences_json),
     )
-    conn.commit()
     return cast(int, cursor.lastrowid)
 
 
@@ -176,7 +175,6 @@ def update_glossary_term(
     )
     if cursor.rowcount == 0:
         raise ValueError(f"Term with id {term_id} not found in {table_name}")
-    conn.commit()
 
 
 def delete_all_glossary_terms(
@@ -195,4 +193,3 @@ def delete_all_glossary_terms(
 
     cursor = conn.cursor()
     cursor.execute(f"DELETE FROM {table_name}")
-    conn.commit()
