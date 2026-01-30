@@ -4,7 +4,7 @@ tags: [security, improvement]
 description: "GlossaryGenerator: プロンプトインジェクション対策"
 created_at: "2026-01-30T08:21:00Z"
 started_at: 2026-01-30T10:02:31Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-30T10:06:01Z # Do not modify manually
 ---
 
 # GlossaryGenerator: プロンプトインジェクション対策
