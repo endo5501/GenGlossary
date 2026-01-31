@@ -81,12 +81,16 @@ def _try_status_with_fallback(
 
 ## Tasks
 
-- [ ] 汎用ステータス更新メソッドの設計
-- [ ] リファクタリング実施
-- [ ] テストが引き続きパスすることを確認
-- [ ] Commit
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 汎用ステータス更新メソッドの設計
+- [x] リファクタリング実施
+- [x] テストが引き続きパスすることを確認
+- [x] Commit
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## Follow-up
+
+- Created ticket: `tickets/260131-runmanager-status-update-improvements.md` for further improvements identified by code review
