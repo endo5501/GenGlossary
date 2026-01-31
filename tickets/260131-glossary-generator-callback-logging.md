@@ -3,7 +3,7 @@ priority: 1
 tags: [improvement, debugging]
 description: "GlossaryGenerator: Add logging to _safe_callback for debugging"
 created_at: "2026-01-31T02:15:00Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-31T01:48:32Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -53,11 +53,11 @@ def _safe_callback(
 
 ## Tasks
 
-- [ ] テストケースの作成
-- [ ] ログ追加の実装
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] テストケースの作成
+- [x] ログ追加の実装
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## 関連
 
