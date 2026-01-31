@@ -4,7 +4,7 @@ tags: [improvement, backend, database]
 description: "Add nested transaction safety using SAVEPOINT"
 created_at: "2026-01-30T22:20:00Z"
 started_at: 2026-01-31T13:52:36Z
-closed_at: null
+closed_at: 2026-01-31T14:02:40Z
 ---
 
 # Add nested transaction safety using SAVEPOINT
