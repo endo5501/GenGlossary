@@ -44,23 +44,25 @@ class GlossaryReviewer:
 
     def review(
         self, glossary: Glossary, cancel_event: Event | None = None
-    ) -> list[GlossaryIssue]:
+    ) -> list[GlossaryIssue] | None:
         """Review the glossary and identify issues.
 
         Args:
             glossary: The glossary to review.
             cancel_event: Optional threading.Event for cancellation. If set,
-                returns empty list without calling LLM.
+                returns None without calling LLM.
 
         Returns:
-            A list of identified issues.
+            A list of identified issues, or None if cancelled.
+            - None: cancelled, no review was performed
+            - []: review was performed, no issues found
         """
         if glossary.term_count == 0:
             return []
 
         # Check for cancellation before calling LLM
         if cancel_event is not None and cancel_event.is_set():
-            return []
+            return None
 
         try:
             prompt = self._create_review_prompt(glossary)

@@ -447,6 +447,10 @@ class PipelineExecutor:
             cancel_event=context.cancel_event,
         )
 
+        # Check cancellation before saving provisional glossary
+        if self._check_cancellation(context):
+            return
+
         # Save provisional glossary using batch insert
         with transaction(conn):
             self._save_glossary_terms_batch(conn, glossary, create_provisional_terms_batch)
@@ -496,6 +500,11 @@ class PipelineExecutor:
         self._log(context, "info", "Reviewing glossary...")
         reviewer = GlossaryReviewer(llm_client=self._llm_client)
         issues = reviewer.review(glossary, cancel_event=context.cancel_event)
+
+        # If review was cancelled, return early without saving
+        if issues is None:
+            self._log(context, "info", "Review cancelled")
+            return
 
         # Save issues using batch insert
         with transaction(conn):

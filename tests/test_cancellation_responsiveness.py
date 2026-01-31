@@ -356,14 +356,14 @@ class TestGlossaryReviewerCancellation:
     def test_review_returns_early_when_cancelled_before_start(
         self, mock_llm_client: MagicMock, sample_glossary: Glossary, cancel_event: Event
     ) -> None:
-        """Test that review() returns empty list when cancelled before start."""
+        """Test that review() returns None when cancelled before start."""
         cancel_event.set()  # Cancel before calling review
 
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
         result = reviewer.review(sample_glossary, cancel_event=cancel_event)
 
-        # Should return empty list
-        assert result == []
+        # Should return None to indicate cancellation
+        assert result is None
         # LLM should not be called
         mock_llm_client.generate_structured.assert_not_called()
 
@@ -393,3 +393,21 @@ class TestGlossaryReviewerCancellation:
         result = reviewer.review(sample_glossary)
 
         assert isinstance(result, list)
+
+    def test_review_returns_none_when_cancelled_to_distinguish_from_no_issues(
+        self, mock_llm_client: MagicMock, sample_glossary: Glossary, cancel_event: Event
+    ) -> None:
+        """Test that review() returns None when cancelled (not empty list).
+
+        This allows callers to distinguish between:
+        - None: cancelled, no review was performed
+        - []: review was performed, no issues found
+        """
+        cancel_event.set()
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        result = reviewer.review(sample_glossary, cancel_event=cancel_event)
+
+        # Should return None (not []) to indicate cancellation
+        assert result is None
+        mock_llm_client.generate_structured.assert_not_called()
