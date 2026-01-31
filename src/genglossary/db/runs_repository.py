@@ -155,7 +155,7 @@ def update_run_progress(
     )
 
 
-def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
+def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
     """Cancel a run.
 
     Sets status to 'cancelled' and sets finished_at to now.
@@ -163,6 +163,9 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
     Args:
         conn: Project database connection.
         run_id: Run ID to cancel.
+
+    Returns:
+        Number of rows updated (0 if run was already in terminal state or not found).
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -171,9 +174,11 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
         SET status = 'cancelled',
             finished_at = datetime('now')
         WHERE id = ?
+        AND status IN ('pending', 'running')
         """,
         (run_id,),
     )
+    return cursor.rowcount
 
 
 def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool:
