@@ -62,8 +62,8 @@ codex MCP レビューで指摘された問題。現在の実装では、executo
 - [ ] Commit
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
 - [ ] Update docs/architecture/*.md
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
