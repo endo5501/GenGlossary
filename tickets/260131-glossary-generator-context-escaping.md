@@ -3,7 +3,7 @@ priority: 1
 tags: [security, improvement]
 description: "GlossaryGenerator: Escape context XML tags to prevent prompt injection"
 created_at: "2026-01-31T02:00:00Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-31T01:39:56Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -38,15 +38,23 @@ def _build_context_text(self, occurrences: list[TermOccurrence]) -> str:
 
 ## Tasks
 
-- [ ] コンテキストエスケープロジックの設計
-- [ ] テストケースの作成（悪意のあるコンテキストを含むドキュメント）
-- [ ] 実装
-- [ ] 他のコードのコンテキストも確認し、同様の問題があるようであれば同様に対応すする
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] コンテキストエスケープロジックの設計
+- [x] テストケースの作成（悪意のあるコンテキストを含むドキュメント）
+- [x] 実装
+- [x] 他のコードのコンテキストも確認し、同様の問題があるようであれば同様に対応する
+  - 追加の脆弱性を発見 → 260131-prompt-injection-comprehensive-fix チケットで対応
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## 実装内容
+
+- `_escape_context_tags()` ヘルパーメソッドを追加
+- `<context>` → `&lt;context&gt;`、`</context>` → `&lt;/context&gt;` にエスケープ
+- `_build_context_text()` でコンテキスト挿入前に自動エスケープ
 
 ## 関連
 
 - 元チケット: 260130-glossary-generator-code-simplification
 - codex MCPレビュー結果
+- 後続チケット: 260131-prompt-injection-comprehensive-fix
