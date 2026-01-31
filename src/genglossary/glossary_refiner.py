@@ -3,6 +3,7 @@
 import logging
 import re
 from collections import defaultdict
+from threading import Event
 
 from pydantic import BaseModel
 
@@ -46,6 +47,7 @@ class GlossaryRefiner:
         documents: list[Document],
         progress_callback: ProgressCallback | None = None,
         term_progress_callback: TermProgressCallback | None = None,
+        cancel_event: Event | None = None,
     ) -> Glossary:
         """Refine the glossary based on identified issues.
 
@@ -57,6 +59,8 @@ class GlossaryRefiner:
                 Receives (current, total) where current is 1-indexed.
             term_progress_callback: Optional callback called after each issue is resolved.
                 Receives (current, total, term_name) where current is 1-indexed.
+            cancel_event: Optional threading.Event for cancellation. If set, processing
+                stops and returns the glossary as refined so far.
 
         Returns:
             A refined Glossary object.
@@ -68,6 +72,10 @@ class GlossaryRefiner:
         )
 
         if not issues:
+            return refined_glossary
+
+        # Check for cancellation before starting
+        if cancel_event is not None and cancel_event.is_set():
             return refined_glossary
 
         # 1. Extract issues with should_exclude=True
@@ -97,6 +105,10 @@ class GlossaryRefiner:
 
         total_issues = len(refine_issues)
         for idx, issue in enumerate(refine_issues, start=1):
+            # Check for cancellation before processing each issue
+            if cancel_event is not None and cancel_event.is_set():
+                break
+
             term = refined_glossary.get_term(issue.term_name)
 
             try:

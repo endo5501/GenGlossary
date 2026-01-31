@@ -442,7 +442,9 @@ class PipelineExecutor:
         generator = GlossaryGenerator(llm_client=self._llm_client)
         progress_cb = self._create_progress_callback(context, "provisional")
         glossary = generator.generate(
-            extracted_terms, documents, term_progress_callback=progress_cb
+            extracted_terms, documents,
+            term_progress_callback=progress_cb,
+            cancel_event=context.cancel_event,
         )
 
         # Save provisional glossary using batch insert
@@ -493,7 +495,7 @@ class PipelineExecutor:
 
         self._log(context, "info", "Reviewing glossary...")
         reviewer = GlossaryReviewer(llm_client=self._llm_client)
-        issues = reviewer.review(glossary)
+        issues = reviewer.review(glossary, cancel_event=context.cancel_event)
 
         # Save issues using batch insert
         with transaction(conn):
@@ -514,7 +516,9 @@ class PipelineExecutor:
             refiner = GlossaryRefiner(llm_client=self._llm_client)
             progress_cb = self._create_progress_callback(context, "refined")
             glossary = refiner.refine(
-                glossary, issues, documents, term_progress_callback=progress_cb
+                glossary, issues, documents,
+                term_progress_callback=progress_cb,
+                cancel_event=context.cancel_event,
             )
             self._log(context, "info", f"Refined {len(glossary.terms)} terms")
         else:
