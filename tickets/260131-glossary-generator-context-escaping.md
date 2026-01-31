@@ -4,7 +4,7 @@ tags: [security, improvement]
 description: "GlossaryGenerator: Escape context XML tags to prevent prompt injection"
 created_at: "2026-01-31T02:00:00Z"
 started_at: 2026-01-31T01:39:56Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-31T01:47:15Z # Do not modify manually
 ---
 
 # GlossaryGenerator: Escape context XML tags to prevent prompt injection
