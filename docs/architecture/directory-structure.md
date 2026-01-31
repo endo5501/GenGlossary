@@ -71,6 +71,12 @@ GenGlossary/
 │   │       ├── files.py         # /api/projects/{project_id}/files
 │   │       └── runs.py          # /api/projects/{project_id}/runs (Schema v3)
 │   ├── config.py                 # 設定管理
+│   ├── utils/                    # ユーティリティモジュール
+│   │   ├── __init__.py
+│   │   ├── hash.py               # ハッシュユーティリティ
+│   │   ├── token_counter.py      # トークンカウント
+│   │   └── text.py               # テキスト処理（CJK検出等）
+│   ├── exceptions.py             # カスタム例外
 │   ├── cli.py                    # CLIエントリーポイント (generate)
 │   ├── cli_db.py                 # DB管理CLI (db サブコマンド)
 │   ├── cli_project.py            # プロジェクト管理CLI (project サブコマンド)
@@ -121,6 +127,8 @@ GenGlossary/
 │   ├── test_cli_db.py           # DB CLI統合テスト
 │   ├── test_cli_db_regenerate.py # regenerateコマンドテスト
 │   ├── test_cli_project.py      # プロジェクトCLI統合テスト
+│   ├── test_text_utils.py       # テキストユーティリティテスト
+│   ├── test_token_counter.py    # トークンカウントテスト
 │   └── output/
 │       └── test_markdown_writer.py
 ├── target_docs/                  # 入力ドキュメント

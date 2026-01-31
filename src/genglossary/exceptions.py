@@ -54,3 +54,23 @@ class ExcludedFileError(GenGlossaryError):
         self.file_path = file_path
         self.pattern = pattern
         super().__init__(f"File '{file_path}' is excluded by pattern '{pattern}'")
+
+
+class LLMError(GenGlossaryError):
+    """Raised when LLM operations fail.
+
+    This exception wraps underlying errors from LLM client operations,
+    including network errors, JSON parsing failures, and validation errors.
+    """
+
+    def __init__(self, message: str, cause: Exception | None = None) -> None:
+        """Initialize LLMError.
+
+        Args:
+            message: Description of the error.
+            cause: The underlying exception that caused this error.
+        """
+        self.cause = cause
+        super().__init__(message)
+        if cause is not None:
+            self.__cause__ = cause
