@@ -61,6 +61,34 @@ def transaction(conn: sqlite3.Connection) -> Iterator[None]:
         raise
 ```
 
+## db_helpers.py
+```python
+from collections.abc import Sequence
+
+def batch_insert(
+    conn: sqlite3.Connection,
+    table_name: str,
+    columns: list[str],
+    data: Sequence[tuple],
+) -> None:
+    """複数行を一括挿入する共通ヘルパー関数
+
+    内部ヘルパー関数として使用。呼び出し側は以下を保証する必要があります:
+    - table_name と columns は信頼できるリテラル値（ユーザー入力不可）
+    - アトミック性が必要な場合は呼び出し側でトランザクション管理
+
+    Args:
+        table_name: 挿入先テーブル名（信頼できる値）
+        columns: 挿入するカラム名のリスト（信頼できる値）
+        data: 挿入する値のタプルのシーケンス
+
+    Raises:
+        sqlite3.IntegrityError: 制約違反時
+        sqlite3.ProgrammingError: タプル長とカラム数不一致時
+    """
+    ...
+```
+
 ## schema.py
 ```python
 SCHEMA_VERSION = 4
@@ -171,17 +199,17 @@ def delete_all_documents(conn: sqlite3.Connection) -> None:
 
 def create_documents_batch(
     conn: sqlite3.Connection,
-    documents: list[tuple[str, str, str]]
+    documents: Sequence[tuple[str, str, str]]
 ) -> None:
-    """複数のドキュメントを一括作成（パフォーマンス最適化）
+    """複数のドキュメントを一括作成（batch_insertヘルパー使用）
 
     Args:
-        documents: (file_name, content, content_hash) のタプルのリスト
+        documents: (file_name, content, content_hash) のタプルのシーケンス
 
     Raises:
         sqlite3.IntegrityError: file_nameが既に存在する場合
     """
-    ...
+    batch_insert(conn, "documents", ["file_name", "content", "content_hash"], documents)
 ```
 
 ## term_repository.py
