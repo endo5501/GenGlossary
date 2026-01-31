@@ -51,19 +51,41 @@ def _batch_insert(
 
 ## Tasks
 
-- [ ] _batch_insert ヘルパー関数を設計・実装
-- [ ] 既存バッチ関数をヘルパー使用に変更
-- [ ] テスト
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] _batch_insert ヘルパー関数を設計・実装
+- [x] 既存バッチ関数をヘルパー使用に変更
+- [x] テスト
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
 - code-simplifier agent からの提案
 - 260130-executor-batch-insert チケットのフォローアップ
+
+## 完了サマリー
+
+### 実装内容
+1. `src/genglossary/db/db_helpers.py` に `batch_insert` ヘルパー関数を新規作成
+2. 6つの既存バッチ関数をヘルパー使用にリファクタリング
+3. 型の一貫性向上（`list` → `Sequence`）
+4. セキュリティに関するdocstring追加
+5. アーキテクチャドキュメント更新
+
+### コミット
+- `4bbc3b6` Add tests for batch_insert helper function
+- `7ddc075` Implement batch_insert helper function
+- `6194a8b` Refactor batch insert functions to use common helper
+- `1157c53` Improve type consistency in batch insert functions
+- `04fed90` Add security and usage notes to batch_insert docstring
+- `a61b666` Update architecture docs for batch_insert helper
+
+### 結果
+- pyright: 0 errors
+- pytest: 901 passed
+- コード削減: -44行 / +15行
