@@ -200,10 +200,12 @@ class DocumentLoader:
 - **パス検証**: シンボリックリンクを解決してディレクトリトラバーサルを検出
 - **機密ファイル除外**: `.env`, `*.key`, `*.pem`, `credentials*`, `.git*` 等を自動除外
 
-**例外:**
+**例外 (exceptions.py):**
+- `GenGlossaryError`: 基底例外クラス
 - `FileSizeExceededError`: ファイルサイズ超過
 - `PathTraversalError`: ディレクトリトラバーサル検出
 - `ExcludedFileError`: 除外ファイルへのアクセス試行
+- `LLMError`: LLM操作エラー（ネットワーク/パース失敗）
 
 ### term_extractor.py (ステップ1)
 ```python
@@ -260,8 +262,14 @@ class TermExtractor:
 
 ### glossary_generator.py (ステップ2)
 ```python
+from genglossary.utils.text import contains_cjk
+
 class GlossaryGenerator:
     """用語集生成を行うクラス"""
+
+    # クラス定数
+    MAX_CONTEXT_COUNT = 5          # プロンプトに含めるコンテキスト数上限
+    DEFAULT_CONTEXT_LINES = 1      # デフォルトのコンテキスト行数
 
     def __init__(self, llm_client: BaseLLMClient):
         self.llm_client = llm_client
@@ -272,6 +280,7 @@ class GlossaryGenerator:
         documents: list[Document],
         progress_callback: ProgressCallback | None = None,
         skip_common_nouns: bool = True,
+        term_progress_callback: TermProgressCallback | None = None,
     ) -> Glossary:
         """用語集を生成
 
@@ -280,12 +289,24 @@ class GlossaryGenerator:
             documents: ドキュメントリスト
             progress_callback: 進捗コールバック（オプション）
             skip_common_nouns: ClassifiedTerm使用時にcommon_nounをスキップ
+            term_progress_callback: 用語ごとの進捗コールバック
 
         Returns:
             生成された用語集
         """
         ...
+
+    def _safe_callback(
+        self, callback: Callable[..., None] | None, *args: Any
+    ) -> None:
+        """コールバックを安全に呼び出し（例外を無視してパイプライン継続）"""
+        ...
 ```
+
+**設計ポイント:**
+- **TypeGuard使用**: `_is_str_list()` で明示的な型絞り込み
+- **CJKユーティリティ分離**: `utils/text.py` に抽出し再利用可能に
+- **コールバック保護**: `_safe_callback` でコールバックエラーを隔離
 
 ### glossary_reviewer.py (ステップ3)
 ```python
@@ -321,3 +342,28 @@ def write_glossary(glossary: Glossary, output_path: str) -> None:
     """用語集をMarkdown形式で出力"""
     ...
 ```
+
+## 5. utils/ - ユーティリティ層
+
+### text.py
+```python
+# Unicode ranges for CJK character detection
+CJK_RANGES: list[tuple[str, str]] = [
+    ("\u4e00", "\u9fff"),  # CJK Unified Ideographs
+    ("\u3040", "\u309f"),  # Hiragana
+    ("\u30a0", "\u30ff"),  # Katakana
+    ("\uac00", "\ud7af"),  # Korean Hangul
+]
+
+def is_cjk_char(char: str) -> bool:
+    """単一文字がCJK文字かチェック"""
+    ...
+
+def contains_cjk(text: str) -> bool:
+    """テキストにCJK文字が含まれるかチェック"""
+    ...
+```
+
+**用途:**
+- 用語検索時のワード境界判定（CJK文字は境界なしでマッチ）
+- 日本語・中国語・韓国語テキストの検出
