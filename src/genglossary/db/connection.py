@@ -68,8 +68,18 @@ def transaction(conn: sqlite3.Connection) -> Iterator[None]:
         # Nested transaction - use SAVEPOINT
         savepoint_name = f"sp_{uuid.uuid4().hex[:8]}"
         conn.execute(f"SAVEPOINT {savepoint_name}")
-        commit_fn = lambda: conn.execute(f"RELEASE {savepoint_name}")
-        rollback_fn = lambda: conn.execute(f"ROLLBACK TO {savepoint_name}")
+
+        def release_savepoint() -> None:
+            conn.execute(f"RELEASE {savepoint_name}")
+
+        def rollback_savepoint() -> None:
+            # ROLLBACK TO undoes changes but keeps savepoint active
+            # RELEASE removes the savepoint from the stack
+            conn.execute(f"ROLLBACK TO {savepoint_name}")
+            conn.execute(f"RELEASE {savepoint_name}")
+
+        commit_fn = release_savepoint
+        rollback_fn = rollback_savepoint
     else:
         # Top-level transaction
         commit_fn = conn.commit
