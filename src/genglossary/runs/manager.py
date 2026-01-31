@@ -1,6 +1,7 @@
 """Run manager for background pipeline execution."""
 
 import sqlite3
+import traceback
 from datetime import datetime
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
@@ -146,11 +147,18 @@ class RunManager:
                     complete_run_if_not_cancelled(conn, run_id)
 
         except Exception as e:
+            # Capture traceback for debugging
+            error_traceback = traceback.format_exc()
             # Update status to failed
             self._update_failed_status(conn, run_id, str(e))
             self._broadcast_log(
                 run_id,
-                {"run_id": run_id, "level": "error", "message": f"Run failed: {str(e)}"},
+                {
+                    "run_id": run_id,
+                    "level": "error",
+                    "message": f"Run failed: {str(e)}",
+                    "traceback": error_traceback,
+                },
             )
         finally:
             # Cleanup cancel event for this run
