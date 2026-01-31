@@ -4,7 +4,7 @@ tags: [improvement, backend, threading]
 description: "RunManager: Synchronize start_run to prevent race conditions"
 created_at: "2026-01-30T21:15:00Z"
 started_at: 2026-01-31T13:41:52Z
-closed_at: null
+closed_at: 2026-01-31T13:51:46Z
 ---
 
 # RunManager: Synchronize start_run to prevent race conditions
