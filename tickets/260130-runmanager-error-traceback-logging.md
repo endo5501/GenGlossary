@@ -4,7 +4,7 @@ tags: [improvement, backend, debugging]
 description: "RunManager: Include traceback in error logging"
 created_at: "2026-01-30T23:30:00+09:00"
 started_at: 2026-01-31T00:37:49Z
-closed_at: null
+closed_at: 2026-01-31T00:46:33Z
 ---
 
 # RunManager: Include traceback in error logging
