@@ -1,5 +1,6 @@
 """Glossary reviewer - Step 3: Review glossary for issues using LLM."""
 
+from threading import Event
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -41,17 +42,27 @@ class GlossaryReviewer:
         """
         self.llm_client = llm_client
 
-    def review(self, glossary: Glossary) -> list[GlossaryIssue]:
+    def review(
+        self, glossary: Glossary, cancel_event: Event | None = None
+    ) -> list[GlossaryIssue] | None:
         """Review the glossary and identify issues.
 
         Args:
             glossary: The glossary to review.
+            cancel_event: Optional threading.Event for cancellation. If set,
+                returns None without calling LLM.
 
         Returns:
-            A list of identified issues.
+            A list of identified issues, or None if cancelled.
+            - None: cancelled, no review was performed
+            - []: review was performed, no issues found
         """
         if glossary.term_count == 0:
             return []
+
+        # Check for cancellation before calling LLM
+        if cancel_event is not None and cancel_event.is_set():
+            return None
 
         try:
             prompt = self._create_review_prompt(glossary)

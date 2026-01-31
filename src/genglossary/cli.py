@@ -255,6 +255,10 @@ def _generate_glossary_with_db(
     else:
         issues = reviewer.review(glossary)
 
+    # Handle None return (cancellation case - should not happen in CLI)
+    if issues is None:
+        issues = []
+
     if verbose:
         console.print(f"[dim]  → {len(issues)} 個の問題を検出しました[/dim]")
         # Display count of terms to be excluded

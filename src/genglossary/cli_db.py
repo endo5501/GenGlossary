@@ -1011,6 +1011,9 @@ def issues_regenerate(llm_provider: str, model: str | None, db_path: str) -> Non
         reviewer = GlossaryReviewer(llm_client=llm_client)
         console.print("[dim]用語集を精査中...[/dim]")
         issues = reviewer.review(glossary)
+        # Handle None return (cancellation case - should not happen in CLI)
+        if issues is None:
+            issues = []
         console.print(f"[dim]{len(issues)} 個の問題を検出しました[/dim]")
 
         # Save issues to database

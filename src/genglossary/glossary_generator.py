@@ -2,6 +2,7 @@
 
 import logging
 import re
+from threading import Event
 from typing import TypeGuard, cast
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ Output:
         progress_callback: ProgressCallback | None = None,
         skip_common_nouns: bool = True,
         term_progress_callback: TermProgressCallback | None = None,
+        cancel_event: Event | None = None,
     ) -> Glossary:
         """Generate a provisional glossary.
 
@@ -86,6 +88,8 @@ Output:
                 when terms is list[ClassifiedTerm]. Has no effect when terms is list[str].
             term_progress_callback: Optional callback called after each term is processed.
                 Receives (current, total, term_name) where current is 1-indexed.
+            cancel_event: Optional threading.Event for cancellation. If set, processing
+                stops and returns the partial glossary built so far.
 
         Returns:
             A Glossary object with terms and their definitions.
@@ -95,6 +99,10 @@ Output:
         if not terms:
             return glossary
 
+        # Check for cancellation before starting
+        if cancel_event is not None and cancel_event.is_set():
+            return glossary
+
         # Filter terms if ClassifiedTerm list and skip_common_nouns is True
         filtered_terms = self._filter_terms(terms, skip_common_nouns)
         if not filtered_terms:
@@ -102,6 +110,10 @@ Output:
 
         total_terms = len(filtered_terms)
         for idx, term_item in enumerate(filtered_terms, start=1):
+            # Check for cancellation before processing each term
+            if cancel_event is not None and cancel_event.is_set():
+                break
+
             # Extract term name (support both str and ClassifiedTerm)
             term_name = term_item if isinstance(term_item, str) else term_item.term
 

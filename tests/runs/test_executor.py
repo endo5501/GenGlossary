@@ -1890,3 +1890,194 @@ class TestDocumentFilePathStorage:
             assert len(file_names) == 2
             assert "docs/README.md" in file_names
             assert "examples/README.md" in file_names
+
+
+class TestPipelineExecutorCancelEventPropagation:
+    """Tests for cancel_event propagation to LLM processing classes.
+
+    These tests verify that PipelineExecutor passes cancel_event to
+    GlossaryGenerator, GlossaryReviewer, and GlossaryRefiner for
+    improved cancellation responsiveness.
+    """
+
+    def test_cancel_event_passed_to_generator(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """GlossaryGenerator.generate() に cancel_event が渡されることを確認"""
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator_cls, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
+
+            mock_glossary = Glossary(terms={})
+            mock_generator_cls.return_value.generate.return_value = mock_glossary
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(project_db, "from_terms", context)
+
+            # Verify cancel_event was passed to generate
+            mock_generator_cls.return_value.generate.assert_called_once()
+            call_kwargs = mock_generator_cls.return_value.generate.call_args.kwargs
+            assert "cancel_event" in call_kwargs
+            assert call_kwargs["cancel_event"] is cancel_event
+
+    def test_cancel_event_passed_to_reviewer(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """GlossaryReviewer.review() に cancel_event が渡されることを確認"""
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_prov.return_value = [
+                {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
+            ]
+
+            mock_reviewer_cls.return_value.review.return_value = []
+
+            executor.execute(project_db, "provisional_to_refined", context)
+
+            # Verify cancel_event was passed to review
+            mock_reviewer_cls.return_value.review.assert_called_once()
+            call_kwargs = mock_reviewer_cls.return_value.review.call_args.kwargs
+            assert "cancel_event" in call_kwargs
+            assert call_kwargs["cancel_event"] is cancel_event
+
+    def test_cancel_event_passed_to_refiner(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """GlossaryRefiner.refine() に cancel_event が渡されることを確認"""
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_prov.return_value = [
+                {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
+            ]
+
+            # Return issues to trigger refiner
+            mock_reviewer.return_value.review.return_value = [
+                GlossaryIssue(term_name="term1", issue_type="unclear", description="Issue")
+            ]
+
+            mock_refiner_cls.return_value.refine.return_value = Glossary(terms={})
+
+            executor.execute(project_db, "provisional_to_refined", context)
+
+            # Verify cancel_event was passed to refine
+            mock_refiner_cls.return_value.refine.assert_called_once()
+            call_kwargs = mock_refiner_cls.return_value.refine.call_args.kwargs
+            assert "cancel_event" in call_kwargs
+            assert call_kwargs["cancel_event"] is cancel_event
+
+    def test_provisional_glossary_not_saved_when_cancelled_during_generate(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """generate() 中にキャンセルされた場合、provisional が保存されないことを確認"""
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator_cls, \
+             patch("genglossary.runs.executor.create_provisional_terms_batch") as mock_create_prov:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
+
+            # Simulate cancellation during generate
+            def generate_with_cancel(*args, **kwargs):
+                cancel_event.set()  # Cancelled during generate
+                return Glossary(terms={})  # Return partial/empty result
+
+            mock_generator_cls.return_value.generate.side_effect = generate_with_cancel
+
+            executor.execute(project_db, "from_terms", context)
+
+            # Provisional terms should NOT be saved because of cancellation
+            mock_create_prov.assert_not_called()
+
+    def test_issues_not_saved_when_review_cancelled(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+        log_callback,
+    ) -> None:
+        """review() がキャンセルでNoneを返した場合、issues が保存されないことを確認"""
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls, \
+             patch("genglossary.runs.executor.create_issues_batch") as mock_create_issues:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_prov.return_value = [
+                {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
+            ]
+
+            # Reviewer returns None (cancelled)
+            mock_reviewer_cls.return_value.review.return_value = None
+
+            executor.execute(project_db, "provisional_to_refined", context)
+
+            # Issues should NOT be saved when review was cancelled
+            mock_create_issues.assert_not_called()

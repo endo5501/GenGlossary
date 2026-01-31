@@ -419,8 +419,81 @@ def _create_progress_callback(
 # executor.py
 progress_cb = self._create_progress_callback(conn, "provisional")
 glossary = generator.generate(
-    extracted_terms, documents, term_progress_callback=progress_cb
+    extracted_terms, documents,
+    cancel_event=context.cancel_event,  # キャンセルイベント伝播
+    term_progress_callback=progress_cb
 )
+```
+
+### LLM 処理クラスへのキャンセルイベント伝播
+
+GlossaryGenerator、GlossaryReviewer、GlossaryRefiner は `cancel_event` パラメータを受け取り、ループ内や LLM 呼び出し前にキャンセルチェックを行います。これにより、長時間の LLM 呼び出し中でも迅速にキャンセルが反映されます。
+
+**対応クラスとメソッド:**
+```python
+# GlossaryGenerator
+def generate(
+    self,
+    term_names: list[str],
+    documents: list[Document],
+    cancel_event: Event | None = None,      # ← 追加
+    term_progress_callback: TermProgressCallback | None = None,
+) -> Glossary:
+    # ループ前にキャンセルチェック
+    if cancel_event is not None and cancel_event.is_set():
+        return Glossary()  # 空の用語集を返却
+
+    for i, term_name in enumerate(term_names):
+        # 各用語処理前にキャンセルチェック
+        if cancel_event is not None and cancel_event.is_set():
+            break  # 処理済みの用語のみを含む用語集を返却
+        # LLM 呼び出し...
+
+# GlossaryReviewer
+def review(
+    self,
+    glossary: Glossary,
+    cancel_event: Event | None = None,      # ← 追加
+) -> list[GlossaryIssue] | None:  # ← None はキャンセルを意味
+    if cancel_event is not None and cancel_event.is_set():
+        return None  # キャンセルと「問題なし」を区別
+    # LLM 呼び出し...
+
+# GlossaryRefiner
+def refine(
+    self,
+    glossary: Glossary,
+    issues: list[GlossaryIssue],
+    documents: list[Document],
+    cancel_event: Event | None = None,      # ← 追加
+    progress_callback: TermProgressCallback | None = None,
+) -> Glossary:
+    if cancel_event is not None and cancel_event.is_set():
+        return glossary  # 未改善の用語集を返却
+    # ループ内でキャンセルチェック...
+```
+
+**戻り値の解釈:**
+
+| クラス | キャンセル時の戻り値 | 通常時との区別 |
+|--------|---------------------|----------------|
+| GlossaryGenerator | 処理済み用語のみの Glossary | term_count で判断 |
+| GlossaryReviewer | `None` | `[]`（問題なし）と区別可能 |
+| GlossaryRefiner | 未改善の Glossary | 呼び出し側で判断 |
+
+**Executor での処理:**
+```python
+# GlossaryReviewer のキャンセル対応
+issues = reviewer.review(glossary, cancel_event=context.cancel_event)
+
+# None はキャンセルを意味 → 後続処理をスキップ
+if issues is None:
+    self._log(context, "info", "Review cancelled")
+    return
+
+# issues が空リスト → レビュー完了、問題なし
+if not issues:
+    # provisional をそのまま refined にコピー...
 ```
 
 ## 実行スコープ
@@ -434,9 +507,10 @@ glossary = generator.generate(
 **重複用語の処理:**
 - 用語抽出ステップ（ステップ2）で LLM が同じ用語を複数回返した場合、重複はスキップされ、ユニークな用語のみが DB に保存されます
 
-**issues がない場合の動作:**
-- GlossaryReviewer が問題点を検出しなかった場合（`issues == []`）、GlossaryRefiner は呼び出されません
-- 代わりに、provisional glossary がそのまま refined glossary としてコピー保存されます
+**issues の処理パターン:**
+- `issues is None`: レビューがキャンセルされた → 後続処理をスキップしてリターン
+- `issues == []`: レビュー完了、問題なし → GlossaryRefiner は呼び出さず、provisional をそのまま refined にコピー
+- `issues` に要素あり: 問題あり → GlossaryRefiner で改善処理を実行
 
 **パイプラインステップ:**
 1. ドキュメント読み込み (DocumentLoader / DBから直接読み込み)
