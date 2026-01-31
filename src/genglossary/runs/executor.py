@@ -109,15 +109,18 @@ class PipelineExecutor:
             total: Optional total count.
             current_term: Optional current term being processed.
         """
-        log_entry: dict = {"run_id": context.run_id, "level": level, "message": message}
-        if step is not None:
-            log_entry["step"] = step
-        if current is not None:
-            log_entry["progress_current"] = current
-        if total is not None:
-            log_entry["progress_total"] = total
-        if current_term is not None:
-            log_entry["current_term"] = current_term
+        optional_fields = {
+            "step": step,
+            "progress_current": current,
+            "progress_total": total,
+            "current_term": current_term,
+        }
+        log_entry: dict = {
+            "run_id": context.run_id,
+            "level": level,
+            "message": message,
+            **{k: v for k, v in optional_fields.items() if v is not None},
+        }
         try:
             context.log_callback(log_entry)
         except Exception:
@@ -209,14 +212,19 @@ class PipelineExecutor:
         """
         def callback(current: int, total: int, term_name: str = "") -> None:
             percent = int((current / total) * 100) if total > 0 else 0
+            # Normalize term_name: treat whitespace-only as empty
+            term_name = term_name.strip() if term_name else ""
+            # Format message: include term_name only if not empty
+            message = f"{term_name}: {percent}%" if term_name else f"{percent}%"
             self._log(
                 context,
                 "info",
-                f"{term_name}: {percent}%",
+                message,
                 step=step_name,
                 current=current,
                 total=total,
-                current_term=term_name,
+                # Only include current_term if not empty
+                current_term=term_name or None,
             )
         return callback
 
