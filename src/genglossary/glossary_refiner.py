@@ -1,9 +1,13 @@
 """Glossary refiner - Step 4: Refine glossary based on issues using LLM."""
 
+import logging
 import re
 from collections import defaultdict
+from typing import Any, Callable
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
@@ -34,6 +38,28 @@ class GlossaryRefiner:
             llm_client: The LLM client to use for refinement.
         """
         self.llm_client = llm_client
+
+    def _safe_callback(
+        self, callback: Callable[..., None] | None, *args: Any
+    ) -> None:
+        """Safely invoke a callback, ignoring any exceptions.
+
+        This prevents callback errors from interrupting the pipeline.
+        Errors are logged at DEBUG level for debugging purposes.
+
+        Args:
+            callback: The callback function to invoke, or None.
+            *args: Arguments to pass to the callback.
+        """
+        if callback is not None:
+            try:
+                callback(*args)
+            except Exception as e:
+                logger.debug(
+                    "Callback error ignored (to prevent pipeline interruption): %s",
+                    e,
+                    exc_info=True,
+                )
 
     def refine(
         self,
@@ -105,18 +131,9 @@ class GlossaryRefiner:
             except Exception as e:
                 print(f"Warning: Failed to refine '{issue.term_name}': {e}")
             finally:
-                # Call progress callbacks if provided (always, even for missing terms)
-                # Guarded to prevent pipeline interruption from callback errors
-                if progress_callback is not None:
-                    try:
-                        progress_callback(idx, total_issues)
-                    except Exception:
-                        pass  # Ignore callback errors to prevent pipeline interruption
-                if term_progress_callback is not None:
-                    try:
-                        term_progress_callback(idx, total_issues, issue.term_name)
-                    except Exception:
-                        pass  # Ignore callback errors to prevent pipeline interruption
+                # Call progress callbacks (guarded to prevent pipeline interruption)
+                self._safe_callback(progress_callback, idx, total_issues)
+                self._safe_callback(term_progress_callback, idx, total_issues, issue.term_name)
 
         refined_glossary.metadata["resolved_issues"] = resolved_count
         return refined_glossary
@@ -252,8 +269,6 @@ JSON形式で回答してください:
         Returns:
             Formatted context string.
         """
-        # Search for contexts containing the term (case-insensitive)
-        term_lower = term_name.lower()
         matching_contexts: list[str] = []
 
         # Check each word in the term name

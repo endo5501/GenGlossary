@@ -777,6 +777,63 @@ class TestPipelineExecutorProgressCallback:
         assert len(logs) == 1
         assert "0%" in logs[0]["message"]
 
+    def test_create_progress_callback_handles_empty_term_name(
+        self,
+        executor: PipelineExecutor,
+        cancel_event: Event,
+    ) -> None:
+        """term_name が空の場合、メッセージに ': ' が含まれない
+
+        空の term_name で `f"{term_name}: {percent}%"` とすると ": 0%" になる。
+        これを避け、フォールバックラベルを使用するか current_term を省略する。
+        """
+        logs: list[dict] = []
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
+
+        progress_cb = executor._create_progress_callback(context, "provisional")
+
+        # Call with empty term_name
+        progress_cb(1, 10, "")
+
+        assert len(logs) == 1
+        message = logs[0]["message"]
+        # Should NOT start with ": " (bad format from empty term_name)
+        assert not message.startswith(": "), f"Message should not start with ': ', got: {message}"
+        # Should contain percentage
+        assert "10%" in message
+        # current_term should be omitted when empty
+        assert "current_term" not in logs[0] or logs[0]["current_term"] == ""
+
+    def test_create_progress_callback_handles_whitespace_term_name(
+        self,
+        executor: PipelineExecutor,
+        cancel_event: Event,
+    ) -> None:
+        """term_name がホワイトスペースのみの場合も空と同様に扱う"""
+        logs: list[dict] = []
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: logs.append(msg),
+            cancel_event=cancel_event,
+        )
+
+        progress_cb = executor._create_progress_callback(context, "provisional")
+
+        # Call with whitespace-only term_name
+        progress_cb(1, 10, "   ")
+
+        assert len(logs) == 1
+        message = logs[0]["message"]
+        # Should NOT start with whitespace + ": " (bad format)
+        assert not message.startswith(": "), f"Message should not start with ': ', got: {message}"
+        assert "   :" not in message, "Whitespace should be stripped"
+        # Should contain percentage
+        assert "10%" in message
+
 
 class TestPipelineExecutorLogExtended:
     """Tests for extended _log method."""
