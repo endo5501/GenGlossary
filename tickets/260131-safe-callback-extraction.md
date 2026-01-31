@@ -3,7 +3,7 @@ priority: 1
 tags: [refactoring, code-quality, backend]
 description: "Extract _safe_callback to common utility module"
 created_at: "2026-01-31T04:10:00Z"
-started_at: null
+started_at: 2026-01-31T04:20:22Z
 closed_at: null
 ---
 
