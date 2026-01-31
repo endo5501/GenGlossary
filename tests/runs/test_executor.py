@@ -1173,7 +1173,7 @@ class TestPipelineExecutorBugFixes:
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
              patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
-             patch("genglossary.runs.executor.create_refined_term") as mock_create_refined:
+             patch("genglossary.runs.executor.create_refined_terms_batch") as mock_create_refined_batch:
 
             mock_llm_factory.return_value = MagicMock()
             mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
@@ -1194,14 +1194,15 @@ class TestPipelineExecutorBugFixes:
             # Refiner should NOT be called (no issues to refine)
             mock_refiner.return_value.refine.assert_not_called()
 
-            # But refined term should be saved (provisional copied to refined)
-            mock_create_refined.assert_called_once_with(
-                project_db,
-                "term1",
-                "definition1",
-                0.9,
-                [TermOccurrence(document_path="test.txt", line_number=1, context="ctx")]
-            )
+            # But refined terms should be saved using batch insert (provisional copied to refined)
+            mock_create_refined_batch.assert_called_once()
+            call_args = mock_create_refined_batch.call_args
+            assert call_args[0][0] == project_db
+            terms_data = call_args[0][1]
+            assert len(terms_data) == 1
+            assert terms_data[0][0] == "term1"
+            assert terms_data[0][1] == "definition1"
+            assert terms_data[0][2] == 0.9
 
     def test_duplicate_terms_from_llm_do_not_crash_pipeline(
         self,
@@ -1388,7 +1389,7 @@ class TestCancellationCheckBeforeRefinedSave:
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.create_refined_term") as mock_create_refined:
+             patch("genglossary.runs.executor.create_refined_terms_batch") as mock_create_refined_batch:
 
             mock_llm_factory.return_value = MagicMock()
             mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
@@ -1416,8 +1417,8 @@ class TestCancellationCheckBeforeRefinedSave:
             with patch.object(executor, "_log", log_and_cancel):
                 executor.execute(project_db, "provisional_to_refined", context)
 
-            # Refined term should NOT be saved because of cancellation
-            mock_create_refined.assert_not_called()
+            # Refined terms batch should NOT be saved because of cancellation
+            mock_create_refined_batch.assert_not_called()
 
 
 class TestDuplicateFilteringBeforeGenerate:
