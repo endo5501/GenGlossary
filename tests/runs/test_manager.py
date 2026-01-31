@@ -1043,3 +1043,176 @@ class TestRunManagerSubscriberCleanup:
             assert completion_signal_found, (
                 "Completion signal should be sent before subscriber cleanup"
             )
+
+
+class TestRunManagerStatusMisclassification:
+    """Tests for status misclassification bug fix.
+
+    Issue: When pipeline succeeds but status update fails (e.g., DB locked),
+    the run is incorrectly marked as 'failed' instead of 'completed'.
+    Similarly, when cancellation status update fails, it's marked as 'failed'
+    instead of 'cancelled'.
+    """
+
+    def test_pipeline_success_with_complete_run_db_failure_still_shows_completed(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """パイプラインが成功し、complete_run_if_not_cancelledでDBエラーが発生しても、
+        リトライによりステータスはcompletedになる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Pipeline executes successfully
+            mock_executor.return_value.execute.return_value = None
+
+            # complete_run_if_not_cancelled fails first time, succeeds on retry
+            original_complete_run = __import__(
+                "genglossary.db.runs_repository", fromlist=["complete_run_if_not_cancelled"]
+            ).complete_run_if_not_cancelled
+
+            call_count = {"value": 0}
+
+            def mock_complete_run_if_not_cancelled(conn, run_id):
+                call_count["value"] += 1
+                if call_count["value"] == 1:
+                    raise sqlite3.OperationalError("database is locked")
+                return original_complete_run(conn, run_id)
+
+            with patch(
+                "genglossary.runs.manager.complete_run_if_not_cancelled",
+                side_effect=mock_complete_run_if_not_cancelled,
+            ):
+                run_id = manager.start_run(scope="full")
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Status should be completed, not failed
+                run = get_run(project_db, run_id)
+                assert run is not None
+                assert run["status"] == "completed", (
+                    f"Expected status 'completed' but got '{run['status']}'. "
+                    "Pipeline succeeded but DB update failure caused misclassification."
+                )
+
+    def test_cancel_with_db_update_failure_shows_cancelled_not_failed(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """キャンセルでDBステータス更新(cancel_run)が失敗しても、
+        リトライによりステータスはcancelledになる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor that waits for cancellation
+            def cancellable_execute(conn, scope, context, doc_root="."):
+                for _ in range(50):
+                    if context.cancel_event.is_set():
+                        return
+                    time.sleep(0.1)
+
+            mock_executor.return_value.execute.side_effect = cancellable_execute
+
+            # cancel_run in repository fails first time, succeeds on retry
+            original_cancel_run = __import__(
+                "genglossary.db.runs_repository", fromlist=["cancel_run"]
+            ).cancel_run
+
+            call_count = {"value": 0}
+
+            def mock_cancel_run(conn, run_id):
+                call_count["value"] += 1
+                if call_count["value"] == 1:
+                    raise sqlite3.OperationalError("database is locked")
+                return original_cancel_run(conn, run_id)
+
+            with patch(
+                "genglossary.runs.manager.cancel_run",
+                side_effect=mock_cancel_run,
+            ):
+                run_id = manager.start_run(scope="full")
+                time.sleep(0.1)  # Allow thread to start
+
+                manager.cancel_run(run_id)
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Status should be cancelled, not failed
+                run = get_run(project_db, run_id)
+                assert run is not None
+                assert run["status"] == "cancelled", (
+                    f"Expected status 'cancelled' but got '{run['status']}'. "
+                    "Cancellation status update failure caused misclassification."
+                )
+
+    def test_pipeline_success_prioritizes_completed_over_failed_on_all_db_failures(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """パイプラインが成功し、すべてのDBステータス更新が失敗しても、
+        ステータスはfailedではなくcompletedのまま（または適切にログされる）"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Pipeline executes successfully
+            mock_executor.return_value.execute.return_value = None
+
+            # All complete_run_if_not_cancelled calls fail
+            with patch(
+                "genglossary.runs.manager.complete_run_if_not_cancelled",
+                side_effect=sqlite3.OperationalError("database is locked"),
+            ):
+                # Subscribe to logs before starting run
+                queue = manager.register_subscriber(run_id=1)
+
+                run_id = manager.start_run(scope="full")
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Even if all DB updates fail, the run should NOT be marked as
+                # failed (which would be a misclassification). The status
+                # should remain 'running' since the pipeline actually succeeded.
+                run = get_run(project_db, run_id)
+                assert run is not None
+                # Status should NOT be 'failed' since pipeline succeeded
+                assert run["status"] != "failed", (
+                    f"Status should not be 'failed' when pipeline succeeded. "
+                    f"Got '{run['status']}'."
+                )
+
+    def test_cancel_prioritizes_cancelled_over_failed_on_all_db_failures(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """キャンセルでDBステータス更新がすべて失敗しても、
+        ステータスはfailedではない（キャンセルが優先される）"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor that waits for cancellation
+            def cancellable_execute(conn, scope, context, doc_root="."):
+                for _ in range(50):
+                    if context.cancel_event.is_set():
+                        return
+                    time.sleep(0.1)
+
+            mock_executor.return_value.execute.side_effect = cancellable_execute
+
+            # All cancel_run calls fail
+            with patch(
+                "genglossary.runs.manager.cancel_run",
+                side_effect=sqlite3.OperationalError("database is locked"),
+            ):
+                # Subscribe to logs before starting run
+                queue = manager.register_subscriber(run_id=1)
+
+                run_id = manager.start_run(scope="full")
+                time.sleep(0.1)  # Allow thread to start
+
+                manager.cancel_run(run_id)
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Status should NOT be 'failed' since cancellation was requested
+                run = get_run(project_db, run_id)
+                assert run is not None
+                assert run["status"] != "failed", (
+                    f"Status should not be 'failed' when cancellation was requested. "
+                    f"Got '{run['status']}'."
+                )
