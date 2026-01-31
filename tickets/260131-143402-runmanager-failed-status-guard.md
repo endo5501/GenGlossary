@@ -4,7 +4,7 @@ tags: [refactoring, backend, code-quality]
 description: "RunManager: Guard failed status update against terminal states"
 created_at: "2026-01-31T14:34:02Z"
 started_at: 2026-01-31T14:40:08Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-31T14:58:00Z # Do not modify manually
 ---
 
 # RunManager: Guard failed status update against terminal states
