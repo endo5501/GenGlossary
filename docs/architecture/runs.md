@@ -286,6 +286,47 @@ class ExecutionContext:
     cancel_event: Event
 ```
 
+### キャンセルチェックデコレータ
+
+`@_cancellable` デコレータは、DRY原則に従いキャンセルチェックパターンを統一します。
+
+```python
+def _cancellable(func: Callable) -> Callable:
+    """メソッド実行前にキャンセルをチェックするデコレータ
+
+    装飾されたメソッドは ExecutionContext を引数として受け取る必要があります。
+    キャンセルが検出された場合、メソッドは実行されずに None を返します。
+
+    一般的なパターン:
+        if self._check_cancellation(context):
+            return
+
+    を置き換えます。
+    """
+    @wraps(func)
+    def wrapper(self: "PipelineExecutor", *args, **kwargs):
+        # kwargs または位置引数から context を検索
+        context = kwargs.get("context")
+        if context is None:
+            for arg in args:
+                if isinstance(arg, ExecutionContext):
+                    context = arg
+                    break
+
+        if context is not None and self._check_cancellation(context):
+            return None
+        return func(self, *args, **kwargs)
+    return wrapper
+```
+
+**適用先:**
+- `_execute_full`: フルパイプライン実行
+- `_execute_from_terms`: 用語抽出済みから再開
+- `_execute_provisional_to_refined`: 暫定用語集から精査
+
+**残存する明示的チェック:**
+LLM呼び出しや最終保存の前には、レスポンシブなキャンセルのため明示的チェックが残ります。
+
 ### PipelineExecutor クラス
 
 ```python
@@ -602,7 +643,7 @@ get_run_manager(db_path) → RunManager
 - warning log broadcast（ステータス更新失敗時の警告ログ）
 - status misclassification（DB更新失敗時のステータス誤分類防止）
 
-**tests/runs/test_executor.py (43 tests)**
+**tests/runs/test_executor.py (50 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
 - キャンセル処理
 - 進捗ログ
@@ -618,8 +659,12 @@ get_run_manager(db_path) → RunManager
   - コンテキスト経由の状態管理
   - 並行実行時の状態分離
   - 不明スコープのエラー処理
+- `@_cancellable` デコレータテスト
+  - エントリーレベルのキャンセルチェック
+  - 非キャンセル時の正常実行
+  - 位置引数からのcontext検出
 
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 122 tests** (Repository 25 + Manager 44 + Executor 43 + API 10)
+**合計: 129 tests** (Repository 25 + Manager 44 + Executor 50 + API 10)
