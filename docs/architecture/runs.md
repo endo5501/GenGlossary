@@ -80,6 +80,19 @@ def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool
         bool: completedに更新できればTrue、既に終了状態ならFalse
     """
     ...
+
+def fail_run_if_not_terminal(
+    conn: sqlite3.Connection, run_id: int, error_message: str
+) -> bool:
+    """Runを原子的にfailedに更新（終了状態でなければ）
+
+    終了状態（completed, cancelled, failed）のrunは上書きしない。
+    cancel_run, complete_run_if_not_cancelled と同じパターン。
+
+    Returns:
+        bool: failedに更新できればTrue、既に終了状態ならFalse
+    """
+    ...
 ```
 
 ## manager.py (RunManager - スレッド管理)
@@ -225,13 +238,16 @@ class RunManager:
         ...
 
     def _try_failed_status(self, conn, run_id, error_message) -> bool:
-        """failed ステータス更新を試行
+        """failed ステータス更新を試行（終了状態ガード付き）
+
+        fail_run_if_not_terminal を使用して、既存の終了状態（cancelled,
+        completed, failed）を上書きしないようガード。
 
         Returns:
-            True: 成功（フォールバック不要）
+            True: 成功またはno-op（既に終了状態、フォールバック不要）
             False: 失敗（フォールバック必要）
 
-        失敗時はwarningログをブロードキャストして False を返す。
+        no-op時はinfoログ、失敗時はwarningログをブロードキャスト。
         """
         ...
 
@@ -736,11 +752,12 @@ get_run_manager(db_path) → RunManager
 
 ## テスト構成
 
-**tests/db/test_runs_repository.py (25 tests)**
+**tests/db/test_runs_repository.py (31 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
+- fail_run_if_not_terminal（終了状態の上書き防止）
 
-**tests/runs/test_manager.py (49 tests)**
+**tests/runs/test_manager.py (52 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - start_run synchronization（並行呼び出しの競合状態防止）
 - per-run cancellation（各runに個別のキャンセルイベント）
@@ -749,6 +766,7 @@ get_run_manager(db_path) → RunManager
 - warning log broadcast（ステータス更新失敗時の警告ログ）
 - status misclassification（DB更新失敗時のステータス誤分類防止）
 - status update fallback logic（no-opと失敗の区別）
+- failed status guard（終了状態への上書き防止）
 
 **tests/runs/test_executor.py (50 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -774,4 +792,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 134 tests** (Repository 25 + Manager 49 + Executor 50 + API 10)
+**合計: 143 tests** (Repository 31 + Manager 52 + Executor 50 + API 10)
