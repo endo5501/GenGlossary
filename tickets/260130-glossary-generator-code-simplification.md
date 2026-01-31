@@ -105,7 +105,7 @@ classified_terms = cast(list[ClassifiedTerm], terms)
 - [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 ## Review findings - 新規チケット作成済み
 
