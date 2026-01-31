@@ -4,6 +4,7 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from enum import Enum
+from functools import wraps
 from threading import Event
 from typing import Callable
 
@@ -47,6 +48,40 @@ _SCOPE_CLEAR_FUNCTIONS: dict[str, list[Callable[[sqlite3.Connection], None]]] = 
     "from_terms": [delete_all_provisional, delete_all_issues, delete_all_refined],
     "provisional_to_refined": [delete_all_issues, delete_all_refined],
 }
+
+
+def _cancellable(func: Callable) -> Callable:
+    """Decorator that checks for cancellation before executing a method.
+
+    The decorated method must receive an ExecutionContext instance as one of its
+    positional or keyword arguments. If cancellation is detected, the method
+    returns None without executing.
+
+    This decorator helps reduce duplication of the common pattern:
+        if self._check_cancellation(context):
+            return
+
+    Args:
+        func: The method to decorate.
+
+    Returns:
+        Wrapped method that checks cancellation at entry.
+    """
+    @wraps(func)
+    def wrapper(self: "PipelineExecutor", *args, **kwargs):  # type: ignore[no-untyped-def]
+        # Find context in kwargs first
+        context = kwargs.get("context")
+        if context is None:
+            # Search in positional args
+            for arg in args:
+                if isinstance(arg, ExecutionContext):
+                    context = arg
+                    break
+
+        if context is not None and self._check_cancellation(context):
+            return None
+        return func(self, *args, **kwargs)
+    return wrapper
 
 
 @dataclass(frozen=True)
@@ -324,6 +359,7 @@ class PipelineExecutor:
         self._log(context, "error", "No documents found")
         raise RuntimeError("Cannot execute pipeline without documents")
 
+    @_cancellable
     def _execute_full(
         self,
         conn: sqlite3.Connection,
@@ -338,9 +374,6 @@ class PipelineExecutor:
             doc_root: Root directory for documents (default: ".").
         """
         # Step 1: Load documents
-        if self._check_cancellation(context):
-            return
-
         documents = self._load_documents(conn, context, doc_root)
         self._log(context, "info", f"Loaded {len(documents)} documents")
 
@@ -375,6 +408,7 @@ class PipelineExecutor:
         # Continue with steps 3-5 (pass unique terms to avoid duplicate LLM calls)
         self._execute_from_terms(conn, context, documents, unique_terms)
 
+    @_cancellable
     def _execute_from_terms(
         self,
         conn: sqlite3.Connection,
@@ -392,15 +426,10 @@ class PipelineExecutor:
         """
         # Load documents from DB if not provided
         if documents is None:
-            if self._check_cancellation(context):
-                return
             documents = self._load_documents(conn, context)
 
         # Load terms from DB if not provided
         if extracted_terms is None:
-            if self._check_cancellation(context):
-                return
-
             self._log(context, "info", "Loading terms from database...")
             term_rows = list_all_terms(conn)
             extracted_terms = [row["term_text"] for row in term_rows]
@@ -425,6 +454,7 @@ class PipelineExecutor:
         # Continue with steps 4-5
         self._execute_provisional_to_refined(conn, context, glossary, documents)
 
+    @_cancellable
     def _execute_provisional_to_refined(
         self,
         conn: sqlite3.Connection,
@@ -442,9 +472,6 @@ class PipelineExecutor:
         """
         # Load glossary from DB if not provided
         if glossary is None:
-            if self._check_cancellation(context):
-                return
-
             self._log(context, "info", "Loading provisional glossary from database...")
             provisional_rows = list_all_provisional(conn)
             if not provisional_rows:
@@ -458,8 +485,6 @@ class PipelineExecutor:
 
         # Load documents from DB if not provided
         if documents is None:
-            if self._check_cancellation(context):
-                return
             documents = self._load_documents(conn, context)
 
         # Step 4: Review glossary
