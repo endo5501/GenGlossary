@@ -193,3 +193,41 @@ def delete_all_glossary_terms(
 
     cursor = conn.cursor()
     cursor.execute(f"DELETE FROM {table_name}")
+
+
+def create_glossary_terms_batch(
+    conn: sqlite3.Connection,
+    table_name: GlossaryTable,
+    terms: list[tuple[str, str, float, list[TermOccurrence]]],
+) -> None:
+    """Create multiple glossary terms in a batch.
+
+    Args:
+        conn: Database connection.
+        table_name: The glossary table ("glossary_provisional" or "glossary_refined").
+        terms: List of tuples (term_name, definition, confidence, occurrences).
+
+    Raises:
+        sqlite3.IntegrityError: If any term_name already exists.
+        ValueError: If table_name is not allowed.
+    """
+    if not terms:
+        return
+
+    _validate_table_name(table_name)
+
+    # Convert terms to format suitable for executemany
+    data = [
+        (term_name, definition, confidence, serialize_occurrences(occurrences))
+        for term_name, definition, confidence, occurrences in terms
+    ]
+
+    cursor = conn.cursor()
+    cursor.executemany(
+        f"""
+        INSERT INTO {table_name}
+        (term_name, definition, confidence, occurrences)
+        VALUES (?, ?, ?, ?)
+        """,
+        data,
+    )

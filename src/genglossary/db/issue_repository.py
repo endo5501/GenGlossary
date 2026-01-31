@@ -74,3 +74,27 @@ def delete_all_issues(conn: sqlite3.Connection) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM glossary_issues")
+
+
+def create_issues_batch(
+    conn: sqlite3.Connection,
+    issues: list[tuple[str, str, str]],
+) -> None:
+    """Create multiple issue records in a batch.
+
+    Args:
+        conn: Database connection.
+        issues: List of tuples (term_name, issue_type, description).
+    """
+    if not issues:
+        return
+
+    cursor = conn.cursor()
+    cursor.executemany(
+        """
+        INSERT INTO glossary_issues
+        (term_name, issue_type, description)
+        VALUES (?, ?, ?)
+        """,
+        issues,
+    )
