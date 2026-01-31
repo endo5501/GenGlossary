@@ -21,6 +21,7 @@
 ## connection.py
 ```python
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from typing import Iterator
 
@@ -44,20 +45,44 @@ def database_connection(db_path: str):
 def transaction(conn: sqlite3.Connection) -> Iterator[None]:
     """トランザクション管理のコンテキストマネージャー
 
-    正常終了時にcommit、例外発生時にrollbackを行います。
+    ネストされたトランザクションをSQLite SAVEPOINTでサポート:
+    - トップレベル: COMMIT/ROLLBACK
+    - ネスト: SAVEPOINT/RELEASE/ROLLBACK TO
+
+    正常終了時にcommit（またはRELEASE）、例外発生時にrollback。
 
     Usage:
         with database_connection(db_path) as conn:
             with transaction(conn):
                 create_term(conn, "term1", ...)
-                create_term(conn, "term2", ...)
+                with transaction(conn):  # ネスト - SAVEPOINTを使用
+                    create_term(conn, "term2", ...)
                 # 両方の操作が成功した場合のみcommit
     """
+    if conn.in_transaction:
+        # ネストされたトランザクション - SAVEPOINTを使用
+        savepoint_name = f"sp_{uuid.uuid4().hex[:8]}"
+        conn.execute(f"SAVEPOINT {savepoint_name}")
+
+        def release_savepoint() -> None:
+            conn.execute(f"RELEASE {savepoint_name}")
+
+        def rollback_savepoint() -> None:
+            conn.execute(f"ROLLBACK TO {savepoint_name}")
+            conn.execute(f"RELEASE {savepoint_name}")
+
+        commit_fn = release_savepoint
+        rollback_fn = rollback_savepoint
+    else:
+        # トップレベルトランザクション
+        commit_fn = conn.commit
+        rollback_fn = conn.rollback
+
     try:
         yield
-        conn.commit()
+        commit_fn()
     except Exception:
-        conn.rollback()
+        rollback_fn()
         raise
 ```
 
@@ -622,6 +647,7 @@ def clone_project(
 - **Repository関数はcommit/rollbackを行わない**（呼び出し元の責任）
 - 書き込み操作には`transaction()`コンテキストマネージャを使用
 - 複数の操作を1つのトランザクションにまとめて原子性を保証
+- **ネストされたトランザクションをサポート**（SQLite SAVEPOINTを使用）
 
 ```python
 # 正しいパターン: 呼び出し元がトランザクションを管理
@@ -632,6 +658,19 @@ with database_connection(db_path) as conn:
         create_term(conn, "term1", ...)
         create_term(conn, "term2", ...)
         # 両方成功 → commit、どちらか失敗 → rollback
+
+# ネストされたトランザクション: 内側は部分ロールバック可能
+with database_connection(db_path) as conn:
+    with transaction(conn):  # トップレベル
+        create_term(conn, "outer", ...)
+        try:
+            with transaction(conn):  # ネスト - SAVEPOINTを使用
+                create_term(conn, "inner", ...)
+                raise ValueError("inner failed")
+        except ValueError:
+            pass  # 内側のみロールバック、外側は継続可能
+        create_term(conn, "after_inner", ...)
+        # outer と after_inner がコミットされる
 
 # アンチパターン: repository関数内でのcommit（廃止）
 # def create_term(conn, ...):
