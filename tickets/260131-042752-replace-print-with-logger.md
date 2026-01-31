@@ -4,7 +4,7 @@ tags: [refactoring, code-quality, backend, logging]
 description: "Replace print statements with logger.warning for consistent logging"
 created_at: "2026-01-31T04:27:52Z"
 started_at: 2026-01-31T14:03:33Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-31T14:13:44Z # Do not modify manually
 ---
 
 # Replace print statements with logger.warning
