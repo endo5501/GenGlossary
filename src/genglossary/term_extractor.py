@@ -720,9 +720,7 @@ JSON形式で回答してください:
         _ = candidates  # Unused but kept for API consistency
         combined_content = self._combine_document_content(documents)
 
-        # Format classified terms for context (escape each term)
-        from genglossary.utils.prompt_escape import escape_prompt_content
-
+        # Format classified terms for context
         classification_text = ""
         for category, terms in classification.classified_terms.items():
             if category != TermCategory.COMMON_NOUN.value and terms:
@@ -733,9 +731,7 @@ JSON形式で回答してください:
                     "title": "役職・称号",
                     "technical_term": "技術用語",
                 }.get(category, category)
-                # Escape each term to prevent injection
-                escaped_terms = [escape_prompt_content(t, "terms") for t in terms]
-                classification_text += f"- {category_label}: {', '.join(escaped_terms)}\n"
+                classification_text += f"- {category_label}: {', '.join(terms)}\n"
 
         # Wrap classification text and content
         wrapped_classification = wrap_user_data(classification_text, "terms")
