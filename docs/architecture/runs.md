@@ -102,6 +102,7 @@ class RunManager:
         self._thread: Thread | None = None
         self._cancel_events: dict[int, Event] = {}  # Per-run cancellation
         self._cancel_events_lock = Lock()
+        self._start_run_lock = Lock()  # Synchronize start_run calls
         self._log_queue: Queue = Queue()
 
     def start_run(self, scope: str) -> int:
@@ -113,16 +114,17 @@ class RunManager:
         Raises:
             RuntimeError: 既にRunが実行中の場合
         """
-        # 接続を作成してアクティブRunをチェック
-        conn = get_connection(self.db_path)
-        try:
-            active_run = get_active_run(conn)
-            if active_run is not None:
-                raise RuntimeError(f"Run already running: {active_run['id']}")
+        # Synchronize to prevent race conditions between concurrent start_run calls
+        with self._start_run_lock:
+            # Check if a run is already active and create run record atomically
+            with database_connection(self.db_path) as conn:
+                active_run = get_active_run(conn)
+                if active_run is not None:
+                    raise RuntimeError(f"Run already running: {active_run['id']}")
 
-            run_id = create_run(conn, scope=scope)
-        finally:
-            conn.close()
+                # Create run record atomically within the same lock
+                with transaction(conn):
+                    run_id = create_run(conn, scope=scope)
 
         # Create cancel event for this run
         cancel_event = Event()
@@ -709,8 +711,9 @@ get_run_manager(db_path) → RunManager
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 
-**tests/runs/test_manager.py (44 tests)**
+**tests/runs/test_manager.py (46 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
+- start_run synchronization（並行呼び出しの競合状態防止）
 - per-run cancellation（各runに個別のキャンセルイベント）
 - cancellation race condition（キャンセルとステータス更新の競合防止）
 - connection error handling（接続エラー時のクリーンアップとフォールバック）
@@ -741,4 +744,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 129 tests** (Repository 25 + Manager 44 + Executor 50 + API 10)
+**合計: 131 tests** (Repository 25 + Manager 46 + Executor 50 + API 10)

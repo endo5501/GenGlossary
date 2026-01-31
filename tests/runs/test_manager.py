@@ -47,6 +47,93 @@ def manager(project_db_path: str) -> RunManager:
         mgr._thread.join(timeout=2)
 
 
+class TestRunManagerStartRunSynchronization:
+    """Tests for start_run synchronization to prevent race conditions."""
+
+    def test_concurrent_start_run_only_one_succeeds(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """並行してstart_runを呼び出した場合、1つだけが成功する"""
+        import concurrent.futures
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor to simulate long-running task
+            def slow_execute(*args, **kwargs):
+                time.sleep(1)
+
+            mock_executor.return_value.execute.side_effect = slow_execute
+
+            results: list[int | Exception] = []
+            errors: list[Exception] = []
+
+            def try_start_run() -> int | None:
+                try:
+                    run_id = manager.start_run(scope="full")
+                    return run_id
+                except RuntimeError as e:
+                    errors.append(e)
+                    return None
+
+            # Start multiple threads concurrently
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(try_start_run) for _ in range(5)]
+                for future in concurrent.futures.as_completed(futures):
+                    result = future.result()
+                    if result is not None:
+                        results.append(result)
+
+            # Only one should succeed
+            assert len(results) == 1, (
+                f"Expected only 1 successful start_run, but got {len(results)}. "
+                "Race condition: multiple runs were created concurrently."
+            )
+            # Others should fail with RuntimeError
+            assert len(errors) == 4, (
+                f"Expected 4 failures, but got {len(errors)}. "
+            )
+            for error in errors:
+                assert "already running" in str(error)
+
+    def test_concurrent_start_run_no_duplicate_run_records(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """並行してstart_runを呼び出しても、重複したrunレコードが作成されない"""
+        import concurrent.futures
+        from genglossary.db.runs_repository import get_active_run
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor to simulate long-running task
+            def slow_execute(*args, **kwargs):
+                time.sleep(1)
+
+            mock_executor.return_value.execute.side_effect = slow_execute
+
+            def try_start_run() -> int | None:
+                try:
+                    return manager.start_run(scope="full")
+                except RuntimeError:
+                    return None
+
+            # Start multiple threads concurrently
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(try_start_run) for _ in range(5)]
+                concurrent.futures.wait(futures)
+
+            # Check that only one active run exists
+            active_run = get_active_run(project_db)
+            assert active_run is not None
+
+            # Count all runs with pending/running status
+            cursor = project_db.execute(
+                "SELECT COUNT(*) FROM runs WHERE status IN ('pending', 'running')"
+            )
+            count = cursor.fetchone()[0]
+            assert count == 1, (
+                f"Expected only 1 active run, but found {count}. "
+                "Race condition: duplicate run records were created."
+            )
+
+
 class TestRunManagerStart:
     """Tests for RunManager.start_run method."""
 
