@@ -3,7 +3,7 @@ priority: 3
 tags: [improvement, backend, executor, ux]
 description: "PipelineExecutor: Improve cancellation responsiveness during long operations"
 created_at: "2026-01-30T20:50:00Z"
-started_at: null
+started_at: 2026-01-31T13:17:03Z
 closed_at: null
 ---
 
@@ -63,20 +63,38 @@ generator.generate(
 
 ## Tasks
 
-- [ ] ループ内キャンセルチェック追加
-- [ ] LLM 処理クラスへの cancel_event 対応
-- [ ] テスト更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] ループ内キャンセルチェック追加
+- [x] LLM 処理クラスへの cancel_event 対応
+- [x] テスト更新
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
 
 - codex MCP レビューで Low 優先度として指摘
 - UX 改善として有用
+
+## 実施内容サマリー
+
+### 1. LLM 処理クラスへの cancel_event 対応
+- `GlossaryGenerator.generate()`: ループ前と各用語処理前にキャンセルチェック
+- `GlossaryReviewer.review()`: LLM呼び出し前にキャンセルチェック、戻り値を `list[GlossaryIssue] | None` に変更
+- `GlossaryRefiner.refine()`: ループ前と各issue処理前にキャンセルチェック
+
+### 2. Executor での対応
+- 各 LLM 処理クラスに `cancel_event=context.cancel_event` を渡すよう変更
+- provisional glossary 保存前にキャンセルチェック追加
+- `issues is None` の処理（レビューキャンセル時）を追加
+
+### 3. CLI/CLI_DB での対応
+- `review()` の戻り値が `None` になる可能性に対応（型安全性）
+
+### 4. ドキュメント更新
+- `docs/architecture/runs.md`: LLM 処理クラスへのキャンセルイベント伝播のセクション追加
