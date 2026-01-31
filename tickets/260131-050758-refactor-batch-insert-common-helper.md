@@ -4,7 +4,7 @@ tags: [refactoring, backend, db]
 description: "Refactor batch insert functions to use common helper"
 created_at: "2026-01-31T05:07:58Z"
 started_at: 2026-01-31T12:46:46Z
-closed_at: null
+closed_at: 2026-01-31T12:57:32Z
 ---
 
 # Refactor batch insert functions to use common helper
