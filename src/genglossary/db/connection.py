@@ -28,6 +28,9 @@ def get_connection(db_path: str) -> sqlite3.Connection:
     # Create connection (check_same_thread=False for FastAPI async support)
     conn = sqlite3.connect(db_path, check_same_thread=False)
 
+    # Set busy timeout to handle transient SQLite locks (5 seconds)
+    conn.execute("PRAGMA busy_timeout = 5000")
+
     # Enable foreign key constraints
     conn.execute("PRAGMA foreign_keys = ON")
 

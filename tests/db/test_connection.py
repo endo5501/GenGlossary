@@ -77,6 +77,19 @@ class TestGetConnection:
         assert cursor.fetchone()[0] == 1
         conn.close()
 
+    def test_get_connection_sets_busy_timeout(self) -> None:
+        """Test that busy_timeout is set for handling transient SQLite locks."""
+        conn = get_connection(":memory:")
+
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA busy_timeout")
+        timeout = cursor.fetchone()[0]
+
+        # Expect busy_timeout to be set (5000ms = 5 seconds)
+        assert timeout == 5000
+
+        conn.close()
+
 
 class TestTransaction:
     """Test transaction context manager."""
