@@ -3,8 +3,8 @@ priority: 1
 tags: [refactoring, backend, code-quality]
 description: "RunManager: Guard failed status update against terminal states"
 created_at: "2026-01-31T14:34:02Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-01-31T14:40:08Z # Do not modify manually
+closed_at: 2026-01-31T14:58:00Z # Do not modify manually
 ---
 
 # RunManager: Guard failed status update against terminal states
@@ -32,15 +32,26 @@ codex MCP レビューで指摘された問題。`_try_failed_status` が既存�
 
 ## Tasks
 
-- [ ] `update_run_status` を条件付き更新に変更（または新しい関数を作成）
-- [ ] `_try_failed_status` で rowcount を確認
-- [ ] テストの追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `update_run_status` を条件付き更新に変更（または新しい関数を作成）
+- [x] `_try_failed_status` で rowcount を確認
+- [x] テストの追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## 実装サマリー
+
+### 変更内容
+- `fail_run_if_not_terminal` 関数を追加（`runs_repository.py`）
+- `_try_failed_status` を更新して終了状態をガード（`manager.py`）
+- テスト追加: Repository 6件、Manager 3件
+- ドキュメント更新: `docs/architecture/runs.md`
+
+### 関連チケット
+- `260131-runs-status-update-refactoring.md`: DRY リファクタリング（code-simplifier 指摘）

@@ -378,3 +378,116 @@ class TestCompleteRunIfNotCancelled:
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "completed"
+
+
+class TestFailRunIfNotTerminal:
+    """Tests for fail_run_if_not_terminal function."""
+
+    def test_fail_running_run(self, project_db: sqlite3.Connection) -> None:
+        """実行中のRunをfailedに更新できる"""
+        from genglossary.db.runs_repository import fail_run_if_not_terminal
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+
+        result = fail_run_if_not_terminal(
+            project_db, run_id, error_message="Test error"
+        )
+
+        assert result is True
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "failed"
+        assert run["error_message"] == "Test error"
+        assert run["finished_at"] is not None
+
+    def test_fail_pending_run(self, project_db: sqlite3.Connection) -> None:
+        """pending状態のRunをfailedに更新できる"""
+        from genglossary.db.runs_repository import fail_run_if_not_terminal
+
+        run_id = create_run(project_db, scope="full")
+
+        result = fail_run_if_not_terminal(
+            project_db, run_id, error_message="Test error"
+        )
+
+        assert result is True
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "failed"
+        assert run["error_message"] == "Test error"
+
+    def test_does_not_overwrite_cancelled_status(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """cancelledのRunは上書きされない"""
+        from genglossary.db.runs_repository import fail_run_if_not_terminal
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        cancel_run(project_db, run_id)
+
+        result = fail_run_if_not_terminal(
+            project_db, run_id, error_message="Test error"
+        )
+
+        assert result is False
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "cancelled"
+        assert run["error_message"] is None
+
+    def test_does_not_overwrite_completed_status(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """completedのRunは上書きされない"""
+        from genglossary.db.runs_repository import fail_run_if_not_terminal
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "completed", finished_at=datetime.now())
+
+        result = fail_run_if_not_terminal(
+            project_db, run_id, error_message="Test error"
+        )
+
+        assert result is False
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "completed"
+        assert run["error_message"] is None
+
+    def test_does_not_overwrite_failed_status(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """既にfailedのRunは上書きされない（べき等性）"""
+        from genglossary.db.runs_repository import fail_run_if_not_terminal
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(
+            project_db, run_id, "failed",
+            finished_at=datetime.now(), error_message="Original error"
+        )
+
+        result = fail_run_if_not_terminal(
+            project_db, run_id, error_message="New error"
+        )
+
+        assert result is False
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "failed"
+        assert run["error_message"] == "Original error"
+
+    def test_returns_false_for_nonexistent_run(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """存在しないRunに対してはFalseを返す"""
+        from genglossary.db.runs_repository import fail_run_if_not_terminal
+
+        result = fail_run_if_not_terminal(
+            project_db, 999, error_message="Test error"
+        )
+
+        assert result is False
