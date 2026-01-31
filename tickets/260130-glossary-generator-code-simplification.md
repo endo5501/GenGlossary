@@ -3,7 +3,7 @@ priority: 1
 tags: [improvement, refactoring, code-quality]
 description: "GlossaryGenerator: コード簡素化とリファクタリング"
 created_at: "2026-01-30T10:00:00Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-31T01:04:27Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -94,10 +94,10 @@ classified_terms = cast(list[ClassifiedTerm], terms)
 
 ## Tasks
 
-- [ ] 重複した進捗コールバック処理をヘルパーメソッドに抽出
+- [x] 重複した進捗コールバック処理をヘルパーメソッドに抽出
 - [ ] 型判定ロジックの簡素化を検討・実装
-- [ ] CJK関連ロジックをユーティリティに抽出（オプション）
-- [ ] マジックナンバーの定数化
+- [ ] CJK関連ロジックをユーティリティに抽出
+- [x] マジックナンバーの定数化
 - [ ] 例外処理の具体化
 - [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
@@ -106,6 +106,11 @@ classified_terms = cast(list[ClassifiedTerm], terms)
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
+
+## Review findings - 新規チケット作成済み
+
+- [x] プロンプトインジェクション対策の強化（</context>のエスケープ）→ 260131-glossary-generator-context-escaping
+- [x] _safe_callbackのログ追加 → 260131-glossary-generator-callback-logging
 
 ## 関連
 

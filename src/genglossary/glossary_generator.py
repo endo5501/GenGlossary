@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import cast
+from typing import Any, Callable, cast
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,9 @@ class GlossaryGenerator:
     # Maximum number of context occurrences to include in prompt
     MAX_CONTEXT_COUNT = 5
 
+    # Default number of surrounding lines to include as context
+    DEFAULT_CONTEXT_LINES = 1
+
     # Few-shot example for definition generation
     FEW_SHOT_EXAMPLE = """Input:
 用語: アソリウス島騎士団
@@ -55,6 +58,23 @@ Output:
             llm_client: The LLM client to use for definition generation.
         """
         self.llm_client = llm_client
+
+    def _safe_callback(
+        self, callback: Callable[..., None] | None, *args: Any
+    ) -> None:
+        """Safely invoke a callback, ignoring any exceptions.
+
+        This prevents callback errors from interrupting the pipeline.
+
+        Args:
+            callback: The callback function to invoke, or None.
+            *args: Arguments to pass to the callback.
+        """
+        if callback is not None:
+            try:
+                callback(*args)
+            except Exception:
+                pass  # Ignore callback errors to prevent pipeline interruption
 
     def generate(
         self,
@@ -123,17 +143,9 @@ Output:
                 )
                 continue
             finally:
-                # Call progress callbacks if provided (guarded to prevent pipeline interruption)
-                if progress_callback is not None:
-                    try:
-                        progress_callback(idx, total_terms)
-                    except Exception:
-                        pass  # Ignore callback errors to prevent pipeline interruption
-                if term_progress_callback is not None:
-                    try:
-                        term_progress_callback(idx, total_terms, term_name)
-                    except Exception:
-                        pass  # Ignore callback errors to prevent pipeline interruption
+                # Call progress callbacks (guarded to prevent pipeline interruption)
+                self._safe_callback(progress_callback, idx, total_terms)
+                self._safe_callback(term_progress_callback, idx, total_terms, term_name)
 
         return glossary
 
@@ -204,7 +216,7 @@ Output:
         Returns:
             A TermOccurrence object with context.
         """
-        context_lines = doc.get_context(line_num, context_lines=1)
+        context_lines = doc.get_context(line_num, context_lines=self.DEFAULT_CONTEXT_LINES)
         context = "\n".join(context_lines)
 
         return TermOccurrence(
