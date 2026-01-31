@@ -257,11 +257,26 @@ Output:
 
         return occurrences
 
+    def _escape_context_tags(self, text: str) -> str:
+        """Escape <context> and </context> tags in text to prevent prompt injection.
+
+        Args:
+            text: The text to escape.
+
+        Returns:
+            Text with context tags escaped using XML entities.
+        """
+        # Escape closing tag first to avoid double-escaping
+        text = text.replace("</context>", "&lt;/context&gt;")
+        text = text.replace("<context>", "&lt;context&gt;")
+        return text
+
     def _build_context_text(self, occurrences: list[TermOccurrence]) -> str:
         """Build context text from term occurrences.
 
         Wraps context in XML tags to prevent prompt injection attacks.
         The context is treated as data, not instructions.
+        Any <context> or </context> tags within the content are escaped.
 
         Args:
             occurrences: List of term occurrences with context.
@@ -273,7 +288,7 @@ Output:
             return "(ドキュメント内に出現箇所がありません)"
 
         lines = "\n".join(
-            f"- {occ.context}"
+            f"- {self._escape_context_tags(occ.context)}"
             for occ in occurrences[: self.MAX_CONTEXT_COUNT]
         )
         return f"<context>\n{lines}\n</context>"
