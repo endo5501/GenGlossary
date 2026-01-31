@@ -1,5 +1,6 @@
 """Tests for GlossaryReviewer - Step 3: Review glossary for issues."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -397,3 +398,42 @@ class TestGlossaryReviewerPromptInjectionPrevention:
         escaped_tags = prompt.count("&lt;/glossary&gt;")
         assert closing_tags == 1, f"Expected 1 real </glossary> tag, found {closing_tags}"
         assert escaped_tags == 1, f"Expected 1 escaped tag, found {escaped_tags}"
+
+
+class TestGlossaryReviewerLogging:
+    """Test suite for GlossaryReviewer logging behavior."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_glossary(self) -> Glossary:
+        """Create a sample glossary for testing."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="TestTerm", definition="Test definition", confidence=0.8))
+        return glossary
+
+    def test_review_logs_warning_on_llm_exception(
+        self,
+        mock_llm_client: MagicMock,
+        sample_glossary: Glossary,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that review logs a warning when LLM call raises an exception."""
+        mock_llm_client.generate_structured.side_effect = RuntimeError("LLM API error")
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+
+        with caplog.at_level(logging.WARNING, logger="genglossary.glossary_reviewer"):
+            result = reviewer.review(sample_glossary)
+
+        # Should return empty list (graceful degradation)
+        assert result == []
+
+        # Should log warning instead of print
+        assert len(caplog.records) == 1
+        assert caplog.records[0].levelno == logging.WARNING
+        assert "Failed to review glossary" in caplog.text
+        assert "LLM API error" in caplog.text
