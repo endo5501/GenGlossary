@@ -4,7 +4,7 @@ tags: [refactoring, backend, code-quality]
 description: "RunManager: Refactor duplicated status update code"
 created_at: "2026-01-31T10:10:00+09:00"
 started_at: 2026-01-31T01:53:23Z
-closed_at: null
+closed_at: 2026-01-31T02:01:43Z
 ---
 
 # RunManager: Refactor duplicated status update code
