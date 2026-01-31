@@ -1126,6 +1126,88 @@ class TestTermExtractorProgressCallback:
 エデルト軍との戦いに備えていた。"""
         return Document(file_path="/story.md", content=content)
 
+    def test_classify_terms_continues_when_callback_raises_exception(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that _classify_terms continues processing when callback raises an exception.
+
+        This verifies that safe_callback is used to prevent callback errors
+        from interrupting the pipeline.
+        """
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        # Mock batch responses for 2 batches
+        mock_llm_client.generate_structured.side_effect = [
+            BatchTermClassificationResponse(
+                classifications=[
+                    {"term": "用語1", "category": "organization"},
+                    {"term": "用語2", "category": "place_name"},
+                ]
+            ),
+            BatchTermClassificationResponse(
+                classifications=[
+                    {"term": "用語3", "category": "person_name"},
+                    {"term": "用語4", "category": "technical_term"},
+                ]
+            ),
+        ]
+
+        # Create a callback that raises an exception
+        def failing_callback(current: int, total: int) -> None:
+            raise ValueError("Callback error")
+
+        extractor = TermExtractor(llm_client=mock_llm_client)
+        candidates = ["用語1", "用語2", "用語3", "用語4"]
+
+        # Should NOT raise even when callback throws an exception
+        result = extractor._classify_terms(
+            candidates, [sample_document], batch_size=2, progress_callback=failing_callback
+        )
+
+        # Should still return classification results
+        assert "用語1" in result.classified_terms.get("organization", [])
+        assert "用語3" in result.classified_terms.get("person_name", [])
+        # Both batches should have been processed
+        assert mock_llm_client.generate_structured.call_count == 2
+
+    def test_extract_terms_continues_when_callback_raises_exception(
+        self, mock_llm_client: MagicMock, sample_document: Document
+    ) -> None:
+        """Test that extract_terms continues processing when callback raises an exception.
+
+        This verifies that safe_callback is used in the public API method.
+        """
+        from genglossary.term_extractor import BatchTermClassificationResponse
+
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "用語1", "category": "organization"},
+                {"term": "用語2", "category": "place_name"},
+            ]
+        )
+
+        # Create a callback that raises an exception
+        def failing_callback(current: int, total: int) -> None:
+            raise RuntimeError("Callback failure")
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["用語1", "用語2"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(llm_client=mock_llm_client)
+
+            # Should NOT raise even when callback throws an exception
+            result = extractor.extract_terms(
+                [sample_document], progress_callback=failing_callback
+            )
+
+            # Should still return extracted terms
+            assert "用語1" in result
+            assert "用語2" in result
+
     def test_classify_terms_calls_progress_callback(
         self, mock_llm_client: MagicMock, sample_document: Document
     ) -> None:

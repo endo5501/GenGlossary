@@ -9,6 +9,7 @@ from genglossary.models.document import Document
 from genglossary.models.term import ClassifiedTerm, TermCategory
 from genglossary.morphological_analyzer import MorphologicalAnalyzer
 from genglossary.types import ProgressCallback
+from genglossary.utils.callback import safe_callback
 from genglossary.utils.prompt_escape import wrap_user_data
 
 # Category definitions for LLM prompts - used across all classification prompts
@@ -497,9 +498,8 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
             # Aggregate classifications from batch response with deduplication
             self._process_batch_response(response, classified, seen_terms)
 
-            # Call progress callback if provided
-            if progress_callback is not None:
-                progress_callback(batch_num, total_batches)
+            # Call progress callback if provided (safe_callback handles None and exceptions)
+            safe_callback(progress_callback, batch_num, total_batches)
 
         return TermClassificationResponse(classified_terms=classified)
 
