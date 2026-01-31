@@ -47,9 +47,9 @@ Backend のプログレスコールバック関連コードの小規模リファ
   - Addressed: whitespace-only term_name handling
   - Noted: progress reporting behavior is intentional (report progress even for skipped items)
 - [x] Update docs/architecture/*.md (N/A - internal implementation changes only)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 

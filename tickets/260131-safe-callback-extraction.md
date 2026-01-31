@@ -50,7 +50,14 @@ def safe_callback(callback: Callable[..., None] | None, *args: Any) -> None:
 - [ ] テストを追加
 - [ ] `glossary_generator.py` を更新
 - [ ] `glossary_refiner.py` を更新
-- [ ] Run tests and pyright
+- [ ] Commit
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
