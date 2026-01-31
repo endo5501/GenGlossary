@@ -1,6 +1,7 @@
 """Repository for documents table CRUD operations."""
 
 import sqlite3
+from collections.abc import Sequence
 from typing import cast
 
 from genglossary.db.db_helpers import batch_insert
@@ -107,7 +108,7 @@ def delete_all_documents(conn: sqlite3.Connection) -> None:
 
 def create_documents_batch(
     conn: sqlite3.Connection,
-    documents: list[tuple[str, str, str]],
+    documents: Sequence[tuple[str, str, str]],
 ) -> None:
     """Create multiple document records in a batch.
 

@@ -5,6 +5,7 @@ and glossary_refined tables to reduce code duplication.
 """
 
 import sqlite3
+from collections.abc import Sequence
 from typing import Literal, cast
 
 from genglossary.db.db_helpers import batch_insert
@@ -199,7 +200,7 @@ def delete_all_glossary_terms(
 def create_glossary_terms_batch(
     conn: sqlite3.Connection,
     table_name: GlossaryTable,
-    terms: list[tuple[str, str, float, list[TermOccurrence]]],
+    terms: Sequence[tuple[str, str, float, list[TermOccurrence]]],
 ) -> None:
     """Create multiple glossary terms in a batch.
 

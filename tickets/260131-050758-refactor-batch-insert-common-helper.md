@@ -3,7 +3,7 @@ priority: 1
 tags: [refactoring, backend, db]
 description: "Refactor batch insert functions to use common helper"
 created_at: "2026-01-31T05:07:58Z"
-started_at: null
+started_at: 2026-01-31T12:46:46Z
 closed_at: null
 ---
 
