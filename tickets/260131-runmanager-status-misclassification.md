@@ -3,8 +3,8 @@ priority: 2
 tags: [bug, backend, reliability]
 description: "RunManager: Fix status misclassification on DB update failure"
 created_at: "2026-01-31T15:20:00+09:00"
-started_at: null
-closed_at: null
+started_at: 2026-01-31T00:47:10Z
+closed_at: 2026-01-31T01:03:28Z
 ---
 
 # RunManager: Fix status misclassification on DB update failure
@@ -70,15 +70,18 @@ def _execute_run(self, run_id: int, scope: str) -> None:
 
 ## Tasks
 
-- [ ] パイプライン実行と最終ステータス更新の例外処理を分離
-- [ ] キャンセル時のステータス更新失敗時に `cancelled` を優先するロジック追加
-- [ ] テストの追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] パイプライン実行と最終ステータス更新の例外処理を分離
+- [x] キャンセル時のステータス更新失敗時に `cancelled` を優先するロジック追加
+- [x] テストの追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+  - チケット作成: tickets/260131-runmanager-status-update-refactoring.md
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+  - チケット作成: tickets/260131-runmanager-late-cancel-race.md
+  - チケット作成: tickets/260131-runmanager-cancellation-exception.md
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing

@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [refactoring, code-quality, frontend]
 description: "Frontend: Small bug fixes in useLogStream"
 created_at: "2026-01-30T09:45:00Z"
