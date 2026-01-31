@@ -59,8 +59,15 @@ def update_run_status(
     """Runステータスを更新"""
     ...
 
-def cancel_run(conn: sqlite3.Connection, run_id: int) -> None:
-    """Runをキャンセル（status='cancelled', finished_at設定）"""
+def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
+    """Runをキャンセル（status='cancelled', finished_at設定）
+
+    Returns:
+        更新された行数（0なら既に終了状態または存在しない）
+
+    Note:
+        終了状態（completed, cancelled, failed）のrunは更新しない
+    """
     ...
 
 def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool:
@@ -217,10 +224,32 @@ class RunManager:
         """
         ...
 
-    def _try_update_status(self, conn, run_id, error_message) -> bool:
-        """ステータス更新を試行し、成功時にTrueを返す
+    def _try_failed_status(self, conn, run_id, error_message) -> bool:
+        """failed ステータス更新を試行
+
+        Returns:
+            True: 成功（フォールバック不要）
+            False: 失敗（フォールバック必要）
 
         失敗時はwarningログをブロードキャストして False を返す。
+        """
+        ...
+
+    def _try_cancel_status(self, conn, run_id) -> bool:
+        """cancelled ステータス更新を試行
+
+        Returns:
+            True: 成功またはno-op（既に終了状態、フォールバック不要）
+            False: 失敗（フォールバック必要）
+        """
+        ...
+
+    def _try_complete_status(self, conn, run_id) -> bool:
+        """completed ステータス更新を試行
+
+        Returns:
+            True: 成功またはno-op（既に終了状態、フォールバック不要）
+            False: 失敗（フォールバック必要）
         """
         ...
 
@@ -711,7 +740,7 @@ get_run_manager(db_path) → RunManager
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 
-**tests/runs/test_manager.py (46 tests)**
+**tests/runs/test_manager.py (49 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - start_run synchronization（並行呼び出しの競合状態防止）
 - per-run cancellation（各runに個別のキャンセルイベント）
@@ -719,6 +748,7 @@ get_run_manager(db_path) → RunManager
 - connection error handling（接続エラー時のクリーンアップとフォールバック）
 - warning log broadcast（ステータス更新失敗時の警告ログ）
 - status misclassification（DB更新失敗時のステータス誤分類防止）
+- status update fallback logic（no-opと失敗の区別）
 
 **tests/runs/test_executor.py (50 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -744,4 +774,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 131 tests** (Repository 25 + Manager 46 + Executor 50 + API 10)
+**合計: 134 tests** (Repository 25 + Manager 49 + Executor 50 + API 10)
