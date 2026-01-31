@@ -99,6 +99,9 @@ class RunManager:
             scope: Run scope.
         """
         conn = None
+        pipeline_error: Exception | None = None
+        pipeline_traceback: str | None = None
+
         try:
             # Create a new connection for this thread
             conn = get_connection(self.db_path)
@@ -128,29 +131,28 @@ class RunManager:
                 provider=self.llm_provider,
                 model=self.llm_model,
             )
-            executor.execute(
-                conn,
-                scope,
-                context,
-                doc_root=self.doc_root,
+
+            # Separate try/except for pipeline execution
+            try:
+                executor.execute(
+                    conn,
+                    scope,
+                    context,
+                    doc_root=self.doc_root,
+                )
+            except Exception as e:
+                pipeline_error = e
+                pipeline_traceback = traceback.format_exc()
+
+            # Finalize run status (separate from pipeline execution)
+            self._finalize_run_status(
+                conn, run_id, cancel_event, pipeline_error, pipeline_traceback
             )
 
-            # Check if cancelled first, then try atomic completion
-            if cancel_event.is_set():
-                with transaction(conn):
-                    cancel_run(conn, run_id)
-            else:
-                # Use atomic update to prevent race condition:
-                # If cancelled between is_set() check and this update,
-                # complete_run_if_not_cancelled will detect it and return False
-                with transaction(conn):
-                    complete_run_if_not_cancelled(conn, run_id)
-
         except Exception as e:
-            # Capture full error information
+            # Connection errors or other errors outside pipeline execution
             error_message = str(e)
             error_traceback = traceback.format_exc()
-            # Update status to failed
             self._update_failed_status(conn, run_id, error_message)
             self._broadcast_log(
                 run_id,
@@ -268,6 +270,123 @@ class RunManager:
             if run_id in self._subscribers:
                 for queue in self._subscribers[run_id]:
                     self._put_to_queue(queue, message)
+
+    def _finalize_run_status(
+        self,
+        conn: sqlite3.Connection,
+        run_id: int,
+        cancel_event: Event,
+        pipeline_error: Exception | None,
+        pipeline_traceback: str | None = None,
+    ) -> None:
+        """Finalize run status after pipeline execution.
+
+        Handles the status update logic separately from pipeline execution
+        to prevent misclassification when status update fails.
+
+        Priority:
+        1. If pipeline had an error -> failed
+        2. If cancelled -> cancelled
+        3. Otherwise -> completed
+
+        Args:
+            conn: Database connection.
+            run_id: Run ID.
+            cancel_event: Cancellation event for this run.
+            pipeline_error: Exception from pipeline execution, or None if successful.
+            pipeline_traceback: Traceback from pipeline error, or None if successful.
+        """
+        if pipeline_error is not None:
+            # Pipeline failed - update to failed status
+            error_message = str(pipeline_error)
+            error_traceback = pipeline_traceback or traceback.format_exc()
+            self._update_failed_status(conn, run_id, error_message)
+            self._broadcast_log(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "level": "error",
+                    "message": f"Run failed: {error_message}",
+                    "traceback": error_traceback,
+                },
+            )
+            return
+
+        # Pipeline succeeded - determine final status
+        if cancel_event.is_set():
+            # Cancelled - try to update status with retry
+            if not self._try_cancel_status(conn, run_id):
+                # Fallback to new connection
+                try:
+                    with database_connection(self.db_path) as fallback_conn:
+                        self._try_cancel_status(fallback_conn, run_id)
+                except Exception as e:
+                    self._broadcast_log(
+                        run_id,
+                        {
+                            "run_id": run_id,
+                            "level": "warning",
+                            "message": f"Failed to update cancelled status: {e}",
+                        },
+                    )
+        else:
+            # Completed - try atomic completion with retry
+            if not self._try_complete_status(conn, run_id):
+                # Fallback to new connection
+                try:
+                    with database_connection(self.db_path) as fallback_conn:
+                        self._try_complete_status(fallback_conn, run_id)
+                except Exception as e:
+                    self._broadcast_log(
+                        run_id,
+                        {
+                            "run_id": run_id,
+                            "level": "warning",
+                            "message": f"Failed to update completed status: {e}",
+                        },
+                    )
+
+    def _try_cancel_status(
+        self,
+        conn: sqlite3.Connection,
+        run_id: int,
+    ) -> bool:
+        """Try to update run status to cancelled, return True if successful."""
+        try:
+            with transaction(conn):
+                cancel_run(conn, run_id)
+            return True
+        except Exception as e:
+            self._broadcast_log(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "level": "warning",
+                    "message": f"Failed to update run status to cancelled: {e}",
+                },
+            )
+            return False
+
+    def _try_complete_status(
+        self,
+        conn: sqlite3.Connection,
+        run_id: int,
+    ) -> bool:
+        """Try to update run status to completed, return True if successful."""
+        try:
+            with transaction(conn):
+                complete_run_if_not_cancelled(conn, run_id)
+            return True
+        except Exception as e:
+            self._broadcast_log(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "level": "warning",
+                    "message": f"Failed to update run status to completed: {e}",
+                },
+            )
+            return False
 
     def _try_update_status(
         self,
