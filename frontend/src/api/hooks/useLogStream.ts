@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { LogMessage } from '../types'
 import { getBaseUrl } from '../client'
 import { useLogStore } from '../../store/logStore'
@@ -36,6 +36,11 @@ export function useLogStream(
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
+  // Use ref to always have access to the latest onComplete callback
+  // This avoids stale closure issues and prevents unnecessary reconnections
+  const onCompleteRef = useRef(options?.onComplete)
+  onCompleteRef.current = options?.onComplete
+
   const handleClearLogs = useCallback(() => clearLogs(), [clearLogs])
 
   // Update context when projectId or runId changes (clears logs when either changes)
@@ -44,7 +49,8 @@ export function useLogStream(
   }, [projectId, runId, setCurrentContext])
 
   useEffect(() => {
-    if (!runId) {
+    // Use == null to correctly handle runId=0 as valid
+    if (runId == null) {
       setIsConnected(false)
       return
     }
@@ -67,7 +73,7 @@ export function useLogStream(
     eventSource.addEventListener('complete', () => {
       eventSource.close()
       setIsConnected(false)
-      options?.onComplete?.()
+      onCompleteRef.current?.()
     })
 
     eventSource.onerror = () => {
