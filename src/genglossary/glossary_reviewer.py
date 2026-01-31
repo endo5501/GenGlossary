@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.glossary import Glossary, GlossaryIssue, IssueType
-from genglossary.utils.prompt_escape import escape_prompt_content, wrap_user_data
+from genglossary.utils.prompt_escape import wrap_user_data
 
 
 class RawIssue(BaseModel):
@@ -71,17 +71,14 @@ class GlossaryReviewer:
         Returns:
             The formatted prompt string.
         """
-        # Build term list with definitions and confidence (escape each field)
+        # Build term list with definitions and confidence
         term_lines: list[str] = []
         for term_name in glossary.all_term_names:
             term = glossary.get_term(term_name)
             if term is not None:
                 confidence_pct = int(term.confidence * 100)
-                # Escape user data to prevent injection
-                escaped_name = escape_prompt_content(term.name, "glossary")
-                escaped_definition = escape_prompt_content(term.definition, "glossary")
                 term_lines.append(
-                    f"- {escaped_name}: {escaped_definition} (信頼度: {confidence_pct}%)"
+                    f"- {term.name}: {term.definition} (信頼度: {confidence_pct}%)"
                 )
 
         terms_text = "\n".join(term_lines)
