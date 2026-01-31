@@ -4,7 +4,7 @@ tags: [bug, backend, reliability]
 description: "RunManager: Fix status misclassification on DB update failure"
 created_at: "2026-01-31T15:20:00+09:00"
 started_at: 2026-01-31T00:47:10Z
-closed_at: null
+closed_at: 2026-01-31T01:03:28Z
 ---
 
 # RunManager: Fix status misclassification on DB update failure
