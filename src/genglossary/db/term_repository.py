@@ -1,6 +1,7 @@
 """Repository for terms_extracted table CRUD operations."""
 
 import sqlite3
+from collections.abc import Sequence
 from typing import cast
 
 
@@ -115,13 +116,13 @@ def delete_all_terms(conn: sqlite3.Connection) -> None:
 
 def create_terms_batch(
     conn: sqlite3.Connection,
-    terms: list[tuple[str, str | None]],
+    terms: Sequence[tuple[str, str | None]],
 ) -> None:
     """Create multiple term records in a batch.
 
     Args:
         conn: Database connection.
-        terms: List of tuples (term_text, category).
+        terms: Sequence of tuples (term_text, category).
 
     Raises:
         sqlite3.IntegrityError: If any term_text already exists.
