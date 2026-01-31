@@ -2,6 +2,7 @@
 
 import sqlite3
 import traceback
+from collections.abc import Callable
 from datetime import datetime
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
@@ -271,6 +272,39 @@ class RunManager:
                 for queue in self._subscribers[run_id]:
                     self._put_to_queue(queue, message)
 
+    def _try_status_with_fallback(
+        self,
+        conn: sqlite3.Connection | None,
+        run_id: int,
+        status_updater: Callable[[sqlite3.Connection, int], bool],
+        operation_name: str,
+    ) -> None:
+        """Try status update with fallback to new connection.
+
+        Args:
+            conn: Primary database connection (may be None or unusable).
+            run_id: Run ID to update.
+            status_updater: Function that takes (conn, run_id) and returns bool.
+            operation_name: Name of the operation for error messages.
+        """
+        # Try primary connection
+        if conn is not None and status_updater(conn, run_id):
+            return
+
+        # Fallback to new connection
+        try:
+            with database_connection(self.db_path) as fallback_conn:
+                status_updater(fallback_conn, run_id)
+        except Exception as e:
+            self._broadcast_log(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "level": "warning",
+                    "message": f"Failed to update {operation_name} status: {e}",
+                },
+            )
+
     def _finalize_run_status(
         self,
         conn: sqlite3.Connection,
@@ -314,37 +348,15 @@ class RunManager:
 
         # Pipeline succeeded - determine final status
         if cancel_event.is_set():
-            # Cancelled - try to update status with retry
-            if not self._try_cancel_status(conn, run_id):
-                # Fallback to new connection
-                try:
-                    with database_connection(self.db_path) as fallback_conn:
-                        self._try_cancel_status(fallback_conn, run_id)
-                except Exception as e:
-                    self._broadcast_log(
-                        run_id,
-                        {
-                            "run_id": run_id,
-                            "level": "warning",
-                            "message": f"Failed to update cancelled status: {e}",
-                        },
-                    )
+            # Cancelled - try to update status with fallback
+            self._try_status_with_fallback(
+                conn, run_id, self._try_cancel_status, "cancelled"
+            )
         else:
-            # Completed - try atomic completion with retry
-            if not self._try_complete_status(conn, run_id):
-                # Fallback to new connection
-                try:
-                    with database_connection(self.db_path) as fallback_conn:
-                        self._try_complete_status(fallback_conn, run_id)
-                except Exception as e:
-                    self._broadcast_log(
-                        run_id,
-                        {
-                            "run_id": run_id,
-                            "level": "warning",
-                            "message": f"Failed to update completed status: {e}",
-                        },
-                    )
+            # Completed - try atomic completion with fallback
+            self._try_status_with_fallback(
+                conn, run_id, self._try_complete_status, "completed"
+            )
 
     def _try_cancel_status(
         self,
@@ -448,21 +460,9 @@ class RunManager:
             run_id: Run ID to update.
             error_message: Error message to store.
         """
-        # Try primary connection
-        if conn is not None and self._try_update_status(conn, run_id, error_message):
-            return
-
-        # Fallback to new connection
-        try:
-            with database_connection(self.db_path) as fallback_conn:
-                self._try_update_status(fallback_conn, run_id, error_message)
-        except Exception as e:
-            # Both failed, status update is lost but error log will still be broadcast
-            self._broadcast_log(
-                run_id,
-                {
-                    "run_id": run_id,
-                    "level": "warning",
-                    "message": f"Failed to create fallback connection: {e}",
-                },
-            )
+        self._try_status_with_fallback(
+            conn,
+            run_id,
+            lambda c, rid: self._try_update_status(c, rid, error_message),
+            "failed",
+        )
