@@ -3,8 +3,8 @@ priority: 1
 tags: [security, improvement]
 description: "Comprehensive prompt injection prevention across LLM prompt builders"
 created_at: "2026-01-31T10:45:00+09:00"
-started_at: null
-closed_at: null
+started_at: 2026-01-31T02:02:29Z
+closed_at: 2026-01-31T03:54:38Z
 ---
 
 # Comprehensive prompt injection prevention across LLM prompt builders
@@ -105,19 +105,21 @@ def escape_prompt_content(text: str, wrapper_tag: str = "data") -> str:
 
 ## Tasks
 
-- [ ] Create shared escape utility in `src/genglossary/utils/prompt_escape.py`
-- [ ] Fix term_extractor.py - _create_single_term_classification_prompt
-- [ ] Fix term_extractor.py - _create_batch_classification_prompt
-- [ ] Fix term_extractor.py - _create_judgment_prompt
-- [ ] Fix term_extractor.py - _create_classification_prompt
-- [ ] Fix term_extractor.py - _create_selection_prompt
-- [ ] Fix glossary_reviewer.py - _create_review_prompt
-- [ ] Fix glossary_refiner.py - _create_refinement_prompt
-- [ ] Fix glossary_generator.py - _build_definition_prompt (term variable)
-- [ ] Write comprehensive tests for each fix
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Create shared escape utility in `src/genglossary/utils/prompt_escape.py`
+- [x] Fix term_extractor.py - _create_single_term_classification_prompt
+- [x] Fix term_extractor.py - _create_batch_classification_prompt
+- [x] Fix term_extractor.py - _create_judgment_prompt
+- [x] Fix term_extractor.py - _create_classification_prompt
+- [x] Fix term_extractor.py - _create_selection_prompt (removed double-escaping)
+- [x] Fix glossary_reviewer.py - _create_review_prompt (removed double-escaping)
+- [x] Fix glossary_refiner.py - _create_refinement_prompt (removed double-escaping)
+- [x] Fix glossary_generator.py - _build_definition_prompt (term variable)
+- [x] Fix glossary_generator.py - Replace _escape_context_tags with shared utility
+- [x] Write comprehensive tests for each fix
+- [x] Add prompt security documentation (docs/architecture/prompt-security.md)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## 関連
 
