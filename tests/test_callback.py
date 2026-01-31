@@ -1,5 +1,7 @@
 """Tests for safe_callback utility function."""
 
+import logging
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -58,3 +60,40 @@ class TestSafeCallback:
         safe_callback(mock_callback, data, items)
 
         mock_callback.assert_called_once_with(data, items)
+
+    def test_logs_debug_when_callback_raises(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that safe_callback logs debug when callback raises an exception."""
+
+        def failing_callback(*args: Any) -> None:
+            raise RuntimeError("Callback exploded")
+
+        with caplog.at_level(logging.DEBUG):
+            safe_callback(failing_callback, 1, 2, 3)
+
+        # Should have logged a debug message
+        assert len(caplog.records) >= 1
+        debug_record = caplog.records[0]
+        assert debug_record.levelno == logging.DEBUG
+        assert "Callback exploded" in debug_record.message
+        assert "callback" in debug_record.name
+
+    def test_logs_debug_with_exc_info(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that safe_callback logs with exc_info for full traceback."""
+
+        def failing_callback(*args: Any) -> None:
+            raise ValueError("Test error with traceback")
+
+        with caplog.at_level(logging.DEBUG):
+            safe_callback(failing_callback, "arg1")
+
+        # Should have logged with exc_info (traceback available)
+        assert len(caplog.records) >= 1
+        debug_record = caplog.records[0]
+        assert debug_record.exc_info is not None
+        assert debug_record.exc_info[0] is ValueError

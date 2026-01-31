@@ -3,7 +3,6 @@
 import logging
 import re
 from collections import defaultdict
-from typing import Any, Callable
 
 from pydantic import BaseModel
 
@@ -14,6 +13,7 @@ from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.models.term import Term
 from genglossary.types import ProgressCallback, TermProgressCallback
+from genglossary.utils.callback import safe_callback
 from genglossary.utils.prompt_escape import wrap_user_data
 
 
@@ -38,28 +38,6 @@ class GlossaryRefiner:
             llm_client: The LLM client to use for refinement.
         """
         self.llm_client = llm_client
-
-    def _safe_callback(
-        self, callback: Callable[..., None] | None, *args: Any
-    ) -> None:
-        """Safely invoke a callback, ignoring any exceptions.
-
-        This prevents callback errors from interrupting the pipeline.
-        Errors are logged at DEBUG level for debugging purposes.
-
-        Args:
-            callback: The callback function to invoke, or None.
-            *args: Arguments to pass to the callback.
-        """
-        if callback is not None:
-            try:
-                callback(*args)
-            except Exception as e:
-                logger.debug(
-                    "Callback error ignored (to prevent pipeline interruption): %s",
-                    e,
-                    exc_info=True,
-                )
 
     def refine(
         self,
@@ -132,8 +110,8 @@ class GlossaryRefiner:
                 print(f"Warning: Failed to refine '{issue.term_name}': {e}")
             finally:
                 # Call progress callbacks (guarded to prevent pipeline interruption)
-                self._safe_callback(progress_callback, idx, total_issues)
-                self._safe_callback(term_progress_callback, idx, total_issues, issue.term_name)
+                safe_callback(progress_callback, idx, total_issues)
+                safe_callback(term_progress_callback, idx, total_issues, issue.term_name)
 
         refined_glossary.metadata["resolved_issues"] = resolved_count
         return refined_glossary
