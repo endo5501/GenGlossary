@@ -1,5 +1,5 @@
 ---
-priority: 6
+priority: 1
 tags: [refactoring, backend, code-quality]
 description: "RunManager: Refactor duplicated status update code"
 created_at: "2026-01-31T10:10:00+09:00"
@@ -84,3 +84,9 @@ def _try_status_with_fallback(
 - [ ] 汎用ステータス更新メソッドの設計
 - [ ] リファクタリング実施
 - [ ] テストが引き続きパスすることを確認
+- [ ] Commit
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing

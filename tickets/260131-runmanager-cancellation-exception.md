@@ -59,3 +59,12 @@ codex MCP レビューで指摘された問題。現在の実装では、executo
 - [ ] executor の修正（必要な場合）
 - [ ] _finalize_run_status の修正
 - [ ] テストの追加
+- [ ] Commit
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
