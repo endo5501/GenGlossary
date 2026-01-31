@@ -50,6 +50,7 @@ class RunManager:
         self._thread: Thread | None = None
         self._cancel_events: dict[int, Event] = {}
         self._cancel_events_lock = Lock()
+        self._start_run_lock = Lock()  # Synchronize start_run to prevent race conditions
         self._current_run_id: int | None = None
         # Subscriber管理
         self._subscribers: dict[int, set[Queue]] = {}
@@ -68,15 +69,17 @@ class RunManager:
         Raises:
             RuntimeError: If a run is already running.
         """
-        # Check if a run is already active
-        with database_connection(self.db_path) as conn:
-            active_run = get_active_run(conn)
-            if active_run is not None:
-                raise RuntimeError(f"Run already running: {active_run['id']}")
+        # Synchronize to prevent race conditions between concurrent start_run calls
+        with self._start_run_lock:
+            # Check if a run is already active and create run record atomically
+            with database_connection(self.db_path) as conn:
+                active_run = get_active_run(conn)
+                if active_run is not None:
+                    raise RuntimeError(f"Run already running: {active_run['id']}")
 
-            # Create run record
-            with transaction(conn):
-                run_id = create_run(conn, scope=scope, triggered_by=triggered_by)
+                # Create run record atomically within the same lock
+                with transaction(conn):
+                    run_id = create_run(conn, scope=scope, triggered_by=triggered_by)
 
         self._current_run_id = run_id
 
