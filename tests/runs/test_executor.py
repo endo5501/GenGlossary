@@ -1682,6 +1682,94 @@ class TestPipelineExecutorThreadSafety:
             assert log.get("run_id") == 2, f"Log in logs_2 has wrong run_id: {log}"
 
 
+class TestCancellableDecorator:
+    """Tests for _cancellable decorator."""
+
+    def test_cancellable_decorator_checks_cancellation_at_method_entry(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        log_callback,
+    ) -> None:
+        """@_cancellable デコレータがメソッドエントリーでキャンセルをチェックする"""
+        cancel_event = Event()
+        cancel_event.set()  # Already cancelled
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+
+            mock_llm_factory.return_value = MagicMock()
+
+            # _execute_full should return early due to decorator check
+            executor._execute_full(project_db, context, doc_root="/test/path")
+
+            # DocumentLoader should NOT be called (decorator returned early)
+            mock_loader.return_value.load_directory.assert_not_called()
+
+    def test_cancellable_decorator_allows_execution_when_not_cancelled(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """キャンセルされていない場合、デコレータは実行を許可する"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.delete_all_documents"):
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="test.txt", content="test")
+            ]
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            # Should execute normally
+            executor._execute_full(project_db, execution_context, doc_root="/test/path")
+
+            # DocumentLoader should be called
+            mock_loader.return_value.load_directory.assert_called_once()
+
+    def test_cancellable_decorator_finds_context_in_positional_args(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        log_callback,
+    ) -> None:
+        """デコレータが位置引数からcontextを見つける"""
+        cancel_event = Event()
+        cancel_event.set()
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            mock_llm_factory.return_value = MagicMock()
+
+            # Call with context as positional arg
+            executor._execute_from_terms(project_db, context)
+
+            # Should return early, no DB access
+            mock_list_docs.assert_not_called()
+
+
 class TestDocumentFilePathStorage:
     """Tests for document file path storage.
 
