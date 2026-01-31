@@ -1,5 +1,5 @@
 ---
-priority: 6
+priority: 1
 tags: [improvement, refactoring, code-quality]
 description: "GlossaryGenerator: コード簡素化とリファクタリング"
 created_at: "2026-01-30T10:00:00Z"
