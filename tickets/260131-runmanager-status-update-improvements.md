@@ -4,7 +4,7 @@ tags: [refactoring, backend, code-quality]
 description: "RunManager: Improve status update fallback logic"
 created_at: "2026-01-31T16:00:00+09:00"
 started_at: 2026-01-31T14:24:05Z
-closed_at: null
+closed_at: 2026-01-31T14:39:24Z
 ---
 
 # RunManager: Improve status update fallback logic
