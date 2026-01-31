@@ -208,3 +208,35 @@ def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool
         (run_id,),
     )
     return cursor.rowcount > 0
+
+
+def fail_run_if_not_terminal(
+    conn: sqlite3.Connection, run_id: int, error_message: str
+) -> bool:
+    """Fail a run only if it is not already in a terminal state.
+
+    This function atomically checks the run status before updating
+    to failed, preventing race conditions and avoiding overwriting
+    terminal states like 'cancelled', 'completed', or 'failed'.
+
+    Args:
+        conn: Project database connection.
+        run_id: Run ID to fail.
+        error_message: Error message to store.
+
+    Returns:
+        bool: True if the run was updated to failed, False if already
+              in a terminal state or not found.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE runs
+        SET status = 'failed',
+            finished_at = datetime('now'),
+            error_message = ?
+        WHERE id = ? AND status IN ('pending', 'running')
+        """,
+        (error_message, run_id),
+    )
+    return cursor.rowcount > 0

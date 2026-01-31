@@ -823,14 +823,13 @@ class TestRunManagerConnectionErrorHandling:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             mock_executor.return_value.execute.side_effect = RuntimeError("Test error")
 
-            # Make primary connection fail, fallback succeeds
+            # Make primary connection fail, fallback succeeds for fail_run_if_not_terminal
             with patch(
-                "genglossary.runs.manager.update_run_status"
-            ) as mock_update_run_status:
-                mock_update_run_status.side_effect = [
-                    None,  # running status
+                "genglossary.runs.manager.fail_run_if_not_terminal"
+            ) as mock_fail_run:
+                mock_fail_run.side_effect = [
                     sqlite3.OperationalError("database is locked"),  # first failed
-                    None,  # fallback succeeds
+                    True,  # fallback succeeds
                 ]
 
                 # Subscribe to logs before starting run
@@ -1275,6 +1274,146 @@ class TestRunManagerStatusUpdateFallbackLogic:
                     "Cancel skipped" in log.get("message", "") and log.get("level") == "info"
                     for log in logs
                 ), "Info log about skipped cancel should be broadcast"
+
+
+class TestRunManagerFailedStatusGuard:
+    """Tests for _try_failed_status guarding against terminal states.
+
+    Issue: _try_failed_status should not overwrite existing terminal states
+    (cancelled, completed, failed) to maintain consistency with cancel_run
+    and complete_run_if_not_cancelled semantics.
+    """
+
+    def test_failed_status_does_not_overwrite_cancelled(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """_try_failed_statusはcancelledを上書きしない"""
+        from genglossary.db.connection import database_connection, transaction
+        from genglossary.db.runs_repository import cancel_run as db_cancel_run
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            cancel_set = Event()
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                # Signal that we are ready to be cancelled
+                cancel_set.set()
+                # Wait to allow cancel to happen
+                time.sleep(0.2)
+                # Simulate failure after cancel is set
+                raise RuntimeError("Test error after cancel")
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to reach the point where it can be cancelled
+            cancel_set.wait(timeout=5)
+
+            # Cancel the run via database directly
+            with database_connection(manager.db_path) as conn:
+                with transaction(conn):
+                    db_cancel_run(conn, run_id)
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=3)
+
+            # Status should remain cancelled, not changed to failed
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "cancelled", (
+                f"Expected status 'cancelled' but got '{run['status']}'. "
+                "_try_failed_status should not overwrite cancelled status."
+            )
+
+    def test_failed_status_does_not_overwrite_completed(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """_try_failed_statusはcompletedを上書きしない"""
+        from genglossary.db.connection import database_connection, transaction
+        from genglossary.db.runs_repository import complete_run_if_not_cancelled
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            exec_done = Event()
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                # Signal that execution is complete
+                exec_done.set()
+                # Wait a bit before returning
+                time.sleep(0.2)
+                # Simulate error after completion is set
+                raise RuntimeError("Test error after complete")
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            exec_done.wait(timeout=5)
+
+            # Complete the run via database directly
+            with database_connection(manager.db_path) as conn:
+                with transaction(conn):
+                    complete_run_if_not_cancelled(conn, run_id)
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=3)
+
+            # Status should remain completed, not changed to failed
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "completed", (
+                f"Expected status 'completed' but got '{run['status']}'. "
+                "_try_failed_status should not overwrite completed status."
+            )
+
+    def test_failed_status_logs_when_skipped(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """_try_failed_statusがスキップされた場合、infoログが出力される"""
+        from genglossary.db.connection import database_connection, transaction
+        from genglossary.db.runs_repository import cancel_run as db_cancel_run
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            cancel_set = Event()
+
+            def mock_execute(conn, scope, context, doc_root="."):
+                cancel_set.set()
+                time.sleep(0.2)
+                raise RuntimeError("Test error after cancel")
+
+            mock_executor.return_value.execute.side_effect = mock_execute
+
+            # Subscribe to logs
+            queue = manager.register_subscriber(run_id=1)
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution
+            cancel_set.wait(timeout=5)
+
+            # Cancel the run
+            with database_connection(manager.db_path) as conn:
+                with transaction(conn):
+                    db_cancel_run(conn, run_id)
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=3)
+
+            # Check that info log was broadcast about skipped failed status
+            logs = []
+            while not queue.empty():
+                log = queue.get_nowait()
+                if log is not None and not log.get("complete"):
+                    logs.append(log)
+
+            assert any(
+                "Failed status skipped" in log.get("message", "")
+                and log.get("level") == "info"
+                for log in logs
+            ), "Info log about skipped failed status should be broadcast"
 
 
 class TestRunManagerStatusMisclassification:

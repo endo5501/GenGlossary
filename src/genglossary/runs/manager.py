@@ -12,6 +12,7 @@ from genglossary.db.runs_repository import (
     cancel_run,
     complete_run_if_not_cancelled,
     create_run,
+    fail_run_if_not_terminal,
     get_active_run,
     get_run,
     update_run_status,
@@ -443,16 +444,27 @@ class RunManager:
         run_id: int,
         error_message: str,
     ) -> bool:
-        """Try to update run status to failed, return True if successful."""
+        """Try to update run status to failed.
+
+        Returns:
+            True if failed or already in terminal state (no fallback needed).
+            False if failed with exception (fallback needed).
+        """
         try:
             with transaction(conn):
-                update_run_status(
-                    conn,
+                was_updated = fail_run_if_not_terminal(conn, run_id, error_message)
+            if not was_updated:
+                # Run was already in terminal state - this is a no-op, not a failure
+                self._broadcast_log(
                     run_id,
-                    "failed",
-                    finished_at=datetime.now(),
-                    error_message=error_message,
+                    {
+                        "run_id": run_id,
+                        "level": "info",
+                        "message": "Failed status skipped: run was already "
+                        "in terminal state",
+                    },
                 )
+            # Both success and no-op return True (no fallback needed)
             return True
         except Exception as e:
             self._broadcast_log(
