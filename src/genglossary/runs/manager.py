@@ -372,11 +372,27 @@ class RunManager:
         conn: sqlite3.Connection,
         run_id: int,
     ) -> bool:
-        """Try to update run status to completed, return True if successful."""
+        """Try to update run status to completed, return True if successful.
+
+        Returns:
+            True if status was updated to completed.
+            False if update failed (exception) or was no-op (already cancelled).
+        """
         try:
             with transaction(conn):
-                complete_run_if_not_cancelled(conn, run_id)
-            return True
+                was_updated = complete_run_if_not_cancelled(conn, run_id)
+            if not was_updated:
+                # Run was already cancelled/failed, completion didn't apply
+                self._broadcast_log(
+                    run_id,
+                    {
+                        "run_id": run_id,
+                        "level": "info",
+                        "message": "Completion skipped: run was already "
+                        "cancelled or in terminal state",
+                    },
+                )
+            return was_updated
         except Exception as e:
             self._broadcast_log(
                 run_id,
