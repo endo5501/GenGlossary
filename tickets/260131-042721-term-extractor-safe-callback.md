@@ -4,7 +4,7 @@ tags: [refactoring, code-quality, backend]
 description: "TermExtractor: Use safe_callback for callback consistency"
 created_at: "2026-01-31T04:27:21Z"
 started_at: 2026-01-31T04:48:42Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-31T04:56:42Z # Do not modify manually
 ---
 
 # TermExtractor: Use safe_callback for callback consistency
