@@ -3,7 +3,7 @@ priority: 2
 tags: [refactoring, code-quality, backend]
 description: "TermExtractor: Use safe_callback for callback consistency"
 created_at: "2026-01-31T04:27:21Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-31T04:48:42Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -41,17 +41,17 @@ safe_callback(progress_callback, batch_num, total_batches)
 
 ## Tasks
 
-- [ ] `term_extractor.py` を更新して `safe_callback` を使用
-- [ ] テストを追加（コールバック例外時の継続確認）
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `term_extractor.py` を更新して `safe_callback` を使用
+- [x] テストを追加（コールバック例外時の継続確認）
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md (N/A: docs/architecture/ directory does not exist)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
