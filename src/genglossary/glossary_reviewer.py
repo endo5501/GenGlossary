@@ -1,9 +1,12 @@
 """Glossary reviewer - Step 3: Review glossary for issues using LLM."""
 
+import logging
 from threading import Event
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
+
+logger = logging.getLogger(__name__)
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.glossary import Glossary, GlossaryIssue, IssueType
@@ -70,7 +73,7 @@ class GlossaryReviewer:
             return self._parse_issues(response.issues)
         except Exception as e:
             # If review fails, log warning and continue without issues
-            print(f"Warning: Failed to review glossary: {e}")
+            logger.warning("Failed to review glossary: %s", e, exc_info=True)
             return []
 
     def _create_review_prompt(self, glossary: Glossary) -> str:

@@ -119,7 +119,12 @@ class GlossaryRefiner:
                 refined_glossary.terms[issue.term_name] = refined_term
                 resolved_count += 1
             except Exception as e:
-                print(f"Warning: Failed to refine '{issue.term_name}': {e}")
+                logger.warning(
+                    "Failed to refine '%s': %s",
+                    issue.term_name,
+                    e,
+                    exc_info=True,
+                )
             finally:
                 # Call progress callbacks (guarded to prevent pipeline interruption)
                 safe_callback(progress_callback, idx, total_issues)
