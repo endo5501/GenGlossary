@@ -155,6 +155,53 @@ def update_run_progress(
     )
 
 
+def update_run_status_if_active(
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    error_message: str | None = None,
+) -> int:
+    """Update run status only if run is active (pending or running).
+
+    This function atomically checks the run status before updating,
+    preventing race conditions and avoiding overwriting terminal states.
+
+    Args:
+        conn: Project database connection.
+        run_id: Run ID to update.
+        status: New status ('completed', 'cancelled', 'failed').
+        error_message: Error message if status is 'failed' (optional).
+
+    Returns:
+        Number of rows updated (0 if run was already in terminal state or not found).
+    """
+    cursor = conn.cursor()
+
+    if error_message is not None:
+        cursor.execute(
+            """
+            UPDATE runs
+            SET status = ?,
+                finished_at = datetime('now'),
+                error_message = ?
+            WHERE id = ? AND status IN ('pending', 'running')
+            """,
+            (status, error_message, run_id),
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE runs
+            SET status = ?,
+                finished_at = datetime('now')
+            WHERE id = ? AND status IN ('pending', 'running')
+            """,
+            (status, run_id),
+        )
+
+    return cursor.rowcount
+
+
 def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
     """Cancel a run.
 
@@ -167,18 +214,7 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
     Returns:
         Number of rows updated (0 if run was already in terminal state or not found).
     """
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE runs
-        SET status = 'cancelled',
-            finished_at = datetime('now')
-        WHERE id = ?
-        AND status IN ('pending', 'running')
-        """,
-        (run_id,),
-    )
-    return cursor.rowcount
+    return update_run_status_if_active(conn, run_id, "cancelled")
 
 
 def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool:
@@ -197,17 +233,7 @@ def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool
         bool: True if the run was updated to completed, False if already
               in a terminal state or not found.
     """
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE runs
-        SET status = 'completed',
-            finished_at = datetime('now')
-        WHERE id = ? AND status IN ('pending', 'running')
-        """,
-        (run_id,),
-    )
-    return cursor.rowcount > 0
+    return update_run_status_if_active(conn, run_id, "completed") > 0
 
 
 def fail_run_if_not_terminal(
@@ -228,15 +254,4 @@ def fail_run_if_not_terminal(
         bool: True if the run was updated to failed, False if already
               in a terminal state or not found.
     """
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE runs
-        SET status = 'failed',
-            finished_at = datetime('now'),
-            error_message = ?
-        WHERE id = ? AND status IN ('pending', 'running')
-        """,
-        (error_message, run_id),
-    )
-    return cursor.rowcount > 0
+    return update_run_status_if_active(conn, run_id, "failed", error_message) > 0

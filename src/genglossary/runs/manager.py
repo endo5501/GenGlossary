@@ -9,13 +9,11 @@ from threading import Event, Lock, Thread
 
 from genglossary.db.connection import database_connection, get_connection, transaction
 from genglossary.db.runs_repository import (
-    cancel_run,
-    complete_run_if_not_cancelled,
     create_run,
-    fail_run_if_not_terminal,
     get_active_run,
     get_run,
     update_run_status,
+    update_run_status_if_active,
 )
 from genglossary.runs.executor import ExecutionContext, PipelineExecutor
 
@@ -362,6 +360,58 @@ class RunManager:
                 conn, run_id, self._try_complete_status, "completed"
             )
 
+    def _try_update_status(
+        self,
+        conn: sqlite3.Connection,
+        run_id: int,
+        status: str,
+        error_message: str | None = None,
+        no_op_message: str = "run was already in terminal state",
+    ) -> bool:
+        """Try to update run status with error handling and logging.
+
+        This is the generic status update method that handles the common pattern
+        of updating status, logging no-op cases, and catching exceptions.
+
+        Args:
+            conn: Database connection.
+            run_id: Run ID to update.
+            status: New status ('cancelled', 'completed', 'failed').
+            error_message: Error message if status is 'failed' (optional).
+            no_op_message: Message to log when update is skipped (no-op).
+
+        Returns:
+            True if status was updated or already in terminal state (no fallback needed).
+            False if failed with exception (fallback needed).
+        """
+        try:
+            with transaction(conn):
+                rows_updated = update_run_status_if_active(
+                    conn, run_id, status, error_message
+                )
+            if rows_updated == 0:
+                # Run was already in terminal state - this is a no-op, not a failure
+                self._broadcast_log(
+                    run_id,
+                    {
+                        "run_id": run_id,
+                        "level": "info",
+                        "message": f"{status.capitalize()} skipped: {no_op_message}",
+                    },
+                )
+            # Both success and no-op return True (no fallback needed)
+            return True
+        except Exception as e:
+            self._broadcast_log(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "level": "warning",
+                    "message": f"Failed to update run status to {status}: {e}",
+                },
+            )
+            return False
+
     def _try_cancel_status(
         self,
         conn: sqlite3.Connection,
@@ -373,31 +423,7 @@ class RunManager:
             True if cancelled or already in terminal state (no fallback needed).
             False if failed with exception (fallback needed).
         """
-        try:
-            with transaction(conn):
-                rows_updated = cancel_run(conn, run_id)
-            if rows_updated == 0:
-                # Run was already in terminal state - this is a no-op, not a failure
-                self._broadcast_log(
-                    run_id,
-                    {
-                        "run_id": run_id,
-                        "level": "info",
-                        "message": "Cancel skipped: run was already in terminal state",
-                    },
-                )
-            # Both success and no-op return True (no fallback needed)
-            return True
-        except Exception as e:
-            self._broadcast_log(
-                run_id,
-                {
-                    "run_id": run_id,
-                    "level": "warning",
-                    "message": f"Failed to update run status to cancelled: {e}",
-                },
-            )
-            return False
+        return self._try_update_status(conn, run_id, "cancelled")
 
     def _try_complete_status(
         self,
@@ -410,33 +436,12 @@ class RunManager:
             True if completed or no-op (no fallback needed).
             False if failed with exception (fallback needed).
         """
-        try:
-            with transaction(conn):
-                was_updated = complete_run_if_not_cancelled(conn, run_id)
-            if not was_updated:
-                # Run was already cancelled/failed - this is a no-op, not a failure
-                # No fallback needed since the terminal state is already set
-                self._broadcast_log(
-                    run_id,
-                    {
-                        "run_id": run_id,
-                        "level": "info",
-                        "message": "Completion skipped: run was already "
-                        "cancelled or in terminal state",
-                    },
-                )
-            # Both success and no-op return True (no fallback needed)
-            return True
-        except Exception as e:
-            self._broadcast_log(
-                run_id,
-                {
-                    "run_id": run_id,
-                    "level": "warning",
-                    "message": f"Failed to update run status to completed: {e}",
-                },
-            )
-            return False
+        return self._try_update_status(
+            conn,
+            run_id,
+            "completed",
+            no_op_message="run was already cancelled or in terminal state",
+        )
 
     def _try_failed_status(
         self,
@@ -450,32 +455,7 @@ class RunManager:
             True if failed or already in terminal state (no fallback needed).
             False if failed with exception (fallback needed).
         """
-        try:
-            with transaction(conn):
-                was_updated = fail_run_if_not_terminal(conn, run_id, error_message)
-            if not was_updated:
-                # Run was already in terminal state - this is a no-op, not a failure
-                self._broadcast_log(
-                    run_id,
-                    {
-                        "run_id": run_id,
-                        "level": "info",
-                        "message": "Failed status skipped: run was already "
-                        "in terminal state",
-                    },
-                )
-            # Both success and no-op return True (no fallback needed)
-            return True
-        except Exception as e:
-            self._broadcast_log(
-                run_id,
-                {
-                    "run_id": run_id,
-                    "level": "warning",
-                    "message": f"Failed to update run status: {e}",
-                },
-            )
-            return False
+        return self._try_update_status(conn, run_id, "failed", error_message)
 
     def _update_failed_status(
         self,
