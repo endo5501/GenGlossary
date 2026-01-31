@@ -13,7 +13,7 @@ from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
 from genglossary.types import ProgressCallback, TermProgressCallback
-from genglossary.utils.prompt_escape import wrap_user_data
+from genglossary.utils.prompt_escape import escape_prompt_content, wrap_user_data
 from genglossary.utils.text import contains_cjk
 
 
@@ -263,20 +263,6 @@ Output:
 
         return occurrences
 
-    def _escape_context_tags(self, text: str) -> str:
-        """Escape <context> and </context> tags in text to prevent prompt injection.
-
-        Args:
-            text: The text to escape.
-
-        Returns:
-            Text with context tags escaped using XML entities.
-        """
-        # Escape closing tag first to avoid double-escaping
-        text = text.replace("</context>", "&lt;/context&gt;")
-        text = text.replace("<context>", "&lt;context&gt;")
-        return text
-
     def _build_context_text(self, occurrences: list[TermOccurrence]) -> str:
         """Build context text from term occurrences.
 
@@ -294,7 +280,7 @@ Output:
             return "(ドキュメント内に出現箇所がありません)"
 
         lines = "\n".join(
-            f"- {self._escape_context_tags(occ.context)}"
+            f"- {escape_prompt_content(occ.context, 'context')}"
             for occ in occurrences[: self.MAX_CONTEXT_COUNT]
         )
         return f"<context>\n{lines}\n</context>"
