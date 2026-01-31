@@ -7,6 +7,7 @@ and glossary_refined tables to reduce code duplication.
 import sqlite3
 from typing import Literal, cast
 
+from genglossary.db.db_helpers import batch_insert
 from genglossary.db.models import (
     GlossaryTermRow,
     deserialize_occurrences,
@@ -213,21 +214,12 @@ def create_glossary_terms_batch(
     """
     _validate_table_name(table_name)
 
-    if not terms:
-        return
-
-    # Convert terms to format suitable for executemany
+    # Convert terms to format suitable for batch_insert
     data = [
         (term_name, definition, confidence, serialize_occurrences(occurrences))
         for term_name, definition, confidence, occurrences in terms
     ]
 
-    cursor = conn.cursor()
-    cursor.executemany(
-        f"""
-        INSERT INTO {table_name}
-        (term_name, definition, confidence, occurrences)
-        VALUES (?, ?, ?, ?)
-        """,
-        data,
+    batch_insert(
+        conn, table_name, ["term_name", "definition", "confidence", "occurrences"], data
     )

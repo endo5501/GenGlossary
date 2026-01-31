@@ -3,6 +3,8 @@
 import sqlite3
 from typing import cast
 
+from genglossary.db.db_helpers import batch_insert
+
 
 def create_issue(
     conn: sqlite3.Connection,
@@ -86,15 +88,6 @@ def create_issues_batch(
         conn: Database connection.
         issues: List of tuples (term_name, issue_type, description).
     """
-    if not issues:
-        return
-
-    cursor = conn.cursor()
-    cursor.executemany(
-        """
-        INSERT INTO glossary_issues
-        (term_name, issue_type, description)
-        VALUES (?, ?, ?)
-        """,
-        issues,
+    batch_insert(
+        conn, "glossary_issues", ["term_name", "issue_type", "description"], issues
     )

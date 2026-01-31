@@ -3,6 +3,8 @@
 import sqlite3
 from typing import cast
 
+from genglossary.db.db_helpers import batch_insert
+
 
 def create_document(
     conn: sqlite3.Connection, file_name: str, content: str, content_hash: str
@@ -116,14 +118,6 @@ def create_documents_batch(
     Raises:
         sqlite3.IntegrityError: If any file_name already exists.
     """
-    if not documents:
-        return
-
-    cursor = conn.cursor()
-    cursor.executemany(
-        """
-        INSERT INTO documents (file_name, content, content_hash)
-        VALUES (?, ?, ?)
-        """,
-        documents,
+    batch_insert(
+        conn, "documents", ["file_name", "content", "content_hash"], documents
     )

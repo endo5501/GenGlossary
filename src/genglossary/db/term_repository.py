@@ -4,6 +4,8 @@ import sqlite3
 from collections.abc import Sequence
 from typing import cast
 
+from genglossary.db.db_helpers import batch_insert
+
 
 def create_term(
     conn: sqlite3.Connection,
@@ -127,14 +129,4 @@ def create_terms_batch(
     Raises:
         sqlite3.IntegrityError: If any term_text already exists.
     """
-    if not terms:
-        return
-
-    cursor = conn.cursor()
-    cursor.executemany(
-        """
-        INSERT INTO terms_extracted (term_text, category)
-        VALUES (?, ?)
-        """,
-        terms,
-    )
+    batch_insert(conn, "terms_extracted", ["term_text", "category"], terms)
