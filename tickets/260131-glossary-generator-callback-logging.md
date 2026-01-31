@@ -4,7 +4,7 @@ tags: [improvement, debugging]
 description: "GlossaryGenerator: Add logging to _safe_callback for debugging"
 created_at: "2026-01-31T02:15:00Z"
 started_at: 2026-01-31T01:48:32Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-01-31T01:52:42Z # Do not modify manually
 ---
 
 # GlossaryGenerator: Add logging to _safe_callback for debugging
