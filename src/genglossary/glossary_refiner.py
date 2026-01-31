@@ -10,7 +10,7 @@ from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.models.term import Term
 from genglossary.types import ProgressCallback, TermProgressCallback
-from genglossary.utils.prompt_escape import escape_prompt_content, wrap_user_data
+from genglossary.utils.prompt_escape import wrap_user_data
 
 
 class RefinementResponse(BaseModel):
@@ -197,17 +197,11 @@ class GlossaryRefiner:
         """
         additional_context = self._extract_context(term.name, context_index)
 
-        # Escape user data to prevent prompt injection
-        escaped_name = escape_prompt_content(term.name, "refinement")
-        escaped_definition = escape_prompt_content(term.definition, "refinement")
-        escaped_description = escape_prompt_content(issue.description, "refinement")
-        escaped_issue_type = escape_prompt_content(issue.issue_type, "refinement")
-
         # Build the refinement data section
-        refinement_data = f"""用語: {escaped_name}
-現在の定義: {escaped_definition}
-問題点: {escaped_description}
-問題タイプ: {escaped_issue_type}"""
+        refinement_data = f"""用語: {term.name}
+現在の定義: {term.definition}
+問題点: {issue.description}
+問題タイプ: {issue.issue_type}"""
 
         # Wrap user data
         wrapped_data = wrap_user_data(refinement_data, "refinement")
