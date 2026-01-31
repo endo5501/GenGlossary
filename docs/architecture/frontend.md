@@ -497,6 +497,10 @@ export const useTerms = (projectId: number) =>
 SSE（Server-Sent Events）を使用したログストリーミングフック。Zustand ストアと統合。
 
 ```typescript
+interface UseLogStreamOptions {
+  onComplete?: () => void  // ストリーム完了時のコールバック
+}
+
 interface UseLogStreamResult {
   logs: LogMessage[]      // ログメッセージ配列（Zustand ストアから取得）
   isConnected: boolean    // 接続状態
@@ -506,7 +510,8 @@ interface UseLogStreamResult {
 
 export function useLogStream(
   projectId: number,
-  runId: number | undefined
+  runId: number | undefined,
+  options?: UseLogStreamOptions
 ): UseLogStreamResult
 ```
 
@@ -517,6 +522,8 @@ export function useLogStream(
 - プロジェクト間でのログ衝突を防止（同じrunIdでも異なるプロジェクトなら別扱い）
 - メモリリーク防止のため最大1000件に制限
 - クリーンアップ時に `EventSource.close()` を呼び出し
+- `runId == null` チェックにより `runId = 0` を有効な値として正しく処理
+- `onComplete` は `useRef` で保持し、stale closure 問題を回避
 
 #### LogMessage 型
 
@@ -718,10 +725,11 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `components/dialogs/AddFileDialog.test.tsx` | 6 | AddFileDialogコンポーネント |
 | `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
 | `terms-workflow.test.tsx` | 43 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel |
-| `logStore.test.ts` | 9 | Zustand ログストアの状態管理、進捗追跡 |
+| `logStore.test.ts` | 20 | Zustand ログストアの状態管理、進捗追跡 |
 | `LogPanel.test.tsx` | 5 | LogPanel の進捗表示UI |
+| `useLogStream.test.ts` | 3 | useLogStream フックの runId=0 処理、onComplete コールバック |
 
-**合計**: 152 テスト
+**合計**: 165 テスト
 
 ### テスト実行
 

@@ -3,8 +3,8 @@ priority: 2
 tags: [refactoring, code-quality, frontend]
 description: "Frontend: Small bug fixes in useLogStream"
 created_at: "2026-01-30T09:45:00Z"
-started_at: null
-closed_at: null
+started_at: 2026-01-31T04:34:33Z
+closed_at: 2026-01-31T04:47:48Z
 ---
 
 # Frontend: Small bug fixes in useLogStream
@@ -27,18 +27,20 @@ closed_at: null
 
 ## Tasks
 
-- [ ] テストを追加・更新
-- [ ] `runId = 0` の falsy 問題修正
-- [ ] `onComplete` の stale closure実装
-- [ ] Run tests (`pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] テストを追加・更新
+- [x] `runId = 0` の falsy 問題修正
+- [x] `onComplete` の stale closure実装
+- [x] Run tests (`pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
 
 - 現状で顕在化していないバグだが、潜在的な問題
 - 緊急性は低い
+- code-simplifier: 不要な useCallback を削除
+- codex MCP: stale error state 問題を発見 → 別チケット作成 (260131-044032-uselogstream-clear-error-state)
