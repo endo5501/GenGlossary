@@ -174,9 +174,15 @@ class RunManager:
                 complete_run_if_not_cancelled(conn, run_id)
 
         except Exception as e:
+            # フルトレースバックをキャプチャしてデバッグ容易化
+            error_message = str(e)
+            error_traceback = traceback.format_exc()
             # ヘルパーメソッドで堅牢なステータス更新
-            self._update_failed_status(conn, run_id, str(e))
-            self._broadcast_log(run_id, {"run_id": run_id, "level": "error", ...})
+            self._update_failed_status(conn, run_id, error_message)
+            self._broadcast_log(run_id, {
+                "run_id": run_id, "level": "error",
+                "message": ..., "traceback": error_traceback
+            })
         finally:
             # Cleanup cancel event for this run
             with self._cancel_events_lock:
@@ -566,7 +572,7 @@ get_run_manager(db_path) → RunManager
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 
-**tests/runs/test_manager.py (39 tests)**
+**tests/runs/test_manager.py (40 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - per-run cancellation（各runに個別のキャンセルイベント）
 - cancellation race condition（キャンセルとステータス更新の競合防止）
@@ -593,4 +599,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 117 tests** (Repository 25 + Manager 39 + Executor 43 + API 10)
+**合計: 118 tests** (Repository 25 + Manager 40 + Executor 43 + API 10)

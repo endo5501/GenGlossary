@@ -594,6 +594,49 @@ class TestRunManagerPerRunCancellation:
                 manager._thread.join(timeout=2)
 
 
+class TestRunManagerErrorLogging:
+    """Tests for error logging with traceback."""
+
+    def test_error_log_includes_traceback(
+        self, manager: RunManager
+    ) -> None:
+        """エラーログにトレースバックが含まれることを確認"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Raise an exception with a specific traceback
+            def raise_error(*args, **kwargs):
+                raise RuntimeError("Test error message")
+
+            mock_executor.return_value.execute.side_effect = raise_error
+
+            # Subscribe to logs before starting run
+            queue = manager.register_subscriber(run_id=1)
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for thread to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Find the error log and check for traceback
+            error_log = None
+            while not queue.empty():
+                log = queue.get_nowait()
+                if log is not None and log.get("level") == "error":
+                    error_log = log
+                    break
+
+            assert error_log is not None, "Error log should be broadcast"
+            assert "Test error message" in error_log.get("message", "")
+            assert "traceback" in error_log, "Error log should include traceback field"
+            assert error_log["traceback"] is not None, "Traceback should not be None"
+            assert "RuntimeError" in error_log["traceback"], (
+                "Traceback should contain exception type"
+            )
+            assert "raise_error" in error_log["traceback"], (
+                "Traceback should contain the function that raised the error"
+            )
+
+
 class TestRunManagerConnectionErrorHandling:
     """Tests for connection error handling in _execute_run."""
 
