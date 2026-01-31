@@ -4,7 +4,7 @@ tags: [improvement, backend, reliability]
 description: "Database: Add retry/backoff for transient SQLite locks"
 created_at: "2026-01-31T15:20:00+09:00"
 started_at: 2026-01-31T14:15:00Z
-closed_at: null
+closed_at: 2026-01-31T14:23:31Z
 ---
 
 # Database: Add retry/backoff for transient SQLite locks
