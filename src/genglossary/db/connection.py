@@ -1,6 +1,7 @@
 """Database connection management."""
 
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -38,10 +39,14 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Iterator[None]:
-    """Context manager for database transactions.
+    """Context manager for database transactions with nested transaction support.
 
-    Commits the transaction on successful completion, or rolls back
-    if an exception occurs.
+    Supports nested transactions using SQLite SAVEPOINT mechanism.
+    - Top-level transaction: Uses COMMIT/ROLLBACK
+    - Nested transaction: Uses SAVEPOINT/RELEASE/ROLLBACK TO
+
+    On successful completion, commits the transaction (or releases savepoint).
+    On exception, rolls back changes (or rolls back to savepoint).
 
     Args:
         conn: Database connection to manage transaction for.
@@ -55,15 +60,28 @@ def transaction(conn: sqlite3.Connection) -> Iterator[None]:
     Example:
         with transaction(conn):
             create_document(conn, path, content, hash)
-            create_term(conn, "term1", "category")
+            with transaction(conn):  # Nested - uses SAVEPOINT
+                create_term(conn, "term1", "category")
             # Both operations committed together, or rolled back on error
     """
-    try:
-        yield
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+    if conn.in_transaction:
+        # Nested transaction - use SAVEPOINT
+        savepoint_name = f"sp_{uuid.uuid4().hex[:8]}"
+        conn.execute(f"SAVEPOINT {savepoint_name}")
+        try:
+            yield
+            conn.execute(f"RELEASE {savepoint_name}")
+        except Exception:
+            conn.execute(f"ROLLBACK TO {savepoint_name}")
+            raise
+    else:
+        # Top-level transaction
+        try:
+            yield
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
 
 @contextmanager
