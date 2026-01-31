@@ -211,10 +211,10 @@ def create_glossary_terms_batch(
         sqlite3.IntegrityError: If any term_name already exists.
         ValueError: If table_name is not allowed.
     """
+    _validate_table_name(table_name)
+
     if not terms:
         return
-
-    _validate_table_name(table_name)
 
     # Convert terms to format suitable for executemany
     data = [
