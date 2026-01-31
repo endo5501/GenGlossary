@@ -4,7 +4,7 @@ tags: [improvement, backend, executor, ux]
 description: "PipelineExecutor: Improve cancellation responsiveness during long operations"
 created_at: "2026-01-30T20:50:00Z"
 started_at: 2026-01-31T13:17:03Z
-closed_at: null
+closed_at: 2026-01-31T13:41:08Z
 ---
 
 # PipelineExecutor: Improve cancellation responsiveness
