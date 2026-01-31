@@ -6,6 +6,7 @@ import pytest
 
 from genglossary.db.document_repository import (
     create_document,
+    create_documents_batch,
     get_document,
     get_document_by_name,
     list_all_documents,
@@ -204,3 +205,64 @@ class TestGetDocumentByName:
         doc = get_document_by_name(db_with_schema, "nonexistent.txt")
 
         assert doc is None
+
+
+class TestCreateDocumentsBatch:
+    """Test create_documents_batch function."""
+
+    def test_create_documents_batch_inserts_all_documents(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_documents_batch inserts all documents."""
+        documents = [
+            ("doc1.txt", "Content 1", "hash1"),
+            ("doc2.txt", "Content 2", "hash2"),
+            ("doc3.txt", "Content 3", "hash3"),
+        ]
+
+        create_documents_batch(db_with_schema, documents)
+
+        all_docs = list_all_documents(db_with_schema)
+        assert len(all_docs) == 3
+        file_names = [d["file_name"] for d in all_docs]
+        assert "doc1.txt" in file_names
+        assert "doc2.txt" in file_names
+        assert "doc3.txt" in file_names
+
+    def test_create_documents_batch_stores_content_and_hash(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_documents_batch stores content and hash correctly."""
+        documents = [
+            ("doc1.txt", "Content 1", "hash1"),
+        ]
+
+        create_documents_batch(db_with_schema, documents)
+
+        doc = get_document_by_name(db_with_schema, "doc1.txt")
+        assert doc is not None
+        assert doc["content"] == "Content 1"
+        assert doc["content_hash"] == "hash1"
+
+    def test_create_documents_batch_with_empty_list(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_documents_batch handles empty list."""
+        create_documents_batch(db_with_schema, [])
+
+        all_docs = list_all_documents(db_with_schema)
+        assert len(all_docs) == 0
+
+    def test_create_documents_batch_unique_constraint(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_documents_batch raises error on duplicate file_name."""
+        import sqlite3 as sql
+
+        documents = [
+            ("doc1.txt", "Content 1", "hash1"),
+            ("doc1.txt", "Content 2", "hash2"),  # Duplicate
+        ]
+
+        with pytest.raises(sql.IntegrityError):
+            create_documents_batch(db_with_schema, documents)

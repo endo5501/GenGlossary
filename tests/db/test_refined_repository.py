@@ -6,6 +6,7 @@ import pytest
 
 from genglossary.db.refined_repository import (
     create_refined_term,
+    create_refined_terms_batch,
     delete_all_refined,
     get_refined_term,
     list_all_refined,
@@ -277,3 +278,73 @@ class TestDeleteAllRefined:
 
         terms = list_all_refined(db_with_schema)
         assert terms == []
+
+
+class TestCreateRefinedTermsBatch:
+    """Test create_refined_terms_batch function."""
+
+    def test_create_refined_terms_batch_inserts_all_terms(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_refined_terms_batch inserts all terms."""
+        occ1 = [TermOccurrence(document_path="/doc1.txt", line_number=1, context="C1")]
+        occ2 = [TermOccurrence(document_path="/doc2.txt", line_number=2, context="C2")]
+        occ3 = [TermOccurrence(document_path="/doc3.txt", line_number=3, context="C3")]
+
+        terms = [
+            ("量子コンピュータ", "定義1", 0.98, occ1),
+            ("量子ビット", "定義2", 0.95, occ2),
+            ("重ね合わせ", "定義3", 0.90, occ3),
+        ]
+
+        create_refined_terms_batch(db_with_schema, terms)
+
+        all_terms = list_all_refined(db_with_schema)
+        assert len(all_terms) == 3
+        term_names = [t["term_name"] for t in all_terms]
+        assert "量子コンピュータ" in term_names
+        assert "量子ビット" in term_names
+        assert "重ね合わせ" in term_names
+
+    def test_create_refined_terms_batch_stores_data_correctly(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_refined_terms_batch stores data correctly."""
+        occ = [TermOccurrence(document_path="/doc.txt", line_number=1, context="Ctx")]
+
+        terms = [
+            ("量子コンピュータ", "量子力学を利用したコンピュータ", 0.98, occ),
+        ]
+
+        create_refined_terms_batch(db_with_schema, terms)
+
+        term = get_refined_term(db_with_schema, 1)
+        assert term is not None
+        assert term["term_name"] == "量子コンピュータ"
+        assert term["definition"] == "量子力学を利用したコンピュータ"
+        assert term["confidence"] == 0.98
+        assert len(term["occurrences"]) == 1
+
+    def test_create_refined_terms_batch_with_empty_list(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_refined_terms_batch handles empty list."""
+        create_refined_terms_batch(db_with_schema, [])
+
+        all_terms = list_all_refined(db_with_schema)
+        assert len(all_terms) == 0
+
+    def test_create_refined_terms_batch_unique_constraint(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_refined_terms_batch raises error on duplicate term_name."""
+        import sqlite3 as sql
+
+        occ = [TermOccurrence(document_path="/doc.txt", line_number=1, context="Ctx")]
+        terms = [
+            ("量子コンピュータ", "定義1", 0.98, occ),
+            ("量子コンピュータ", "定義2", 0.95, occ),  # Duplicate
+        ]
+
+        with pytest.raises(sql.IntegrityError):
+            create_refined_terms_batch(db_with_schema, terms)

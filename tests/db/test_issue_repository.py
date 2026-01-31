@@ -6,6 +6,7 @@ import pytest
 
 from genglossary.db.issue_repository import (
     create_issue,
+    create_issues_batch,
     delete_all_issues,
     get_issue,
     list_all_issues,
@@ -156,3 +157,51 @@ class TestDeleteAllIssues:
 
         issues = list_all_issues(db_with_schema)
         assert issues == []
+
+
+class TestCreateIssuesBatch:
+    """Test create_issues_batch function."""
+
+    def test_create_issues_batch_inserts_all_issues(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_issues_batch inserts all issues."""
+        issues = [
+            ("量子コンピュータ", "unclear", "定義が曖昧です"),
+            ("量子ビット", "contradiction", "矛盾があります"),
+            ("重ね合わせ", "missing", "出典がありません"),
+        ]
+
+        create_issues_batch(db_with_schema, issues)
+
+        all_issues = list_all_issues(db_with_schema)
+        assert len(all_issues) == 3
+        term_names = [i["term_name"] for i in all_issues]
+        assert "量子コンピュータ" in term_names
+        assert "量子ビット" in term_names
+        assert "重ね合わせ" in term_names
+
+    def test_create_issues_batch_stores_data_correctly(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_issues_batch stores data correctly."""
+        issues = [
+            ("量子コンピュータ", "unclear", "定義が曖昧です"),
+        ]
+
+        create_issues_batch(db_with_schema, issues)
+
+        issue = get_issue(db_with_schema, 1)
+        assert issue is not None
+        assert issue["term_name"] == "量子コンピュータ"
+        assert issue["issue_type"] == "unclear"
+        assert issue["description"] == "定義が曖昧です"
+
+    def test_create_issues_batch_with_empty_list(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_issues_batch handles empty list."""
+        create_issues_batch(db_with_schema, [])
+
+        all_issues = list_all_issues(db_with_schema)
+        assert len(all_issues) == 0
