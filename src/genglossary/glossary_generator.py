@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import Any, Callable, cast
+from typing import Any, Callable, TypeGuard, cast
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,7 @@ from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
 from genglossary.types import ProgressCallback, TermProgressCallback
+from genglossary.utils.text import contains_cjk
 
 
 class DefinitionResponse(BaseModel):
@@ -22,20 +23,24 @@ class DefinitionResponse(BaseModel):
     confidence: confloat(ge=0.0, le=1.0)  # type: ignore[valid-type]
 
 
+def _is_str_list(terms: list[str] | list[ClassifiedTerm]) -> TypeGuard[list[str]]:
+    """Type guard to check if terms is a list of strings.
+
+    Args:
+        terms: The list to check (must be non-empty).
+
+    Returns:
+        True if terms is a list of strings.
+    """
+    return bool(terms) and isinstance(terms[0], str)
+
+
 class GlossaryGenerator:
     """Generates provisional glossary from terms and documents using LLM.
 
     This class handles the second step of the glossary generation pipeline:
     generating definitions for terms using context from documents.
     """
-
-    # Unicode ranges for CJK character detection
-    CJK_RANGES = [
-        ("\u4e00", "\u9fff"),  # CJK Unified Ideographs
-        ("\u3040", "\u309f"),  # Hiragana
-        ("\u30a0", "\u30ff"),  # Katakana
-        ("\uac00", "\ud7af"),  # Korean Hangul
-    ]
 
     # Maximum number of context occurrences to include in prompt
     MAX_CONTEXT_COUNT = 5
@@ -134,7 +139,11 @@ Output:
 
                 glossary.add_term(term)
             except Exception as e:
-                # Skip this term and continue with the next one
+                # Known exception types from LLM operations:
+                # - ValueError: JSON parsing/validation failures
+                # - httpx.HTTPError: Network/API failures (from LLM clients)
+                # We catch all exceptions to ensure the pipeline continues
+                # processing remaining terms even if one fails.
                 logger.warning(
                     "Failed to generate definition for '%s': %s",
                     term_name,
@@ -168,12 +177,11 @@ Output:
         if not terms:
             return terms
 
-        # If str list, filter out empty/whitespace-only terms
-        if isinstance(terms[0], str):
-            str_terms = cast(list[str], terms)
-            return [t for t in str_terms if t.strip()]
+        # Filter string list (TypeGuard narrows type to list[str])
+        if _is_str_list(terms):
+            return [t for t in terms if t.strip()]
 
-        # Filter ClassifiedTerm list
+        # Filter ClassifiedTerm list (cast needed for else branch)
         classified_terms = cast(list[ClassifiedTerm], terms)
         filtered = [t for t in classified_terms if t.term.strip()]
 
@@ -198,7 +206,7 @@ Output:
         """
         escaped_term = re.escape(term)
 
-        if self._contains_cjk(term):
+        if contains_cjk(term):
             return re.compile(escaped_term)
 
         # For ASCII terms, match if not preceded/followed by ASCII word characters
@@ -248,28 +256,6 @@ Output:
                     occurrences.append(self._create_occurrence(doc, line_num))
 
         return occurrences
-
-    def _is_cjk_char(self, char: str) -> bool:
-        """Check if a single character is CJK.
-
-        Args:
-            char: A single character to check.
-
-        Returns:
-            True if the character is in a CJK range.
-        """
-        return any(start <= char <= end for start, end in self.CJK_RANGES)
-
-    def _contains_cjk(self, text: str) -> bool:
-        """Check if text contains CJK (Chinese, Japanese, Korean) characters.
-
-        Args:
-            text: The text to check.
-
-        Returns:
-            True if the text contains CJK characters.
-        """
-        return any(self._is_cjk_char(char) for char in text)
 
     def _build_context_text(self, occurrences: list[TermOccurrence]) -> str:
         """Build context text from term occurrences.
