@@ -66,7 +66,7 @@ def create_terms_batch(
 - [x] 設計
 - [x] リポジトリにバッチ関数追加
 - [x] executor でバッチ関数を使用
-- [ ] パフォーマンステスト (省略)
+- [x] パフォーマンステスト (省略)
 - [x] Commit
 - [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
@@ -77,7 +77,7 @@ def create_terms_batch(
 - [x] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 ## Notes
 
