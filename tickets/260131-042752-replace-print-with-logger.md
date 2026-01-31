@@ -3,7 +3,7 @@ priority: 3
 tags: [refactoring, code-quality, backend, logging]
 description: "Replace print statements with logger.warning for consistent logging"
 created_at: "2026-01-31T04:27:52Z"
-started_at: null  # Do not modify manually
+started_at: 2026-01-31T14:03:33Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -48,19 +48,34 @@ logger.warning("Failed to review glossary: %s", e, exc_info=True)
 
 ## Tasks
 
-- [ ] `glossary_refiner.py` の `print` を `logger.warning` に置き換え
-- [ ] `glossary_reviewer.py` の `print` を `logger.warning` に置き換え
-- [ ] 他のファイルで同様の問題がないか確認
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `glossary_refiner.py` の `print` を `logger.warning` に置き換え
+- [x] `glossary_reviewer.py` の `print` を `logger.warning` に置き換え
+- [x] 他のファイルで同様の問題がないか確認
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md (不要 - アーキテクチャ変更なし)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
 - code-simplifier agent レビューで指摘（260131-safe-callback-extraction チケット作業中）
+
+## 完了サマリー
+
+### 変更内容
+- `glossary_refiner.py`: `print` → `logger.warning` (exc_info=True)
+- `glossary_reviewer.py`: `logging` インポート追加、`logger` 定義追加、`print` → `logger.warning`
+
+### コミット
+- f116885: Add tests for logger.warning usage
+- 6d67259: Replace print statements with logger.warning
+- e594ee0: Fix logger placement per PEP8 import ordering
+
+### レビュー結果
+- code-simplifier: 問題なし
+- codex MCP: PEP8スタイル指摘 → 修正済み
