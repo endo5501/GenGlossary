@@ -21,5 +21,13 @@ def batch_insert(
     Raises:
         sqlite3.IntegrityError: If any constraint is violated.
     """
-    # TODO: Implement
-    pass
+    if not data:
+        return
+
+    placeholders = ", ".join("?" * len(columns))
+    columns_str = ", ".join(columns)
+    cursor = conn.cursor()
+    cursor.executemany(
+        f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})",
+        data,
+    )
