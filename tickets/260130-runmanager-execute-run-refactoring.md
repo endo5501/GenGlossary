@@ -3,8 +3,8 @@ priority: 1
 tags: [improvement, backend, refactoring]
 description: "RunManager: _execute_run method refactoring and hardening"
 created_at: "2026-01-30T23:55:00+09:00"
-started_at: null
-closed_at: null
+started_at: 2026-01-30T15:07:01Z
+closed_at: 2026-01-31T00:36:50Z
 ---
 
 # RunManager: _execute_run method refactoring and hardening
@@ -63,16 +63,36 @@ fallback の `database_connection` がガードされていない。失敗する
 
 ## Tasks
 
-- [ ] ステータス更新ロジックをヘルパーメソッドに抽出
-- [ ] conn使用不能時のフォールバック処理追加
-- [ ] fallback接続のエラーハンドリング追加
-- [ ] テストの更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] ステータス更新ロジックをヘルパーメソッドに抽出
+- [x] conn使用不能時のフォールバック処理追加
+- [x] fallback接続のエラーハンドリング追加
+- [x] テストの更新
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## 実装サマリー
+
+### 追加されたヘルパーメソッド
+
+- `_try_update_status`: ステータス更新を試行し、成功時にTrueを返す。失敗時はwarningログをブロードキャスト
+- `_update_failed_status`: フォールバック接続付きでステータスを 'failed' に更新
+
+### 追加されたテスト
+
+- `test_fallback_to_new_connection_when_conn_update_fails`
+- `test_error_log_broadcast_even_when_fallback_connection_fails`
+- `test_completion_signal_sent_even_when_fallback_connection_fails`
+- `test_warning_log_broadcast_when_status_update_fails`
+
+### 作成されたフォローアップチケット
+
+- 260131-runmanager-status-misclassification (priority 2)
+- 260131-sqlite-retry-backoff (priority 3)
+- 260131-runmanager-start-run-race (priority 4)
