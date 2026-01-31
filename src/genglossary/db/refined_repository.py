@@ -1,6 +1,7 @@
 """Repository for glossary_refined table CRUD operations."""
 
 import sqlite3
+from collections.abc import Sequence
 
 from genglossary.db.glossary_helpers import (
     create_glossary_term,
@@ -97,7 +98,7 @@ def delete_all_refined(conn: sqlite3.Connection) -> None:
 
 def create_refined_terms_batch(
     conn: sqlite3.Connection,
-    terms: list[tuple[str, str, float, list[TermOccurrence]]],
+    terms: Sequence[tuple[str, str, float, list[TermOccurrence]]],
 ) -> None:
     """Create multiple refined glossary terms in a batch.
 

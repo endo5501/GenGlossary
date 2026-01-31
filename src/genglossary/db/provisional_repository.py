@@ -1,6 +1,7 @@
 """Repository for glossary_provisional table CRUD operations."""
 
 import sqlite3
+from collections.abc import Sequence
 
 from genglossary.db.glossary_helpers import (
     create_glossary_term,
@@ -97,7 +98,7 @@ def delete_all_provisional(conn: sqlite3.Connection) -> None:
 
 def create_provisional_terms_batch(
     conn: sqlite3.Connection,
-    terms: list[tuple[str, str, float, list[TermOccurrence]]],
+    terms: Sequence[tuple[str, str, float, list[TermOccurrence]]],
 ) -> None:
     """Create multiple provisional glossary terms in a batch.
 

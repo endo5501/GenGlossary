@@ -1,7 +1,10 @@
 """Repository for glossary_issues table CRUD operations."""
 
 import sqlite3
+from collections.abc import Sequence
 from typing import cast
+
+from genglossary.db.db_helpers import batch_insert
 
 
 def create_issue(
@@ -78,7 +81,7 @@ def delete_all_issues(conn: sqlite3.Connection) -> None:
 
 def create_issues_batch(
     conn: sqlite3.Connection,
-    issues: list[tuple[str, str, str]],
+    issues: Sequence[tuple[str, str, str]],
 ) -> None:
     """Create multiple issue records in a batch.
 
@@ -86,15 +89,6 @@ def create_issues_batch(
         conn: Database connection.
         issues: List of tuples (term_name, issue_type, description).
     """
-    if not issues:
-        return
-
-    cursor = conn.cursor()
-    cursor.executemany(
-        """
-        INSERT INTO glossary_issues
-        (term_name, issue_type, description)
-        VALUES (?, ?, ?)
-        """,
-        issues,
+    batch_insert(
+        conn, "glossary_issues", ["term_name", "issue_type", "description"], issues
     )

@@ -1,7 +1,10 @@
 """Repository for documents table CRUD operations."""
 
 import sqlite3
+from collections.abc import Sequence
 from typing import cast
+
+from genglossary.db.db_helpers import batch_insert
 
 
 def create_document(
@@ -105,7 +108,7 @@ def delete_all_documents(conn: sqlite3.Connection) -> None:
 
 def create_documents_batch(
     conn: sqlite3.Connection,
-    documents: list[tuple[str, str, str]],
+    documents: Sequence[tuple[str, str, str]],
 ) -> None:
     """Create multiple document records in a batch.
 
@@ -116,14 +119,6 @@ def create_documents_batch(
     Raises:
         sqlite3.IntegrityError: If any file_name already exists.
     """
-    if not documents:
-        return
-
-    cursor = conn.cursor()
-    cursor.executemany(
-        """
-        INSERT INTO documents (file_name, content, content_hash)
-        VALUES (?, ?, ?)
-        """,
-        documents,
+    batch_insert(
+        conn, "documents", ["file_name", "content", "content_hash"], documents
     )
