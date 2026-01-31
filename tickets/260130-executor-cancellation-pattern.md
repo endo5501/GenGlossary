@@ -4,7 +4,7 @@ tags: [improvement, backend, executor, refactoring]
 description: "PipelineExecutor: Reduce duplicated cancellation check pattern"
 created_at: "2026-01-30T20:50:00Z"
 started_at: 2026-01-31T12:58:58Z
-closed_at: null
+closed_at: 2026-01-31T13:15:16Z
 ---
 
 # PipelineExecutor: Reduce duplicated cancellation check pattern
