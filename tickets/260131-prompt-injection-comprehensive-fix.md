@@ -4,7 +4,7 @@ tags: [security, improvement]
 description: "Comprehensive prompt injection prevention across LLM prompt builders"
 created_at: "2026-01-31T10:45:00+09:00"
 started_at: 2026-01-31T02:02:29Z
-closed_at: null
+closed_at: 2026-01-31T03:54:38Z
 ---
 
 # Comprehensive prompt injection prevention across LLM prompt builders
