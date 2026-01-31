@@ -4,7 +4,7 @@ tags: [improvement, backend, refactoring]
 description: "RunManager: _execute_run method refactoring and hardening"
 created_at: "2026-01-30T23:55:00+09:00"
 started_at: 2026-01-30T15:07:01Z
-closed_at: null
+closed_at: 2026-01-31T00:36:50Z
 ---
 
 # RunManager: _execute_run method refactoring and hardening
