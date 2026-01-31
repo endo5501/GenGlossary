@@ -1,6 +1,7 @@
 """Tests for GlossaryGenerator - Step 2: Generate provisional glossary."""
 
 import re
+from typing import Any
 from unittest.mock import MagicMock, call
 
 import pytest
@@ -893,6 +894,51 @@ class TestGlossaryGeneratorCallbackExceptionHandling:
     def mock_llm_client(self) -> MagicMock:
         """Create a mock LLM client."""
         return MagicMock(spec=BaseLLMClient)
+
+    def test_safe_callback_logs_debug_when_callback_raises(
+        self,
+        mock_llm_client: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that _safe_callback logs debug when callback raises an exception."""
+        import logging
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+
+        def failing_callback(*args: Any) -> None:
+            raise RuntimeError("Callback exploded")
+
+        with caplog.at_level(logging.DEBUG):
+            generator._safe_callback(failing_callback, 1, 2, 3)
+
+        # Should have logged a debug message
+        assert len(caplog.records) >= 1
+        debug_record = caplog.records[0]
+        assert debug_record.levelno == logging.DEBUG
+        assert "Callback exploded" in debug_record.message
+        assert "glossary_generator" in debug_record.name
+
+    def test_safe_callback_logs_debug_with_exc_info(
+        self,
+        mock_llm_client: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that _safe_callback logs with exc_info for full traceback."""
+        import logging
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+
+        def failing_callback(*args: Any) -> None:
+            raise ValueError("Test error with traceback")
+
+        with caplog.at_level(logging.DEBUG):
+            generator._safe_callback(failing_callback, "arg1")
+
+        # Should have logged with exc_info (traceback available)
+        assert len(caplog.records) >= 1
+        debug_record = caplog.records[0]
+        assert debug_record.exc_info is not None
+        assert debug_record.exc_info[0] is ValueError
 
     @pytest.fixture
     def sample_document(self) -> Document:
