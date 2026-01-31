@@ -73,6 +73,7 @@ GenGlossary/
 │   ├── config.py                 # 設定管理
 │   ├── utils/                    # ユーティリティモジュール
 │   │   ├── __init__.py
+│   │   ├── callback.py           # コールバック安全呼び出し
 │   │   ├── hash.py               # ハッシュユーティリティ
 │   │   ├── token_counter.py      # トークンカウント
 │   │   └── text.py               # テキスト処理（CJK検出等）
@@ -127,6 +128,7 @@ GenGlossary/
 │   ├── test_cli_db.py           # DB CLI統合テスト
 │   ├── test_cli_db_regenerate.py # regenerateコマンドテスト
 │   ├── test_cli_project.py      # プロジェクトCLI統合テスト
+│   ├── test_callback.py         # コールバックユーティリティテスト
 │   ├── test_text_utils.py       # テキストユーティリティテスト
 │   ├── test_token_counter.py    # トークンカウントテスト
 │   └── output/

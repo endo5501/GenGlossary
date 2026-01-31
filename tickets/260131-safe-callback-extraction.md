@@ -3,8 +3,8 @@ priority: 1
 tags: [refactoring, code-quality, backend]
 description: "Extract _safe_callback to common utility module"
 created_at: "2026-01-31T04:10:00Z"
-started_at: null
-closed_at: null
+started_at: 2026-01-31T04:20:22Z
+closed_at: 2026-01-31T04:33:03Z
 ---
 
 # Extract _safe_callback to common utility module
@@ -46,19 +46,21 @@ def safe_callback(callback: Callable[..., None] | None, *args: Any) -> None:
 
 ## Tasks
 
-- [ ] `src/genglossary/utils/callback.py` を作成
-- [ ] テストを追加
-- [ ] `glossary_generator.py` を更新
-- [ ] `glossary_refiner.py` を更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `src/genglossary/utils/callback.py` を作成
+- [x] テストを追加
+- [x] `glossary_generator.py` を更新
+- [x] `glossary_refiner.py` を更新
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+  - Created: `260131-042721-term-extractor-safe-callback.md` (TermExtractor safe_callback consistency)
+  - Created: `260131-042752-replace-print-with-logger.md` (Replace print with logger.warning)
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
