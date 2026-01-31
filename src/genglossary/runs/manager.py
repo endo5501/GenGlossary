@@ -366,10 +366,26 @@ class RunManager:
         conn: sqlite3.Connection,
         run_id: int,
     ) -> bool:
-        """Try to update run status to cancelled, return True if successful."""
+        """Try to update run status to cancelled.
+
+        Returns:
+            True if cancelled or already in terminal state (no fallback needed).
+            False if failed with exception (fallback needed).
+        """
         try:
             with transaction(conn):
-                cancel_run(conn, run_id)
+                rows_updated = cancel_run(conn, run_id)
+            if rows_updated == 0:
+                # Run was already in terminal state - this is a no-op, not a failure
+                self._broadcast_log(
+                    run_id,
+                    {
+                        "run_id": run_id,
+                        "level": "info",
+                        "message": "Cancel skipped: run was already in terminal state",
+                    },
+                )
+            # Both success and no-op return True (no fallback needed)
             return True
         except Exception as e:
             self._broadcast_log(
@@ -387,17 +403,18 @@ class RunManager:
         conn: sqlite3.Connection,
         run_id: int,
     ) -> bool:
-        """Try to update run status to completed, return True if successful.
+        """Try to update run status to completed.
 
         Returns:
-            True if status was updated to completed.
-            False if update failed (exception) or was no-op (already cancelled).
+            True if completed or no-op (no fallback needed).
+            False if failed with exception (fallback needed).
         """
         try:
             with transaction(conn):
                 was_updated = complete_run_if_not_cancelled(conn, run_id)
             if not was_updated:
-                # Run was already cancelled/failed, completion didn't apply
+                # Run was already cancelled/failed - this is a no-op, not a failure
+                # No fallback needed since the terminal state is already set
                 self._broadcast_log(
                     run_id,
                     {
@@ -407,7 +424,8 @@ class RunManager:
                         "cancelled or in terminal state",
                     },
                 )
-            return was_updated
+            # Both success and no-op return True (no fallback needed)
+            return True
         except Exception as e:
             self._broadcast_log(
                 run_id,
@@ -419,7 +437,7 @@ class RunManager:
             )
             return False
 
-    def _try_update_status(
+    def _try_failed_status(
         self,
         conn: sqlite3.Connection,
         run_id: int,
@@ -466,6 +484,6 @@ class RunManager:
         self._try_status_with_fallback(
             conn,
             run_id,
-            lambda c, rid: self._try_update_status(c, rid, error_message),
+            lambda c, rid: self._try_failed_status(c, rid, error_message),
             "failed",
         )

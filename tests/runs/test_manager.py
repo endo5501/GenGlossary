@@ -1132,6 +1132,151 @@ class TestRunManagerSubscriberCleanup:
             )
 
 
+class TestRunManagerStatusUpdateFallbackLogic:
+    """Tests for improved status update fallback logic.
+
+    Issues addressed:
+    1. _try_complete_status returns False for both no-op (already terminal) and
+       failure (exception), causing unnecessary fallback for no-op case.
+    2. _try_status_with_fallback doesn't catch exceptions from updater,
+       preventing fallback when updater throws.
+    3. _try_cancel_status returns True even when cancel_run didn't update rows.
+    """
+
+    def test_complete_status_no_op_does_not_trigger_fallback(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """complete_run_if_not_cancelledがFalseを返した場合（no-op）、
+        フォールバックは試行されない"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            # Track how many times complete_run_if_not_cancelled is called
+            call_count = {"value": 0}
+
+            original_complete_run = __import__(
+                "genglossary.db.runs_repository", fromlist=["complete_run_if_not_cancelled"]
+            ).complete_run_if_not_cancelled
+
+            def counting_complete_run(conn, run_id):
+                call_count["value"] += 1
+                # Always return False to simulate no-op (already cancelled)
+                return False
+
+            with patch(
+                "genglossary.runs.manager.complete_run_if_not_cancelled",
+                side_effect=counting_complete_run,
+            ):
+                run_id = manager.start_run(scope="full")
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # complete_run_if_not_cancelled should be called only once
+                # (no fallback retry for no-op case)
+                assert call_count["value"] == 1, (
+                    f"Expected 1 call to complete_run_if_not_cancelled (no fallback for no-op), "
+                    f"but got {call_count['value']} calls"
+                )
+
+    def test_status_updater_exception_triggers_fallback(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """status_updaterが例外を投げた場合、フォールバックが試行される"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            # Track calls to complete_run_if_not_cancelled
+            call_count = {"value": 0}
+
+            original_complete_run = __import__(
+                "genglossary.db.runs_repository", fromlist=["complete_run_if_not_cancelled"]
+            ).complete_run_if_not_cancelled
+
+            def failing_then_succeeding_complete(conn, run_id):
+                call_count["value"] += 1
+                if call_count["value"] == 1:
+                    # Simulate updater throwing exception (not caught internally)
+                    raise sqlite3.OperationalError("database is locked")
+                return original_complete_run(conn, run_id)
+
+            with patch(
+                "genglossary.runs.manager.complete_run_if_not_cancelled",
+                side_effect=failing_then_succeeding_complete,
+            ):
+                run_id = manager.start_run(scope="full")
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Should have been called twice: once failed, once fallback succeeded
+                assert call_count["value"] == 2, (
+                    f"Expected 2 calls (failure + fallback), got {call_count['value']}"
+                )
+
+                # Status should be completed via fallback
+                run = get_run(project_db, run_id)
+                assert run is not None
+                assert run["status"] == "completed"
+
+    def test_cancel_status_no_op_logged_and_no_fallback(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """cancel_runが0行を返した場合（no-op）、ログに記録されフォールバックは試行されない"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor that waits for cancellation
+            def cancellable_execute(conn, scope, context, doc_root="."):
+                for _ in range(50):
+                    if context.cancel_event.is_set():
+                        return
+                    time.sleep(0.1)
+
+            mock_executor.return_value.execute.side_effect = cancellable_execute
+
+            # Track how many times cancel_run is called
+            call_count = {"value": 0}
+
+            def counting_cancel_run(conn, run_id):
+                call_count["value"] += 1
+                # Always return 0 rows updated (no-op - already terminal)
+                return 0
+
+            with patch(
+                "genglossary.runs.manager.cancel_run",
+                side_effect=counting_cancel_run,
+            ):
+                # Subscribe to logs
+                queue = manager.register_subscriber(run_id=1)
+
+                run_id = manager.start_run(scope="full")
+                time.sleep(0.1)  # Allow thread to start
+
+                manager.cancel_run(run_id)
+
+                # Wait for thread to complete
+                if manager._thread:
+                    manager._thread.join(timeout=2)
+
+                # Should only be called once (no fallback for no-op)
+                assert call_count["value"] == 1, (
+                    f"Expected 1 call (no fallback for no-op), got {call_count['value']}"
+                )
+
+                # Check that info log was broadcast about skipped cancel
+                logs = []
+                while not queue.empty():
+                    log = queue.get_nowait()
+                    if log is not None and not log.get("complete"):
+                        logs.append(log)
+
+                assert any(
+                    "Cancel skipped" in log.get("message", "") and log.get("level") == "info"
+                    for log in logs
+                ), "Info log about skipped cancel should be broadcast"
+
+
 class TestRunManagerStatusMisclassification:
     """Tests for status misclassification bug fix.
 
