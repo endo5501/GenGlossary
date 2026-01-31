@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { LogMessage } from '../types'
 import { getBaseUrl } from '../client'
 import { useLogStore } from '../../store/logStore'
@@ -40,8 +40,6 @@ export function useLogStream(
   // This avoids stale closure issues and prevents unnecessary reconnections
   const onCompleteRef = useRef(options?.onComplete)
   onCompleteRef.current = options?.onComplete
-
-  const handleClearLogs = useCallback(() => clearLogs(), [clearLogs])
 
   // Update context when projectId or runId changes (clears logs when either changes)
   useEffect(() => {
@@ -88,5 +86,5 @@ export function useLogStream(
     }
   }, [projectId, runId, addLog])
 
-  return { logs, isConnected, error, clearLogs: handleClearLogs }
+  return { logs, isConnected, error, clearLogs }
 }
