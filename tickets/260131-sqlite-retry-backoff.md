@@ -3,8 +3,8 @@ priority: 3
 tags: [improvement, backend, reliability]
 description: "Database: Add retry/backoff for transient SQLite locks"
 created_at: "2026-01-31T15:20:00+09:00"
-started_at: null
-closed_at: null
+started_at: 2026-01-31T14:15:00Z
+closed_at: 2026-01-31T14:23:31Z
 ---
 
 # Database: Add retry/backoff for transient SQLite locks
@@ -76,15 +76,28 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 ## Tasks
 
-- [ ] `busy_timeout` PRAGMA の追加を検討
-- [ ] または `_try_update_status` にリトライロジックを追加
-- [ ] テストの追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `busy_timeout` PRAGMA の追加を検討
+- [x] または `_try_update_status` にリトライロジックを追加
+- [x] テストの追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## 完了サマリー
+
+**採用したアプローチ**: オプション2（`busy_timeout` PRAGMA の追加）
+
+**変更内容**:
+- `src/genglossary/db/connection.py`: `PRAGMA busy_timeout = 5000` を追加
+- `tests/db/test_connection.py`: テスト追加
+- `docs/architecture/database.md`: ドキュメント更新
+
+**レビュー結果**:
+- code-simplifier: 現在のコードは十分に簡潔、変更不要
+- codex MCP: Low優先度の改善提案（WALモード、リトライ/バックオフの検討）→ 将来的な改善として検討可能

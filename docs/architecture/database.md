@@ -27,9 +27,10 @@ from typing import Iterator
 
 def get_connection(db_path: str) -> sqlite3.Connection:
     """データベース接続を取得"""
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.execute("PRAGMA busy_timeout = 5000")  # 一時的なロック対策 (5秒待機)
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.row_factory = sqlite3.Row
     return conn
 
 @contextmanager
