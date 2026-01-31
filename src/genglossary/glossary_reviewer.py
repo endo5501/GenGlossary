@@ -6,11 +6,11 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-logger = logging.getLogger(__name__)
-
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.glossary import Glossary, GlossaryIssue, IssueType
 from genglossary.utils.prompt_escape import wrap_user_data
+
+logger = logging.getLogger(__name__)
 
 
 class RawIssue(BaseModel):
