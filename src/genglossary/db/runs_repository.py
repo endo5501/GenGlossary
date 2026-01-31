@@ -176,29 +176,16 @@ def update_run_status_if_active(
         Number of rows updated (0 if run was already in terminal state or not found).
     """
     cursor = conn.cursor()
-
-    if error_message is not None:
-        cursor.execute(
-            """
-            UPDATE runs
-            SET status = ?,
-                finished_at = datetime('now'),
-                error_message = ?
-            WHERE id = ? AND status IN ('pending', 'running')
-            """,
-            (status, error_message, run_id),
-        )
-    else:
-        cursor.execute(
-            """
-            UPDATE runs
-            SET status = ?,
-                finished_at = datetime('now')
-            WHERE id = ? AND status IN ('pending', 'running')
-            """,
-            (status, run_id),
-        )
-
+    cursor.execute(
+        """
+        UPDATE runs
+        SET status = ?,
+            finished_at = datetime('now'),
+            error_message = ?
+        WHERE id = ? AND status IN ('pending', 'running')
+        """,
+        (status, error_message, run_id),
+    )
     return cursor.rowcount
 
 
