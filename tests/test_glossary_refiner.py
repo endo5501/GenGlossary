@@ -1,5 +1,6 @@
 """Tests for GlossaryRefiner - Step 4: Refine glossary based on issues."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -911,3 +912,49 @@ class TestGlossaryRefinerPromptInjectionPrevention:
         escaped_tags = prompt.count("&lt;/refinement&gt;")
         assert closing_tags == 1, f"Expected 1 real </refinement> tag, found {closing_tags}"
         assert escaped_tags == 1, f"Expected 1 escaped tag, found {escaped_tags}"
+
+
+class TestGlossaryRefinerLogging:
+    """Test suite for GlossaryRefiner logging behavior."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def sample_documents(self) -> list[Document]:
+        """Create sample documents for testing."""
+        return [
+            Document(
+                file_path="/test.md",
+                content="Term1 content here.",
+            )
+        ]
+
+    def test_refine_logs_warning_on_llm_exception(
+        self,
+        mock_llm_client: MagicMock,
+        sample_documents: list[Document],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test that refine logs a warning when LLM call raises an exception."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="TestTerm", definition="Test definition", confidence=0.8))
+
+        issues = [
+            GlossaryIssue(term_name="TestTerm", issue_type="unclear", description="Issue"),
+        ]
+
+        mock_llm_client.generate_structured.side_effect = RuntimeError("LLM API error")
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+
+        with caplog.at_level(logging.WARNING, logger="genglossary.glossary_refiner"):
+            refiner.refine(glossary, issues, sample_documents)
+
+        # Should log warning instead of print
+        assert len(caplog.records) == 1
+        assert caplog.records[0].levelno == logging.WARNING
+        assert "Failed to refine 'TestTerm'" in caplog.text
+        assert "LLM API error" in caplog.text
