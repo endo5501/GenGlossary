@@ -4,6 +4,7 @@ import sqlite3
 
 from genglossary.db.glossary_helpers import (
     create_glossary_term,
+    create_glossary_terms_batch,
     delete_all_glossary_terms,
     get_glossary_term,
     list_all_glossary_terms,
@@ -92,3 +93,19 @@ def delete_all_refined(conn: sqlite3.Connection) -> None:
         conn: Database connection.
     """
     delete_all_glossary_terms(conn, "glossary_refined")
+
+
+def create_refined_terms_batch(
+    conn: sqlite3.Connection,
+    terms: list[tuple[str, str, float, list[TermOccurrence]]],
+) -> None:
+    """Create multiple refined glossary terms in a batch.
+
+    Args:
+        conn: Database connection.
+        terms: List of tuples (term_name, definition, confidence, occurrences).
+
+    Raises:
+        sqlite3.IntegrityError: If any term_name already exists.
+    """
+    create_glossary_terms_batch(conn, "glossary_refined", terms)

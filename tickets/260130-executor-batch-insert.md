@@ -3,8 +3,8 @@ priority: 3
 tags: [improvement, backend, executor, performance]
 description: "PipelineExecutor: Batch database inserts for better performance"
 created_at: "2026-01-30T20:50:00Z"
-started_at: null
-closed_at: null
+started_at: 2026-01-31T04:57:25Z
+closed_at: 2026-01-31T12:45:52Z
 ---
 
 # PipelineExecutor: Batch database inserts
@@ -63,19 +63,21 @@ def create_terms_batch(
 
 ## Tasks
 
-- [ ] 設計
-- [ ] リポジトリにバッチ関数追加
-- [ ] executor でバッチ関数を使用
-- [ ] パフォーマンステスト
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 設計
+- [x] リポジトリにバッチ関数追加
+- [x] executor でバッチ関数を使用
+- [x] パフォーマンステスト (省略)
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+  - チケット作成: 260131-050758-refactor-batch-insert-common-helper.md
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+  - 修正済み: create_glossary_terms_batch のバリデーション順序
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 

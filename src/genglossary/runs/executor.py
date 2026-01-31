@@ -5,23 +5,23 @@ import sqlite3
 from dataclasses import dataclass
 from enum import Enum
 from threading import Event
-from typing import Any, Callable
+from typing import Callable
 
 from genglossary.db.connection import transaction
 from genglossary.db.document_repository import (
-    create_document,
+    create_documents_batch,
     delete_all_documents,
     list_all_documents,
 )
-from genglossary.db.issue_repository import create_issue, delete_all_issues
+from genglossary.db.issue_repository import create_issues_batch, delete_all_issues
 from genglossary.db.models import GlossaryTermRow
 from genglossary.db.provisional_repository import (
-    create_provisional_term,
+    create_provisional_terms_batch,
     delete_all_provisional,
     list_all_provisional,
 )
-from genglossary.db.refined_repository import create_refined_term, delete_all_refined
-from genglossary.db.term_repository import create_term, delete_all_terms, list_all_terms
+from genglossary.db.refined_repository import create_refined_terms_batch, delete_all_refined
+from genglossary.db.term_repository import create_terms_batch, delete_all_terms, list_all_terms
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.glossary_refiner import GlossaryRefiner
@@ -177,22 +177,25 @@ class PipelineExecutor:
         return glossary
 
     @staticmethod
-    def _save_glossary_terms(
+    def _save_glossary_terms_batch(
         conn: sqlite3.Connection,
         glossary: Glossary,
-        save_func: Callable[
-            [sqlite3.Connection, str, str, float, list[TermOccurrence]], Any
+        batch_func: Callable[
+            [sqlite3.Connection, list[tuple[str, str, float, list[TermOccurrence]]]], None
         ],
     ) -> None:
-        """Save glossary terms to database using the provided save function.
+        """Save glossary terms to database using batch insert.
 
         Args:
             conn: Project database connection.
             glossary: Glossary to save.
-            save_func: Function to save individual terms (e.g., create_provisional_term).
+            batch_func: Batch function (e.g., create_provisional_terms_batch).
         """
-        for term in glossary.terms.values():
-            save_func(conn, term.name, term.definition, term.confidence, term.occurrences)
+        terms_data = [
+            (term.name, term.definition, term.confidence, term.occurrences)
+            for term in glossary.terms.values()
+        ]
+        batch_func(conn, terms_data)
 
     def _create_progress_callback(
         self,
@@ -299,17 +302,22 @@ class PipelineExecutor:
             documents = loader.load_directory(doc_root)
 
             if documents:
-                # Save loaded documents to DB
+                # Save loaded documents to DB using batch insert
                 # Use relative path from doc_root as file_name to:
                 # - Avoid same basename collisions (e.g., docs/README.md vs examples/README.md)
                 # - Prevent server path leakage via API/logs (security)
                 # - Improve portability when moving DB between environments
                 with transaction(conn):
                     delete_all_documents(conn)
-                    for document in documents:
-                        content_hash = compute_content_hash(document.content)
-                        relative_path = os.path.relpath(document.file_path, doc_root)
-                        create_document(conn, relative_path, document.content, content_hash)
+                    docs_data = [
+                        (
+                            os.path.relpath(document.file_path, doc_root),
+                            document.content,
+                            compute_content_hash(document.content),
+                        )
+                        for document in documents
+                    ]
+                    create_documents_batch(conn, docs_data)
                 return documents
 
         # No documents found
@@ -354,14 +362,13 @@ class PipelineExecutor:
             seen_terms.add(classified_term.term)
             unique_terms.append(classified_term)
 
-        # Save all unique terms in a single transaction
+        # Save all unique terms in a single transaction using batch insert
         with transaction(conn):
-            for classified_term in unique_terms:
-                create_term(
-                    conn,
-                    classified_term.term,
-                    category=classified_term.category.value,
-                )
+            terms_data = [
+                (classified_term.term, classified_term.category.value)
+                for classified_term in unique_terms
+            ]
+            create_terms_batch(conn, terms_data)
 
         self._log(context, "info", f"Extracted {len(unique_terms)} unique terms (from {len(extracted_terms)} total)")
 
@@ -409,9 +416,9 @@ class PipelineExecutor:
             extracted_terms, documents, term_progress_callback=progress_cb
         )
 
-        # Save provisional glossary
+        # Save provisional glossary using batch insert
         with transaction(conn):
-            self._save_glossary_terms(conn, glossary, create_provisional_term)
+            self._save_glossary_terms_batch(conn, glossary, create_provisional_terms_batch)
 
         self._log(context, "info", f"Generated {len(glossary.terms)} terms")
 
@@ -463,15 +470,13 @@ class PipelineExecutor:
         reviewer = GlossaryReviewer(llm_client=self._llm_client)
         issues = reviewer.review(glossary)
 
-        # Save issues
+        # Save issues using batch insert
         with transaction(conn):
-            for issue in issues:
-                create_issue(
-                    conn,
-                    issue.term_name,
-                    issue.issue_type,
-                    issue.description,
-                )
+            issues_data = [
+                (issue.term_name, issue.issue_type, issue.description)
+                for issue in issues
+            ]
+            create_issues_batch(conn, issues_data)
 
         self._log(context, "info", f"Found {len(issues)} issues")
 
@@ -494,9 +499,9 @@ class PipelineExecutor:
         if self._check_cancellation(context):
             return
 
-        # Save refined glossary (either refined or copied from provisional)
+        # Save refined glossary (either refined or copied from provisional) using batch insert
         with transaction(conn):
-            self._save_glossary_terms(conn, glossary, create_refined_term)
+            self._save_glossary_terms_batch(conn, glossary, create_refined_terms_batch)
 
     def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: str) -> None:
         """Clear relevant tables before execution.

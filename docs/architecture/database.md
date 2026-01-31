@@ -168,6 +168,20 @@ def delete_document(conn: sqlite3.Connection, document_id: int) -> None:
 def delete_all_documents(conn: sqlite3.Connection) -> None:
     """全ドキュメントを削除"""
     ...
+
+def create_documents_batch(
+    conn: sqlite3.Connection,
+    documents: list[tuple[str, str, str]]
+) -> None:
+    """複数のドキュメントを一括作成（パフォーマンス最適化）
+
+    Args:
+        documents: (file_name, content, content_hash) のタプルのリスト
+
+    Raises:
+        sqlite3.IntegrityError: file_nameが既に存在する場合
+    """
+    ...
 ```
 
 ## term_repository.py
@@ -207,6 +221,20 @@ def delete_term(conn: sqlite3.Connection, term_id: int) -> None:
 
 def delete_all_terms(conn: sqlite3.Connection) -> None:
     """全ての用語を削除"""
+    ...
+
+def create_terms_batch(
+    conn: sqlite3.Connection,
+    terms: Sequence[tuple[str, str | None]]
+) -> None:
+    """複数の用語を一括作成（パフォーマンス最適化）
+
+    Args:
+        terms: (term_text, category) のタプルのシーケンス
+
+    Raises:
+        sqlite3.IntegrityError: term_textが既に存在する場合
+    """
     ...
 ```
 
@@ -307,6 +335,23 @@ def delete_all_glossary_terms(
         ValueError: table_nameが許可されていない場合
     """
     ...
+
+def create_glossary_terms_batch(
+    conn: sqlite3.Connection,
+    table_name: GlossaryTable,
+    terms: list[tuple[str, str, float, list[TermOccurrence]]]
+) -> None:
+    """複数の用語集エントリを一括作成（パフォーマンス最適化）
+
+    Args:
+        table_name: "glossary_provisional" または "glossary_refined"
+        terms: (term_name, definition, confidence, occurrences) のタプルのリスト
+
+    Raises:
+        ValueError: table_nameが許可されていない場合
+        sqlite3.IntegrityError: term_nameが既に存在する場合
+    """
+    ...
 ```
 
 ## provisional_repository.py / refined_repository.py
@@ -373,6 +418,22 @@ def update_provisional_term(
 def delete_all_provisional(conn: sqlite3.Connection) -> None:
     """全ての暫定用語集エントリを削除"""
     delete_all_glossary_terms(conn, "glossary_provisional")
+
+def create_provisional_terms_batch(
+    conn: sqlite3.Connection,
+    terms: list[tuple[str, str, float, list[TermOccurrence]]]
+) -> None:
+    """複数の暫定用語集エントリを一括作成（パフォーマンス最適化）
+
+    Args:
+        terms: (term_name, definition, confidence, occurrences) のタプルのリスト
+
+    Raises:
+        sqlite3.IntegrityError: term_nameが既に存在する場合
+    """
+    create_glossary_terms_batch(conn, "glossary_provisional", terms)
+
+# refined_repository.py にも同様の create_refined_terms_batch 関数あり
 ```
 
 ## プロジェクト管理システム

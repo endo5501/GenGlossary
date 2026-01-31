@@ -101,3 +101,29 @@ def delete_all_documents(conn: sqlite3.Connection) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM documents")
+
+
+def create_documents_batch(
+    conn: sqlite3.Connection,
+    documents: list[tuple[str, str, str]],
+) -> None:
+    """Create multiple document records in a batch.
+
+    Args:
+        conn: Database connection.
+        documents: List of tuples (file_name, content, content_hash).
+
+    Raises:
+        sqlite3.IntegrityError: If any file_name already exists.
+    """
+    if not documents:
+        return
+
+    cursor = conn.cursor()
+    cursor.executemany(
+        """
+        INSERT INTO documents (file_name, content, content_hash)
+        VALUES (?, ?, ?)
+        """,
+        documents,
+    )

@@ -7,6 +7,7 @@ import pytest
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import (
     create_term,
+    create_terms_batch,
     delete_all_terms,
     delete_term,
     get_term,
@@ -272,3 +273,63 @@ class TestDeleteAllTerms:
         delete_all_terms(db_with_schema)  # Should not raise
 
         assert len(list_all_terms(db_with_schema)) == 0
+
+
+class TestCreateTermsBatch:
+    """Test create_terms_batch function."""
+
+    def test_create_terms_batch_inserts_all_terms(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_terms_batch inserts all terms."""
+        terms = [
+            ("量子コンピュータ", "technical_term"),
+            ("量子ビット", "technical_term"),
+            ("重ね合わせ", "concept"),
+        ]
+
+        create_terms_batch(db_with_schema, terms)
+
+        all_terms = list_all_terms(db_with_schema)
+        assert len(all_terms) == 3
+        term_texts = [t["term_text"] for t in all_terms]
+        assert "量子コンピュータ" in term_texts
+        assert "量子ビット" in term_texts
+        assert "重ね合わせ" in term_texts
+
+    def test_create_terms_batch_stores_category(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_terms_batch stores category correctly."""
+        terms = [
+            ("量子コンピュータ", "technical_term"),
+            ("重ね合わせ", None),
+        ]
+
+        create_terms_batch(db_with_schema, terms)
+
+        all_terms = list_all_terms(db_with_schema)
+        term_map = {t["term_text"]: t["category"] for t in all_terms}
+        assert term_map["量子コンピュータ"] == "technical_term"
+        assert term_map["重ね合わせ"] is None
+
+    def test_create_terms_batch_with_empty_list(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_terms_batch handles empty list."""
+        create_terms_batch(db_with_schema, [])
+
+        all_terms = list_all_terms(db_with_schema)
+        assert len(all_terms) == 0
+
+    def test_create_terms_batch_unique_constraint(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_terms_batch raises error on duplicate term_text."""
+        terms = [
+            ("量子コンピュータ", "technical_term"),
+            ("量子コンピュータ", "concept"),  # Duplicate
+        ]
+
+        with pytest.raises(sqlite3.IntegrityError):
+            create_terms_batch(db_with_schema, terms)
