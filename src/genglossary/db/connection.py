@@ -68,20 +68,19 @@ def transaction(conn: sqlite3.Connection) -> Iterator[None]:
         # Nested transaction - use SAVEPOINT
         savepoint_name = f"sp_{uuid.uuid4().hex[:8]}"
         conn.execute(f"SAVEPOINT {savepoint_name}")
-        try:
-            yield
-            conn.execute(f"RELEASE {savepoint_name}")
-        except Exception:
-            conn.execute(f"ROLLBACK TO {savepoint_name}")
-            raise
+        commit_fn = lambda: conn.execute(f"RELEASE {savepoint_name}")
+        rollback_fn = lambda: conn.execute(f"ROLLBACK TO {savepoint_name}")
     else:
         # Top-level transaction
-        try:
-            yield
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
+        commit_fn = conn.commit
+        rollback_fn = conn.rollback
+
+    try:
+        yield
+        commit_fn()
+    except Exception:
+        rollback_fn()
+        raise
 
 
 @contextmanager
