@@ -140,3 +140,115 @@ class TestTransaction:
         cursor = in_memory_db.cursor()
         cursor.execute("SELECT COUNT(*) FROM test")
         assert cursor.fetchone()[0] == 0
+
+
+class TestNestedTransaction:
+    """Test nested transaction support using SAVEPOINT."""
+
+    def test_nested_transaction_commits_all_on_success(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that nested transactions commit all changes on success."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+        in_memory_db.commit()
+
+        with transaction(in_memory_db):
+            in_memory_db.execute("INSERT INTO test VALUES (1, 'outer')")
+            with transaction(in_memory_db):
+                in_memory_db.execute("INSERT INTO test VALUES (2, 'inner')")
+
+        # Both operations should be committed
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test")
+        assert cursor.fetchone()[0] == 2
+
+    def test_nested_transaction_inner_rollback_keeps_outer(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that inner transaction rollback doesn't affect outer transaction."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+        in_memory_db.commit()
+
+        with transaction(in_memory_db):
+            in_memory_db.execute("INSERT INTO test VALUES (1, 'outer')")
+            try:
+                with transaction(in_memory_db):
+                    in_memory_db.execute("INSERT INTO test VALUES (2, 'inner')")
+                    raise ValueError("Inner error")
+            except ValueError:
+                pass  # Catch and continue outer transaction
+            in_memory_db.execute("INSERT INTO test VALUES (3, 'after_inner')")
+
+        # Outer operations committed, inner rolled back
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT name FROM test ORDER BY id")
+        rows = cursor.fetchall()
+        assert len(rows) == 2
+        assert rows[0]["name"] == "outer"
+        assert rows[1]["name"] == "after_inner"
+
+    def test_nested_transaction_outer_rollback_undoes_all(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that outer transaction rollback undoes inner committed changes."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+        in_memory_db.commit()
+
+        with pytest.raises(ValueError):
+            with transaction(in_memory_db):
+                in_memory_db.execute("INSERT INTO test VALUES (1, 'outer')")
+                with transaction(in_memory_db):
+                    in_memory_db.execute("INSERT INTO test VALUES (2, 'inner')")
+                # Inner transaction completed successfully
+                raise ValueError("Outer error after inner success")
+
+        # All operations should be rolled back
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test")
+        assert cursor.fetchone()[0] == 0
+
+    def test_triple_nested_transaction(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that three levels of nesting work correctly."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+        in_memory_db.commit()
+
+        with transaction(in_memory_db):
+            in_memory_db.execute("INSERT INTO test VALUES (1, 'level1')")
+            with transaction(in_memory_db):
+                in_memory_db.execute("INSERT INTO test VALUES (2, 'level2')")
+                with transaction(in_memory_db):
+                    in_memory_db.execute("INSERT INTO test VALUES (3, 'level3')")
+
+        # All three operations should be committed
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test")
+        assert cursor.fetchone()[0] == 3
+
+    def test_triple_nested_middle_rollback(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test middle level rollback in triple nesting."""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+        in_memory_db.commit()
+
+        with transaction(in_memory_db):
+            in_memory_db.execute("INSERT INTO test VALUES (1, 'level1')")
+            try:
+                with transaction(in_memory_db):
+                    in_memory_db.execute("INSERT INTO test VALUES (2, 'level2')")
+                    with transaction(in_memory_db):
+                        in_memory_db.execute("INSERT INTO test VALUES (3, 'level3')")
+                    raise ValueError("Middle level error")
+            except ValueError:
+                pass
+            in_memory_db.execute("INSERT INTO test VALUES (4, 'after_middle')")
+
+        # level1 and after_middle committed, level2 and level3 rolled back
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT name FROM test ORDER BY id")
+        rows = cursor.fetchall()
+        assert len(rows) == 2
+        assert rows[0]["name"] == "level1"
+        assert rows[1]["name"] == "after_middle"
