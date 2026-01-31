@@ -143,8 +143,14 @@ class RunManager:
             このメソッドは別スレッドで実行されるため、
             独自のDB接続を作成します。
             接続作成が失敗した場合もクリーンアップと完了シグナルを保証します。
+
+        重要: パイプライン実行とステータス更新は分離されています。
+            これにより、パイプラインが成功してもDB更新が失敗した場合に
+            ステータスが誤って 'failed' になる問題を防止します。
         """
         conn = None
+        pipeline_error = None
+        pipeline_traceback = None
         try:
             # スレッド内で新しい接続を作成
             conn = get_connection(self.db_path)
@@ -162,22 +168,23 @@ class RunManager:
                 cancel_event=cancel_event,
             )
 
-            # パイプライン実行
+            # パイプライン実行（分離されたtry/except）
             executor = PipelineExecutor()
-            executor.execute(conn, scope, context, doc_root=self.doc_root)
+            try:
+                executor.execute(conn, scope, context, doc_root=self.doc_root)
+            except Exception as e:
+                pipeline_error = e
+                pipeline_traceback = traceback.format_exc()
 
-            # Race condition safe: complete_run_if_not_cancelled prevents
-            # completing a run that was cancelled between is_set() and update
-            if cancel_event.is_set():
-                cancel_run(conn, run_id)
-            else:
-                complete_run_if_not_cancelled(conn, run_id)
+            # ステータス更新（パイプライン実行とは別に処理）
+            self._finalize_run_status(
+                conn, run_id, cancel_event, pipeline_error, pipeline_traceback
+            )
 
         except Exception as e:
-            # フルトレースバックをキャプチャしてデバッグ容易化
+            # 接続エラーなど、パイプライン外のエラー
             error_message = str(e)
             error_traceback = traceback.format_exc()
-            # ヘルパーメソッドで堅牢なステータス更新
             self._update_failed_status(conn, run_id, error_message)
             self._broadcast_log(run_id, {
                 "run_id": run_id, "level": "error",
@@ -192,6 +199,21 @@ class RunManager:
             # スレッド終了時に接続を閉じる（接続があれば）
             if conn is not None:
                 conn.close()
+
+    def _finalize_run_status(self, conn, run_id, cancel_event, pipeline_error, pipeline_traceback) -> None:
+        """パイプライン実行後のステータスを確定
+
+        ステータス更新ロジックをパイプライン実行から分離することで、
+        ステータス更新の失敗がステータスの誤分類を引き起こすのを防止。
+
+        優先順位:
+        1. パイプラインエラーがあれば → failed
+        2. キャンセルされていれば → cancelled
+        3. それ以外 → completed
+
+        ステータス更新失敗時はフォールバック接続でリトライ。
+        """
+        ...
 
     def _try_update_status(self, conn, run_id, error_message) -> bool:
         """ステータス更新を試行し、成功時にTrueを返す
@@ -572,12 +594,13 @@ get_run_manager(db_path) → RunManager
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 
-**tests/runs/test_manager.py (40 tests)**
+**tests/runs/test_manager.py (44 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - per-run cancellation（各runに個別のキャンセルイベント）
 - cancellation race condition（キャンセルとステータス更新の競合防止）
 - connection error handling（接続エラー時のクリーンアップとフォールバック）
 - warning log broadcast（ステータス更新失敗時の警告ログ）
+- status misclassification（DB更新失敗時のステータス誤分類防止）
 
 **tests/runs/test_executor.py (43 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -599,4 +622,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 118 tests** (Repository 25 + Manager 40 + Executor 43 + API 10)
+**合計: 122 tests** (Repository 25 + Manager 44 + Executor 43 + API 10)
