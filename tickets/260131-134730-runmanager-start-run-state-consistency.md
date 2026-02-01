@@ -4,7 +4,7 @@ tags: [improvement, backend, threading]
 description: "RunManager: Improve start_run in-memory state consistency"
 created_at: "2026-01-31T13:47:30Z"
 started_at: 2026-02-01T10:01:22Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T10:16:07Z # Do not modify manually
 ---
 
 # RunManager: Improve start_run in-memory state consistency
