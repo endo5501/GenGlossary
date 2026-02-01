@@ -4,7 +4,7 @@ tags: [improvement, backend, reliability]
 description: "RunManager: Prevent race condition in start_run"
 created_at: "2026-01-31T15:20:00+09:00"
 started_at: 2026-02-01T10:17:00Z
-closed_at: null
+closed_at: 2026-02-01T10:18:21Z
 ---
 
 # RunManager: Prevent race condition in start_run
