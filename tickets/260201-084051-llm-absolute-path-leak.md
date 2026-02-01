@@ -45,19 +45,37 @@ documents = [
 
 ## Tasks
 
-- [ ] 問題の影響範囲を調査
-- [ ] Document.file_path を正規化するタイミングを決定
-- [ ] 実装
-- [ ] テスト追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 問題の影響範囲を調査
+- [x] Document.file_path を正規化するタイミングを決定
+- [x] 実装
+- [x] テスト追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## 実装サマリー
+
+### 解決策
+
+`DocumentLoader.load_directory()` で `to_safe_relative_path()` を使用してファイルパスを相対パス（POSIX形式）に変換。
+
+### 変更ファイル
+
+- `src/genglossary/document_loader.py` - 相対パス変換を追加
+- `src/genglossary/utils/path_utils.py` - エラーメッセージから絶対パスを削除
+- `docs/architecture/prompt-security.md` - ファイルパス漏洩防止セクション追加
+- テストファイル更新
+
+### レビュー対応
+
+- code-simplifier: try-except順序改善、エラーメッセージ汎用化
+- codex MCP: エラーメッセージからパス削除、docstring更新、例外ハンドリング狭める
 
 ## Notes
 
