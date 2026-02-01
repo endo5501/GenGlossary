@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS runs (
     progress_current INTEGER DEFAULT 0,
     progress_total INTEGER DEFAULT 0,
     current_step TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL  -- Set by Python, not SQLite default
 );
 """
 
