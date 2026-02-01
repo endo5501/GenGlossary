@@ -4,7 +4,7 @@ tags: [bug, backend, critical]
 description: "Pipeline完了後も状態がRunningのまま更新されない問題"
 created_at: "2026-02-01T12:48:12Z"
 started_at: 2026-02-01T16:41:48Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T22:14:09Z # Do not modify manually
 ---
 
 # パイプライン状態がRunningのまま
