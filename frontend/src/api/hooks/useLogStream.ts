@@ -87,7 +87,10 @@ export function useLogStream(
     eventSource.addEventListener('complete', handleComplete)
     eventSource.onerror = handleError
 
-    return disconnect
+    return () => {
+      eventSource.removeEventListener('complete', handleComplete)
+      disconnect()
+    }
   }, [projectId, runId, addLog])
 
   return { logs, isConnected, error, clearLogs }
