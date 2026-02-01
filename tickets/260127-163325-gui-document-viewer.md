@@ -1,5 +1,5 @@
 ---
-priority: 8
+priority: 2
 tags: [gui, frontend, document-viewer]
 description: "Document Viewer 完全実装"
 created_at: "2026-01-27T16:33:25Z"
