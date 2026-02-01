@@ -517,7 +517,19 @@ class PipelineExecutor:
 
         self._log(context, "info", "Reviewing glossary...")
         reviewer = GlossaryReviewer(llm_client=self._llm_client)
-        issues = reviewer.review(glossary, cancel_event=context.cancel_event)
+
+        def on_batch_progress(current: int, total: int) -> None:
+            self._log(context, "info", f"Reviewing batch {current}/{total}...")
+
+        try:
+            issues = reviewer.review(
+                glossary,
+                cancel_event=context.cancel_event,
+                batch_progress_callback=on_batch_progress,
+            )
+        except Exception as e:
+            self._log(context, "error", f"Review failed: {e}")
+            raise
 
         # If review was cancelled, raise exception
         if issues is None:

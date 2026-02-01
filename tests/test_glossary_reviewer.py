@@ -1,6 +1,5 @@
 """Tests for GlossaryReviewer - Step 3: Review glossary for issues."""
 
-import logging
 from unittest.mock import MagicMock
 
 import pytest
