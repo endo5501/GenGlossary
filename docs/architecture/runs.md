@@ -623,8 +623,13 @@ def review(
 ) -> list[GlossaryIssue] | None:  # ← None はキャンセルを意味
     """バッチ処理でレビューを実行（タイムアウト回避）
 
-    50件以上の用語をレビューする際のタイムアウトを防ぐため、
-    用語をバッチに分割（デフォルト20件/バッチ）してLLMに送信します。
+    大量の用語をレビューする際のタイムアウトやトークン制限を防ぐため、
+    用語をバッチに分割（デフォルト10件/バッチ）してLLMに送信します。
+
+    エラー耐性:
+        バッチ処理中にエラーが発生した場合（JSON解析失敗、タイムアウト等）、
+        そのバッチをスキップして次のバッチに進みます。成功したバッチの
+        issuesのみを返却し、パイプライン全体が停止することを防ぎます。
 
     Args:
         batch_progress_callback: コールバック(current_batch, total_batches)
@@ -640,7 +645,11 @@ def review(
             return None
         if batch_progress_callback:
             batch_progress_callback(current_batch, total_batches)
-        # LLM 呼び出し（バッチ単位）...
+        try:
+            # LLM 呼び出し（バッチ単位）...
+        except Exception:
+            # エラー時はスキップして次のバッチへ（警告ログ出力）
+            continue
 
 # GlossaryRefiner
 def refine(
