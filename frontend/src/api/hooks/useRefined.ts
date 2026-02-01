@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient, getBaseUrl } from '../client'
-import type { GlossaryTermResponse } from '../types'
+import type { GlossaryTermResponse, RunResponse } from '../types'
 import { useResourceList, useResourceDetail } from './useResource'
+import { runKeys } from './useRuns'
 
 export const refinedKeys = {
   all: ['refined'] as const,
@@ -27,7 +28,7 @@ const refinedApi = {
     return response.text()
   },
   regenerate: (projectId: number) =>
-    apiClient.post<{ message: string }>(`/api/projects/${projectId}/refined/regenerate`, {}),
+    apiClient.post<RunResponse>(`/api/projects/${projectId}/runs`, { scope: 'refine' }),
 }
 
 export function useRefined(projectId: number | undefined) {
@@ -74,6 +75,7 @@ export function useRegenerateRefined(projectId: number) {
     mutationFn: () => refinedApi.regenerate(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: refinedKeys.list(projectId) })
+      queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
     },
   })
 }

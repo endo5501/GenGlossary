@@ -14,7 +14,7 @@ from genglossary.db.document_repository import (
     delete_all_documents,
     list_all_documents,
 )
-from genglossary.db.issue_repository import create_issues_batch, delete_all_issues
+from genglossary.db.issue_repository import create_issues_batch, delete_all_issues, list_all_issues
 from genglossary.db.models import GlossaryTermRow
 from genglossary.db.provisional_repository import (
     create_provisional_terms_batch,
@@ -29,7 +29,7 @@ from genglossary.glossary_refiner import GlossaryRefiner
 from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.factory import create_llm_client
 from genglossary.models.document import Document
-from genglossary.models.glossary import Glossary
+from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.models.term import ClassifiedTerm, Term, TermOccurrence
 from genglossary.term_extractor import TermExtractor
 from genglossary.utils.hash import compute_content_hash
@@ -44,14 +44,18 @@ class PipelineScope(Enum):
     """Enumeration of pipeline execution scopes."""
 
     FULL = "full"
-    FROM_TERMS = "from_terms"
-    PROVISIONAL_TO_REFINED = "provisional_to_refined"
+    EXTRACT = "extract"
+    GENERATE = "generate"
+    REVIEW = "review"
+    REFINE = "refine"
 
 # Map of scope to clear functions for table cleanup
 _SCOPE_CLEAR_FUNCTIONS: dict[PipelineScope, list[Callable[[sqlite3.Connection], None]]] = {
     PipelineScope.FULL: [delete_all_terms, delete_all_provisional, delete_all_issues, delete_all_refined],
-    PipelineScope.FROM_TERMS: [delete_all_provisional, delete_all_issues, delete_all_refined],
-    PipelineScope.PROVISIONAL_TO_REFINED: [delete_all_issues, delete_all_refined],
+    PipelineScope.EXTRACT: [delete_all_terms],
+    PipelineScope.GENERATE: [delete_all_provisional],
+    PipelineScope.REVIEW: [delete_all_issues],
+    PipelineScope.REFINE: [delete_all_refined],
 }
 
 
@@ -310,8 +314,10 @@ class PipelineExecutor:
         # Execute based on scope using dispatch table with direct method references
         scope_handlers = {
             PipelineScope.FULL: self._execute_full,
-            PipelineScope.FROM_TERMS: self._execute_from_terms,
-            PipelineScope.PROVISIONAL_TO_REFINED: self._execute_provisional_to_refined,
+            PipelineScope.EXTRACT: self._execute_extract,
+            PipelineScope.GENERATE: self._execute_generate,
+            PipelineScope.REVIEW: self._execute_review,
+            PipelineScope.REFINE: self._execute_refine,
         }
 
         handler = scope_handlers.get(scope_enum)
@@ -384,7 +390,7 @@ class PipelineExecutor:
         context: ExecutionContext,
         doc_root: str = ".",
     ) -> None:
-        """Execute full pipeline (steps 1-5).
+        """Execute full pipeline (extract → generate → review → refine).
 
         Args:
             conn: Project database connection.
@@ -399,14 +405,167 @@ class PipelineExecutor:
         self._log(context, "info", f"Loaded {len(documents)} documents")
 
         # Step 2: Extract terms
-        self._check_cancellation(context)  # Raises if cancelled
+        unique_terms = self._do_extract(conn, context, documents)
+
+        # Step 3: Generate glossary
+        glossary = self._do_generate(conn, context, documents, unique_terms)
+
+        # Step 4: Review glossary
+        issues = self._do_review(conn, context, glossary)
+
+        # Step 5: Refine glossary
+        self._do_refine(conn, context, glossary, issues, documents)
+
+    @_cancellable
+    def _execute_extract(
+        self,
+        conn: sqlite3.Connection,
+        context: ExecutionContext,
+        doc_root: str = ".",
+    ) -> None:
+        """Execute extract step only.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging and cancellation.
+            doc_root: Root directory for documents (default: ".").
+
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+        """
+        documents = self._load_documents(conn, context, doc_root)
+        self._log(context, "info", f"Loaded {len(documents)} documents")
+        self._do_extract(conn, context, documents)
+
+    @_cancellable
+    def _execute_generate(
+        self,
+        conn: sqlite3.Connection,
+        context: ExecutionContext,
+        _doc_root: str = ".",
+    ) -> None:
+        """Execute generate step only.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging and cancellation.
+            _doc_root: Root directory for documents (unused).
+
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+            RuntimeError: If no terms found in database.
+        """
+        documents = self._load_documents(conn, context)
+
+        # Load terms from DB
+        self._log(context, "info", "Loading terms from database...")
+        term_rows = list_all_terms(conn)
+        if not term_rows:
+            self._log(context, "error", "No terms found in database")
+            raise RuntimeError("Cannot execute generate without extracted terms")
+        extracted_terms = [row["term_text"] for row in term_rows]
+
+        self._do_generate(conn, context, documents, extracted_terms)
+
+    @_cancellable
+    def _execute_review(
+        self,
+        conn: sqlite3.Connection,
+        context: ExecutionContext,
+        _doc_root: str = ".",
+    ) -> None:
+        """Execute review step only.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging and cancellation.
+            _doc_root: Root directory for documents (unused).
+
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+            RuntimeError: If no provisional glossary found in database.
+        """
+        # Load provisional glossary from DB
+        self._log(context, "info", "Loading provisional glossary from database...")
+        provisional_rows = list_all_provisional(conn)
+        if not provisional_rows:
+            self._log(context, "error", "No provisional terms found in database")
+            raise RuntimeError("Cannot execute review without provisional glossary")
+        glossary = self._glossary_from_db_rows(provisional_rows)
+        self._log(context, "info", f"Loaded {len(provisional_rows)} provisional terms")
+
+        self._do_review(conn, context, glossary)
+
+    @_cancellable
+    def _execute_refine(
+        self,
+        conn: sqlite3.Connection,
+        context: ExecutionContext,
+        _doc_root: str = ".",
+    ) -> None:
+        """Execute refine step only.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging and cancellation.
+            _doc_root: Root directory for documents (unused).
+
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+            RuntimeError: If no provisional glossary found in database.
+        """
+        documents = self._load_documents(conn, context)
+
+        # Load provisional glossary from DB
+        self._log(context, "info", "Loading provisional glossary from database...")
+        provisional_rows = list_all_provisional(conn)
+        if not provisional_rows:
+            self._log(context, "error", "No provisional terms found in database")
+            raise RuntimeError("Cannot execute refine without provisional glossary")
+        glossary = self._glossary_from_db_rows(provisional_rows)
+        self._log(context, "info", f"Loaded {len(provisional_rows)} provisional terms")
+
+        # Load issues from DB
+        self._log(context, "info", "Loading issues from database...")
+        issue_rows = list_all_issues(conn)
+        issues = [
+            GlossaryIssue(
+                term_name=row["term_name"],
+                issue_type=row["issue_type"],
+                description=row["description"],
+            )
+            for row in issue_rows
+        ]
+        self._log(context, "info", f"Loaded {len(issues)} issues")
+
+        self._do_refine(conn, context, glossary, issues, documents)
+
+    def _do_extract(
+        self,
+        conn: sqlite3.Connection,
+        context: ExecutionContext,
+        documents: list[Document],
+    ) -> list[ClassifiedTerm]:
+        """Execute term extraction and save to DB.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging and cancellation.
+            documents: Documents to extract terms from.
+
+        Returns:
+            list[ClassifiedTerm]: Unique extracted terms.
+
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+        """
+        self._check_cancellation(context)
 
         self._log(context, "info", "Extracting terms...")
         extractor = TermExtractor(llm_client=self._llm_client)
         extracted_terms = extractor.extract_terms(documents, return_categories=True)
 
-        # Save extracted terms and build unique list (skip duplicates)
-        # Note: extracted_terms is list[ClassifiedTerm] here (return_categories=True)
+        # Build unique list (skip duplicates)
         seen_terms: set[str] = set()
         unique_terms: list[ClassifiedTerm] = []
         for classified_term in extracted_terms:
@@ -424,43 +583,30 @@ class PipelineExecutor:
             create_terms_batch(conn, terms_data)
 
         self._log(context, "info", f"Extracted {len(unique_terms)} unique terms (from {len(extracted_terms)} total)")
+        return unique_terms
 
-        # Continue with steps 3-5 (pass unique terms to avoid duplicate LLM calls)
-        self._execute_from_terms(conn, context, documents=documents, extracted_terms=unique_terms)
-
-    @_cancellable
-    def _execute_from_terms(
+    def _do_generate(
         self,
         conn: sqlite3.Connection,
         context: ExecutionContext,
-        _doc_root: str = ".",
-        documents: list[Document] | None = None,
-        extracted_terms: list[str] | list[ClassifiedTerm] | None = None,
-    ) -> None:
-        """Execute from terms (steps 3-5).
+        documents: list[Document],
+        extracted_terms: list[str] | list[ClassifiedTerm],
+    ) -> Glossary:
+        """Execute glossary generation and save to DB.
 
         Args:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
-            _doc_root: Root directory for documents (unused, for unified signature).
-            documents: Pre-loaded documents (None to load from DB).
-            extracted_terms: Pre-extracted terms as strings or ClassifiedTerms (None to load from DB).
+            documents: Source documents.
+            extracted_terms: Terms to generate definitions for.
+
+        Returns:
+            Glossary: Generated provisional glossary.
 
         Raises:
             PipelineCancelledException: If execution is cancelled.
         """
-        # Load documents from DB if not provided
-        if documents is None:
-            documents = self._load_documents(conn, context)
-
-        # Load terms from DB if not provided
-        if extracted_terms is None:
-            self._log(context, "info", "Loading terms from database...")
-            term_rows = list_all_terms(conn)
-            extracted_terms = [row["term_text"] for row in term_rows]
-
-        # Step 3: Generate glossary
-        self._check_cancellation(context)  # Raises if cancelled
+        self._check_cancellation(context)
 
         self._log(context, "info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
@@ -476,56 +622,32 @@ class PipelineExecutor:
             raise
 
         # Save provisional glossary using batch insert
-        # Note: No cancellation check here - once generation is complete, we always save
-        # to preserve the user's work (late-cancel race condition fix)
         with transaction(conn):
             self._save_glossary_terms_batch(conn, glossary, create_provisional_terms_batch)
 
         self._log(context, "info", f"Generated {len(glossary.terms)} terms")
+        return glossary
 
-        # Continue with steps 4-5
-        self._execute_provisional_to_refined(conn, context, glossary=glossary, documents=documents)
-
-    @_cancellable
-    def _execute_provisional_to_refined(
+    def _do_review(
         self,
         conn: sqlite3.Connection,
         context: ExecutionContext,
-        _doc_root: str = ".",
-        glossary: Glossary | None = None,
-        documents: list[Document] | None = None,
-    ) -> None:
-        """Execute from provisional to refined (steps 4-5).
+        glossary: Glossary,
+    ) -> list:
+        """Execute glossary review and save issues to DB.
 
         Args:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
-            _doc_root: Root directory for documents (unused, for unified signature).
-            glossary: Pre-generated provisional glossary (None to load from DB).
-            documents: Pre-loaded documents (None to load from DB).
+            glossary: Provisional glossary to review.
+
+        Returns:
+            list[GlossaryIssue]: Found issues.
 
         Raises:
             PipelineCancelledException: If execution is cancelled.
         """
-        # Load glossary from DB if not provided
-        if glossary is None:
-            self._log(context, "info", "Loading provisional glossary from database...")
-            provisional_rows = list_all_provisional(conn)
-            if not provisional_rows:
-                self._log(context, "error", "No provisional terms found in database")
-                raise RuntimeError("Cannot execute provisional_to_refined without provisional glossary")
-
-            # Reconstruct Glossary from DB rows
-            glossary = self._glossary_from_db_rows(provisional_rows)
-
-            self._log(context, "info", f"Loaded {len(provisional_rows)} provisional terms")
-
-        # Load documents from DB if not provided
-        if documents is None:
-            documents = self._load_documents(conn, context)
-
-        # Step 4: Review glossary
-        self._check_cancellation(context)  # Raises if cancelled
+        self._check_cancellation(context)
 
         self._log(context, "info", "Reviewing glossary...")
         reviewer = GlossaryReviewer(
@@ -559,10 +681,33 @@ class PipelineExecutor:
             create_issues_batch(conn, issues_data)
 
         self._log(context, "info", f"Found {len(issues)} issues")
+        return issues
 
-        # Step 5: Refine glossary
+    def _do_refine(
+        self,
+        conn: sqlite3.Connection,
+        context: ExecutionContext,
+        glossary: Glossary,
+        issues: list,
+        documents: list[Document],
+    ) -> Glossary:
+        """Execute glossary refinement and save to DB.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging and cancellation.
+            glossary: Provisional glossary to refine.
+            issues: Issues to address.
+            documents: Source documents.
+
+        Returns:
+            Glossary: Refined glossary.
+
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+        """
         if issues:
-            self._check_cancellation(context)  # Raises if cancelled
+            self._check_cancellation(context)
 
             self._log(context, "info", "Refining glossary...")
             refiner = GlossaryRefiner(llm_client=self._llm_client)
@@ -580,11 +725,11 @@ class PipelineExecutor:
         else:
             self._log(context, "info", "No issues found, copying provisional to refined")
 
-        # Save refined glossary (either refined or copied from provisional) using batch insert
-        # Note: No cancellation check here - once refinement is complete, we always save
-        # to preserve the user's work (late-cancel race condition fix)
+        # Save refined glossary using batch insert
         with transaction(conn):
             self._save_glossary_terms_batch(conn, glossary, create_refined_terms_batch)
+
+        return glossary
 
     def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: PipelineScope) -> None:
         """Clear relevant tables before execution.

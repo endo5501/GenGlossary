@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
-import type { IssueResponse, IssueType } from '../types'
+import type { IssueResponse, IssueType, RunResponse } from '../types'
 import { useResourceList, useResourceDetail } from './useResource'
+import { runKeys } from './useRuns'
 
 export const issueKeys = {
   all: ['issues'] as const,
@@ -25,7 +26,7 @@ const issueApi = {
   get: (projectId: number, issueId: number) =>
     apiClient.get<IssueResponse>(`/api/projects/${projectId}/issues/${issueId}`),
   review: (projectId: number) =>
-    apiClient.post<{ message: string }>(`/api/projects/${projectId}/issues/review`, {}),
+    apiClient.post<RunResponse>(`/api/projects/${projectId}/runs`, { scope: 'review' }),
 }
 
 export function useIssues(projectId: number | undefined, issueType?: IssueType) {
@@ -51,6 +52,7 @@ export function useReviewIssues(projectId: number) {
     mutationFn: () => issueApi.review(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: issueKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
     },
   })
 }

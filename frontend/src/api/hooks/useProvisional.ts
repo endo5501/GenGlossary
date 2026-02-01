@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
-import type { GlossaryTermResponse, ProvisionalUpdateRequest } from '../types'
+import type { GlossaryTermResponse, ProvisionalUpdateRequest, RunResponse } from '../types'
 import { useResourceList, useResourceDetail } from './useResource'
+import { runKeys } from './useRuns'
 
 export const provisionalKeys = {
   all: ['provisional'] as const,
@@ -23,10 +24,7 @@ const provisionalApi = {
       data
     ),
   regenerate: (projectId: number) =>
-    apiClient.post<{ message: string }>(
-      `/api/projects/${projectId}/provisional/regenerate`,
-      {}
-    ),
+    apiClient.post<RunResponse>(`/api/projects/${projectId}/runs`, { scope: 'generate' }),
 }
 
 export function useProvisional(projectId: number | undefined) {
@@ -70,6 +68,7 @@ export function useRegenerateProvisional(projectId: number) {
     mutationFn: () => provisionalApi.regenerate(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: provisionalKeys.list(projectId) })
+      queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
     },
   })
 }

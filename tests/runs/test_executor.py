@@ -197,21 +197,20 @@ class TestPipelineExecutorFull:
             mock_loader.return_value.load_directory.assert_not_called()
 
 
-class TestPipelineExecutorFromTerms:
-    """Tests for from_terms scope execution."""
+class TestPipelineExecutorGenerate:
+    """Tests for generate scope execution."""
 
-    def test_from_terms_skips_document_loading_from_filesystem(
+    def test_generate_loads_from_db_and_skips_extraction(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         execution_context: ExecutionContext,
     ) -> None:
-        """from_termsはファイルシステムからの読み込みをスキップし、DBから取得する"""
+        """generateスコープはDBから用語を読み込み、抽出をスキップする"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
@@ -219,48 +218,47 @@ class TestPipelineExecutorFromTerms:
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock DB data loading (v4: file_name and content from DB)
+            # Mock DB data loading
             mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
             mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # Mock glossary generation
             mock_glossary = Glossary(terms={})
             mock_generator.return_value.generate.return_value = mock_glossary
-            mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "from_terms", execution_context)
+            executor.execute(project_db, "generate", execution_context)
 
             # DocumentLoader.load_directory should not be called (we load from DB instead)
             mock_loader.return_value.load_directory.assert_not_called()
-            # DocumentLoader.load_file should not be called (content comes from DB)
-            mock_loader.return_value.load_file.assert_not_called()
             # TermExtractor should not be called
             mock_extractor.return_value.extract_terms.assert_not_called()
+            # Generator should be called
+            mock_generator.return_value.generate.assert_called_once()
 
 
-class TestPipelineExecutorProvisionalToRefined:
-    """Tests for provisional_to_refined scope execution."""
+class TestPipelineExecutorReview:
+    """Tests for review scope execution."""
 
-    def test_provisional_to_refined_starts_from_review(
+    def test_review_loads_provisional_and_runs_review_only(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         execution_context: ExecutionContext,
     ) -> None:
-        """provisional_to_refinedは精査から開始する"""
+        """reviewスコープはprovisionalを読み込んでレビューのみ実行する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_provisional") as mock_list_provisional, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_provisional:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock DB data loading (v4: file_name and content from DB)
+            # Mock DB data loading
             from genglossary.models.term import TermOccurrence
             mock_list_provisional.return_value = [
                 {
@@ -270,22 +268,22 @@ class TestPipelineExecutorProvisionalToRefined:
                     "occurrences": [TermOccurrence(document_path="test.txt", line_number=1, context="ctx")]
                 }
             ]
-            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
 
             # Mock review
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "provisional_to_refined", execution_context)
+            executor.execute(project_db, "review", execution_context)
 
             # Earlier stages should not be called
             mock_loader.return_value.load_directory.assert_not_called()
-            # DocumentLoader.load_file should not be called (content comes from DB)
-            mock_loader.return_value.load_file.assert_not_called()
             mock_extractor.return_value.extract_terms.assert_not_called()
             mock_generator.return_value.generate.assert_not_called()
 
             # Reviewer should be called
             mock_reviewer.return_value.review.assert_called_once()
+
+            # Refiner should NOT be called (review scope only runs review)
+            mock_refiner.return_value.refine.assert_not_called()
 
 
 class TestPipelineExecutorProgress:
@@ -468,8 +466,10 @@ class TestPipelineExecutorConfiguration:
         from genglossary.runs.executor import PipelineScope
         mock_scope_clear_functions = {
             PipelineScope.FULL: [mock_delete_terms, mock_delete_prov, mock_delete_issues, mock_delete_refined],
-            PipelineScope.FROM_TERMS: [mock_delete_prov, mock_delete_issues, mock_delete_refined],
-            PipelineScope.PROVISIONAL_TO_REFINED: [mock_delete_issues, mock_delete_refined],
+            PipelineScope.EXTRACT: [mock_delete_terms],
+            PipelineScope.GENERATE: [mock_delete_prov],
+            PipelineScope.REVIEW: [mock_delete_issues],
+            PipelineScope.REFINE: [mock_delete_refined],
         }
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -903,7 +903,7 @@ class TestPipelineExecutorLogExtended:
 class TestPipelineExecutorProgressCallbackIntegration:
     """Tests for progress callback integration with GlossaryGenerator/Refiner."""
 
-    def test_execute_from_terms_passes_term_progress_callback_to_generator(
+    def test_execute_generate_passes_term_progress_callback_to_generator(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
@@ -922,8 +922,7 @@ class TestPipelineExecutorProgressCallbackIntegration:
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
-             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator_cls, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator_cls:
 
             mock_llm_factory.return_value = MagicMock()
             mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
@@ -931,9 +930,8 @@ class TestPipelineExecutorProgressCallbackIntegration:
 
             mock_glossary = Glossary(terms={})
             mock_generator_cls.return_value.generate.return_value = mock_glossary
-            mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "from_terms", context)
+            executor.execute(project_db, "generate", context)
 
             # Verify term_progress_callback was passed to generate
             mock_generator_cls.return_value.generate.assert_called_once()
@@ -941,7 +939,7 @@ class TestPipelineExecutorProgressCallbackIntegration:
             assert "term_progress_callback" in call_kwargs
             assert callable(call_kwargs["term_progress_callback"])
 
-    def test_execute_refiner_passes_term_progress_callback_to_refiner(
+    def test_execute_refine_passes_term_progress_callback_to_refiner(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
@@ -960,7 +958,7 @@ class TestPipelineExecutorProgressCallbackIntegration:
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_issues") as mock_list_issues, \
              patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner_cls:
 
             mock_llm_factory.return_value = MagicMock()
@@ -968,14 +966,13 @@ class TestPipelineExecutorProgressCallbackIntegration:
             mock_list_prov.return_value = [
                 {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
             ]
-
-            mock_reviewer.return_value.review.return_value = [
-                GlossaryIssue(term_name="term1", issue_type="unclear", description="Issue")
+            mock_list_issues.return_value = [
+                {"term_name": "term1", "issue_type": "unclear", "description": "Issue"}
             ]
 
             mock_refiner_cls.return_value.refine.return_value = Glossary(terms={})
 
-            executor.execute(project_db, "provisional_to_refined", context)
+            executor.execute(project_db, "refine", context)
 
             # Verify term_progress_callback was passed to refine
             mock_refiner_cls.return_value.refine.assert_called_once()
@@ -1168,14 +1165,14 @@ class TestPipelineExecutorBugFixes:
         """Bug A: issues がない場合でも refined glossary が保存される
 
         期待する動作:
-        - Reviewer が空の issues を返した場合
+        - DB に issues がない場合
         - Refiner は呼ばれない（改善する問題がないため）
         - しかし provisional glossary は refined として保存されるべき
         """
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_issues") as mock_list_issues, \
              patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
              patch("genglossary.runs.executor.create_refined_terms_batch") as mock_create_refined_batch:
 
@@ -1190,10 +1187,10 @@ class TestPipelineExecutorBugFixes:
                 }
             ]
 
-            # Reviewer returns empty issues list
-            mock_reviewer.return_value.review.return_value = []
+            # No issues in DB
+            mock_list_issues.return_value = []
 
-            executor.execute(project_db, "provisional_to_refined", execution_context)
+            executor.execute(project_db, "refine", execution_context)
 
             # Refiner should NOT be called (no issues to refine)
             mock_refiner.return_value.refine.assert_not_called()
@@ -1329,16 +1326,27 @@ class TestPipelineScopeEnum:
         from genglossary.runs.executor import PipelineScope
 
         assert hasattr(PipelineScope, "FULL")
-        assert hasattr(PipelineScope, "FROM_TERMS")
-        assert hasattr(PipelineScope, "PROVISIONAL_TO_REFINED")
+        assert hasattr(PipelineScope, "EXTRACT")
+        assert hasattr(PipelineScope, "GENERATE")
+        assert hasattr(PipelineScope, "REVIEW")
+        assert hasattr(PipelineScope, "REFINE")
 
     def test_pipeline_scope_values(self) -> None:
         """PipelineScope Enum の値が正しいことを確認"""
         from genglossary.runs.executor import PipelineScope
 
         assert PipelineScope.FULL.value == "full"
-        assert PipelineScope.FROM_TERMS.value == "from_terms"
-        assert PipelineScope.PROVISIONAL_TO_REFINED.value == "provisional_to_refined"
+        assert PipelineScope.EXTRACT.value == "extract"
+        assert PipelineScope.GENERATE.value == "generate"
+        assert PipelineScope.REVIEW.value == "review"
+        assert PipelineScope.REFINE.value == "refine"
+
+    def test_old_scopes_removed(self) -> None:
+        """旧スコープが削除されていることを確認"""
+        from genglossary.runs.executor import PipelineScope
+
+        assert not hasattr(PipelineScope, "FROM_TERMS")
+        assert not hasattr(PipelineScope, "PROVISIONAL_TO_REFINED")
 
     def test_execute_accepts_pipeline_scope_enum(
         self,
@@ -1370,8 +1378,10 @@ class TestPipelineScopeEnum:
 
         # Keys must be PipelineScope enum values (not strings)
         assert PipelineScope.FULL in _SCOPE_CLEAR_FUNCTIONS
-        assert PipelineScope.FROM_TERMS in _SCOPE_CLEAR_FUNCTIONS
-        assert PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.EXTRACT in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.GENERATE in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.REVIEW in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.REFINE in _SCOPE_CLEAR_FUNCTIONS
 
     def test_execute_dispatches_to_correct_handler(self) -> None:
         """execute() が各スコープに対して正しいハンドラーを呼び出すことを確認"""
@@ -1384,8 +1394,10 @@ class TestPipelineScopeEnum:
         # Test that each scope calls the expected internal method
         for scope in PipelineScope:
             with patch.object(executor, "_execute_full") as mock_full, \
-                 patch.object(executor, "_execute_from_terms") as mock_from_terms, \
-                 patch.object(executor, "_execute_provisional_to_refined") as mock_provisional, \
+                 patch.object(executor, "_execute_extract") as mock_extract, \
+                 patch.object(executor, "_execute_generate") as mock_generate, \
+                 patch.object(executor, "_execute_review") as mock_review, \
+                 patch.object(executor, "_execute_refine") as mock_refine, \
                  patch.object(executor, "_clear_tables_for_scope"), \
                  patch.object(executor, "_log"), \
                  patch.object(executor, "_check_cancellation", return_value=False):
@@ -1398,16 +1410,34 @@ class TestPipelineScopeEnum:
                 # Verify the correct handler was called
                 if scope == PipelineScope.FULL:
                     mock_full.assert_called_once()
-                    mock_from_terms.assert_not_called()
-                    mock_provisional.assert_not_called()
-                elif scope == PipelineScope.FROM_TERMS:
+                    mock_extract.assert_not_called()
+                    mock_generate.assert_not_called()
+                    mock_review.assert_not_called()
+                    mock_refine.assert_not_called()
+                elif scope == PipelineScope.EXTRACT:
                     mock_full.assert_not_called()
-                    mock_from_terms.assert_called_once()
-                    mock_provisional.assert_not_called()
-                elif scope == PipelineScope.PROVISIONAL_TO_REFINED:
+                    mock_extract.assert_called_once()
+                    mock_generate.assert_not_called()
+                    mock_review.assert_not_called()
+                    mock_refine.assert_not_called()
+                elif scope == PipelineScope.GENERATE:
                     mock_full.assert_not_called()
-                    mock_from_terms.assert_not_called()
-                    mock_provisional.assert_called_once()
+                    mock_extract.assert_not_called()
+                    mock_generate.assert_called_once()
+                    mock_review.assert_not_called()
+                    mock_refine.assert_not_called()
+                elif scope == PipelineScope.REVIEW:
+                    mock_full.assert_not_called()
+                    mock_extract.assert_not_called()
+                    mock_generate.assert_not_called()
+                    mock_review.assert_called_once()
+                    mock_refine.assert_not_called()
+                elif scope == PipelineScope.REFINE:
+                    mock_full.assert_not_called()
+                    mock_extract.assert_not_called()
+                    mock_generate.assert_not_called()
+                    mock_review.assert_not_called()
+                    mock_refine.assert_called_once()
 
 
 class TestCancellationCheckBeforeRefinedSave:
@@ -1420,9 +1450,9 @@ class TestCancellationCheckBeforeRefinedSave:
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """issues が空の場合、レビュー完了後のキャンセルでも refined が保存されることを確認
+        """issues が空の場合、処理完了後のキャンセルでも refined が保存されることを確認
 
-        Late-cancel race condition fix: once review completes, results are saved
+        Late-cancel race condition fix: once refinement completes, results are saved
         even if cancel arrives before the final save.
         """
         context = ExecutionContext(
@@ -1434,7 +1464,7 @@ class TestCancellationCheckBeforeRefinedSave:
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_issues") as mock_list_issues, \
              patch("genglossary.runs.executor.create_refined_terms_batch") as mock_create_refined_batch:
 
             mock_llm_factory.return_value = MagicMock()
@@ -1448,10 +1478,10 @@ class TestCancellationCheckBeforeRefinedSave:
                 }
             ]
 
-            # Reviewer returns empty issues list
-            mock_reviewer.return_value.review.return_value = []
+            # No issues in DB
+            mock_list_issues.return_value = []
 
-            # Set cancel after review completes (simulate late cancel)
+            # Set cancel after "No issues found" log (simulate late cancel)
             original_log = executor._log
 
             def log_and_cancel(ctx, level, message, **kwargs):
@@ -1463,7 +1493,7 @@ class TestCancellationCheckBeforeRefinedSave:
             with patch.object(executor, "_log", log_and_cancel):
                 # Pipeline completes successfully (no exception raised)
                 # because late cancel happens after the no-check-before-save point
-                executor.execute(project_db, "provisional_to_refined", context)
+                executor.execute(project_db, "refine", context)
 
             # Refined terms batch SHOULD be saved even with late cancel
             # (late-cancel race condition fix: preserve user's work)
@@ -1825,7 +1855,7 @@ class TestCancellableDecorator:
 
             # Call with context as positional arg - should raise
             with pytest.raises(PipelineCancelledException):
-                executor._execute_from_terms(project_db, context)
+                executor._execute_generate(project_db, context)
 
             # Should not access DB (raised early)
             mock_list_docs.assert_not_called()
@@ -2073,7 +2103,7 @@ class TestPipelineExecutorCancelEventPropagation:
             mock_generator_cls.return_value.generate.return_value = mock_glossary
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "from_terms", context)
+            executor.execute(project_db, "generate", context)
 
             # Verify cancel_event was passed to generate
             mock_generator_cls.return_value.generate.assert_called_once()
@@ -2096,19 +2126,17 @@ class TestPipelineExecutorCancelEventPropagation:
         )
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls:
 
             mock_llm_factory.return_value = MagicMock()
-            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
             mock_list_prov.return_value = [
                 {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
             ]
 
             mock_reviewer_cls.return_value.review.return_value = []
 
-            executor.execute(project_db, "provisional_to_refined", context)
+            executor.execute(project_db, "review", context)
 
             # Verify cancel_event was passed to review
             mock_reviewer_cls.return_value.review.assert_called_once()
@@ -2133,7 +2161,7 @@ class TestPipelineExecutorCancelEventPropagation:
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_issues") as mock_list_issues, \
              patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner_cls:
 
             mock_llm_factory.return_value = MagicMock()
@@ -2142,14 +2170,14 @@ class TestPipelineExecutorCancelEventPropagation:
                 {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
             ]
 
-            # Return issues to trigger refiner
-            mock_reviewer.return_value.review.return_value = [
-                GlossaryIssue(term_name="term1", issue_type="unclear", description="Issue")
+            # Return issues from DB to trigger refiner
+            mock_list_issues.return_value = [
+                {"term_name": "term1", "issue_type": "unclear", "description": "Issue"}
             ]
 
             mock_refiner_cls.return_value.refine.return_value = Glossary(terms={})
 
-            executor.execute(project_db, "provisional_to_refined", context)
+            executor.execute(project_db, "refine", context)
 
             # Verify cancel_event was passed to refine
             mock_refiner_cls.return_value.refine.assert_called_once()
@@ -2199,12 +2227,9 @@ class TestPipelineExecutorCancelEventPropagation:
                 )})
 
             mock_generator_cls.return_value.generate.side_effect = generate_with_late_cancel
-            # Reviewer returns None because cancelled
-            mock_reviewer_cls.return_value.review.return_value = None
 
-            # Pipeline raises PipelineCancelledException because reviewer detected cancel
-            with pytest.raises(PipelineCancelledException):
-                executor.execute(project_db, "from_terms", context)
+            # Generate scope completes normally (no reviewer call)
+            executor.execute(project_db, "generate", context)
 
             # Provisional terms SHOULD be saved (late-cancel fix)
             mock_create_prov.assert_called_once()
@@ -2226,13 +2251,11 @@ class TestPipelineExecutorCancelEventPropagation:
         )
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls, \
              patch("genglossary.runs.executor.create_issues_batch") as mock_create_issues:
 
             mock_llm_factory.return_value = MagicMock()
-            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
             mock_list_prov.return_value = [
                 {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
             ]
@@ -2241,7 +2264,7 @@ class TestPipelineExecutorCancelEventPropagation:
             mock_reviewer_cls.return_value.review.return_value = None
 
             with pytest.raises(PipelineCancelledException):
-                executor.execute(project_db, "provisional_to_refined", context)
+                executor.execute(project_db, "review", context)
 
             # Issues should NOT be saved when review was cancelled
             mock_create_issues.assert_not_called()

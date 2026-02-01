@@ -9,8 +9,10 @@ class RunScope:
     """Run scope constants."""
 
     FULL = "full"
-    FROM_TERMS = "from_terms"
-    PROVISIONAL_TO_REFINED = "provisional_to_refined"
+    EXTRACT = "extract"
+    GENERATE = "generate"
+    REVIEW = "review"
+    REFINE = "refine"
 
 
 class RunStartRequest(BaseModel):
@@ -19,7 +21,7 @@ class RunStartRequest(BaseModel):
     scope: str = Field(
         ...,
         description="Run scope",
-        pattern="^(full|from_terms|provisional_to_refined)$",
+        pattern="^(full|extract|generate|review|refine)$",
     )
 
 
