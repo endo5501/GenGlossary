@@ -51,6 +51,58 @@ describe('useLogStream', () => {
     })
   })
 
+  describe('error state clearing', () => {
+    it('should clear error state when runId becomes undefined', async () => {
+      let eventSourceInstance: InstanceType<typeof MockedEventSource> | null =
+        null
+
+      // Capture the EventSource instance
+      const OriginalEventSource = window.EventSource
+      window.EventSource = class extends (
+        OriginalEventSource
+      ) {
+        constructor(url: string) {
+          super(url)
+          eventSourceInstance = this as unknown as InstanceType<
+            typeof MockedEventSource
+          >
+        }
+      } as typeof EventSource
+
+      try {
+        const { result, rerender } = renderHook(
+          ({ runId }) => useLogStream(1, runId),
+          { initialProps: { runId: 1 as number | undefined } }
+        )
+
+        // Wait for connection
+        await waitFor(() => {
+          expect(eventSourceInstance).not.toBeNull()
+        })
+
+        // Simulate SSE error
+        act(() => {
+          eventSourceInstance!.onerror?.(new Event('error'))
+        })
+
+        // Verify error is set
+        expect(result.current.error).not.toBeNull()
+        expect(result.current.error?.message).toBe('SSE connection error')
+
+        // Change runId to undefined (no active run)
+        rerender({ runId: undefined })
+
+        // Error should be cleared when runId becomes undefined
+        // Use waitFor because setError(null) happens in useEffect after render
+        await waitFor(() => {
+          expect(result.current.error).toBeNull()
+        })
+      } finally {
+        window.EventSource = OriginalEventSource
+      }
+    })
+  })
+
   describe('onComplete stale closure', () => {
     it('should call the latest onComplete callback when complete event fires', async () => {
       const onComplete1 = vi.fn()
