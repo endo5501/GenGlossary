@@ -131,7 +131,7 @@ class TestPipelineExecutorFull:
 
             # Mock document loading
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test content")
+                MagicMock(file_path="/test/path/test.txt", content="test content")
             ]
 
             # Mock term extraction
@@ -308,7 +308,7 @@ class TestPipelineExecutorProgress:
             mock_llm_factory.return_value = mock_llm_client
 
             # Mock components
-            mock_loader.return_value.load_directory.return_value = [MagicMock(file_path="test.txt", content="test")]
+            mock_loader.return_value.load_directory.return_value = [MagicMock(file_path="/test/path/test.txt", content="test")]
             mock_extractor.return_value.extract_terms.return_value = [
                 ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
             ]
@@ -358,7 +358,7 @@ class TestPipelineExecutorLogCallback:
 
             # Mock components
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test")
+                MagicMock(file_path="/test/path/test.txt", content="test")
             ]
             mock_extractor.return_value.extract_terms.return_value = [
                 ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
@@ -397,7 +397,7 @@ class TestPipelineExecutorConfiguration:
 
             # Mock components
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test")
+                MagicMock(file_path="/custom/path/test.txt", content="test")
             ]
             mock_extractor.return_value.extract_terms.return_value = [
                 ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
@@ -433,7 +433,7 @@ class TestPipelineExecutorConfiguration:
 
             # Mock components
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test")
+                MagicMock(file_path="/test/path/test.txt", content="test")
             ]
             mock_extractor.return_value.extract_terms.return_value = [
                 ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
@@ -483,7 +483,7 @@ class TestPipelineExecutorConfiguration:
 
             # Mock components
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test")
+                MagicMock(file_path="/test/path/test.txt", content="test")
             ]
             mock_extractor.return_value.extract_terms.return_value = [
                 ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
@@ -603,7 +603,7 @@ class TestPipelineExecutorDBFirstApproach:
 
             # Mock filesystem loading
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="cli_file.txt", content="cli content")
+                MagicMock(file_path="/custom/cli/path/cli_file.txt", content="cli content")
             ]
 
             # Mock term extraction
@@ -1127,7 +1127,7 @@ class TestPipelineExecutorDBDocumentsLegacy:
 
             # Mock filesystem loading
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="cli_file.txt", content="cli content")
+                MagicMock(file_path="/custom/path/cli_file.txt", content="cli content")
             ]
 
             # Mock term extraction
@@ -1227,7 +1227,7 @@ class TestPipelineExecutorBugFixes:
 
             mock_llm_factory.return_value = MagicMock()
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test content")
+                MagicMock(file_path="/test/path/test.txt", content="test content")
             ]
 
             # LLM returns duplicate terms
@@ -1279,8 +1279,8 @@ class TestPipelineExecutorBugFixes:
 
             # Multiple files with same basename from different directories
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="docs/README.md", content="docs readme content"),
-                MagicMock(file_path="examples/README.md", content="examples readme content"),
+                MagicMock(file_path="/test/path/docs/README.md", content="docs readme content"),
+                MagicMock(file_path="/test/path/examples/README.md", content="examples readme content"),
             ]
 
             mock_extractor.return_value.extract_terms.return_value = [
@@ -1478,7 +1478,7 @@ class TestDuplicateFilteringBeforeGenerate:
 
             mock_llm_factory.return_value = MagicMock()
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test content")
+                MagicMock(file_path="/test/path/test.txt", content="test content")
             ]
 
             # LLM returns duplicate terms
@@ -1589,7 +1589,7 @@ class TestPipelineExecutorWithContext:
 
             mock_llm_factory.return_value = MagicMock()
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test")
+                MagicMock(file_path="/test/path/test.txt", content="test")
             ]
             mock_extractor.return_value.extract_terms.return_value = [
                 ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
@@ -1685,7 +1685,7 @@ class TestPipelineExecutorThreadSafety:
 
                     mock_llm_factory.return_value = MagicMock()
                     mock_loader.return_value.load_directory.return_value = [
-                        MagicMock(file_path="test.txt", content="test")
+                        MagicMock(file_path="/test/path/test.txt", content="test")
                     ]
                     mock_extractor.return_value.extract_terms.return_value = [
                         ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
@@ -1766,7 +1766,7 @@ class TestCancellableDecorator:
 
             mock_llm_factory.return_value = MagicMock()
             mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="test.txt", content="test")
+                MagicMock(file_path="/test/path/test.txt", content="test")
             ]
             mock_extractor.return_value.extract_terms.return_value = [
                 ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
