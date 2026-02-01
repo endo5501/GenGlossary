@@ -1,5 +1,5 @@
 ---
-priority: 8
+priority: 3
 tags: [feature, backend]
 description: "DB progress update implementation"
 created_at: "2026-01-30T09:45:00Z"
