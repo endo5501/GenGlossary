@@ -40,8 +40,17 @@ def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
 def get_active_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
     """アクティブなRun（pending or running）を取得"""
     cursor.execute(
-        "SELECT * FROM runs WHERE status IN ('pending', 'running') ORDER BY id DESC LIMIT 1"
+        "SELECT * FROM runs WHERE status IN ('pending', 'running') ORDER BY created_at DESC, id DESC LIMIT 1"
     )
+    ...
+
+def get_current_or_latest_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """アクティブなRunがあれば返し、なければ最新のRunを返す
+
+    /current エンドポイント用。パイプライン完了後も完了状態を取得可能にする。
+    アクティブなRun（pending/running）がある場合はそれを優先。
+    なければ、ステータスに関係なく最新のRunを返す。
+    """
     ...
 
 def list_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
