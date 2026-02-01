@@ -92,6 +92,7 @@ class GlossaryReviewer:
         ]
 
         all_issues: list[GlossaryIssue] = []
+        failed_batches: list[int] = []
         for batch_idx, batch_terms in enumerate(batches):
             # Check for cancellation before each batch
             if cancel_event is not None and cancel_event.is_set():
@@ -104,9 +105,26 @@ class GlossaryReviewer:
                 except Exception as e:
                     logger.warning("Batch progress callback failed: %s", e)
 
-            # Review this batch
-            issues = self._review_batch(glossary, batch_terms)
-            all_issues.extend(issues)
+            # Review this batch (skip on error, continue with next batch)
+            try:
+                issues = self._review_batch(glossary, batch_terms)
+                all_issues.extend(issues)
+            except Exception as e:
+                failed_batches.append(batch_idx + 1)
+                logger.warning(
+                    "Batch %d/%d failed, skipping: %s",
+                    batch_idx + 1,
+                    len(batches),
+                    e,
+                )
+
+        if failed_batches:
+            logger.warning(
+                "Review completed with %d/%d batches failed: %s",
+                len(failed_batches),
+                len(batches),
+                failed_batches,
+            )
 
         return all_issues
 
