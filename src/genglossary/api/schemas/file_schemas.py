@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class FileResponse(BaseModel):
-    """Response schema for a document file."""
+    """Response schema for a document file (without content)."""
 
     id: int = Field(..., description="Document ID")
     file_name: str = Field(..., description="File name")
@@ -39,6 +39,32 @@ class FileResponse(BaseModel):
             list[FileResponse]: List of response instances.
         """
         return [cls.from_db_row(row) for row in rows]
+
+
+class FileDetailResponse(BaseModel):
+    """Response schema for a document file with content."""
+
+    id: int = Field(..., description="Document ID")
+    file_name: str = Field(..., description="File name")
+    content_hash: str = Field(..., description="Content hash")
+    content: str = Field(..., description="File content")
+
+    @classmethod
+    def from_db_row(cls, row: Any) -> "FileDetailResponse":
+        """Create from database row.
+
+        Args:
+            row: Database row (sqlite3.Row or dict-like).
+
+        Returns:
+            FileDetailResponse: Response instance.
+        """
+        return cls(
+            id=row["id"],
+            file_name=row["file_name"],
+            content_hash=row["content_hash"],
+            content=row["content"],
+        )
 
 
 class FileCreateRequest(BaseModel):

@@ -80,14 +80,14 @@ def test_list_files_returns_all_documents(test_project_setup, client: TestClient
     assert data[1]["file_name"] == "doc2.md"
 
 
-def test_get_file_by_id_returns_document(test_project_setup, client: TestClient):
-    """Test GET /api/projects/{id}/files/{file_id} returns specific document."""
+def test_get_file_by_id_returns_document_with_content(test_project_setup, client: TestClient):
+    """Test GET /api/projects/{id}/files/{file_id} returns document with content."""
     project_id = test_project_setup["project_id"]
     project_db_path = test_project_setup["project_db_path"]
 
     conn = get_connection(project_db_path)
     with transaction(conn):
-        doc_id = create_document(conn, "test.txt", "Test content", "test_hash")
+        doc_id = create_document(conn, "test.txt", "Test content for viewer", "test_hash")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/files/{doc_id}")
@@ -97,6 +97,7 @@ def test_get_file_by_id_returns_document(test_project_setup, client: TestClient)
     assert data["id"] == doc_id
     assert data["file_name"] == "test.txt"
     assert data["content_hash"] == "test_hash"
+    assert data["content"] == "Test content for viewer"
 
 
 def test_get_file_by_id_returns_404_for_missing_file(

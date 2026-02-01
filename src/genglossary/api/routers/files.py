@@ -10,6 +10,7 @@ from genglossary.db.connection import transaction
 from genglossary.api.schemas.file_schemas import (
     FileCreateBulkRequest,
     FileCreateRequest,
+    FileDetailResponse,
     FileResponse,
 )
 from genglossary.db.document_repository import (
@@ -106,13 +107,13 @@ async def list_files(
     return FileResponse.from_db_rows(rows)
 
 
-@router.get("/{file_id}", response_model=FileResponse)
+@router.get("/{file_id}", response_model=FileDetailResponse)
 async def get_file_by_id(
     project_id: int = Path(..., description="Project ID"),
     file_id: int = Path(..., description="File ID"),
     project_db: sqlite3.Connection = Depends(get_project_db),
-) -> FileResponse:
-    """Get a specific document by ID.
+) -> FileDetailResponse:
+    """Get a specific document by ID with content.
 
     Args:
         project_id: Project ID (path parameter).
@@ -120,7 +121,7 @@ async def get_file_by_id(
         project_db: Project database connection.
 
     Returns:
-        FileResponse: The requested document.
+        FileDetailResponse: The requested document with content.
 
     Raises:
         HTTPException: 404 if document not found.
@@ -129,7 +130,7 @@ async def get_file_by_id(
     if row is None:
         raise HTTPException(status_code=404, detail=f"File {file_id} not found")
 
-    return FileResponse.from_db_row(row)
+    return FileDetailResponse.from_db_row(row)
 
 
 @router.post("", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
