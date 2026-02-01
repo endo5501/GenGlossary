@@ -154,6 +154,11 @@ class RunManager:
 
         Raises:
             RuntimeError: 既にRunが実行中の場合
+
+        Lock ordering: _start_run_lock -> database connection -> _cancel_events_lock
+        この順序により、以下のレースコンディションを防止:
+        - 並行する start_run 呼び出し
+        - start_run と cancel_run の競合
         """
         # Synchronize to prevent race conditions between concurrent start_run calls
         with self._start_run_lock:
@@ -167,15 +172,28 @@ class RunManager:
                 with transaction(conn):
                     run_id = create_run(conn, scope=scope)
 
-        # Create cancel event for this run
-        cancel_event = Event()
-        with self._cancel_events_lock:
-            self._cancel_events[run_id] = cancel_event
+            # Create cancel event within the same lock to ensure consistency
+            # DB状態とインメモリ状態の整合性を保証
+            cancel_event = Event()
+            with self._cancel_events_lock:
+                self._cancel_events[run_id] = cancel_event
 
-        # バックグラウンドスレッドを起動
-        self._thread = Thread(target=self._execute_run, args=(run_id, scope))
-        self._thread.daemon = True
-        self._thread.start()
+        # バックグラウンドスレッドを起動（ロック外で）
+        try:
+            self._thread = Thread(target=self._execute_run, args=(run_id, scope))
+            self._thread.daemon = True
+            self._thread.start()
+        except Exception:
+            # Cleanup on thread start failure
+            with self._cancel_events_lock:
+                self._cancel_events.pop(run_id, None)
+            with database_connection(self.db_path) as conn:
+                with transaction(conn):
+                    update_run_status(
+                        conn, run_id, "failed",
+                        error_message="Failed to start execution thread"
+                    )
+            raise
 
         return run_id
 
@@ -879,7 +897,7 @@ get_run_manager(db_path) → RunManager
 - タイムゾーン検証（naive datetime の拒否）
 - ヘルパー関数テスト（_to_iso_string, _current_utc_iso）
 
-**tests/runs/test_manager.py (52 tests)**
+**tests/runs/test_manager.py (56 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - start_run synchronization（並行呼び出しの競合状態防止）
 - per-run cancellation（各runに個別のキャンセルイベント）
@@ -889,6 +907,7 @@ get_run_manager(db_path) → RunManager
 - status misclassification（DB更新失敗時のステータス誤分類防止）
 - status update fallback logic（no-opと失敗の区別）
 - failed status guard（終了状態への上書き防止）
+- state consistency（DB状態とインメモリ状態の整合性）
 
 **tests/runs/test_executor.py (50 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -914,4 +933,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 165 tests** (Repository 53 + Manager 52 + Executor 50 + API 10)
+**合計: 169 tests** (Repository 53 + Manager 56 + Executor 50 + API 10)
