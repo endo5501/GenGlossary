@@ -29,19 +29,19 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] Investigate current timestamp usage across the codebase
-- [ ] Decide on unified timestamp format (UTC ISO recommended)
-- [ ] Update update_run_status_if_active to use Python datetime
-- [ ] Update update_run_status if needed
-- [ ] Add tests for timestamp format consistency
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Investigate current timestamp usage across the codebase
+- [x] Decide on unified timestamp format (UTC ISO recommended)
+- [x] Update update_run_status_if_active to use Python datetime
+- [x] Update update_run_status if needed
+- [x] Add tests for timestamp format consistency
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
