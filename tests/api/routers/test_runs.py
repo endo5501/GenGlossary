@@ -189,7 +189,7 @@ class TestListRuns:
         conn = get_connection(project_db_path)
         with transaction(conn):
             run1_id = create_run(conn, scope="full")
-            run2_id = create_run(conn, scope="from_terms")
+            run2_id = create_run(conn, scope="extract")
         conn.close()
 
         response = client.get(f"/api/projects/{project_id}/runs")

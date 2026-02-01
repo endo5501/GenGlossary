@@ -14,7 +14,7 @@ def create_run(
 
     Args:
         conn: Project database connection.
-        scope: Run scope ('full', 'from_terms', 'provisional_to_refined').
+        scope: Run scope ('full', 'extract', 'generate', 'review', 'refine').
         triggered_by: Source that triggered the run (default: 'api').
 
     Returns:

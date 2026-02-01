@@ -205,7 +205,7 @@ class TestRunManagerStart:
 
             # Attempt to start another run while first is running
             with pytest.raises(RuntimeError, match="already running"):
-                manager.start_run(scope="from_terms")
+                manager.start_run(scope="extract")
 
     def test_start_run_with_different_scopes(
         self, manager: RunManager, project_db: sqlite3.Connection
@@ -214,11 +214,11 @@ class TestRunManagerStart:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             mock_executor.return_value.execute.return_value = None
 
-            run_id = manager.start_run(scope="from_terms")
+            run_id = manager.start_run(scope="extract")
 
             run = get_run(project_db, run_id)
             assert run is not None
-            assert run["scope"] == "from_terms"
+            assert run["scope"] == "extract"
 
 
 class TestRunManagerCancel:

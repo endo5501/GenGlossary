@@ -9,7 +9,7 @@ GUIアプリケーションから非同期にパイプラインを実行する�
 ```sql
 CREATE TABLE runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    scope TEXT NOT NULL,  -- 'full' | 'from_terms' | 'provisional_to_refined'
+    scope TEXT NOT NULL,  -- 'full' | 'extract' | 'generate' | 'review' | 'refine'
     status TEXT NOT NULL, -- 'pending' | 'running' | 'completed' | 'cancelled' | 'failed'
     started_at TEXT,
     finished_at TEXT,
@@ -404,9 +404,11 @@ def _current_utc_iso() -> str:
 ```python
 class PipelineScope(Enum):
     """パイプライン実行スコープの列挙型"""
-    FULL = "full"                                    # 全ステップ実行
-    FROM_TERMS = "from_terms"                        # 用語抽出済みから再開
-    PROVISIONAL_TO_REFINED = "provisional_to_refined" # 暫定用語集から精査
+    FULL = "full"        # 全ステップ実行
+    EXTRACT = "extract"  # 用語抽出のみ
+    GENERATE = "generate" # 用語集生成のみ
+    REVIEW = "review"    # レビューのみ
+    REFINE = "refine"    # 改善のみ
 ```
 
 ### ExecutionContext (スレッドセーフティ)
@@ -466,8 +468,10 @@ def _cancellable(func: Callable) -> Callable:
 
 **適用先:**
 - `_execute_full`: フルパイプライン実行
-- `_execute_from_terms`: 用語抽出済みから再開
-- `_execute_provisional_to_refined`: 暫定用語集から精査
+- `_execute_extract`: 用語抽出のみ
+- `_execute_generate`: 用語集生成のみ
+- `_execute_review`: レビューのみ
+- `_execute_refine`: 改善のみ
 
 **残存する明示的チェック:**
 LLM呼び出しや最終保存の前には、レスポンシブなキャンセルのため明示的チェックが残ります。
@@ -526,8 +530,10 @@ class PipelineExecutor:
         # ディスパッチテーブルでスコープに対応するハンドラーを取得
         scope_handlers = {
             PipelineScope.FULL: self._execute_full,
-            PipelineScope.FROM_TERMS: self._execute_from_terms,
-            PipelineScope.PROVISIONAL_TO_REFINED: self._execute_provisional_to_refined,
+            PipelineScope.EXTRACT: self._execute_extract,
+            PipelineScope.GENERATE: self._execute_generate,
+            PipelineScope.REVIEW: self._execute_review,
+            PipelineScope.REFINE: self._execute_refine,
         }
 
         handler = scope_handlers.get(scope_enum)
@@ -724,8 +730,10 @@ if not issues:
 | Scope | 実行ステップ | 用途 |
 |-------|------------|------|
 | `full` | 1→2→3→4→5 | 全パイプライン実行（ドキュメント読み込みから） |
-| `from_terms` | 3→4→5 | 既存の抽出用語から用語集生成 |
-| `provisional_to_refined` | 4→5 | 既存の暫定用語集から精査・改善 |
+| `extract` | 2 | 用語抽出のみ |
+| `generate` | 3 | 用語集生成のみ |
+| `review` | 4 | レビューのみ |
+| `refine` | 5 | 改善のみ |
 
 **重複用語の処理:**
 - 用語抽出ステップ（ステップ2）で LLM が同じ用語を複数回返した場合、重複はスキップされ、ユニークな用語のみが DB に保存されます
@@ -772,7 +780,7 @@ if not issues:
   - サーバーの絶対パス漏洩を防止（セキュリティ）
   - DBの環境間移動時の互換性を向上（ポータビリティ）
 
-- `full` / `from_terms` / `provisional_to_refined`: すべて `_load_documents()` を使用
+- `full` / `extract` / `refine`: `_load_documents()` を使用してドキュメントを読み込む
 - GUIからのファイル追加: HTML5 File APIでブラウザから読み取り、APIを通じてDBに保存
 
 **DB-firstアプローチの理由:**

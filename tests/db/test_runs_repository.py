@@ -45,13 +45,13 @@ class TestCreateRun:
         """全フィールドを指定してRunを作成できる"""
         run_id = create_run(
             project_db,
-            scope="from_terms",
+            scope="extract",
             triggered_by="api",
         )
 
         run = get_run(project_db, run_id)
         assert run is not None
-        assert run["scope"] == "from_terms"
+        assert run["scope"] == "extract"
         assert run["status"] == "pending"
         assert run["triggered_by"] == "api"
 
@@ -146,7 +146,7 @@ class TestGetActiveRun:
         # Ensure different created_at timestamp
         time.sleep(1.1)
 
-        run_id2 = create_run(project_db, scope="from_terms")
+        run_id2 = create_run(project_db, scope="extract")
         update_run_status(project_db, run_id2, "running", started_at=datetime.now(timezone.utc))
 
         active_run = get_active_run(project_db)
@@ -165,8 +165,8 @@ class TestListRuns:
     def test_list_multiple(self, project_db: sqlite3.Connection) -> None:
         """複数のRunをリストできる"""
         id1 = create_run(project_db, "full")
-        id2 = create_run(project_db, "from_terms")
-        id3 = create_run(project_db, "provisional_to_refined")
+        id2 = create_run(project_db, "extract")
+        id3 = create_run(project_db, "generate")
 
         runs = list_runs(project_db)
         assert len(runs) == 3
@@ -182,9 +182,9 @@ class TestListRuns:
 
         id1 = create_run(project_db, "full")
         time.sleep(1.1)  # SQLite datetime('now') is second-precision
-        id2 = create_run(project_db, "from_terms")
+        id2 = create_run(project_db, "extract")
         time.sleep(1.1)
-        id3 = create_run(project_db, "provisional_to_refined")
+        id3 = create_run(project_db, "generate")
 
         runs = list_runs(project_db)
         # Most recent first

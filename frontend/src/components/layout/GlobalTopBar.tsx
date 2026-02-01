@@ -15,12 +15,14 @@ interface GlobalTopBarProps {
 
 const scopeOptions = [
   { value: 'full', label: 'Full Pipeline' },
-  { value: 'from_terms', label: 'From Terms' },
-  { value: 'provisional_to_refined', label: 'Provisional to Refined' },
+  { value: 'extract', label: 'Extract Only' },
+  { value: 'generate', label: 'Generate Only' },
+  { value: 'review', label: 'Review Only' },
+  { value: 'refine', label: 'Refine Only' },
 ]
 
 const isRunScope = (value: string): value is RunScope =>
-  ['full', 'from_terms', 'provisional_to_refined'].includes(value)
+  ['full', 'extract', 'generate', 'review', 'refine'].includes(value)
 
 export function GlobalTopBar({
   projectId,
