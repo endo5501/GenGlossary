@@ -2318,3 +2318,111 @@ class TestExecuteReturnValue:
             result = executor.execute(project_db, "full", context, doc_root="/test")
 
             assert result is True, "Should return True when cancelled during execution"
+
+
+class TestPipelineCancelledException:
+    """Tests for PipelineCancelledException class and cancellation via exception."""
+
+    def test_pipeline_cancelled_exception_class_exists(self) -> None:
+        """PipelineCancelledException クラスが存在し、Exception を継承している"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        assert issubclass(PipelineCancelledException, Exception)
+
+    def test_pipeline_cancelled_exception_can_be_raised(self) -> None:
+        """PipelineCancelledException が正常に raise できる"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        with pytest.raises(PipelineCancelledException):
+            raise PipelineCancelledException()
+
+    def test_execute_raises_exception_when_cancelled_before_start(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        log_callback,
+    ) -> None:
+        """キャンセル状態で execute を呼び出すと PipelineCancelledException が発生する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        cancel_event = Event()
+        cancel_event.set()  # Set before execution
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with pytest.raises(PipelineCancelledException):
+            executor.execute(project_db, "full", context)
+
+    def test_execute_raises_exception_when_cancelled_during_execution(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        log_callback,
+    ) -> None:
+        """実行中にキャンセルされると PipelineCancelledException が発生する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        cancel_event = Event()
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        def set_cancel_and_return_docs(*_args, **_kwargs):
+            cancel_event.set()
+            return [MagicMock(file_path="/test/doc.txt", content="test")]
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+            mock_llm_factory.return_value = MagicMock()
+            mock_loader.return_value.load_directory.side_effect = set_cancel_and_return_docs
+
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, "full", context, doc_root="/test")
+
+    def test_check_cancellation_raises_exception(
+        self,
+        executor: PipelineExecutor,
+        log_callback,
+    ) -> None:
+        """_check_cancellation がキャンセル時に例外を raise する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        cancel_event = Event()
+        cancel_event.set()
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with pytest.raises(PipelineCancelledException):
+            executor._check_cancellation(context)
+
+    def test_cancellable_decorator_raises_exception(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        log_callback,
+    ) -> None:
+        """@_cancellable デコレータがキャンセル時に例外を raise する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        cancel_event = Event()
+        cancel_event.set()
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client"):
+            with pytest.raises(PipelineCancelledException):
+                executor._execute_full(project_db, context, doc_root="/test/path")

@@ -1674,3 +1674,75 @@ class TestRunManagerStatusMisclassification:
                     f"Status should not be 'failed' when cancellation was requested. "
                     f"Got '{run['status']}'."
                 )
+
+
+class TestPipelineCancelledExceptionHandling:
+    """Tests for manager handling of PipelineCancelledException from executor."""
+
+    def test_cancelled_exception_sets_status_to_cancelled(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """PipelineCancelledException が発生した場合、ステータスは cancelled になる"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor to raise PipelineCancelledException
+            mock_executor.return_value.execute.side_effect = PipelineCancelledException()
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that run status is "cancelled"
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "cancelled", (
+                f"Expected status 'cancelled' but got '{run['status']}'. "
+                "PipelineCancelledException should result in cancelled status."
+            )
+
+    def test_regular_exception_sets_status_to_failed(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """通常の例外が発生した場合、ステータスは failed になる（回帰テスト）"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor to raise regular exception
+            mock_executor.return_value.execute.side_effect = RuntimeError("Something went wrong")
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that run status is "failed"
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "failed", (
+                f"Expected status 'failed' but got '{run['status']}'. "
+                "Regular exceptions should result in failed status."
+            )
+            assert "Something went wrong" in (run["error_message"] or "")
+
+    def test_cancelled_exception_does_not_set_error_message(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """PipelineCancelledException の場合、error_message は設定されない"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = PipelineCancelledException()
+
+            run_id = manager.start_run(scope="full")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            run = get_run(project_db, run_id)
+            assert run is not None
+            # error_message should be None or empty for cancellation
+            assert run["error_message"] is None or run["error_message"] == "", (
+                f"error_message should be empty for cancellation, got '{run['error_message']}'"
+            )
