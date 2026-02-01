@@ -383,6 +383,31 @@ class PipelineExecutor:
         self._log(context, "error", "No documents found")
         raise RuntimeError("Cannot execute pipeline without documents")
 
+    def _load_provisional_glossary(
+        self, conn: sqlite3.Connection, context: ExecutionContext, step_name: str
+    ) -> Glossary:
+        """Load provisional glossary from database.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging.
+            step_name: Name of the step requesting the glossary (for error messages).
+
+        Returns:
+            Glossary: Loaded provisional glossary.
+
+        Raises:
+            RuntimeError: If no provisional glossary found.
+        """
+        self._log(context, "info", "Loading provisional glossary from database...")
+        provisional_rows = list_all_provisional(conn)
+        if not provisional_rows:
+            self._log(context, "error", "No provisional terms found in database")
+            raise RuntimeError(f"Cannot execute {step_name} without provisional glossary")
+        glossary = self._glossary_from_db_rows(provisional_rows)
+        self._log(context, "info", f"Loaded {len(provisional_rows)} provisional terms")
+        return glossary
+
     @_cancellable
     def _execute_full(
         self,
@@ -485,15 +510,7 @@ class PipelineExecutor:
             PipelineCancelledException: If execution is cancelled.
             RuntimeError: If no provisional glossary found in database.
         """
-        # Load provisional glossary from DB
-        self._log(context, "info", "Loading provisional glossary from database...")
-        provisional_rows = list_all_provisional(conn)
-        if not provisional_rows:
-            self._log(context, "error", "No provisional terms found in database")
-            raise RuntimeError("Cannot execute review without provisional glossary")
-        glossary = self._glossary_from_db_rows(provisional_rows)
-        self._log(context, "info", f"Loaded {len(provisional_rows)} provisional terms")
-
+        glossary = self._load_provisional_glossary(conn, context, "review")
         self._do_review(conn, context, glossary)
 
     @_cancellable
@@ -515,15 +532,7 @@ class PipelineExecutor:
             RuntimeError: If no provisional glossary found in database.
         """
         documents = self._load_documents(conn, context)
-
-        # Load provisional glossary from DB
-        self._log(context, "info", "Loading provisional glossary from database...")
-        provisional_rows = list_all_provisional(conn)
-        if not provisional_rows:
-            self._log(context, "error", "No provisional terms found in database")
-            raise RuntimeError("Cannot execute refine without provisional glossary")
-        glossary = self._glossary_from_db_rows(provisional_rows)
-        self._log(context, "info", f"Loaded {len(provisional_rows)} provisional terms")
+        glossary = self._load_provisional_glossary(conn, context, "refine")
 
         # Load issues from DB
         self._log(context, "info", "Loading issues from database...")
