@@ -25,25 +25,27 @@ router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 ALLOWED_EXTENSIONS = {".txt", ".md"}
 
 
-def _validate_file_name(file_name: str) -> None:
-    """Validate file name (relative path).
+def _validate_file_name(file_name: str) -> str:
+    """Validate and normalize file name (relative path).
 
     Accepts relative paths with forward slashes (e.g., 'chapter1/intro.md').
-    Rejects path traversal attempts (..) and Windows backslashes.
+    Rejects absolute paths, path traversal attempts (..), and Windows backslashes.
+    Normalizes paths by removing '.' segments.
 
     Args:
         file_name: File name or relative path to validate.
 
+    Returns:
+        Normalized path string.
+
     Raises:
         HTTPException: If file name is invalid.
     """
-    # Reject path traversal attempts (check path segments, not substring)
-    # This allows filenames like "notes..md" but rejects "../secret.txt"
-    segments = file_name.split("/")
-    if ".." in segments:
+    # Reject absolute paths
+    if file_name.startswith("/"):
         raise HTTPException(
             status_code=400,
-            detail="File name cannot contain '..' path segments",
+            detail="Absolute paths not allowed",
         )
 
     # Reject Windows backslashes (POSIX format only)
@@ -53,19 +55,36 @@ def _validate_file_name(file_name: str) -> None:
             detail="File name must use forward slashes",
         )
 
-    # Check extension
-    if "." not in file_name:
+    # Split into segments for validation and normalization
+    segments = file_name.split("/")
+
+    # Reject path traversal attempts (check path segments, not substring)
+    # This allows filenames like "notes..md" but rejects "../secret.txt"
+    if ".." in segments:
+        raise HTTPException(
+            status_code=400,
+            detail="File name cannot contain '..' path segments",
+        )
+
+    # Normalize: remove '.' segments
+    normalized_segments = [s for s in segments if s != "."]
+    normalized = "/".join(normalized_segments)
+
+    # Check extension on normalized path
+    if "." not in normalized:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
         )
 
-    ext = "." + file_name.rsplit(".", 1)[-1].lower()
+    ext = "." + normalized.rsplit(".", 1)[-1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
         )
+
+    return normalized
 
 
 @router.get("", response_model=list[FileResponse])
@@ -132,21 +151,21 @@ async def create_file(
         HTTPException: 400 if file name or extension is invalid.
         HTTPException: 409 if file already exists.
     """
-    # Validate file name
-    _validate_file_name(request.file_name)
+    # Validate and normalize file name
+    normalized_file_name = _validate_file_name(request.file_name)
 
     # Compute hash
     content_hash = compute_content_hash(request.content)
 
-    # Create document
+    # Create document with normalized name
     try:
         with transaction(project_db):
             doc_id = create_document(
-                project_db, request.file_name, request.content, content_hash
+                project_db, normalized_file_name, request.content, content_hash
             )
     except sqlite3.IntegrityError:
         raise HTTPException(
-            status_code=409, detail=f"File already exists: {request.file_name}"
+            status_code=409, detail=f"File already exists: {normalized_file_name}"
         )
 
     # Return created document
@@ -181,32 +200,34 @@ async def create_files_bulk(
         HTTPException: 400 if any file name or extension is invalid.
         HTTPException: 409 if any file already exists.
     """
-    # Validate all file names first
+    # Validate and normalize all file names first
+    normalized_files: list[tuple[str, str]] = []  # (normalized_name, content)
     for file_req in request.files:
-        _validate_file_name(file_req.file_name)
+        normalized_name = _validate_file_name(file_req.file_name)
+        normalized_files.append((normalized_name, file_req.content))
 
-    # Check for duplicates in request
-    file_names = [f.file_name for f in request.files]
-    if len(file_names) != len(set(file_names)):
+    # Check for duplicates in request (using normalized names)
+    normalized_names = [name for name, _ in normalized_files]
+    if len(normalized_names) != len(set(normalized_names)):
         raise HTTPException(
             status_code=400, detail="Duplicate file names in request"
         )
 
-    # Check for existing files
-    for file_req in request.files:
-        existing = get_document_by_name(project_db, file_req.file_name)
+    # Check for existing files (using normalized names)
+    for normalized_name, _ in normalized_files:
+        existing = get_document_by_name(project_db, normalized_name)
         if existing is not None:
             raise HTTPException(
-                status_code=409, detail=f"File already exists: {file_req.file_name}"
+                status_code=409, detail=f"File already exists: {normalized_name}"
             )
 
-    # Create all documents
+    # Create all documents with normalized names
     created_ids = []
     with transaction(project_db):
-        for file_req in request.files:
-            content_hash = compute_content_hash(file_req.content)
+        for normalized_name, content in normalized_files:
+            content_hash = compute_content_hash(content)
             doc_id = create_document(
-                project_db, file_req.file_name, file_req.content, content_hash
+                project_db, normalized_name, content, content_hash
             )
             created_ids.append(doc_id)
 
