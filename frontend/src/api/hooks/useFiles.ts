@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
-import type { FileResponse, FileCreateRequest, FileCreateBulkRequest } from '../types'
+import type { FileResponse, FileDetailResponse, FileCreateRequest, FileCreateBulkRequest } from '../types'
 import { projectKeys } from './useProjects'
 
 // Query keys
@@ -18,7 +18,7 @@ const fileApi = {
   list: (projectId: number) =>
     apiClient.get<FileResponse[]>(`/api/projects/${projectId}/files`),
   get: (projectId: number, fileId: number) =>
-    apiClient.get<FileResponse>(`/api/projects/${projectId}/files/${fileId}`),
+    apiClient.get<FileDetailResponse>(`/api/projects/${projectId}/files/${fileId}`),
   create: (projectId: number, data: FileCreateRequest) =>
     apiClient.post<FileResponse>(`/api/projects/${projectId}/files`, data),
   createBulk: (projectId: number, data: FileCreateBulkRequest) =>
@@ -36,7 +36,7 @@ export function useFiles(projectId: number | undefined) {
   })
 }
 
-export function useFile(projectId: number | undefined, fileId: number | undefined) {
+export function useFileDetail(projectId: number | undefined, fileId: number | undefined) {
   return useQuery({
     queryKey: fileKeys.detail(projectId!, fileId!),
     queryFn: () => fileApi.get(projectId!, fileId!),

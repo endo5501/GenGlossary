@@ -43,6 +43,13 @@ export interface FileResponse {
   content_hash: string
 }
 
+export interface FileDetailResponse {
+  id: number
+  file_name: string
+  content_hash: string
+  content: string
+}
+
 export interface FileCreateRequest {
   file_name: string
   content: string
