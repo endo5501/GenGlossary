@@ -1,5 +1,6 @@
 """Files API endpoints."""
 
+import re
 import sqlite3
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
@@ -41,8 +42,15 @@ def _validate_file_name(file_name: str) -> str:
     Raises:
         HTTPException: If file name is invalid.
     """
-    # Reject absolute paths
+    # Reject absolute paths (Unix-style)
     if file_name.startswith("/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Absolute paths not allowed",
+        )
+
+    # Reject Windows drive paths (e.g., C:/path, D:\path)
+    if re.match(r"^[A-Za-z]:", file_name):
         raise HTTPException(
             status_code=400,
             detail="Absolute paths not allowed",
