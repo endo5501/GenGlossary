@@ -26,6 +26,7 @@ def to_safe_relative_path(file_path: Path | str, root: Path | str) -> str:
     resolved_root = Path(root).resolve()
 
     if not resolved_file.is_relative_to(resolved_root):
-        raise ValueError(f"File is outside doc_root: {file_path}")
+        # Don't include the absolute path in error message to prevent leakage
+        raise ValueError("Path is outside root directory")
 
     return resolved_file.relative_to(resolved_root).as_posix()

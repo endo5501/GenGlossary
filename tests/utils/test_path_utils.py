@@ -47,7 +47,7 @@ class TestToSafeRelativePath:
         outside_file.parent.mkdir()
         outside_file.touch()
 
-        with pytest.raises(ValueError, match="outside doc_root"):
+        with pytest.raises(ValueError, match="Path is outside root directory"):
             to_safe_relative_path(outside_file, root)
 
     def test_rejects_parent_traversal(self, tmp_path: Path) -> None:
@@ -58,7 +58,7 @@ class TestToSafeRelativePath:
         outside_file = tmp_path / "root" / "file.txt"
         outside_file.touch()
 
-        with pytest.raises(ValueError, match="outside doc_root"):
+        with pytest.raises(ValueError, match="Path is outside root directory"):
             to_safe_relative_path(outside_file, root)
 
     def test_handles_symlinks_safely(self, tmp_path: Path) -> None:

@@ -1956,7 +1956,7 @@ class TestDocumentFilePathStorage:
             ]
 
             # Should raise ValueError for file outside doc_root
-            with pytest.raises(ValueError, match="outside doc_root"):
+            with pytest.raises(ValueError, match="outside root directory"):
                 executor.execute(
                     project_db, "full", execution_context,
                     doc_root="/project/docs"

@@ -108,6 +108,33 @@ prompt = f"""以下の用語集を精査してください。
 JSON形式で回答してください..."""
 ```
 
+## ファイルパス漏洩防止
+
+LLMプロンプトには `Document.file_path` が含まれることがあります（出現箇所のコンテキストなど）。絶対パスをそのまま送信すると、サーバーのディレクトリ構造やユーザー名などのプライバシー情報が外部LLMサービスに漏洩する可能性があります。
+
+### 対策
+
+`DocumentLoader.load_directory()` はファイルパスを自動的に相対パス（POSIX形式）に変換します：
+
+```python
+# 内部処理
+documents = loader.load_directory("/home/user/project/docs")
+# Document.file_path は "chapter1/intro.txt" のような相対パスになる
+```
+
+これにより、LLMプロンプトに含まれるパスは常に相対パスとなり、絶対パスの漏洩を防ぎます。
+
+### 技術詳細
+
+- `to_safe_relative_path()` 関数を使用してパスを変換
+- シンボリックリンクは `resolve()` 後に検証（ディレクトリ外へのリンクはスキップ）
+- エラーメッセージにも絶対パスを含めない（漏洩防止）
+
+### 参考
+
+- `src/genglossary/document_loader.py` - DocumentLoader実装
+- `src/genglossary/utils/path_utils.py` - パス変換ユーティリティ
+
 ## テスト
 
 プロンプトインジェクション防止のテストは以下で実行できます:
