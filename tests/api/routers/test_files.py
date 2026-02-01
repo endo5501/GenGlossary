@@ -137,19 +137,53 @@ def test_create_file_rejects_invalid_extension(test_project_setup, client: TestC
     assert "extension" in response.json()["detail"].lower()
 
 
-def test_create_file_rejects_path_in_filename(test_project_setup, client: TestClient):
-    """Test POST /api/projects/{id}/files rejects file names with path separators."""
+def test_create_file_accepts_relative_path(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files accepts relative paths with forward slashes."""
     project_id = test_project_setup["project_id"]
 
-    # Test forward slash
-    payload = {"file_name": "path/to/file.txt", "content": "content"}
+    # Relative path with forward slashes should be accepted
+    payload = {"file_name": "chapter1/intro.txt", "content": "content"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 201
+    assert response.json()["file_name"] == "chapter1/intro.txt"
+
+
+def test_create_file_rejects_path_traversal(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files rejects path traversal attempts."""
+    project_id = test_project_setup["project_id"]
+
+    # Path traversal with .. should be rejected
+    payload = {"file_name": "../secret.txt", "content": "content"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 400
+    assert ".." in response.json()["detail"]
+
+    # Path traversal in middle of path
+    payload = {"file_name": "chapter1/../../../etc/passwd.txt", "content": "content"}
     response = client.post(f"/api/projects/{project_id}/files", json=payload)
     assert response.status_code == 400
 
-    # Test backslash
+
+def test_create_file_rejects_backslash(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files rejects Windows-style backslashes."""
+    project_id = test_project_setup["project_id"]
+
+    # Backslash should be rejected (POSIX format only)
     payload = {"file_name": "path\\to\\file.txt", "content": "content"}
     response = client.post(f"/api/projects/{project_id}/files", json=payload)
     assert response.status_code == 400
+    assert "forward" in response.json()["detail"].lower() or "slash" in response.json()["detail"].lower()
+
+
+def test_create_file_allows_double_dots_in_filename(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files allows .. in filename (not path segment)."""
+    project_id = test_project_setup["project_id"]
+
+    # Double dots in filename (not a path segment) should be allowed
+    payload = {"file_name": "notes..md", "content": "content"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 201
+    assert response.json()["file_name"] == "notes..md"
 
 
 def test_create_file_returns_409_for_duplicate_file(

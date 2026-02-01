@@ -44,7 +44,7 @@ class FileResponse(BaseModel):
 class FileCreateRequest(BaseModel):
     """Request schema for creating a document file with content."""
 
-    file_name: str = Field(..., description="File name (without path)")
+    file_name: str = Field(..., description="Relative file path (POSIX format, e.g., 'chapter1/intro.md')")
     content: str = Field(..., description="File content")
 
 

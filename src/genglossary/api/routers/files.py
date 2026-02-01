@@ -26,19 +26,31 @@ ALLOWED_EXTENSIONS = {".txt", ".md"}
 
 
 def _validate_file_name(file_name: str) -> None:
-    """Validate file name.
+    """Validate file name (relative path).
+
+    Accepts relative paths with forward slashes (e.g., 'chapter1/intro.md').
+    Rejects path traversal attempts (..) and Windows backslashes.
 
     Args:
-        file_name: File name to validate.
+        file_name: File name or relative path to validate.
 
     Raises:
         HTTPException: If file name is invalid.
     """
-    # Check for path separators
-    if "/" in file_name or "\\" in file_name:
+    # Reject path traversal attempts (check path segments, not substring)
+    # This allows filenames like "notes..md" but rejects "../secret.txt"
+    segments = file_name.split("/")
+    if ".." in segments:
         raise HTTPException(
             status_code=400,
-            detail="File name cannot contain path separators",
+            detail="File name cannot contain '..' path segments",
+        )
+
+    # Reject Windows backslashes (POSIX format only)
+    if "\\" in file_name:
+        raise HTTPException(
+            status_code=400,
+            detail="File name must use forward slashes",
         )
 
     # Check extension

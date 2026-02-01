@@ -1,10 +1,10 @@
 """Pipeline executor for running glossary generation steps."""
 
-import os
 import sqlite3
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
+from pathlib import Path
 from threading import Event
 from typing import Callable
 
@@ -33,6 +33,7 @@ from genglossary.models.glossary import Glossary
 from genglossary.models.term import ClassifiedTerm, Term, TermOccurrence
 from genglossary.term_extractor import TermExtractor
 from genglossary.utils.hash import compute_content_hash
+from genglossary.utils.path_utils import to_safe_relative_path
 
 
 class PipelineScope(Enum):
@@ -346,11 +347,12 @@ class PipelineExecutor:
                 # - Avoid same basename collisions (e.g., docs/README.md vs examples/README.md)
                 # - Prevent server path leakage via API/logs (security)
                 # - Improve portability when moving DB between environments
+                # - Reject files outside doc_root for security (path traversal prevention)
                 with transaction(conn):
                     delete_all_documents(conn)
                     docs_data = [
                         (
-                            os.path.relpath(document.file_path, doc_root),
+                            to_safe_relative_path(document.file_path, doc_root),
                             document.content,
                             compute_content_hash(document.content),
                         )
