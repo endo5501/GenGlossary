@@ -11,7 +11,7 @@ export {
 
 export {
   useFiles,
-  useFile,
+  useFileDetail,
   useCreateFile,
   useCreateFilesBulk,
   useDeleteFile,
