@@ -136,8 +136,9 @@ class RunManager:
             )
 
             # Separate try/except for pipeline execution
+            was_cancelled = False
             try:
-                executor.execute(
+                was_cancelled = executor.execute(
                     conn,
                     scope,
                     context,
@@ -149,7 +150,7 @@ class RunManager:
 
             # Finalize run status (separate from pipeline execution)
             self._finalize_run_status(
-                conn, run_id, cancel_event, pipeline_error, pipeline_traceback
+                conn, run_id, was_cancelled, pipeline_error, pipeline_traceback
             )
 
         except Exception as e:
@@ -311,7 +312,7 @@ class RunManager:
         self,
         conn: sqlite3.Connection,
         run_id: int,
-        cancel_event: Event,
+        was_cancelled: bool,
         pipeline_error: Exception | None,
         pipeline_traceback: str | None = None,
     ) -> None:
@@ -322,13 +323,13 @@ class RunManager:
 
         Priority:
         1. If pipeline had an error -> failed
-        2. If cancelled -> cancelled
-        3. Otherwise -> completed
+        2. If actually cancelled during execution -> cancelled
+        3. Otherwise -> completed (even if cancel was requested after completion)
 
         Args:
             conn: Database connection.
             run_id: Run ID.
-            cancel_event: Cancellation event for this run.
+            was_cancelled: True if pipeline was actually cancelled during execution.
             pipeline_error: Exception from pipeline execution, or None if successful.
             pipeline_traceback: Traceback from pipeline error, or None if successful.
         """
@@ -349,8 +350,8 @@ class RunManager:
             return
 
         # Pipeline succeeded - determine final status
-        if cancel_event.is_set():
-            # Cancelled - try to update status with fallback
+        if was_cancelled:
+            # Cancelled during execution - try to update status with fallback
             self._try_status_with_fallback(
                 conn, run_id, self._try_cancel_status, "cancelled"
             )

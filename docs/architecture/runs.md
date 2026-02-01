@@ -243,7 +243,7 @@ class RunManager:
             if conn is not None:
                 conn.close()
 
-    def _finalize_run_status(self, conn, run_id, cancel_event, pipeline_error, pipeline_traceback) -> None:
+    def _finalize_run_status(self, conn, run_id, was_cancelled, pipeline_error, pipeline_traceback) -> None:
         """パイプライン実行後のステータスを確定
 
         ステータス更新ロジックをパイプライン実行から分離することで、
@@ -251,8 +251,17 @@ class RunManager:
 
         優先順位:
         1. パイプラインエラーがあれば → failed
-        2. キャンセルされていれば → cancelled
-        3. それ以外 → completed
+        2. 実行中にキャンセルされていれば → cancelled
+        3. それ以外 → completed（遅延キャンセルでも完了を優先）
+
+        Args:
+            was_cancelled: executor.execute() の戻り値。
+                           True = 実行中にキャンセルされた、False = 正常完了
+
+        Note:
+            cancel_event.is_set() ではなく was_cancelled を使用することで、
+            遅延キャンセル（パイプライン完了後にキャンセルリクエストが到着）
+            でも結果を保持できます。
 
         ステータス更新失敗時はフォールバック接続でリトライ。
         """
@@ -412,11 +421,12 @@ def _cancellable(func: Callable) -> Callable:
     """メソッド実行前にキャンセルをチェックするデコレータ
 
     装飾されたメソッドは ExecutionContext を引数として受け取る必要があります。
-    キャンセルが検出された場合、メソッドは実行されずに None を返します。
+    キャンセルが検出された場合、メソッドは実行されずに True を返します
+    （True = キャンセルされた）。
 
     一般的なパターン:
         if self._check_cancellation(context):
-            return
+            return True
 
     を置き換えます。
     """
@@ -431,7 +441,7 @@ def _cancellable(func: Callable) -> Callable:
                     break
 
         if context is not None and self._check_cancellation(context):
-            return None
+            return True  # キャンセルされた
         return func(self, *args, **kwargs)
     return wrapper
 ```
@@ -464,7 +474,7 @@ class PipelineExecutor:
         scope: str | PipelineScope,  # Enum または文字列を受け付け
         context: ExecutionContext,   # 実行コンテキスト
         doc_root: str = ".",
-    ) -> None:
+    ) -> bool:
         """指定されたスコープでパイプラインを実行
 
         Args:
@@ -472,6 +482,9 @@ class PipelineExecutor:
             scope: 実行スコープ（PipelineScope または文字列）
             context: 実行コンテキスト（run_id, log_callback, cancel_event）
             doc_root: ドキュメントルートディレクトリ
+
+        Returns:
+            bool: True = 実行中にキャンセルされた、False = 正常完了
 
         Raises:
             ValueError: 不明なスコープが指定された場合
@@ -616,6 +629,37 @@ if issues is None:
 if not issues:
     # provisional をそのまま refined にコピー...
 ```
+
+## 遅延キャンセル（Late-Cancel）の処理
+
+パイプライン完了後にキャンセルリクエストが到着した場合の処理方針：
+
+**完了を優先**: パイプラインが実際に完了していれば、ステータスは `completed` となり、結果は保存されます。
+
+**理由**: ユーザーの成果物（用語集）が失われないことを優先。
+
+**実装方法**:
+1. `executor.execute()` が `bool` を返す（`True` = キャンセルで中断、`False` = 正常完了）
+2. `manager._finalize_run_status()` は `cancel_event.is_set()` ではなく `was_cancelled` を使用
+3. 各ステップの処理完了後は、キャンセルチェックなしで結果を保存
+
+**シナリオ例**:
+```
+時系列:
+1. パイプライン実行開始
+2. パイプライン正常完了（execute が False を返す）
+3. ユーザーがキャンセルボタンを押す（遅すぎた）
+4. _finalize_run_status で was_cancelled=False なので completed に
+5. 結果：ステータスは completed、用語集は保存済み
+```
+
+**キャンセルが効くタイミング**:
+- 各ステップの開始前（`@_cancellable` デコレータ）
+- LLM呼び出し前の明示的チェック
+- LLM処理クラス内のループ中
+
+**キャンセルが効かないタイミング（完了を優先）**:
+- 生成/精査完了後の保存直前
 
 ## 実行スコープ
 
