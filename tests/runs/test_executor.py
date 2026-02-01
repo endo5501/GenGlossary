@@ -176,7 +176,9 @@ class TestPipelineExecutorFull:
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """キャンセル時は途中で停止する"""
+        """キャンセル時は途中で停止し、PipelineCancelledException を raise する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         # Set cancellation before execution
         cancel_event.set()
 
@@ -186,9 +188,10 @@ class TestPipelineExecutorFull:
             cancel_event=cancel_event,
         )
 
-        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+        with patch("genglossary.runs.executor.create_llm_client"), \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
-            executor.execute(project_db, "full", context)
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, "full", context)
 
             # DocumentLoader should not be called when cancelled
             mock_loader.return_value.load_directory.assert_not_called()
@@ -1345,7 +1348,7 @@ class TestPipelineScopeEnum:
         log_callback,
     ) -> None:
         """execute メソッドが PipelineScope Enum を受け付けることを確認"""
-        from genglossary.runs.executor import PipelineScope
+        from genglossary.runs.executor import PipelineCancelledException, PipelineScope
 
         # Set cancellation to skip actual execution
         cancel_event.set()
@@ -1357,8 +1360,9 @@ class TestPipelineScopeEnum:
         )
 
         with patch("genglossary.runs.executor.create_llm_client"):
-            # Should not raise TypeError when using enum
-            executor.execute(project_db, PipelineScope.FULL, context)
+            # Should raise PipelineCancelledException (not TypeError) when using enum
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, PipelineScope.FULL, context)
 
     def test_scope_clear_functions_use_enum_keys(self) -> None:
         """_SCOPE_CLEAR_FUNCTIONS が PipelineScope Enum をキーとして使用することを確認"""
@@ -1457,13 +1461,13 @@ class TestCancellationCheckBeforeRefinedSave:
                     cancel_event.set()
 
             with patch.object(executor, "_log", log_and_cancel):
-                result = executor.execute(project_db, "provisional_to_refined", context)
+                # Pipeline completes successfully (no exception raised)
+                # because late cancel happens after the no-check-before-save point
+                executor.execute(project_db, "provisional_to_refined", context)
 
             # Refined terms batch SHOULD be saved even with late cancel
             # (late-cancel race condition fix: preserve user's work)
             mock_create_refined_batch.assert_called_once()
-            # Result is False because pipeline completed successfully
-            assert result is False
 
 
 class TestDuplicateFilteringBeforeGenerate:
@@ -1556,7 +1560,9 @@ class TestPipelineExecutorWithContext:
         project_db: sqlite3.Connection,
     ) -> None:
         """execute メソッドが ExecutionContext を受け付けることを確認"""
-        logs = []
+        from genglossary.runs.executor import PipelineCancelledException
+
+        logs: list[dict] = []
         cancel_event = Event()
         cancel_event.set()  # Cancel immediately to skip actual execution
 
@@ -1567,10 +1573,11 @@ class TestPipelineExecutorWithContext:
         )
 
         with patch("genglossary.runs.executor.create_llm_client"):
-            # Should not raise TypeError when using ExecutionContext
-            executor.execute(
-                project_db, "full", context, doc_root="."
-            )
+            # Should raise PipelineCancelledException (not TypeError) when using ExecutionContext
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(
+                    project_db, "full", context, doc_root="."
+                )
 
     def test_execute_logs_use_context_run_id(
         self,
@@ -1615,8 +1622,10 @@ class TestPipelineExecutorWithContext:
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
     ) -> None:
-        """execute が context.cancel_event を正しく使用することを確認"""
-        logs = []
+        """execute が context.cancel_event を正しく使用し、キャンセル時に例外を raise することを確認"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        logs: list[dict] = []
         cancel_event = Event()
         cancel_event.set()  # Set before execution
 
@@ -1629,7 +1638,8 @@ class TestPipelineExecutorWithContext:
         with patch("genglossary.runs.executor.create_llm_client"), \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
 
-            executor.execute(project_db, "full", context, doc_root="/test/path")
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, "full", context, doc_root="/test/path")
 
             # DocumentLoader should not be called when cancelled
             mock_loader.return_value.load_directory.assert_not_called()
@@ -1736,7 +1746,9 @@ class TestCancellableDecorator:
         project_db: sqlite3.Connection,
         log_callback,
     ) -> None:
-        """@_cancellable デコレータがメソッドエントリーでキャンセルをチェックする"""
+        """@_cancellable デコレータがメソッドエントリーでキャンセルをチェックし例外を raise する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         cancel_event = Event()
         cancel_event.set()  # Already cancelled
 
@@ -1751,10 +1763,11 @@ class TestCancellableDecorator:
 
             mock_llm_factory.return_value = MagicMock()
 
-            # _execute_full should return early due to decorator check
-            executor._execute_full(project_db, context, doc_root="/test/path")
+            # _execute_full should raise PipelineCancelledException due to decorator check
+            with pytest.raises(PipelineCancelledException):
+                executor._execute_full(project_db, context, doc_root="/test/path")
 
-            # DocumentLoader should NOT be called (decorator returned early)
+            # DocumentLoader should NOT be called (decorator raised early)
             mock_loader.return_value.load_directory.assert_not_called()
 
     def test_cancellable_decorator_allows_execution_when_not_cancelled(
@@ -1781,7 +1794,7 @@ class TestCancellableDecorator:
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            # Should execute normally
+            # Should execute normally (no exception)
             executor._execute_full(project_db, execution_context, doc_root="/test/path")
 
             # DocumentLoader should be called
@@ -1793,7 +1806,9 @@ class TestCancellableDecorator:
         project_db: sqlite3.Connection,
         log_callback,
     ) -> None:
-        """デコレータが位置引数からcontextを見つける"""
+        """デコレータが位置引数からcontextを見つけ、キャンセル時に例外を raise する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         cancel_event = Event()
         cancel_event.set()
 
@@ -1808,10 +1823,11 @@ class TestCancellableDecorator:
 
             mock_llm_factory.return_value = MagicMock()
 
-            # Call with context as positional arg
-            executor._execute_from_terms(project_db, context)
+            # Call with context as positional arg - should raise
+            with pytest.raises(PipelineCancelledException):
+                executor._execute_from_terms(project_db, context)
 
-            # Should return early, no DB access
+            # Should not access DB (raised early)
             mock_list_docs.assert_not_called()
 
 
@@ -2153,6 +2169,8 @@ class TestPipelineExecutorCancelEventPropagation:
         Late-cancel race condition fix: once generation completes (returns a value),
         results are saved even if cancel arrives before the save.
         """
+        from genglossary.runs.executor import PipelineCancelledException
+
         context = ExecutionContext(
             run_id=1,
             log_callback=log_callback,
@@ -2184,12 +2202,12 @@ class TestPipelineExecutorCancelEventPropagation:
             # Reviewer returns None because cancelled
             mock_reviewer_cls.return_value.review.return_value = None
 
-            result = executor.execute(project_db, "from_terms", context)
+            # Pipeline raises PipelineCancelledException because reviewer detected cancel
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, "from_terms", context)
 
             # Provisional terms SHOULD be saved (late-cancel fix)
             mock_create_prov.assert_called_once()
-            # Result is True because pipeline was cancelled (reviewer detected cancel)
-            assert result is True
 
     def test_issues_not_saved_when_review_cancelled(
         self,
@@ -2198,7 +2216,9 @@ class TestPipelineExecutorCancelEventPropagation:
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """review() がキャンセルでNoneを返した場合、issues が保存されないことを確認"""
+        """review() がキャンセルでNoneを返した場合、issues が保存されずに例外が raise される"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         context = ExecutionContext(
             run_id=1,
             log_callback=log_callback,
@@ -2220,21 +2240,22 @@ class TestPipelineExecutorCancelEventPropagation:
             # Reviewer returns None (cancelled)
             mock_reviewer_cls.return_value.review.return_value = None
 
-            executor.execute(project_db, "provisional_to_refined", context)
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, "provisional_to_refined", context)
 
             # Issues should NOT be saved when review was cancelled
             mock_create_issues.assert_not_called()
 
 
-class TestExecuteReturnValue:
-    """Tests for execute() return value indicating cancellation status."""
+class TestExecuteCompletionBehavior:
+    """Tests for execute() completion and cancellation behavior."""
 
-    def test_execute_returns_false_when_completed_normally(
+    def test_execute_completes_normally_without_exception(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
     ) -> None:
-        """execute が正常完了時に False を返すことを確認"""
+        """execute が正常完了時に例外を raise しないことを確認"""
         cancel_event = Event()
         context = ExecutionContext(
             run_id=1,
@@ -2268,16 +2289,17 @@ class TestExecuteReturnValue:
             mock_generator.return_value.generate.return_value = mock_glossary
             mock_reviewer.return_value.review.return_value = []
 
-            result = executor.execute(project_db, "full", context, doc_root="/test")
+            # Should complete without raising any exception
+            executor.execute(project_db, "full", context, doc_root="/test")
 
-            assert result is False, "Should return False when completed normally"
-
-    def test_execute_returns_true_when_cancelled_before_start(
+    def test_execute_raises_exception_when_cancelled_before_start(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
     ) -> None:
-        """execute が開始前にキャンセルされた場合に True を返すことを確認"""
+        """execute が開始前にキャンセルされた場合に PipelineCancelledException を raise することを確認"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         cancel_event = Event()
         cancel_event.set()  # Set before execution
         context = ExecutionContext(
@@ -2289,16 +2311,17 @@ class TestExecuteReturnValue:
         with patch("genglossary.runs.executor.create_llm_client"), \
              patch("genglossary.runs.executor.DocumentLoader"):
 
-            result = executor.execute(project_db, "full", context, doc_root="/test")
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, "full", context, doc_root="/test")
 
-            assert result is True, "Should return True when cancelled before start"
-
-    def test_execute_returns_true_when_cancelled_after_document_load(
+    def test_execute_raises_exception_when_cancelled_after_document_load(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
     ) -> None:
-        """execute がドキュメント読み込み後にキャンセルされた場合に True を返すことを確認"""
+        """execute がドキュメント読み込み後にキャンセルされた場合に PipelineCancelledException を raise することを確認"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         cancel_event = Event()
         context = ExecutionContext(
             run_id=1,
@@ -2315,6 +2338,113 @@ class TestExecuteReturnValue:
             mock_llm_factory.return_value = MagicMock()
             mock_loader.return_value.load_directory.side_effect = set_cancel_and_return_docs
 
-            result = executor.execute(project_db, "full", context, doc_root="/test")
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, "full", context, doc_root="/test")
 
-            assert result is True, "Should return True when cancelled during execution"
+
+class TestPipelineCancelledException:
+    """Tests for PipelineCancelledException class and cancellation via exception."""
+
+    def test_pipeline_cancelled_exception_class_exists(self) -> None:
+        """PipelineCancelledException クラスが存在し、Exception を継承している"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        assert issubclass(PipelineCancelledException, Exception)
+
+    def test_pipeline_cancelled_exception_can_be_raised(self) -> None:
+        """PipelineCancelledException が正常に raise できる"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        with pytest.raises(PipelineCancelledException):
+            raise PipelineCancelledException()
+
+    def test_execute_raises_exception_when_cancelled_before_start(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        log_callback,
+    ) -> None:
+        """キャンセル状態で execute を呼び出すと PipelineCancelledException が発生する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        cancel_event = Event()
+        cancel_event.set()  # Set before execution
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with pytest.raises(PipelineCancelledException):
+            executor.execute(project_db, "full", context)
+
+    def test_execute_raises_exception_when_cancelled_during_execution(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        log_callback,
+    ) -> None:
+        """実行中にキャンセルされると PipelineCancelledException が発生する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        cancel_event = Event()
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        def set_cancel_and_return_docs(*_args, **_kwargs):
+            cancel_event.set()
+            return [MagicMock(file_path="/test/doc.txt", content="test")]
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+            mock_llm_factory.return_value = MagicMock()
+            mock_loader.return_value.load_directory.side_effect = set_cancel_and_return_docs
+
+            with pytest.raises(PipelineCancelledException):
+                executor.execute(project_db, "full", context, doc_root="/test")
+
+    def test_check_cancellation_raises_exception(
+        self,
+        executor: PipelineExecutor,
+        log_callback,
+    ) -> None:
+        """_check_cancellation がキャンセル時に例外を raise する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        cancel_event = Event()
+        cancel_event.set()
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with pytest.raises(PipelineCancelledException):
+            executor._check_cancellation(context)
+
+    def test_cancellable_decorator_raises_exception(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        log_callback,
+    ) -> None:
+        """@_cancellable デコレータがキャンセル時に例外を raise する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        cancel_event = Event()
+        cancel_event.set()
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client"):
+            with pytest.raises(PipelineCancelledException):
+                executor._execute_full(project_db, context, doc_root="/test/path")

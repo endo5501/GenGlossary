@@ -15,7 +15,11 @@ from genglossary.db.runs_repository import (
     update_run_status,
     update_run_status_if_active,
 )
-from genglossary.runs.executor import ExecutionContext, PipelineExecutor
+from genglossary.runs.executor import (
+    ExecutionContext,
+    PipelineCancelledException,
+    PipelineExecutor,
+)
 
 
 class RunManager:
@@ -144,10 +148,9 @@ class RunManager:
                 model=self.llm_model,
             )
 
-            # Separate try/except for pipeline execution
-            was_cancelled = False
+            # Execute pipeline - exceptions indicate cancellation or failure
             try:
-                was_cancelled = executor.execute(
+                executor.execute(
                     conn,
                     scope,
                     context,
@@ -159,7 +162,7 @@ class RunManager:
 
             # Finalize run status (separate from pipeline execution)
             self._finalize_run_status(
-                conn, run_id, was_cancelled, pipeline_error, pipeline_traceback
+                conn, run_id, pipeline_error, pipeline_traceback
             )
 
         except Exception as e:
@@ -321,7 +324,6 @@ class RunManager:
         self,
         conn: sqlite3.Connection,
         run_id: int,
-        was_cancelled: bool,
         pipeline_error: Exception | None,
         pipeline_traceback: str | None = None,
     ) -> None:
@@ -331,18 +333,25 @@ class RunManager:
         to prevent misclassification when status update fails.
 
         Priority:
-        1. If pipeline had an error -> failed
-        2. If actually cancelled during execution -> cancelled
-        3. Otherwise -> completed (even if cancel was requested after completion)
+        1. If PipelineCancelledException -> cancelled
+        2. If other exception -> failed
+        3. No exception -> completed
 
         Args:
             conn: Database connection.
             run_id: Run ID.
-            was_cancelled: True if pipeline was actually cancelled during execution.
             pipeline_error: Exception from pipeline execution, or None if successful.
             pipeline_traceback: Traceback from pipeline error, or None if successful.
         """
         if pipeline_error is not None:
+            # Check if it's a cancellation exception
+            if isinstance(pipeline_error, PipelineCancelledException):
+                # Cancelled during execution - try to update status with fallback
+                self._try_status_with_fallback(
+                    conn, run_id, self._try_cancel_status, "cancelled"
+                )
+                return
+
             # Pipeline failed - update to failed status
             error_message = str(pipeline_error)
             error_traceback = pipeline_traceback or traceback.format_exc()
@@ -358,17 +367,10 @@ class RunManager:
             )
             return
 
-        # Pipeline succeeded - determine final status
-        if was_cancelled:
-            # Cancelled during execution - try to update status with fallback
-            self._try_status_with_fallback(
-                conn, run_id, self._try_cancel_status, "cancelled"
-            )
-        else:
-            # Completed - try atomic completion with fallback
-            self._try_status_with_fallback(
-                conn, run_id, self._try_complete_status, "completed"
-            )
+        # Pipeline succeeded - completed
+        self._try_status_with_fallback(
+            conn, run_id, self._try_complete_status, "completed"
+        )
 
     def _try_update_status(
         self,

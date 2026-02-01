@@ -228,15 +228,16 @@ class TestRunManagerCancel:
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
         """cancel_runはRunのステータスをcancelledに設定する"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that checks cancel event and returns True (cancelled)
+            # Mock executor that checks cancel event and raises PipelineCancelledException
             def cancellable_execute(conn, scope, context, doc_root="."):
                 # Wait for cancellation, checking the event
                 for _ in range(50):  # 5 seconds max
                     if context.cancel_event.is_set():
-                        return True  # Cancelled
+                        raise PipelineCancelledException()
                     time.sleep(0.1)
-                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1078,15 +1079,16 @@ class TestRunManagerSubscriberCleanup:
         self, manager: RunManager
     ) -> None:
         """runキャンセル後にsubscribersがクリーンアップされる"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
             def cancellable_execute(conn, scope, context, doc_root="."):
-                # Wait for cancellation and return True (cancelled)
+                # Wait for cancellation and raise PipelineCancelledException
                 for _ in range(50):
                     if context.cancel_event.is_set():
-                        return True  # Cancelled
+                        raise PipelineCancelledException()
                     time.sleep(0.1)
-                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1226,14 +1228,15 @@ class TestRunManagerStatusUpdateFallbackLogic:
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
         """update_run_status_if_activeが0を返した場合（no-op）、ログに記録されフォールバックは試行されない"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that waits for cancellation and returns True (cancelled)
+            # Mock executor that waits for cancellation and raises PipelineCancelledException
             def cancellable_execute(conn, scope, context, doc_root="."):
                 for _ in range(50):
                     if context.cancel_event.is_set():
-                        return True  # Cancelled
+                        raise PipelineCancelledException()
                     time.sleep(0.1)
-                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1548,14 +1551,15 @@ class TestRunManagerStatusMisclassification:
     ) -> None:
         """キャンセルでDBステータス更新(update_run_status_if_active)が失敗しても、
         リトライによりステータスはcancelledになる"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that waits for cancellation and returns True (cancelled)
+            # Mock executor that waits for cancellation and raises PipelineCancelledException
             def cancellable_execute(conn, scope, context, doc_root="."):
                 for _ in range(50):
                     if context.cancel_event.is_set():
-                        return True  # Cancelled
+                        raise PipelineCancelledException()
                     time.sleep(0.1)
-                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1633,14 +1637,15 @@ class TestRunManagerStatusMisclassification:
     ) -> None:
         """キャンセルでDBステータス更新がすべて失敗しても、
         ステータスはfailedではない（キャンセルが優先される）"""
+        from genglossary.runs.executor import PipelineCancelledException
+
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that waits for cancellation and returns True (cancelled)
+            # Mock executor that waits for cancellation and raises PipelineCancelledException
             def cancellable_execute(conn, scope, context, doc_root="."):
                 for _ in range(50):
                     if context.cancel_event.is_set():
-                        return True  # Cancelled
+                        raise PipelineCancelledException()
                     time.sleep(0.1)
-                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1674,3 +1679,75 @@ class TestRunManagerStatusMisclassification:
                     f"Status should not be 'failed' when cancellation was requested. "
                     f"Got '{run['status']}'."
                 )
+
+
+class TestPipelineCancelledExceptionHandling:
+    """Tests for manager handling of PipelineCancelledException from executor."""
+
+    def test_cancelled_exception_sets_status_to_cancelled(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """PipelineCancelledException が発生した場合、ステータスは cancelled になる"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor to raise PipelineCancelledException
+            mock_executor.return_value.execute.side_effect = PipelineCancelledException()
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that run status is "cancelled"
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "cancelled", (
+                f"Expected status 'cancelled' but got '{run['status']}'. "
+                "PipelineCancelledException should result in cancelled status."
+            )
+
+    def test_regular_exception_sets_status_to_failed(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """通常の例外が発生した場合、ステータスは failed になる（回帰テスト）"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            # Mock executor to raise regular exception
+            mock_executor.return_value.execute.side_effect = RuntimeError("Something went wrong")
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for execution to complete
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Check that run status is "failed"
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "failed", (
+                f"Expected status 'failed' but got '{run['status']}'. "
+                "Regular exceptions should result in failed status."
+            )
+            assert "Something went wrong" in (run["error_message"] or "")
+
+    def test_cancelled_exception_does_not_set_error_message(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """PipelineCancelledException の場合、error_message は設定されない"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = PipelineCancelledException()
+
+            run_id = manager.start_run(scope="full")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            run = get_run(project_db, run_id)
+            assert run is not None
+            # error_message should be None or empty for cancellation
+            assert run["error_message"] is None or run["error_message"] == "", (
+                f"error_message should be empty for cancellation, got '{run['error_message']}'"
+            )
