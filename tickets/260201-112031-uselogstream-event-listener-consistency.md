@@ -4,7 +4,7 @@ tags: [frontend, refactoring]
 description: "useLogStream: Unify event listener registration to addEventListener"
 created_at: "2026-02-01T11:20:31Z"
 started_at: 2026-02-01T11:22:51Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T11:31:35Z # Do not modify manually
 ---
 
 # useLogStream: Unify event listener registration
