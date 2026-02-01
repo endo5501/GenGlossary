@@ -352,10 +352,14 @@ class TestDocumentLoaderValidation:
         # Both original and symlink should be loaded
         assert len(docs) >= 1
 
-    def test_load_directory_validate_path_disabled_allows_escape(
+    def test_load_directory_skips_symlink_escape_for_relative_path_conversion(
         self, tmp_path: Path
     ) -> None:
-        """Test symlink escape is allowed when validation is disabled."""
+        """Test symlink escape is skipped even when validate_path is disabled.
+
+        Even with validate_path=False, symlinks pointing outside the directory
+        are skipped during relative path conversion to prevent privacy leaks.
+        """
         # Create a file outside the directory
         outside_dir = tmp_path / "outside"
         outside_dir.mkdir()
@@ -371,8 +375,8 @@ class TestDocumentLoaderValidation:
         loader = DocumentLoader(validate_path=False)
         docs = loader.load_directory(str(doc_dir))
 
-        assert len(docs) == 1
-        assert docs[0].content == "secret content"
+        # External symlink is skipped (cannot convert to relative path)
+        assert len(docs) == 0
 
     # ===== Excluded File Pattern Tests =====
 
