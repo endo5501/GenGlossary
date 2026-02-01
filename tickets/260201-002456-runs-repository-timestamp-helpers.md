@@ -1,5 +1,5 @@
 ---
-priority: 6
+priority: 1
 tags: [backend, refactoring]
 description: "runs_repository: Extract helper functions for timestamp handling"
 created_at: "2026-02-01T00:24:56Z"
@@ -56,7 +56,6 @@ def _current_utc_iso() -> str:
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
 - [ ] Update docs/architecture/*.md
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
