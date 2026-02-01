@@ -223,6 +223,11 @@ describe('AppShell', () => {
       await renderApp('/projects/1/files')
       expect(screen.getByTestId('main-content')).toBeInTheDocument()
     })
+
+    it('should have scrollable content wrapper on project page', async () => {
+      await renderApp('/projects/1/files')
+      expect(screen.getByTestId('scrollable-content')).toBeInTheDocument()
+    })
   })
 
   describe('LogPanel (on project page)', () => {

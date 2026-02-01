@@ -1,4 +1,4 @@
-import { Stack, Group, Center, Text, Loader, Button } from '@mantine/core'
+import { Box, Group, Center, Text, Loader, Button } from '@mantine/core'
 import type { ReactNode } from 'react'
 
 interface PageContainerProps {
@@ -34,37 +34,57 @@ export function PageContainer({
 
   if (error) {
     return (
-      <Stack>
-        <Group>{actionBar}</Group>
-        <Center data-testid="page-error" h={200}>
-          <Stack align="center">
+      <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Group
+          data-testid="action-bar"
+          p="md"
+          style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+        >
+          {actionBar}
+        </Group>
+        <Center data-testid="page-error" style={{ flex: 1 }}>
+          <Box style={{ textAlign: 'center' }}>
             <Text c="red">Error: {error.message}</Text>
             {onRetry && (
-              <Button variant="outline" onClick={onRetry}>
+              <Button variant="outline" onClick={onRetry} mt="md">
                 Retry
               </Button>
             )}
-          </Stack>
+          </Box>
         </Center>
-      </Stack>
+      </Box>
     )
   }
 
   if (isEmpty) {
     return (
-      <Stack>
-        <Group>{actionBar}</Group>
-        <Center data-testid={emptyTestId} h={200}>
+      <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Group
+          data-testid="action-bar"
+          p="md"
+          style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+        >
+          {actionBar}
+        </Group>
+        <Center data-testid={emptyTestId} style={{ flex: 1 }}>
           <Text c="dimmed">{emptyMessage}</Text>
         </Center>
-      </Stack>
+      </Box>
     )
   }
 
   return (
-    <Stack>
-      <Group>{actionBar}</Group>
-      {children}
-    </Stack>
+    <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Group
+        data-testid="action-bar"
+        p="md"
+        style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+      >
+        {actionBar}
+      </Group>
+      <Box style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 'var(--mantine-spacing-md)' }}>
+        {children}
+      </Box>
+    </Box>
   )
 }

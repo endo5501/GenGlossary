@@ -47,8 +47,22 @@ export function AppShell() {
       )}
 
       <MantineAppShell.Main>
-        <Box data-testid="main-content" style={{ height: '100%' }}>
-          <Box style={{ minHeight: hasProject ? 'calc(100vh - 60px - 200px - 32px)' : 'calc(100vh - 60px - 32px)' }}>
+        <Box
+          data-testid="main-content"
+          style={{
+            height: 'calc(100vh - 60px)',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Box
+            data-testid="scrollable-content"
+            style={{
+              flex: 1,
+              overflow: 'hidden',
+              minHeight: 0,
+            }}
+          >
             <Outlet />
           </Box>
           {hasProject && <LogPanel projectId={projectId} runId={runId} onRunComplete={handleRunComplete} />}

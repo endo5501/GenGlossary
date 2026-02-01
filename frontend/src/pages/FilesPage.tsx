@@ -57,84 +57,103 @@ export function FilesPage({ projectId }: FilesPageProps) {
   const isEmpty = !files || files.length === 0
 
   return (
-    <Box p="md">
-      <Group justify="space-between" mb="lg">
+    <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Group
+        data-testid="action-bar"
+        justify="space-between"
+        p="md"
+        style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+      >
         <Title order={2}>Files</Title>
         <Button leftSection={<IconPlus size={16} />} onClick={() => setAddDialogOpened(true)}>Add</Button>
       </Group>
 
-      {isEmpty ? (
-        <Card withBorder p="xl" data-testid="files-empty">
-          <Stack align="center" gap="md">
-            <IconFile size={48} color="var(--mantine-color-dimmed)" />
-            <Text size="lg" c="dimmed">
-              No files registered
-            </Text>
-            <Text c="dimmed">
-              Click Add to upload files to the project.
-            </Text>
-            <Button
-              leftSection={<IconPlus size={16} />}
-              onClick={() => setAddDialogOpened(true)}
-            >
-              Add Files
-            </Button>
-          </Stack>
-        </Card>
-      ) : (
-        <Card withBorder>
-          <Table highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>File Name</Table.Th>
-                <Table.Th>Content Hash</Table.Th>
-                <Table.Th style={{ width: 100 }}>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {files.map((file) => (
-                <Table.Tr
-                  key={file.id}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => {
-                    // Navigate to document viewer
-                    navigate({
-                      to: `/projects/${projectId}/document-viewer`,
-                      search: { file: file.id },
-                    })
-                  }}
-                >
-                  <Table.Td>
-                    <Group gap="xs">
-                      <IconFile size={16} />
-                      {file.file_name}
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c="dimmed" ff="monospace">
-                      {file.content_hash.substring(0, 8)}...
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Button
-                      variant="subtle"
-                      color="red"
-                      size="xs"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteFile(file.id)
-                      }}
-                      loading={deletingFileId === file.id}
-                    >
-                      <IconTrash size={16} />
-                    </Button>
-                  </Table.Td>
+      <Box style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 'var(--mantine-spacing-md)' }}>
+        {isEmpty ? (
+          <Card withBorder p="xl" data-testid="files-empty">
+            <Stack align="center" gap="md">
+              <IconFile size={48} color="var(--mantine-color-dimmed)" />
+              <Text size="lg" c="dimmed">
+                No files registered
+              </Text>
+              <Text c="dimmed">
+                Click Add to upload files to the project.
+              </Text>
+              <Button
+                leftSection={<IconPlus size={16} />}
+                onClick={() => setAddDialogOpened(true)}
+              >
+                Add Files
+              </Button>
+            </Stack>
+          </Card>
+        ) : (
+          <Card withBorder>
+            <Table highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>File Name</Table.Th>
+                  <Table.Th>Content Hash</Table.Th>
+                  <Table.Th style={{ width: 100 }}>Actions</Table.Th>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Card>
-      )}
+              </Table.Thead>
+              <Table.Tbody>
+                {files.map((file) => (
+                  <Table.Tr
+                    key={file.id}
+                    style={{ cursor: 'pointer' }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View ${file.file_name}`}
+                    onClick={() => {
+                      navigate({
+                        to: `/projects/${projectId}/document-viewer`,
+                        search: { file: file.id },
+                      })
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate({
+                          to: `/projects/${projectId}/document-viewer`,
+                          search: { file: file.id },
+                        })
+                      }
+                    }}
+                  >
+                    <Table.Td>
+                      <Group gap="xs">
+                        <IconFile size={16} />
+                        {file.file_name}
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed" ff="monospace">
+                        {file.content_hash.substring(0, 8)}...
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Button
+                        variant="subtle"
+                        color="red"
+                        size="xs"
+                        aria-label={`Delete ${file.file_name}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteFile(file.id)
+                        }}
+                        loading={deletingFileId === file.id}
+                      >
+                        <IconTrash size={16} />
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Card>
+        )}
+      </Box>
 
       <AddFileDialog
         projectId={projectId}
