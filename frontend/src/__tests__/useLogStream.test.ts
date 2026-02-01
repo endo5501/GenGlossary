@@ -93,7 +93,10 @@ describe('useLogStream', () => {
         rerender({ runId: undefined })
 
         // Error should be cleared when runId becomes undefined
-        expect(result.current.error).toBeNull()
+        // Use waitFor because setError(null) happens in useEffect after render
+        await waitFor(() => {
+          expect(result.current.error).toBeNull()
+        })
       } finally {
         window.EventSource = OriginalEventSource
       }
