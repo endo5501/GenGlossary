@@ -134,7 +134,7 @@ export interface IssueResponse {
 }
 
 // Run types
-export type RunScope = 'full' | 'from_terms' | 'provisional_to_refined'
+export type RunScope = 'full' | 'extract' | 'generate' | 'review' | 'refine'
 export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export interface RunResponse {

@@ -96,7 +96,7 @@ class TestStartRun:
             # Try to start another run while first is running
             response2 = client.post(
                 f"/api/projects/{project_id}/runs",
-                json={"scope": "from_terms"}
+                json={"scope": "extract"}
             )
             assert response2.status_code == 409
 
@@ -109,7 +109,7 @@ class TestStartRun:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             mock_executor.return_value.execute.return_value = None
 
-            for scope in ["full", "from_terms", "provisional_to_refined"]:
+            for scope in ["full", "extract", "generate", "review", "refine"]:
                 response = client.post(
                     f"/api/projects/{project_id}/runs",
                     json={"scope": scope}
@@ -189,7 +189,7 @@ class TestListRuns:
         conn = get_connection(project_db_path)
         with transaction(conn):
             run1_id = create_run(conn, scope="full")
-            run2_id = create_run(conn, scope="from_terms")
+            run2_id = create_run(conn, scope="extract")
         conn.close()
 
         response = client.get(f"/api/projects/{project_id}/runs")

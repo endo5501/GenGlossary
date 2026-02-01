@@ -4,8 +4,10 @@ import type {
   TermResponse,
   TermCreateRequest,
   TermUpdateRequest,
+  RunResponse,
 } from '../types'
 import { useResourceList, useResourceDetail } from './useResource'
+import { runKeys } from './useRuns'
 
 export const termKeys = {
   all: ['terms'] as const,
@@ -28,7 +30,7 @@ const termApi = {
   delete: (projectId: number, termId: number) =>
     apiClient.delete<void>(`/api/projects/${projectId}/terms/${termId}`),
   extract: (projectId: number) =>
-    apiClient.post<{ message: string }>(`/api/projects/${projectId}/terms/extract`, {}),
+    apiClient.post<RunResponse>(`/api/projects/${projectId}/runs`, { scope: 'extract' }),
 }
 
 export function useTerms(projectId: number | undefined) {
@@ -89,6 +91,7 @@ export function useExtractTerms(projectId: number) {
     mutationFn: () => termApi.extract(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: termKeys.list(projectId) })
+      queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
     },
   })
 }

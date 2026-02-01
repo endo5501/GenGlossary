@@ -62,7 +62,7 @@ class RunManager:
         """Start a new run in the background.
 
         Args:
-            scope: Run scope ('full', 'from_terms', 'provisional_to_refined').
+            scope: Run scope ('full', 'extract', 'generate', 'review', 'refine').
             triggered_by: Source that triggered the run (default: 'api').
 
         Returns:
