@@ -3,7 +3,7 @@ priority: 3
 tags: [security, backend]
 description: "LLM prompts receive absolute file paths - potential privacy leak"
 created_at: "2026-02-01T08:40:51Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-01T08:45:57Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 

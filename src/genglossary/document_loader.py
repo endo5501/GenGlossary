@@ -252,20 +252,18 @@ class DocumentLoader:
             self._validate_path_in_directory(file_path, dir_path)
 
             try:
-                content = file_path.read_text(encoding="utf-8")
-                # Convert to relative path to prevent privacy leaks
+                # Convert to relative path first to prevent privacy leaks
                 # when file paths are sent to external LLM services
                 relative_path = to_safe_relative_path(file_path, dir_path)
+                content = file_path.read_text(encoding="utf-8")
                 documents.append(
                     Document(file_path=relative_path, content=content)
                 )
-            except (OSError, UnicodeDecodeError):
-                # Skip files that can't be read
-                continue
             except ValueError:
                 # Skip files outside the directory (e.g., symlinks pointing outside)
-                # This is caught from to_safe_relative_path() when the resolved
-                # path is not within the base directory
+                continue
+            except (OSError, UnicodeDecodeError):
+                # Skip files that can't be read
                 continue
 
         return documents
