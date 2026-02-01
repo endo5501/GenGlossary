@@ -112,30 +112,32 @@ Document Viewer ページをスケルトン実装から完全実装にする。
 ## Tasks
 
 - [x] `/brainstorming` skillを使用して計画を明確にする
-- [ ] Phase 1: バックエンドAPI
-  - [ ] `FileDetailResponse`スキーマ追加（contentフィールド付き）
-  - [ ] `GET /files/{file_id}` でcontentを返すよう修正
-  - [ ] APIテスト追加
-- [ ] Phase 2: フロントエンド型・フック
-  - [ ] `FileDetailResponse`型追加
-  - [ ] `useFileDetail`フック追加
-- [ ] Phase 3: UIコンポーネント
-  - [ ] `DocumentPane`コンポーネント作成（タブ + 本文表示）
-  - [ ] `TermCard`コンポーネント作成（用語詳細表示）
-  - [ ] `DocumentViewerPage`を左右2ペイン構成に変更
-- [ ] Phase 4: 用語ハイライト
-  - [ ] 本文中の用語をクリッカブルにする機能実装
-  - [ ] 選択用語のハイライト表示
-- [ ] Phase 5: 統合テスト
-  - [ ] playwright MCPを使用してDocument Viewerにプロジェクトのテキストが表示されることを確認
-  - [ ] playwright MCPを使用してDocument Viewerで用語クリックでハイライト・用語カードが表示されることを確認
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Phase 1: バックエンドAPI
+  - [x] `FileDetailResponse`スキーマ追加（contentフィールド付き）
+  - [x] `GET /files/{file_id}` でcontentを返すよう修正
+  - [x] APIテスト追加
+- [x] Phase 2: フロントエンド型・フック
+  - [x] `FileDetailResponse`型追加
+  - [x] `useFileDetail`フック追加
+- [x] Phase 3: UIコンポーネント
+  - [x] `DocumentPane`コンポーネント作成（タブ + 本文表示）
+  - [x] `TermCard`コンポーネント作成（用語詳細表示）
+  - [x] `DocumentViewerPage`を左右2ペイン構成に変更
+- [x] Phase 4: 用語ハイライト
+  - [x] 本文中の用語をクリッカブルにする機能実装
+  - [x] 選択用語のハイライト表示
+- [x] Phase 5: 統合テスト
+  - [x] playwright MCPを使用してDocument Viewerにプロジェクトのテキストが表示されることを確認
+  - [x] playwright MCPを使用してDocument Viewerで用語クリックでハイライト・用語カードが表示されることを確認
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+  - Created ticket: 260201-120133-code-simplification-file-schemas-viewer.md
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+  - Created ticket: 260201-120325-document-viewer-performance-optimization.md
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
