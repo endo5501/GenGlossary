@@ -491,3 +491,87 @@ class TestFailRunIfNotTerminal:
         )
 
         assert result is False
+
+
+class TestUpdateRunStatusIfActive:
+    """Tests for update_run_status_if_active function."""
+
+    def test_update_running_run_to_completed(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """running状態のRunをcompletedに更新できる"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+
+        rows_updated = update_run_status_if_active(project_db, run_id, "completed")
+
+        assert rows_updated == 1
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "completed"
+        assert run["finished_at"] is not None
+
+    def test_update_pending_run_to_cancelled(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """pending状態のRunをcancelledに更新できる"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+
+        rows_updated = update_run_status_if_active(project_db, run_id, "cancelled")
+
+        assert rows_updated == 1
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "cancelled"
+        assert run["finished_at"] is not None
+
+    def test_update_running_run_to_failed_with_error_message(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """running状態のRunをfailedに更新し、エラーメッセージを設定できる"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+
+        rows_updated = update_run_status_if_active(
+            project_db, run_id, "failed", error_message="Test error"
+        )
+
+        assert rows_updated == 1
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "failed"
+        assert run["error_message"] == "Test error"
+        assert run["finished_at"] is not None
+
+    def test_does_not_update_terminal_state(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """terminal状態のRunは更新されない"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        cancel_run(project_db, run_id)
+
+        rows_updated = update_run_status_if_active(project_db, run_id, "completed")
+
+        assert rows_updated == 0
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "cancelled"
+
+    def test_returns_zero_for_nonexistent_run(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """存在しないRunに対しては0を返す"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        rows_updated = update_run_status_if_active(project_db, 999, "completed")
+
+        assert rows_updated == 0

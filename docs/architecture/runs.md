@@ -59,40 +59,56 @@ def update_run_status(
     """Runステータスを更新"""
     ...
 
-def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
-    """Runをキャンセル（status='cancelled', finished_at設定）
+def update_run_status_if_active(
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    error_message: str | None = None
+) -> int:
+    """アクティブな状態（pending/running）のRunのみステータスを更新
+
+    終了状態（completed, cancelled, failed）のRunは更新しない。
+    cancel_run, complete_run_if_not_cancelled, fail_run_if_not_terminal の
+    共通ロジックを統合した汎用関数。
 
     Returns:
         更新された行数（0なら既に終了状態または存在しない）
-
-    Note:
-        終了状態（completed, cancelled, failed）のrunは更新しない
     """
     ...
+
+def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
+    """Runをキャンセル（status='cancelled', finished_at設定）
+
+    update_run_status_if_active の薄いラッパー。
+
+    Returns:
+        更新された行数（0なら既に終了状態または存在しない）
+    """
+    return update_run_status_if_active(conn, run_id, "cancelled")
 
 def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool:
     """Runを原子的に完了（キャンセル済みまたは終了済みでなければ）
 
-    レースコンディション防止: キャンセルチェックとステータス更新の間に
-    別スレッドからキャンセルされても、completedに上書きしない。
+    update_run_status_if_active の薄いラッパー。
+    レースコンディション防止: 別スレッドからキャンセルされても上書きしない。
 
     Returns:
         bool: completedに更新できればTrue、既に終了状態ならFalse
     """
-    ...
+    return update_run_status_if_active(conn, run_id, "completed") > 0
 
 def fail_run_if_not_terminal(
     conn: sqlite3.Connection, run_id: int, error_message: str
 ) -> bool:
     """Runを原子的にfailedに更新（終了状態でなければ）
 
+    update_run_status_if_active の薄いラッパー。
     終了状態（completed, cancelled, failed）のrunは上書きしない。
-    cancel_run, complete_run_if_not_cancelled と同じパターン。
 
     Returns:
         bool: failedに更新できればTrue、既に終了状態ならFalse
     """
-    ...
+    return update_run_status_if_active(conn, run_id, "failed", error_message) > 0
 ```
 
 ## manager.py (RunManager - スレッド管理)
@@ -237,11 +253,18 @@ class RunManager:
         """
         ...
 
-    def _try_failed_status(self, conn, run_id, error_message) -> bool:
-        """failed ステータス更新を試行（終了状態ガード付き）
+    def _try_update_status(
+        self, conn, run_id, status, error_message=None, no_op_message="..."
+    ) -> bool:
+        """汎用ステータス更新メソッド（エラーハンドリング・ログ出力付き）
 
-        fail_run_if_not_terminal を使用して、既存の終了状態（cancelled,
-        completed, failed）を上書きしないようガード。
+        update_run_status_if_active を使用し、共通のエラーハンドリングと
+        ログ出力パターンを提供。
+
+        Args:
+            status: 新しいステータス（'cancelled', 'completed', 'failed'）
+            error_message: failedステータスの場合のエラーメッセージ
+            no_op_message: 更新がスキップされた場合のログメッセージ
 
         Returns:
             True: 成功またはno-op（既に終了状態、フォールバック不要）
@@ -254,20 +277,23 @@ class RunManager:
     def _try_cancel_status(self, conn, run_id) -> bool:
         """cancelled ステータス更新を試行
 
-        Returns:
-            True: 成功またはno-op（既に終了状態、フォールバック不要）
-            False: 失敗（フォールバック必要）
+        _try_update_status の薄いラッパー。
         """
-        ...
+        return self._try_update_status(conn, run_id, "cancelled")
 
     def _try_complete_status(self, conn, run_id) -> bool:
         """completed ステータス更新を試行
 
-        Returns:
-            True: 成功またはno-op（既に終了状態、フォールバック不要）
-            False: 失敗（フォールバック必要）
+        _try_update_status の薄いラッパー。
         """
-        ...
+        return self._try_update_status(conn, run_id, "completed", ...)
+
+    def _try_failed_status(self, conn, run_id, error_message) -> bool:
+        """failed ステータス更新を試行
+
+        _try_update_status の薄いラッパー。
+        """
+        return self._try_update_status(conn, run_id, "failed", error_message)
 
     def _update_failed_status(self, conn, run_id, error_message) -> None:
         """フォールバック接続付きでステータスを 'failed' に更新
@@ -752,10 +778,11 @@ get_run_manager(db_path) → RunManager
 
 ## テスト構成
 
-**tests/db/test_runs_repository.py (31 tests)**
+**tests/db/test_runs_repository.py (36 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 - fail_run_if_not_terminal（終了状態の上書き防止）
+- update_run_status_if_active（汎用ステータス更新関数）
 
 **tests/runs/test_manager.py (52 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
@@ -792,4 +819,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 143 tests** (Repository 31 + Manager 52 + Executor 50 + API 10)
+**合計: 148 tests** (Repository 36 + Manager 52 + Executor 50 + API 10)

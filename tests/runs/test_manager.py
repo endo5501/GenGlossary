@@ -823,13 +823,13 @@ class TestRunManagerConnectionErrorHandling:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             mock_executor.return_value.execute.side_effect = RuntimeError("Test error")
 
-            # Make primary connection fail, fallback succeeds for fail_run_if_not_terminal
+            # Make primary connection fail, fallback succeeds for update_run_status_if_active
             with patch(
-                "genglossary.runs.manager.fail_run_if_not_terminal"
-            ) as mock_fail_run:
-                mock_fail_run.side_effect = [
+                "genglossary.runs.manager.update_run_status_if_active"
+            ) as mock_update:
+                mock_update.side_effect = [
                     sqlite3.OperationalError("database is locked"),  # first failed
-                    True,  # fallback succeeds
+                    1,  # fallback succeeds (1 row updated)
                 ]
 
                 # Subscribe to logs before starting run
@@ -1145,26 +1145,22 @@ class TestRunManagerStatusUpdateFallbackLogic:
     def test_complete_status_no_op_does_not_trigger_fallback(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """complete_run_if_not_cancelledがFalseを返した場合（no-op）、
+        """update_run_status_if_activeが0を返した場合（no-op）、
         フォールバックは試行されない"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             mock_executor.return_value.execute.return_value = None
 
-            # Track how many times complete_run_if_not_cancelled is called
+            # Track how many times update_run_status_if_active is called
             call_count = {"value": 0}
 
-            original_complete_run = __import__(
-                "genglossary.db.runs_repository", fromlist=["complete_run_if_not_cancelled"]
-            ).complete_run_if_not_cancelled
-
-            def counting_complete_run(conn, run_id):
+            def counting_update(conn, run_id, status, error_message=None):
                 call_count["value"] += 1
-                # Always return False to simulate no-op (already cancelled)
-                return False
+                # Always return 0 to simulate no-op (already cancelled)
+                return 0
 
             with patch(
-                "genglossary.runs.manager.complete_run_if_not_cancelled",
-                side_effect=counting_complete_run,
+                "genglossary.runs.manager.update_run_status_if_active",
+                side_effect=counting_update,
             ):
                 run_id = manager.start_run(scope="full")
 
@@ -1172,10 +1168,10 @@ class TestRunManagerStatusUpdateFallbackLogic:
                 if manager._thread:
                     manager._thread.join(timeout=2)
 
-                # complete_run_if_not_cancelled should be called only once
+                # update_run_status_if_active should be called only once
                 # (no fallback retry for no-op case)
                 assert call_count["value"] == 1, (
-                    f"Expected 1 call to complete_run_if_not_cancelled (no fallback for no-op), "
+                    f"Expected 1 call to update_run_status_if_active (no fallback for no-op), "
                     f"but got {call_count['value']} calls"
                 )
 
@@ -1186,23 +1182,23 @@ class TestRunManagerStatusUpdateFallbackLogic:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             mock_executor.return_value.execute.return_value = None
 
-            # Track calls to complete_run_if_not_cancelled
+            # Track calls to update_run_status_if_active
             call_count = {"value": 0}
 
-            original_complete_run = __import__(
-                "genglossary.db.runs_repository", fromlist=["complete_run_if_not_cancelled"]
-            ).complete_run_if_not_cancelled
+            original_update = __import__(
+                "genglossary.db.runs_repository", fromlist=["update_run_status_if_active"]
+            ).update_run_status_if_active
 
-            def failing_then_succeeding_complete(conn, run_id):
+            def failing_then_succeeding_update(conn, run_id, status, error_message=None):
                 call_count["value"] += 1
                 if call_count["value"] == 1:
                     # Simulate updater throwing exception (not caught internally)
                     raise sqlite3.OperationalError("database is locked")
-                return original_complete_run(conn, run_id)
+                return original_update(conn, run_id, status, error_message)
 
             with patch(
-                "genglossary.runs.manager.complete_run_if_not_cancelled",
-                side_effect=failing_then_succeeding_complete,
+                "genglossary.runs.manager.update_run_status_if_active",
+                side_effect=failing_then_succeeding_update,
             ):
                 run_id = manager.start_run(scope="full")
 
@@ -1223,7 +1219,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
     def test_cancel_status_no_op_logged_and_no_fallback(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """cancel_runが0行を返した場合（no-op）、ログに記録されフォールバックは試行されない"""
+        """update_run_status_if_activeが0を返した場合（no-op）、ログに記録されフォールバックは試行されない"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             # Mock executor that waits for cancellation
             def cancellable_execute(conn, scope, context, doc_root="."):
@@ -1234,17 +1230,19 @@ class TestRunManagerStatusUpdateFallbackLogic:
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
-            # Track how many times cancel_run is called
+            # Track how many times update_run_status_if_active is called for 'cancelled'
             call_count = {"value": 0}
 
-            def counting_cancel_run(conn, run_id):
-                call_count["value"] += 1
-                # Always return 0 rows updated (no-op - already terminal)
-                return 0
+            def counting_update(conn, run_id, status, error_message=None):
+                if status == "cancelled":
+                    call_count["value"] += 1
+                    # Always return 0 rows updated (no-op - already terminal)
+                    return 0
+                return 1  # For other status updates (like 'running'), return success
 
             with patch(
-                "genglossary.runs.manager.cancel_run",
-                side_effect=counting_cancel_run,
+                "genglossary.runs.manager.update_run_status_if_active",
+                side_effect=counting_update,
             ):
                 # Subscribe to logs
                 queue = manager.register_subscriber(run_id=1)
@@ -1258,7 +1256,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
                 if manager._thread:
                     manager._thread.join(timeout=2)
 
-                # Should only be called once (no fallback for no-op)
+                # Should only be called once for cancelled status (no fallback for no-op)
                 assert call_count["value"] == 1, (
                     f"Expected 1 call (no fallback for no-op), got {call_count['value']}"
                 )
@@ -1271,7 +1269,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
                         logs.append(log)
 
                 assert any(
-                    "Cancel skipped" in log.get("message", "") and log.get("level") == "info"
+                    "Cancelled skipped" in log.get("message", "") and log.get("level") == "info"
                     for log in logs
                 ), "Info log about skipped cancel should be broadcast"
 
@@ -1410,7 +1408,7 @@ class TestRunManagerFailedStatusGuard:
                     logs.append(log)
 
             assert any(
-                "Failed status skipped" in log.get("message", "")
+                "Failed skipped" in log.get("message", "")
                 and log.get("level") == "info"
                 for log in logs
             ), "Info log about skipped failed status should be broadcast"
@@ -1428,28 +1426,28 @@ class TestRunManagerStatusMisclassification:
     def test_pipeline_success_with_complete_run_db_failure_still_shows_completed(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """パイプラインが成功し、complete_run_if_not_cancelledでDBエラーが発生しても、
+        """パイプラインが成功し、update_run_status_if_activeでDBエラーが発生しても、
         リトライによりステータスはcompletedになる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             # Pipeline executes successfully
             mock_executor.return_value.execute.return_value = None
 
-            # complete_run_if_not_cancelled fails first time, succeeds on retry
-            original_complete_run = __import__(
-                "genglossary.db.runs_repository", fromlist=["complete_run_if_not_cancelled"]
-            ).complete_run_if_not_cancelled
+            # update_run_status_if_active fails first time, succeeds on retry
+            original_update = __import__(
+                "genglossary.db.runs_repository", fromlist=["update_run_status_if_active"]
+            ).update_run_status_if_active
 
             call_count = {"value": 0}
 
-            def mock_complete_run_if_not_cancelled(conn, run_id):
+            def mock_update(conn, run_id, status, error_message=None):
                 call_count["value"] += 1
                 if call_count["value"] == 1:
                     raise sqlite3.OperationalError("database is locked")
-                return original_complete_run(conn, run_id)
+                return original_update(conn, run_id, status, error_message)
 
             with patch(
-                "genglossary.runs.manager.complete_run_if_not_cancelled",
-                side_effect=mock_complete_run_if_not_cancelled,
+                "genglossary.runs.manager.update_run_status_if_active",
+                side_effect=mock_update,
             ):
                 run_id = manager.start_run(scope="full")
 
@@ -1468,7 +1466,7 @@ class TestRunManagerStatusMisclassification:
     def test_cancel_with_db_update_failure_shows_cancelled_not_failed(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """キャンセルでDBステータス更新(cancel_run)が失敗しても、
+        """キャンセルでDBステータス更新(update_run_status_if_active)が失敗しても、
         リトライによりステータスはcancelledになる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             # Mock executor that waits for cancellation
@@ -1480,22 +1478,23 @@ class TestRunManagerStatusMisclassification:
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
-            # cancel_run in repository fails first time, succeeds on retry
-            original_cancel_run = __import__(
-                "genglossary.db.runs_repository", fromlist=["cancel_run"]
-            ).cancel_run
+            # update_run_status_if_active for 'cancelled' fails first time, succeeds on retry
+            original_update = __import__(
+                "genglossary.db.runs_repository", fromlist=["update_run_status_if_active"]
+            ).update_run_status_if_active
 
             call_count = {"value": 0}
 
-            def mock_cancel_run(conn, run_id):
-                call_count["value"] += 1
-                if call_count["value"] == 1:
-                    raise sqlite3.OperationalError("database is locked")
-                return original_cancel_run(conn, run_id)
+            def mock_update(conn, run_id, status, error_message=None):
+                if status == "cancelled":
+                    call_count["value"] += 1
+                    if call_count["value"] == 1:
+                        raise sqlite3.OperationalError("database is locked")
+                return original_update(conn, run_id, status, error_message)
 
             with patch(
-                "genglossary.runs.manager.cancel_run",
-                side_effect=mock_cancel_run,
+                "genglossary.runs.manager.update_run_status_if_active",
+                side_effect=mock_update,
             ):
                 run_id = manager.start_run(scope="full")
                 time.sleep(0.1)  # Allow thread to start
@@ -1523,9 +1522,9 @@ class TestRunManagerStatusMisclassification:
             # Pipeline executes successfully
             mock_executor.return_value.execute.return_value = None
 
-            # All complete_run_if_not_cancelled calls fail
+            # All update_run_status_if_active calls fail
             with patch(
-                "genglossary.runs.manager.complete_run_if_not_cancelled",
+                "genglossary.runs.manager.update_run_status_if_active",
                 side_effect=sqlite3.OperationalError("database is locked"),
             ):
                 # Subscribe to logs before starting run
@@ -1563,10 +1562,16 @@ class TestRunManagerStatusMisclassification:
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
-            # All cancel_run calls fail
+            # All update_run_status_if_active calls for 'cancelled' fail
+            def failing_update(conn, run_id, status, error_message=None):
+                if status == "cancelled":
+                    raise sqlite3.OperationalError("database is locked")
+                # Allow other status updates
+                return 1
+
             with patch(
-                "genglossary.runs.manager.cancel_run",
-                side_effect=sqlite3.OperationalError("database is locked"),
+                "genglossary.runs.manager.update_run_status_if_active",
+                side_effect=failing_update,
             ):
                 # Subscribe to logs before starting run
                 queue = manager.register_subscriber(run_id=1)
