@@ -8,12 +8,10 @@ const MockedEventSource = window.EventSource as unknown as {
   new (url: string): {
     url: string
     readyState: number
-    onopen: ((event: Event) => void) | null
-    onmessage: ((event: MessageEvent) => void) | null
-    onerror: ((event: Event) => void) | null
     addEventListener: ReturnType<typeof vi.fn>
     removeEventListener: ReturnType<typeof vi.fn>
     close: ReturnType<typeof vi.fn>
+    dispatchEvent: (event: Event) => boolean
   }
   CONNECTING: 0
   OPEN: 1
@@ -82,7 +80,7 @@ describe('useLogStream', () => {
 
         // Simulate SSE error
         act(() => {
-          eventSourceInstance!.onerror?.(new Event('error'))
+          eventSourceInstance!.dispatchEvent(new Event('error'))
         })
 
         // Verify error is set
@@ -104,7 +102,7 @@ describe('useLogStream', () => {
   })
 
   describe('event listener cleanup', () => {
-    it('should remove complete event listener on cleanup to prevent memory leaks', async () => {
+    it('should close EventSource on cleanup (close() handles all listener cleanup)', async () => {
       let eventSourceInstance: InstanceType<typeof MockedEventSource> | null =
         null
 
@@ -129,21 +127,28 @@ describe('useLogStream', () => {
           expect(eventSourceInstance).not.toBeNull()
         })
 
-        // Verify addEventListener was called for 'complete'
+        // Verify addEventListener was called for all events
+        expect(eventSourceInstance!.addEventListener).toHaveBeenCalledWith(
+          'open',
+          expect.any(Function)
+        )
+        expect(eventSourceInstance!.addEventListener).toHaveBeenCalledWith(
+          'message',
+          expect.any(Function)
+        )
         expect(eventSourceInstance!.addEventListener).toHaveBeenCalledWith(
           'complete',
+          expect.any(Function)
+        )
+        expect(eventSourceInstance!.addEventListener).toHaveBeenCalledWith(
+          'error',
           expect.any(Function)
         )
 
         // Unmount to trigger cleanup
         unmount()
 
-        // BUG: Currently removeEventListener is not called for 'complete'
-        // FIX: Cleanup should call eventSource.removeEventListener('complete', handleComplete)
-        expect(eventSourceInstance!.removeEventListener).toHaveBeenCalledWith(
-          'complete',
-          expect.any(Function)
-        )
+        // close() is called and handles all listener cleanup
         expect(eventSourceInstance!.close).toHaveBeenCalled()
       } finally {
         window.EventSource = OriginalEventSource

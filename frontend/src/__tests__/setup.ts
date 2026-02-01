@@ -40,22 +40,36 @@ class EventSourceMock {
 
   url: string
   readyState = EventSourceMock.CONNECTING
-  onopen: ((event: Event) => void) | null = null
-  onmessage: ((event: MessageEvent) => void) | null = null
-  onerror: ((event: Event) => void) | null = null
+  private listeners: Map<string, Set<EventListener>> = new Map()
 
-  addEventListener = vi.fn()
-  removeEventListener = vi.fn()
+  addEventListener = vi.fn((event: string, handler: EventListener) => {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set())
+    }
+    this.listeners.get(event)!.add(handler)
+  })
+
+  removeEventListener = vi.fn((event: string, handler: EventListener) => {
+    this.listeners.get(event)?.delete(handler)
+  })
+
   close = vi.fn(() => {
     this.readyState = EventSourceMock.CLOSED
+    this.listeners.clear()
   })
+
+  // Helper to dispatch events to registered listeners
+  dispatchEvent(event: Event) {
+    this.listeners.get(event.type)?.forEach((handler) => handler(event))
+    return true
+  }
 
   constructor(url: string) {
     this.url = url
     // Simulate immediate connection for simpler tests
     queueMicrotask(() => {
       this.readyState = EventSourceMock.OPEN
-      this.onopen?.(new Event('open'))
+      this.dispatchEvent(new Event('open'))
     })
   }
 }
