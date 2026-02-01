@@ -118,14 +118,22 @@ class PipelineExecutor:
         each execute() call.
     """
 
-    def __init__(self, provider: str = "ollama", model: str = ""):
+    def __init__(
+        self,
+        provider: str = "ollama",
+        model: str = "",
+        review_batch_size: int = GlossaryReviewer.DEFAULT_BATCH_SIZE,
+    ):
         """Initialize the PipelineExecutor.
 
         Args:
             provider: LLM provider name (default: 'ollama').
             model: LLM model name (default: '').
+            review_batch_size: Number of terms per batch for review step.
+                Defaults to GlossaryReviewer.DEFAULT_BATCH_SIZE (20).
         """
         self._llm_client = create_llm_client(provider=provider, model=model)
+        self._review_batch_size = review_batch_size
 
     def _log(
         self,
@@ -520,7 +528,9 @@ class PipelineExecutor:
         self._check_cancellation(context)  # Raises if cancelled
 
         self._log(context, "info", "Reviewing glossary...")
-        reviewer = GlossaryReviewer(llm_client=self._llm_client)
+        reviewer = GlossaryReviewer(
+            llm_client=self._llm_client, batch_size=self._review_batch_size
+        )
 
         def on_batch_progress(current: int, total: int) -> None:
             self._log(context, "info", f"Reviewing batch {current}/{total}...")

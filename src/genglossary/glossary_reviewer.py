@@ -48,7 +48,12 @@ class GlossaryReviewer:
         Args:
             llm_client: The LLM client to use for review.
             batch_size: Number of terms to process per batch. Defaults to 20.
+
+        Raises:
+            ValueError: If batch_size is less than 1.
         """
+        if batch_size < 1:
+            raise ValueError("batch_size must be at least 1")
         self.llm_client = llm_client
         self.batch_size = batch_size
 
@@ -72,12 +77,12 @@ class GlossaryReviewer:
             - None: cancelled, no review was performed
             - []: review was performed, no issues found
         """
-        if glossary.term_count == 0:
-            return []
-
-        # Check for cancellation before calling LLM
+        # Check for cancellation first (before any other checks)
         if cancel_event is not None and cancel_event.is_set():
             return None
+
+        if glossary.term_count == 0:
+            return []
 
         # Split terms into batches
         all_terms = glossary.all_term_names
@@ -92,9 +97,12 @@ class GlossaryReviewer:
             if cancel_event is not None and cancel_event.is_set():
                 return None
 
-            # Report progress
+            # Report progress (best-effort, don't abort on callback errors)
             if batch_progress_callback is not None:
-                batch_progress_callback(batch_idx + 1, len(batches))
+                try:
+                    batch_progress_callback(batch_idx + 1, len(batches))
+                except Exception as e:
+                    logger.warning("Batch progress callback failed: %s", e)
 
             # Review this batch
             issues = self._review_batch(glossary, batch_terms)

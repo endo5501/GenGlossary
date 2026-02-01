@@ -515,6 +515,54 @@ class TestGlossaryReviewerBatchProcessing:
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
         assert reviewer.batch_size == 20
 
+    def test_batch_size_validation_rejects_zero(self, mock_llm_client: MagicMock) -> None:
+        """Test that batch_size=0 raises ValueError."""
+        with pytest.raises(ValueError, match="batch_size must be at least 1"):
+            GlossaryReviewer(llm_client=mock_llm_client, batch_size=0)
+
+    def test_batch_size_validation_rejects_negative(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that negative batch_size raises ValueError."""
+        with pytest.raises(ValueError, match="batch_size must be at least 1"):
+            GlossaryReviewer(llm_client=mock_llm_client, batch_size=-5)
+
+    def test_callback_exception_does_not_abort_review(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that callback exception is caught and review continues."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(
+            issues=[{"term": "Term0", "issue_type": "unclear", "description": "Test"}]
+        )
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(5)
+
+        # Callback that raises exception
+        def bad_callback(current: int, total: int) -> None:
+            raise RuntimeError("Callback error")
+
+        # Review should complete despite callback error
+        issues = reviewer.review(glossary, batch_progress_callback=bad_callback)
+        assert issues is not None
+        assert len(issues) == 1
+
+    def test_cancellation_checked_before_empty_glossary_return(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that cancellation is checked before empty glossary early return."""
+        from threading import Event
+
+        cancel_event = Event()
+        cancel_event.set()
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        empty_glossary = Glossary()
+
+        # Should return None (cancelled) not [] (empty)
+        result = reviewer.review(empty_glossary, cancel_event=cancel_event)
+        assert result is None
+
 
 class TestGlossaryReviewerErrorHandling:
     """Test suite for GlossaryReviewer error handling."""
