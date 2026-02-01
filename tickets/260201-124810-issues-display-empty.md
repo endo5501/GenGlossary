@@ -4,7 +4,7 @@ tags: [bug, frontend, critical]
 description: "Issues画面に何も表示されなくなった"
 created_at: "2026-02-01T12:48:10Z"
 started_at: 2026-02-01T13:12:22Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T13:54:22Z # Do not modify manually
 ---
 
 # Issues画面が空になる問題
