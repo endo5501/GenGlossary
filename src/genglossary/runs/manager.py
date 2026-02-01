@@ -11,6 +11,7 @@ from genglossary.db.connection import database_connection, get_connection, trans
 from genglossary.db.runs_repository import (
     create_run,
     get_active_run,
+    get_current_or_latest_run,
     get_run,
     update_run_status,
     update_run_status_if_active,
@@ -214,6 +215,18 @@ class RunManager:
         """
         with database_connection(self.db_path) as conn:
             return get_active_run(conn)
+
+    def get_current_or_latest_run(self) -> sqlite3.Row | None:
+        """Get the active run if exists, otherwise the latest run.
+
+        This is useful for the /current endpoint to show completed runs
+        after the pipeline finishes.
+
+        Returns:
+            sqlite3.Row if found, None otherwise.
+        """
+        with database_connection(self.db_path) as conn:
+            return get_current_or_latest_run(conn)
 
     def get_run(self, run_id: int) -> sqlite3.Row | None:
         """Get run details by ID.

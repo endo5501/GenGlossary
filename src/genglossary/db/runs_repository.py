@@ -73,6 +73,36 @@ def get_active_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
     return cursor.fetchone()
 
 
+def get_current_or_latest_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """Get the active run if exists, otherwise the latest run.
+
+    This function first looks for an active run (pending or running).
+    If no active run exists, it returns the most recent run regardless of status.
+    This is useful for the /current endpoint to show completed runs.
+
+    Args:
+        conn: Project database connection.
+
+    Returns:
+        sqlite3.Row if found, None otherwise.
+    """
+    # First, try to get an active run
+    active = get_active_run(conn)
+    if active is not None:
+        return active
+
+    # No active run, return the most recent run
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT * FROM runs
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+    )
+    return cursor.fetchone()
+
+
 def list_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """List all runs ordered by created_at descending.
 
