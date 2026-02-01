@@ -39,8 +39,6 @@ from genglossary.utils.path_utils import to_safe_relative_path
 class PipelineCancelledException(Exception):
     """Raised when pipeline execution is cancelled by user request."""
 
-    pass
-
 
 class PipelineScope(Enum):
     """Enumeration of pipeline execution scopes."""
