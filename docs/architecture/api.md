@@ -625,13 +625,18 @@ router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
 ALLOWED_EXTENSIONS = {".txt", ".md"}
 
-def _validate_file_name(file_name: str) -> None:
-    """ファイル名を検証
+def _validate_file_name(file_name: str) -> str:
+    """ファイル名を検証・正規化
 
+    - 絶対パス（/で始まる）を拒否
     - 相対パスを許可（例: 'chapter1/intro.md'）
     - パストラバーサル（..）を拒否
     - Windowsバックスラッシュを拒否（POSIX形式のみ）
     - 拡張子チェック（.txt, .md のみ）
+    - パス正規化: .セグメント除去（例: './a/./b.md' → 'a/b.md'）
+
+    Returns:
+        正規化されたパス文字列
     """
     ...
 
@@ -647,9 +652,9 @@ async def create_file(
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> FileResponse:
     """ファイルを追加（file_name + contentを受け取り、DBに保存）"""
-    _validate_file_name(request.file_name)
+    normalized_file_name = _validate_file_name(request.file_name)  # 正規化されたパスを使用
     content_hash = compute_content_hash(request.content)
-    doc_id = create_document(project_db, request.file_name, request.content, content_hash)
+    doc_id = create_document(project_db, normalized_file_name, request.content, content_hash)
     ...
 
 @router.post("/bulk", response_model=list[FileResponse], status_code=201)
@@ -658,7 +663,7 @@ async def create_files_bulk(
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> list[FileResponse]:
     """複数ファイルを一括追加（バリデーション後、全ファイルを作成）"""
-    # 全ファイル名のバリデーション → 重複チェック → 既存ファイルチェック → 一括作成
+    # 全ファイル名のバリデーション・正規化 → 正規化済みパスで重複チェック → 既存ファイルチェック → 一括作成
     ...
 ```
 
@@ -666,7 +671,8 @@ async def create_files_bulk(
 - HTML5 File APIからファイル名とコンテンツを受け取り
 - SHA256ハッシュで重複検出
 - `.txt`, `.md` のみ許可
-- パス区切り文字（`/`, `\`）を含むファイル名を拒否
+- POSIX形式の相対パスを許可（`chapter1/intro.md` など）
+- 絶対パスと `\` を拒否、`.` セグメントは正規化で除去
 - bulk APIは全ファイルのバリデーション後に一括作成
 
 ## middleware/

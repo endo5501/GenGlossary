@@ -306,3 +306,103 @@ def test_get_files_returns_404_for_missing_project(client: TestClient):
     response = client.get("/api/projects/999/files")
 
     assert response.status_code == 404
+
+
+class TestPathValidationEnhancement:
+    """Tests for absolute path rejection and path normalization."""
+
+    def test_create_file_rejects_absolute_path(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files rejects absolute paths."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "/etc/passwd.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "absolute" in response.json()["detail"].lower()
+
+    def test_create_file_normalizes_dot_segments(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files normalizes . segments in path."""
+        project_id = test_project_setup["project_id"]
+
+        # Path with . segments should be normalized
+        payload = {"file_name": "./chapter1/./intro.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
+        # The stored file_name should be normalized
+        assert response.json()["file_name"] == "chapter1/intro.md"
+
+    def test_create_file_detects_duplicate_via_normalization(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that normalized paths are used for duplicate detection."""
+        project_id = test_project_setup["project_id"]
+
+        # Create a file
+        payload1 = {"file_name": "chapter1/intro.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload1)
+        assert response.status_code == 201
+
+        # Try to create same file with . segments - should be detected as duplicate
+        payload2 = {"file_name": "./chapter1/./intro.md", "content": "other content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload2)
+        assert response.status_code == 409
+
+    def test_create_files_bulk_rejects_absolute_path(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files/bulk rejects absolute paths."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "valid.md", "content": "content"},
+                {"file_name": "/etc/passwd.md", "content": "bad"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 400
+        assert "absolute" in response.json()["detail"].lower()
+
+    def test_create_files_bulk_normalizes_paths(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files/bulk normalizes paths."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "./file1.md", "content": "content1"},
+                {"file_name": "dir/./file2.md", "content": "content2"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data[0]["file_name"] == "file1.md"
+        assert data[1]["file_name"] == "dir/file2.md"
+
+    def test_create_files_bulk_detects_duplicate_via_normalization(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that bulk create detects duplicates after normalization."""
+        project_id = test_project_setup["project_id"]
+
+        # These are the same file after normalization
+        payload = {
+            "files": [
+                {"file_name": "chapter/intro.md", "content": "content1"},
+                {"file_name": "./chapter/./intro.md", "content": "content2"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 400
+        assert "duplicate" in response.json()["detail"].lower()
