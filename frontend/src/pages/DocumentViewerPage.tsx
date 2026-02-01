@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Box, Title, Grid } from '@mantine/core'
 import { useFiles, useFileDetail } from '../api/hooks/useFiles'
 import { useTerms } from '../api/hooks/useTerms'
@@ -27,7 +27,7 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
   const { data: provisionalTerms = [] } = useProvisional(projectId)
 
   // Auto-select first file if none selected
-  useMemo(() => {
+  useEffect(() => {
     if (files.length > 0 && selectedFileId === null) {
       setSelectedFileId(files[0].id)
     }
