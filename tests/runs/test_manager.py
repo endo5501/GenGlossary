@@ -973,16 +973,19 @@ class TestRunManagerConnectionErrorHandling:
 class TestRunManagerCancellationRaceCondition:
     """Tests for race condition between cancellation and completion."""
 
-    def test_run_not_completed_when_cancelled_after_execution(
+    def test_late_cancel_preserves_completed_status(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """実行完了後にキャンセルされた場合、ステータスはcancelledのまま"""
-        from genglossary.db.connection import database_connection, transaction
-        from genglossary.db.runs_repository import cancel_run as db_cancel_run
+        """パイプライン完了後にキャンセルが来ても、ステータスはcompletedのまま
 
+        This is the "late cancel" scenario: the pipeline has already completed,
+        but a cancel request arrives just before the status update.
+        The implementation prioritizes preserving results over respecting
+        the cancel request.
+        """
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that simulates completion, then cancel happens
-            # before status update
+            # Mock executor that simulates completion (returns False = not cancelled)
+            # then cancel happens before status update
             cancel_after_execute = Event()
 
             def mock_execute(conn, scope, context, doc_root="."):
@@ -994,6 +997,7 @@ class TestRunManagerCancellationRaceCondition:
                 cancel_after_execute.set()
                 # Small delay to allow cancellation to happen before status update
                 time.sleep(0.2)
+                return False  # Completed normally (not cancelled during execution)
 
             mock_executor.return_value.execute.side_effect = mock_execute
 
@@ -1002,23 +1006,23 @@ class TestRunManagerCancellationRaceCondition:
             # Wait for execution to complete
             cancel_after_execute.wait(timeout=5)
 
-            # Cancel immediately after execute completes (race condition scenario)
-            # This simulates the race: cancel happens between is_set() check
-            # and status update
-            with database_connection(manager.db_path) as conn:
-                with transaction(conn):
-                    db_cancel_run(conn, run_id)
+            # Cancel immediately after execute completes (late cancel scenario)
+            # This simulates the race: user clicks cancel after pipeline is done
+            # but before status update. cancel_run sets the event, but
+            # since was_cancelled=False, the status should still be completed.
+            manager.cancel_run(run_id)
 
             # Wait for thread to complete
             if manager._thread:
                 manager._thread.join(timeout=3)
 
-            # Status should be cancelled, not completed
+            # Status should be completed, because the pipeline finished before cancel
+            # The cancel request was too late - results are preserved
             run = get_run(project_db, run_id)
             assert run is not None
-            assert run["status"] == "cancelled", (
-                f"Expected status 'cancelled' but got '{run['status']}'. "
-                "Race condition: run was completed despite cancellation."
+            assert run["status"] == "completed", (
+                f"Expected status 'completed' but got '{run['status']}'. "
+                "Late cancel should not override completed status - results should be preserved."
             )
 
 
