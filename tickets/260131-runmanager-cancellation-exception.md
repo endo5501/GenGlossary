@@ -4,7 +4,7 @@ tags: [enhancement, backend, robustness]
 description: "RunManager: Handle cancellation exceptions distinctly"
 created_at: "2026-01-31T10:05:00+09:00"
 started_at: 2026-02-01T10:50:57Z
-closed_at: null
+closed_at: 2026-02-01T11:16:37Z
 ---
 
 # RunManager: Handle cancellation exceptions distinctly
