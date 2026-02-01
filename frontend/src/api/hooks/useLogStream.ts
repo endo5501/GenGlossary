@@ -50,6 +50,7 @@ export function useLogStream(
     // Use == null to correctly handle runId=0 as valid
     if (runId == null) {
       setIsConnected(false)
+      setError(null)  // Clear error when no run is active
       return
     }
 
