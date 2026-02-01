@@ -24,15 +24,16 @@ const mockFileDetail: FileDetailResponse = {
   id: 1,
   file_name: 'test.md',
   file_path: '/test.md',
-  content: '量子コンピュータは量子力学を利用します。コンピュータは一般名詞です。',
+  content: '量子コンピュータは量子力学を利用します。計算機は一般名詞です。',
 }
 
-// All extracted terms including COMMON_NOUN
+// Terms for COMMON_NOUN test - uses 計算機 instead of コンピュータ to avoid partial match
 const mockTermsWithCommonNoun: TermResponse[] = [
   { id: 1, term_text: '量子コンピュータ', category: '技術用語' },
   { id: 2, term_text: '量子力学', category: '技術用語' },
-  { id: 3, term_text: 'コンピュータ', category: 'COMMON_NOUN' }, // Should NOT be highlighted
+  { id: 3, term_text: '計算機', category: 'COMMON_NOUN' }, // Should NOT be highlighted
 ]
+
 
 // Provisional glossary - only processed terms (no COMMON_NOUN)
 const mockProvisionalTerms: GlossaryTermResponse[] = [
@@ -153,15 +154,14 @@ describe('DocumentViewerPage - Term Highlighting Filter', () => {
       // '量子コンピュータ' should be highlighted (in refinedTerms)
       expect(highlightedTexts).toContain('量子コンピュータ')
 
-      // 'コンピュータ' should NOT be highlighted (COMMON_NOUN, not in refined)
-      // Note: The word 'コンピュータ' appears alone and should not be highlighted
-      const plainComputerElements = Array.from(document.querySelectorAll('span')).filter(
-        el => el.textContent === 'コンピュータ' && !el.style.backgroundColor
-      )
-      expect(plainComputerElements.length).toBeGreaterThan(0)
+      // '計算機' should NOT be highlighted (COMMON_NOUN, not in refined)
+      expect(highlightedTexts).not.toContain('計算機')
 
       // '量子力学' should NOT be highlighted (not in refinedTerms, only in provisional)
       expect(highlightedTexts).not.toContain('量子力学')
+
+      // Only 1 term should be highlighted (量子コンピュータ)
+      expect(highlightedElements.length).toBe(1)
     })
   })
 
@@ -196,11 +196,11 @@ describe('DocumentViewerPage - Term Highlighting Filter', () => {
       expect(highlightedTexts).toContain('量子コンピュータ')
       expect(highlightedTexts).toContain('量子力学')
 
-      // 'コンピュータ' should NOT be highlighted (COMMON_NOUN)
-      const plainComputerElements = Array.from(document.querySelectorAll('span')).filter(
-        el => el.textContent === 'コンピュータ' && !el.style.backgroundColor
-      )
-      expect(plainComputerElements.length).toBeGreaterThan(0)
+      // '計算機' should NOT be highlighted (COMMON_NOUN)
+      expect(highlightedTexts).not.toContain('計算機')
+
+      // Only 2 terms should be highlighted
+      expect(highlightedElements.length).toBe(2)
     })
   })
 

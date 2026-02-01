@@ -38,8 +38,13 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
     setSelectedTerm(null)
   }, [selectedFileId])
 
-  // Extract term texts for highlighting
-  const termTexts = useMemo(() => terms.map((t) => t.term_text), [terms])
+  // Extract term texts for highlighting from glossary (not raw extracted terms)
+  // Use refined if available, otherwise provisional (both exclude COMMON_NOUN)
+  const glossaryTerms = refinedTerms.length > 0 ? refinedTerms : provisionalTerms
+  const termTexts = useMemo(
+    () => glossaryTerms.map((t) => t.term_name),
+    [glossaryTerms]
+  )
 
   // Find term data for selected term
   const findTermData = (
