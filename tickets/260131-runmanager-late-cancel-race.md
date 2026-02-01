@@ -4,7 +4,7 @@ tags: [enhancement, backend, race-condition]
 description: "RunManager: Handle late-cancel race condition"
 created_at: "2026-01-31T10:00:00+09:00"
 started_at: 2026-02-01T09:04:07Z
-closed_at: null
+closed_at: 2026-02-01T09:34:44Z
 ---
 
 # RunManager: Handle late-cancel race condition
