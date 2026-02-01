@@ -4,7 +4,7 @@ tags: [security, backend]
 description: "API path validation: reject Windows drive paths"
 created_at: "2026-02-01T10:26:37Z"
 started_at: 2026-02-01T11:32:50Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T11:41:22Z # Do not modify manually
 ---
 
 # API path validation: reject Windows drive paths
