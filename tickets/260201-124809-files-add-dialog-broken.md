@@ -4,7 +4,7 @@ tags: [bug, frontend, critical]
 description: "Files画面でファイル追加ボタンクリック時にファイル選択ダイアログが表示されない"
 created_at: "2026-02-01T12:48:09Z"
 started_at: 2026-02-01T13:00:32Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T13:10:54Z # Do not modify manually
 ---
 
 # ファイル追加ダイアログが表示されない
