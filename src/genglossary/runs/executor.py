@@ -457,11 +457,15 @@ class PipelineExecutor:
         self._log(context, "info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
         progress_cb = self._create_progress_callback(context, "provisional")
-        glossary = generator.generate(
-            extracted_terms, documents,
-            term_progress_callback=progress_cb,
-            cancel_event=context.cancel_event,
-        )
+        try:
+            glossary = generator.generate(
+                extracted_terms, documents,
+                term_progress_callback=progress_cb,
+                cancel_event=context.cancel_event,
+            )
+        except Exception as e:
+            self._log(context, "error", f"Generation failed: {e}")
+            raise
 
         # Save provisional glossary using batch insert
         # Note: No cancellation check here - once generation is complete, we always save
@@ -553,11 +557,15 @@ class PipelineExecutor:
             self._log(context, "info", "Refining glossary...")
             refiner = GlossaryRefiner(llm_client=self._llm_client)
             progress_cb = self._create_progress_callback(context, "refined")
-            glossary = refiner.refine(
-                glossary, issues, documents,
-                term_progress_callback=progress_cb,
-                cancel_event=context.cancel_event,
-            )
+            try:
+                glossary = refiner.refine(
+                    glossary, issues, documents,
+                    term_progress_callback=progress_cb,
+                    cancel_event=context.cancel_event,
+                )
+            except Exception as e:
+                self._log(context, "error", f"Refinement failed: {e}")
+                raise
             self._log(context, "info", f"Refined {len(glossary.terms)} terms")
         else:
             self._log(context, "info", "No issues found, copying provisional to refined")

@@ -497,6 +497,24 @@ class TestGlossaryReviewerBatchProcessing:
 
         callback.assert_called_once_with(1, 1)
 
+    def test_custom_batch_size(self, mock_llm_client: MagicMock) -> None:
+        """Test that custom batch size can be set."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        # Custom batch size of 10
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client, batch_size=10)
+        glossary = self._create_glossary_with_n_terms(25)
+
+        reviewer.review(glossary)
+
+        # 25 terms with batch_size=10 -> 3 batches (10 + 10 + 5)
+        assert mock_llm_client.generate_structured.call_count == 3
+
+    def test_default_batch_size_is_20(self, mock_llm_client: MagicMock) -> None:
+        """Test that default batch size is 20."""
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        assert reviewer.batch_size == 20
+
 
 class TestGlossaryReviewerErrorHandling:
     """Test suite for GlossaryReviewer error handling."""

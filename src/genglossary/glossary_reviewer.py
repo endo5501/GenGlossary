@@ -38,15 +38,19 @@ class GlossaryReviewer:
     contradictions, or missing relationships.
     """
 
-    def __init__(self, llm_client: BaseLLMClient) -> None:
+    DEFAULT_BATCH_SIZE = 20
+
+    def __init__(
+        self, llm_client: BaseLLMClient, batch_size: int = DEFAULT_BATCH_SIZE
+    ) -> None:
         """Initialize the GlossaryReviewer.
 
         Args:
             llm_client: The LLM client to use for review.
+            batch_size: Number of terms to process per batch. Defaults to 20.
         """
         self.llm_client = llm_client
-
-    BATCH_SIZE = 20
+        self.batch_size = batch_size
 
     def review(
         self,
@@ -78,8 +82,8 @@ class GlossaryReviewer:
         # Split terms into batches
         all_terms = glossary.all_term_names
         batches = [
-            all_terms[i : i + self.BATCH_SIZE]
-            for i in range(0, len(all_terms), self.BATCH_SIZE)
+            all_terms[i : i + self.batch_size]
+            for i in range(0, len(all_terms), self.batch_size)
         ]
 
         all_issues: list[GlossaryIssue] = []
