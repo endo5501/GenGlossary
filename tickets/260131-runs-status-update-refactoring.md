@@ -4,7 +4,7 @@ tags: [refactoring, backend, code-quality]
 description: "Refactor runs status update functions to eliminate duplication"
 created_at: "2026-01-31T15:00:00Z"
 started_at: 2026-01-31T15:00:32Z
-closed_at: null
+closed_at: 2026-02-01T00:02:51Z
 ---
 
 # Refactor runs status update functions to eliminate duplication
