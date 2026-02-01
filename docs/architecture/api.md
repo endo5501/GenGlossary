@@ -286,7 +286,7 @@ class FileResponse(BaseModel):
 
 class FileCreateRequest(BaseModel):
     """Request schema for creating a document file."""
-    file_name: str = Field(..., description="File name (without path)")
+    file_name: str = Field(..., description="Relative file path (POSIX format, e.g., 'chapter1/intro.md')")
     content: str = Field(..., description="File content")
 
 
@@ -626,7 +626,13 @@ router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 ALLOWED_EXTENSIONS = {".txt", ".md"}
 
 def _validate_file_name(file_name: str) -> None:
-    """ファイル名を検証（パス区切り文字禁止、拡張子チェック）"""
+    """ファイル名を検証
+
+    - 相対パスを許可（例: 'chapter1/intro.md'）
+    - パストラバーサル（..）を拒否
+    - Windowsバックスラッシュを拒否（POSIX形式のみ）
+    - 拡張子チェック（.txt, .md のみ）
+    """
     ...
 
 # GET /api/projects/{project_id}/files - ファイル一覧取得

@@ -127,9 +127,11 @@ def initialize_db(conn: sqlite3.Connection) -> None:
     # runsテーブルはバックグラウンド実行の履歴を管理
     #
     # documentsテーブル (v4):
-    #   file_name TEXT NOT NULL UNIQUE  -- ファイル名または相対パス
-    #     - GUI: ファイル名のみ (例: "chapter1.md")
-    #     - CLI: doc_rootからの相対パス (例: "docs/chapter1.md")
+    #   file_name TEXT NOT NULL UNIQUE  -- doc_rootからの相対パス (POSIX形式)
+    #     - 例: "chapter1.md", "docs/intro.md"
+    #     - POSIX形式 (/) で統一（クロスプラットフォーム互換性）
+    #     - doc_root外のファイルは拒否（セキュリティ）
+    #     - パストラバーサル (..) は許可されない
     #   content TEXT NOT NULL           -- ファイル内容
     #   content_hash TEXT NOT NULL      -- SHA256ハッシュ
     ...
