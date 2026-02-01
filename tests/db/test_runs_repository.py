@@ -102,7 +102,7 @@ class TestGetActiveRun:
     ) -> None:
         """実行中のRunを取得できる"""
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
 
         active_run = get_active_run(project_db)
         assert active_run is not None
@@ -126,7 +126,7 @@ class TestGetActiveRun:
         """アクティブなRunがない場合はNoneを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(
-            project_db, run_id, "completed", finished_at=datetime.now()
+            project_db, run_id, "completed", finished_at=datetime.now(timezone.utc)
         )
 
         active_run = get_active_run(project_db)
@@ -139,13 +139,13 @@ class TestGetActiveRun:
         import time
 
         run_id1 = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id1, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id1, "running", started_at=datetime.now(timezone.utc))
 
         # Ensure different created_at timestamp
         time.sleep(1.1)
 
         run_id2 = create_run(project_db, scope="from_terms")
-        update_run_status(project_db, run_id2, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id2, "running", started_at=datetime.now(timezone.utc))
 
         active_run = get_active_run(project_db)
         assert active_run is not None
@@ -197,7 +197,7 @@ class TestUpdateRunStatus:
     def test_update_to_running(self, project_db: sqlite3.Connection) -> None:
         """ステータスをrunningに更新できる"""
         run_id = create_run(project_db, scope="full")
-        started = datetime.now()
+        started = datetime.now(timezone.utc)
 
         update_run_status(project_db, run_id, "running", started_at=started)
 
@@ -209,8 +209,8 @@ class TestUpdateRunStatus:
     def test_update_to_completed(self, project_db: sqlite3.Connection) -> None:
         """ステータスをcompletedに更新できる"""
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
-        finished = datetime.now()
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+        finished = datetime.now(timezone.utc)
 
         update_run_status(project_db, run_id, "completed", finished_at=finished)
 
@@ -222,13 +222,13 @@ class TestUpdateRunStatus:
     def test_update_to_failed_with_error(self, project_db: sqlite3.Connection) -> None:
         """ステータスをfailedに更新し、エラーメッセージを設定できる"""
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
 
         update_run_status(
             project_db,
             run_id,
             "failed",
-            finished_at=datetime.now(),
+            finished_at=datetime.now(timezone.utc),
             error_message="LLM API error",
         )
 
@@ -281,7 +281,7 @@ class TestCancelRun:
     def test_cancel_run(self, project_db: sqlite3.Connection) -> None:
         """Runをキャンセルできる"""
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
 
         cancel_run(project_db, run_id)
 
@@ -305,7 +305,7 @@ class TestCompleteRunIfNotCancelled:
         from genglossary.db.runs_repository import complete_run_if_not_cancelled
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
 
         result = complete_run_if_not_cancelled(project_db, run_id)
 
@@ -322,7 +322,7 @@ class TestCompleteRunIfNotCancelled:
         from genglossary.db.runs_repository import complete_run_if_not_cancelled
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         cancel_run(project_db, run_id)
 
         result = complete_run_if_not_cancelled(project_db, run_id)
@@ -349,10 +349,10 @@ class TestCompleteRunIfNotCancelled:
         from genglossary.db.runs_repository import complete_run_if_not_cancelled
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         update_run_status(
             project_db, run_id, "failed",
-            finished_at=datetime.now(), error_message="Test error"
+            finished_at=datetime.now(timezone.utc), error_message="Test error"
         )
 
         result = complete_run_if_not_cancelled(project_db, run_id)
@@ -370,8 +370,8 @@ class TestCompleteRunIfNotCancelled:
         from genglossary.db.runs_repository import complete_run_if_not_cancelled
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
-        update_run_status(project_db, run_id, "completed", finished_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+        update_run_status(project_db, run_id, "completed", finished_at=datetime.now(timezone.utc))
 
         result = complete_run_if_not_cancelled(project_db, run_id)
 
@@ -389,7 +389,7 @@ class TestFailRunIfNotTerminal:
         from genglossary.db.runs_repository import fail_run_if_not_terminal
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
 
         result = fail_run_if_not_terminal(
             project_db, run_id, error_message="Test error"
@@ -425,7 +425,7 @@ class TestFailRunIfNotTerminal:
         from genglossary.db.runs_repository import fail_run_if_not_terminal
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         cancel_run(project_db, run_id)
 
         result = fail_run_if_not_terminal(
@@ -445,8 +445,8 @@ class TestFailRunIfNotTerminal:
         from genglossary.db.runs_repository import fail_run_if_not_terminal
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
-        update_run_status(project_db, run_id, "completed", finished_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+        update_run_status(project_db, run_id, "completed", finished_at=datetime.now(timezone.utc))
 
         result = fail_run_if_not_terminal(
             project_db, run_id, error_message="Test error"
@@ -465,10 +465,10 @@ class TestFailRunIfNotTerminal:
         from genglossary.db.runs_repository import fail_run_if_not_terminal
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         update_run_status(
             project_db, run_id, "failed",
-            finished_at=datetime.now(), error_message="Original error"
+            finished_at=datetime.now(timezone.utc), error_message="Original error"
         )
 
         result = fail_run_if_not_terminal(
@@ -504,7 +504,7 @@ class TestUpdateRunStatusIfActive:
         from genglossary.db.runs_repository import update_run_status_if_active
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
 
         rows_updated = update_run_status_if_active(project_db, run_id, "completed")
 
@@ -537,7 +537,7 @@ class TestUpdateRunStatusIfActive:
         from genglossary.db.runs_repository import update_run_status_if_active
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
 
         rows_updated = update_run_status_if_active(
             project_db, run_id, "failed", error_message="Test error"
@@ -557,7 +557,7 @@ class TestUpdateRunStatusIfActive:
         from genglossary.db.runs_repository import update_run_status_if_active
 
         run_id = create_run(project_db, scope="full")
-        update_run_status(project_db, run_id, "running", started_at=datetime.now())
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         cancel_run(project_db, run_id)
 
         rows_updated = update_run_status_if_active(project_db, run_id, "completed")
