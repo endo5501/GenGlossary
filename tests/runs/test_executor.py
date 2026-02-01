@@ -1929,6 +1929,90 @@ class TestDocumentFilePathStorage:
             assert "docs/README.md" in file_names
             assert "examples/README.md" in file_names
 
+    def test_files_outside_doc_root_raise_value_error(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """doc_root 外のファイルは ValueError で拒否される
+
+        セキュリティ上の理由から、doc_root の外部にあるファイルは
+        処理対象にしてはならない。
+        """
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = []
+
+            # File outside doc_root (doc_root=/project/docs, file=/etc/passwd)
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(
+                    file_path="/etc/passwd",
+                    content="root:x:0:0:root:/root:/bin/bash"
+                ),
+            ]
+
+            # Should raise ValueError for file outside doc_root
+            with pytest.raises(ValueError, match="outside doc_root"):
+                executor.execute(
+                    project_db, "full", execution_context,
+                    doc_root="/project/docs"
+                )
+
+    def test_relative_path_stored_in_posix_format(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """相対パスは POSIX 形式（/）で保存される
+
+        Windows 環境でも、DB には / を使ったパスで保存することで
+        クロスプラットフォームでの互換性を確保する。
+        """
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = []
+
+            # Absolute paths (could have Windows-style separators internally)
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(
+                    file_path="/project/docs/subdir/file.md",
+                    content="content"
+                ),
+            ]
+
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
+            ]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(
+                project_db, "full", execution_context,
+                doc_root="/project/docs"
+            )
+
+            # Verify paths use forward slashes (POSIX format)
+            from genglossary.db.document_repository import list_all_documents
+            docs = list_all_documents(project_db)
+
+            for row in docs:
+                file_name = row["file_name"]
+                assert "\\" not in file_name, \
+                    f"file_name should use / not \\: {file_name}"
+                # Should be: subdir/file.md
+                assert file_name == "subdir/file.md"
+
 
 class TestPipelineExecutorCancelEventPropagation:
     """Tests for cancel_event propagation to LLM processing classes.
