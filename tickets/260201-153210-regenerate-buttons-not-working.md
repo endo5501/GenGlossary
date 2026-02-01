@@ -4,7 +4,7 @@ tags: [bug, frontend, critical]
 description: "各画面の再生成ボタン（Review, Regenerate等）が反応しない"
 created_at: "2026-02-01T15:32:10Z"
 started_at: 2026-02-01T15:44:06Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T16:41:12Z # Do not modify manually
 ---
 
 # 各画面の再生成ボタンが機能しない
