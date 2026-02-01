@@ -43,7 +43,6 @@ return () => {
 - [ ] Commit
 - [ ] Run tests (`pnpm test`) before reviewing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
 - [ ] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
