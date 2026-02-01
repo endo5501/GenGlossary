@@ -54,7 +54,7 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
       <Box data-testid="issue-type-filter">
         <Select
           value={issueTypeFilter}
-          onChange={(val) => setIssueTypeFilter(val ?? '')}
+          onChange={(val) => setIssueTypeFilter((val ?? '') as IssueType | '')}
           data={issueTypeOptions}
           placeholder="Filter by type"
           clearable
