@@ -3,7 +3,7 @@ priority: 5
 tags: [frontend, bugfix]
 description: "useLogStream: Add removeEventListener for complete event to prevent memory leaks"
 created_at: "2026-02-01T07:50:29Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-01T11:18:02Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -38,13 +38,13 @@ return () => {
 
 ## Tasks
 
-- [ ] TDDでテストを先に作成
-- [ ] 修正実装
-- [ ] Commit
-- [ ] Run tests (`pnpm test`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] TDDでテストを先に作成
+- [x] 修正実装
+- [x] Commit
+- [x] Run tests (`pnpm test`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 

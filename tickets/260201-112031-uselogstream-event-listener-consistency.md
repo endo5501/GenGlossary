@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [frontend, refactoring]
 description: "useLogStream: Unify event listener registration to addEventListener"
 created_at: "2026-02-01T11:20:31Z"
