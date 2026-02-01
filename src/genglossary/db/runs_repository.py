@@ -66,7 +66,7 @@ def get_active_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
         """
         SELECT * FROM runs
         WHERE status IN ('pending', 'running')
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 1
         """,
     )
@@ -96,7 +96,7 @@ def get_current_or_latest_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
     cursor.execute(
         """
         SELECT * FROM runs
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 1
         """,
     )
