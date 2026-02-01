@@ -80,7 +80,7 @@ Terms画面などで、上部に操作ボタン、下部にログ表示がある
 
 - [x] レイアウト構造の見直し（sticky/fixed positioning）
 - [x] 中央コンテンツ部分のスクロール領域設定
-- [ ] 各画面での動作確認
+- [x] 各画面での動作確認
 - [x] Commit
 - [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
@@ -91,7 +91,7 @@ Terms画面などで、上部に操作ボタン、下部にログ表示がある
 - [x] Update docs/architecture/*.md
 - [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 
 ## Notes
