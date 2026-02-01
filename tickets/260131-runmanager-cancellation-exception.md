@@ -3,7 +3,7 @@ priority: 5
 tags: [enhancement, backend, robustness]
 description: "RunManager: Handle cancellation exceptions distinctly"
 created_at: "2026-01-31T10:05:00+09:00"
-started_at: null
+started_at: 2026-02-01T10:50:57Z
 closed_at: null
 ---
 
@@ -52,6 +52,48 @@ codex MCP レビューで指摘された問題。現在の実装では、executo
 
 - `src/genglossary/runs/manager.py:299`
 - `src/genglossary/runs/executor.py`
+
+---
+
+## 実装設計（2026-02-01 承認済み）
+
+### 1. 例外クラスの定義
+
+**ファイル**: `src/genglossary/runs/executor.py`
+
+```python
+class PipelineCancelledException(Exception):
+    """Raised when pipeline execution is cancelled by user request."""
+    pass
+```
+
+- `ExecutionContext` クラスの前に配置
+
+### 2. executor の変更
+
+**ファイル**: `src/genglossary/runs/executor.py`
+
+- `_check_cancellation` メソッド: `bool` を返す代わりに `PipelineCancelledException` を raise
+- `@_cancellable` デコレータ: `return True` の代わりに例外を raise
+- `execute()` と各 `_execute_*` メソッド: `if self._check_cancellation(): return True` パターンを削除し簡素化
+
+### 3. manager の変更
+
+**ファイル**: `src/genglossary/runs/manager.py`
+
+- `_finalize_run_status` から `was_cancelled` 引数を削除
+- `pipeline_error` が `PipelineCancelledException` かどうかで `cancelled` / `failed` を判定
+- `_execute_run` から `was_cancelled` 変数を削除
+- import 追加: `from genglossary.runs.executor import PipelineCancelledException`
+
+### 4. テスト戦略
+
+- executor が `PipelineCancelledException` を raise することを確認
+- manager が例外を `cancelled` ステータスに変換することを確認
+- 通常の例外は `failed` ステータスになることを確認（回帰テスト）
+- 既存テストを例外ベースに更新
+
+---
 
 ## Tasks
 
