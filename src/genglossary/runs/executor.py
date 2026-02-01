@@ -311,11 +311,9 @@ class PipelineExecutor:
             raise ValueError(f"Unknown scope: {scope_enum}")
 
         was_cancelled = handler(conn, context, doc_root)
-        if was_cancelled:
-            return True  # Cancelled during execution
-
-        self._log(context, "info", "Pipeline execution completed")
-        return False  # Completed normally
+        if not was_cancelled:
+            self._log(context, "info", "Pipeline execution completed")
+        return was_cancelled
 
     def _load_documents(
         self, conn: sqlite3.Connection, context: ExecutionContext, doc_root: str = "."
