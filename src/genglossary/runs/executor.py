@@ -33,28 +33,7 @@ from genglossary.models.glossary import Glossary
 from genglossary.models.term import ClassifiedTerm, Term, TermOccurrence
 from genglossary.term_extractor import TermExtractor
 from genglossary.utils.hash import compute_content_hash
-
-
-def _safe_relative_path(file_path: Path, doc_root: Path) -> str:
-    """Convert file path to safe relative path in POSIX format.
-
-    Args:
-        file_path: Target file path.
-        doc_root: Document root directory.
-
-    Returns:
-        Relative path in POSIX format (using /).
-
-    Raises:
-        ValueError: If file is outside doc_root.
-    """
-    resolved_file = file_path.resolve()
-    resolved_root = doc_root.resolve()
-
-    if not resolved_file.is_relative_to(resolved_root):
-        raise ValueError(f"File is outside doc_root: {file_path}")
-
-    return resolved_file.relative_to(resolved_root).as_posix()
+from genglossary.utils.path_utils import to_safe_relative_path
 
 
 class PipelineScope(Enum):
@@ -369,12 +348,11 @@ class PipelineExecutor:
                 # - Prevent server path leakage via API/logs (security)
                 # - Improve portability when moving DB between environments
                 # - Reject files outside doc_root for security (path traversal prevention)
-                doc_root_path = Path(doc_root)
                 with transaction(conn):
                     delete_all_documents(conn)
                     docs_data = [
                         (
-                            _safe_relative_path(Path(document.file_path), doc_root_path),
+                            to_safe_relative_path(document.file_path, doc_root),
                             document.content,
                             compute_content_hash(document.content),
                         )

@@ -29,6 +29,7 @@ from genglossary.progress import progress_task
 from genglossary.output.markdown_writer import MarkdownWriter
 from genglossary.term_extractor import TermExtractor, TermExtractionAnalysis
 from genglossary.utils.hash import compute_content_hash
+from genglossary.utils.path_utils import to_safe_relative_path
 
 console = Console()
 
@@ -179,13 +180,11 @@ def _generate_glossary_with_db(
 
     # Save documents to database if enabled
     if conn is not None:
-        input_dir_path = Path(input_dir).resolve()
         for document in documents:
             # Calculate content hash for deduplication
             content_hash = compute_content_hash(document.content)
-            # Use relative path from input_dir in POSIX format
-            file_path = Path(document.file_path).resolve()
-            file_name = file_path.relative_to(input_dir_path).as_posix()
+            # Use relative path from input_dir in POSIX format (with security check)
+            file_name = to_safe_relative_path(document.file_path, input_dir)
             create_document(conn, file_name, document.content, content_hash)
         if verbose:
             console.print(f"[dim]  → データベースに {len(documents)} 件のドキュメントを保存[/dim]")
