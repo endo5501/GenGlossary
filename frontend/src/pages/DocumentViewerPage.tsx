@@ -1,5 +1,11 @@
-import { Box, Text, Title, Card, Stack, Tabs } from '@mantine/core'
-import { IconFile, IconTags } from '@tabler/icons-react'
+import { useState, useMemo } from 'react'
+import { Box, Title, Grid } from '@mantine/core'
+import { useFiles, useFileDetail } from '../api/hooks/useFiles'
+import { useTerms } from '../api/hooks/useTerms'
+import { useRefined } from '../api/hooks/useRefined'
+import { useProvisional } from '../api/hooks/useProvisional'
+import { DocumentPane, TermCard } from '../components/document-viewer'
+import type { GlossaryTermResponse } from '../api/types'
 
 interface DocumentViewerPageProps {
   projectId: number
@@ -7,45 +13,75 @@ interface DocumentViewerPageProps {
 }
 
 export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProps) {
+  const [selectedFileId, setSelectedFileId] = useState<number | null>(fileId ?? null)
+  const [selectedTerm, setSelectedTerm] = useState<string | null>(null)
+
+  // Fetch data
+  const { data: files = [] } = useFiles(projectId)
+  const { data: fileDetail, isLoading: isFileLoading } = useFileDetail(
+    projectId,
+    selectedFileId ?? undefined
+  )
+  const { data: terms = [] } = useTerms(projectId)
+  const { data: refinedTerms = [] } = useRefined(projectId)
+  const { data: provisionalTerms = [] } = useProvisional(projectId)
+
+  // Auto-select first file if none selected
+  useMemo(() => {
+    if (files.length > 0 && selectedFileId === null) {
+      setSelectedFileId(files[0].id)
+    }
+  }, [files, selectedFileId])
+
+  // Extract term texts for highlighting
+  const termTexts = useMemo(() => terms.map((t) => t.term_text), [terms])
+
+  // Find term data for selected term
+  const findTermData = (
+    termList: GlossaryTermResponse[],
+    termText: string
+  ): GlossaryTermResponse | null => {
+    return (
+      termList.find(
+        (t) => t.term_name.toLowerCase() === termText.toLowerCase()
+      ) ?? null
+    )
+  }
+
+  const refinedData = selectedTerm
+    ? findTermData(refinedTerms, selectedTerm)
+    : null
+  const provisionalData = selectedTerm
+    ? findTermData(provisionalTerms, selectedTerm)
+    : null
+
   return (
-    <Box p="md">
-      <Title order={2} mb="lg">Document Viewer</Title>
+    <Box p="md" h="100%">
+      <Title order={2} mb="lg">
+        Document Viewer
+      </Title>
 
-      <Tabs defaultValue="document">
-        <Tabs.List>
-          <Tabs.Tab value="document" leftSection={<IconFile size={16} />}>
-            Document
-          </Tabs.Tab>
-          <Tabs.Tab value="terms" leftSection={<IconTags size={16} />}>
-            Terms
-          </Tabs.Tab>
-        </Tabs.List>
-
-        <Tabs.Panel value="document" pt="lg">
-          <Card withBorder p="xl">
-            <Stack align="center" gap="md">
-              <Text c="dimmed">
-                {fileId
-                  ? `Document content will be displayed here for file ID: ${fileId}`
-                  : 'Select a file to view its content'}
-              </Text>
-              <Text size="sm" c="dimmed">
-                Project ID: {projectId}
-              </Text>
-            </Stack>
-          </Card>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="terms" pt="lg">
-          <Card withBorder p="xl">
-            <Stack align="center" gap="md">
-              <Text c="dimmed">
-                Term cards will be displayed here
-              </Text>
-            </Stack>
-          </Card>
-        </Tabs.Panel>
-      </Tabs>
+      <Grid h="calc(100% - 60px)" gutter="md">
+        <Grid.Col span={7}>
+          <DocumentPane
+            files={files}
+            selectedFileId={selectedFileId}
+            onFileSelect={setSelectedFileId}
+            content={fileDetail?.content ?? null}
+            isLoading={isFileLoading}
+            terms={termTexts}
+            selectedTerm={selectedTerm}
+            onTermClick={setSelectedTerm}
+          />
+        </Grid.Col>
+        <Grid.Col span={5}>
+          <TermCard
+            selectedTerm={selectedTerm}
+            refinedData={refinedData}
+            provisionalData={provisionalData}
+          />
+        </Grid.Col>
+      </Grid>
     </Box>
   )
 }
