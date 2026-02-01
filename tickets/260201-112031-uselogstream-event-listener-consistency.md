@@ -3,7 +3,7 @@ priority: 2
 tags: [frontend, refactoring]
 description: "useLogStream: Unify event listener registration to addEventListener"
 created_at: "2026-02-01T11:20:31Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-01T11:22:51Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -56,3 +56,44 @@ return disconnect  // eventSource.close() handles all cleanup
 - Discovered during code-simplifier review of 260201-075029-uselogstream-event-listener-cleanup ticket
 - Low priority as current implementation works correctly
 - Pure refactoring, no functional change expected
+
+---
+
+## Design (Approved)
+
+### Change Summary
+
+**Target**: `frontend/src/api/hooks/useLogStream.ts` lines 85-93
+
+**Before (Current)**:
+```typescript
+eventSource.onopen = handleOpen
+eventSource.onmessage = handleMessage
+eventSource.addEventListener('complete', handleComplete)
+eventSource.onerror = handleError
+
+return () => {
+  eventSource.removeEventListener('complete', handleComplete)
+  disconnect()
+}
+```
+
+**After (Proposed)**:
+```typescript
+eventSource.addEventListener('open', handleOpen)
+eventSource.addEventListener('message', handleMessage)
+eventSource.addEventListener('complete', handleComplete)
+eventSource.addEventListener('error', handleError)
+
+return disconnect  // eventSource.close() handles all cleanup
+```
+
+### Key Changes
+- Unify all 4 events to use `addEventListener`
+- Simplify cleanup to just `disconnect()` (`eventSource.close()` invalidates all listeners)
+- Remove explicit `removeEventListener` call
+
+### Test Strategy
+- No additional tests needed - this is a pure internal implementation change
+- Existing tests in `useLogStream.test.ts` serve as regression tests
+- If existing tests pass, functional correctness is guaranteed
