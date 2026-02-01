@@ -96,6 +96,41 @@ class TestDocumentLoader:
         assert len(docs) == 1
         assert docs[0].content == "Content"
 
+    def test_load_directory_returns_relative_paths(self, tmp_path: Path) -> None:
+        """Test that load_directory returns relative paths, not absolute paths.
+
+        This is important for privacy/security: absolute paths could leak
+        server directory structure when sent to external LLM services.
+        """
+        # Create files in subdirectory
+        subdir = tmp_path / "docs"
+        subdir.mkdir()
+        (subdir / "readme.txt").write_text("Content")
+
+        loader = DocumentLoader()
+        docs = loader.load_directory(str(subdir))
+
+        assert len(docs) == 1
+        # Path should be relative, not absolute
+        assert docs[0].file_path == "readme.txt"
+        assert not docs[0].file_path.startswith("/")
+
+    def test_load_directory_returns_posix_relative_paths_for_nested(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that nested files get POSIX-style relative paths."""
+        # Create nested structure
+        nested = tmp_path / "docs" / "chapter1"
+        nested.mkdir(parents=True)
+        (nested / "intro.txt").write_text("Introduction")
+
+        loader = DocumentLoader()
+        docs = loader.load_directory(str(tmp_path / "docs"))
+
+        assert len(docs) == 1
+        # Should use forward slashes (POSIX format)
+        assert docs[0].file_path == "chapter1/intro.txt"
+
     def test_load_directory_multiple_files(self, tmp_path: Path) -> None:
         """Test loading a directory with multiple files."""
         (tmp_path / "file1.txt").write_text("Content 1")
