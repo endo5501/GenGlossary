@@ -3,7 +3,7 @@ priority: 4
 tags: [enhancement, backend, race-condition]
 description: "RunManager: Handle late-cancel race condition"
 created_at: "2026-01-31T10:00:00+09:00"
-started_at: null
+started_at: 2026-02-01T09:04:07Z
 closed_at: null
 ---
 
@@ -41,6 +41,38 @@ codex MCP レビューで指摘された問題。パイプライン完了後に�
 
 - `src/genglossary/runs/manager.py:315`
 - `src/genglossary/runs/manager.py:349`
+
+## 設計決定
+
+### 方針: 完了を優先
+
+パイプラインが実際に完了していれば `completed` として結果を保持する。キャンセルリクエストが間に合わなかった場合は、キャンセルは無視される。
+
+**理由**: ユーザーの成果物（用語集）が失われないことを優先。
+
+### 実装方法: パイプラインから結果を返す
+
+`executor.execute()` が「キャンセルによって中断されたか」を示す bool を返すように変更。
+
+### 変更箇所
+
+1. **executor.py**
+   - `execute()` の戻り値を `None` → `bool` に変更
+   - `True`: キャンセルで中断された
+   - `False`: 正常完了
+   - 各所の `return` を `return True` に、最後に `return False` を追加
+
+2. **manager.py**
+   - `execute()` の戻り値を `was_cancelled` として受け取る
+   - `_finalize_run_status` のシグネチャ変更: `cancel_event: Event` → `was_cancelled: bool`
+   - 判定ロジックを `cancel_event.is_set()` から `was_cancelled` に変更
+
+### テストシナリオ
+
+1. 正常完了（キャンセルなし）→ `completed`
+2. キャンセルで中断 → `cancelled`
+3. 遅延キャンセル（完了後にキャンセルリクエスト）→ `completed`（今回の修正対象）
+4. パイプラインエラー → `failed`（既存動作、変更なし）
 
 ## Tasks
 
