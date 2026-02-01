@@ -1,7 +1,7 @@
 """Repository for runs table operations."""
 
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -175,16 +175,17 @@ def update_run_status_if_active(
     Returns:
         Number of rows updated (0 if run was already in terminal state or not found).
     """
+    finished_at = datetime.now(timezone.utc).isoformat()
     cursor = conn.cursor()
     cursor.execute(
         """
         UPDATE runs
         SET status = ?,
-            finished_at = datetime('now'),
+            finished_at = ?,
             error_message = ?
         WHERE id = ? AND status IN ('pending', 'running')
         """,
-        (status, error_message, run_id),
+        (status, finished_at, error_message, run_id),
     )
     return cursor.rowcount
 
