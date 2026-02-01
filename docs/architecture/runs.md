@@ -261,25 +261,23 @@ class RunManager:
             if conn is not None:
                 conn.close()
 
-    def _finalize_run_status(self, conn, run_id, was_cancelled, pipeline_error, pipeline_traceback) -> None:
+    def _finalize_run_status(self, conn, run_id, pipeline_error, pipeline_traceback) -> None:
         """パイプライン実行後のステータスを確定
 
         ステータス更新ロジックをパイプライン実行から分離することで、
         ステータス更新の失敗がステータスの誤分類を引き起こすのを防止。
 
         優先順位:
-        1. パイプラインエラーがあれば → failed
-        2. 実行中にキャンセルされていれば → cancelled
-        3. それ以外 → completed（遅延キャンセルでも完了を優先）
+        1. PipelineCancelledException → cancelled
+        2. その他の例外 → failed
+        3. 例外なし → completed
 
         Args:
-            was_cancelled: executor.execute() の戻り値。
-                           True = 実行中にキャンセルされた、False = 正常完了
+            pipeline_error: executor.execute() から catch された例外、または None
 
         Note:
-            cancel_event.is_set() ではなく was_cancelled を使用することで、
-            遅延キャンセル（パイプライン完了後にキャンセルリクエストが到着）
-            でも結果を保持できます。
+            isinstance(pipeline_error, PipelineCancelledException) でキャンセルを判定。
+            これにより、キャンセルと通常のエラーを明確に区別できます。
 
         ステータス更新失敗時はフォールバック接続でリトライ。
         """
@@ -430,6 +428,15 @@ class ExecutionContext:
     cancel_event: Event
 ```
 
+### PipelineCancelledException
+
+キャンセル時に raise される専用例外クラス。これにより、キャンセルと通常のエラーを明確に区別できます。
+
+```python
+class PipelineCancelledException(Exception):
+    """Raised when pipeline execution is cancelled by user request."""
+```
+
 ### キャンセルチェックデコレータ
 
 `@_cancellable` デコレータは、DRY原則に従いキャンセルチェックパターンを統一します。
@@ -439,14 +446,7 @@ def _cancellable(func: Callable) -> Callable:
     """メソッド実行前にキャンセルをチェックするデコレータ
 
     装飾されたメソッドは ExecutionContext を引数として受け取る必要があります。
-    キャンセルが検出された場合、メソッドは実行されずに True を返します
-    （True = キャンセルされた）。
-
-    一般的なパターン:
-        if self._check_cancellation(context):
-            return True
-
-    を置き換えます。
+    キャンセルが検出された場合、PipelineCancelledException を raise します。
     """
     @wraps(func)
     def wrapper(self: "PipelineExecutor", *args, **kwargs):
@@ -458,8 +458,8 @@ def _cancellable(func: Callable) -> Callable:
                     context = arg
                     break
 
-        if context is not None and self._check_cancellation(context):
-            return True  # キャンセルされた
+        if context is not None:
+            self._check_cancellation(context)  # Raises if cancelled
         return func(self, *args, **kwargs)
     return wrapper
 ```
@@ -492,7 +492,7 @@ class PipelineExecutor:
         scope: str | PipelineScope,  # Enum または文字列を受け付け
         context: ExecutionContext,   # 実行コンテキスト
         doc_root: str = ".",
-    ) -> bool:
+    ) -> None:
         """指定されたスコープでパイプラインを実行
 
         Args:
@@ -501,10 +501,8 @@ class PipelineExecutor:
             context: 実行コンテキスト（run_id, log_callback, cancel_event）
             doc_root: ドキュメントルートディレクトリ
 
-        Returns:
-            bool: True = 実行中にキャンセルされた、False = 正常完了
-
         Raises:
+            PipelineCancelledException: キャンセルされた場合
             ValueError: 不明なスコープが指定された場合
         """
         # Enum に正規化（文字列の場合は変換）
@@ -657,23 +655,23 @@ if not issues:
 **理由**: ユーザーの成果物（用語集）が失われないことを優先。
 
 **実装方法**:
-1. `executor.execute()` が `bool` を返す（`True` = キャンセルで中断、`False` = 正常完了）
-2. `manager._finalize_run_status()` は `cancel_event.is_set()` ではなく `was_cancelled` を使用
+1. `executor.execute()` はキャンセル時に `PipelineCancelledException` を raise
+2. `manager._finalize_run_status()` は `isinstance(pipeline_error, PipelineCancelledException)` でキャンセルを判定
 3. 各ステップの処理完了後は、キャンセルチェックなしで結果を保存
 
 **シナリオ例**:
 ```
 時系列:
 1. パイプライン実行開始
-2. パイプライン正常完了（execute が False を返す）
+2. パイプライン正常完了（execute が例外なしで終了）
 3. ユーザーがキャンセルボタンを押す（遅すぎた）
-4. _finalize_run_status で was_cancelled=False なので completed に
+4. _finalize_run_status で pipeline_error=None なので completed に
 5. 結果：ステータスは completed、用語集は保存済み
 ```
 
 **キャンセルが効くタイミング**:
-- 各ステップの開始前（`@_cancellable` デコレータ）
-- LLM呼び出し前の明示的チェック
+- 各ステップの開始前（`@_cancellable` デコレータが `PipelineCancelledException` を raise）
+- LLM呼び出し前の明示的チェック（`_check_cancellation()` が例外を raise）
 - LLM処理クラス内のループ中
 
 **キャンセルが効かないタイミング（完了を優先）**:
