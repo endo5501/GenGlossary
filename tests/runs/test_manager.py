@@ -229,13 +229,14 @@ class TestRunManagerCancel:
     ) -> None:
         """cancel_runはRunのステータスをcancelledに設定する"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that checks cancel event
+            # Mock executor that checks cancel event and returns True (cancelled)
             def cancellable_execute(conn, scope, context, doc_root="."):
                 # Wait for cancellation, checking the event
                 for _ in range(50):  # 5 seconds max
                     if context.cancel_event.is_set():
-                        return
+                        return True  # Cancelled
                     time.sleep(0.1)
+                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1076,11 +1077,12 @@ class TestRunManagerSubscriberCleanup:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
             def cancellable_execute(conn, scope, context, doc_root="."):
-                # Wait for cancellation
+                # Wait for cancellation and return True (cancelled)
                 for _ in range(50):
                     if context.cancel_event.is_set():
-                        return
+                        return True  # Cancelled
                     time.sleep(0.1)
+                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1221,12 +1223,13 @@ class TestRunManagerStatusUpdateFallbackLogic:
     ) -> None:
         """update_run_status_if_activeが0を返した場合（no-op）、ログに記録されフォールバックは試行されない"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that waits for cancellation
+            # Mock executor that waits for cancellation and returns True (cancelled)
             def cancellable_execute(conn, scope, context, doc_root="."):
                 for _ in range(50):
                     if context.cancel_event.is_set():
-                        return
+                        return True  # Cancelled
                     time.sleep(0.1)
+                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1469,12 +1472,13 @@ class TestRunManagerStatusMisclassification:
         """キャンセルでDBステータス更新(update_run_status_if_active)が失敗しても、
         リトライによりステータスはcancelledになる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that waits for cancellation
+            # Mock executor that waits for cancellation and returns True (cancelled)
             def cancellable_execute(conn, scope, context, doc_root="."):
                 for _ in range(50):
                     if context.cancel_event.is_set():
-                        return
+                        return True  # Cancelled
                     time.sleep(0.1)
+                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 
@@ -1553,12 +1557,13 @@ class TestRunManagerStatusMisclassification:
         """キャンセルでDBステータス更新がすべて失敗しても、
         ステータスはfailedではない（キャンセルが優先される）"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            # Mock executor that waits for cancellation
+            # Mock executor that waits for cancellation and returns True (cancelled)
             def cancellable_execute(conn, scope, context, doc_root="."):
                 for _ in range(50):
                     if context.cancel_event.is_set():
-                        return
+                        return True  # Cancelled
                     time.sleep(0.1)
+                return False  # Completed normally
 
             mock_executor.return_value.execute.side_effect = cancellable_execute
 

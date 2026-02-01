@@ -2217,13 +2217,35 @@ class TestExecuteReturnValue:
         cancel_event = Event()
         context = ExecutionContext(
             run_id=1,
-            log_callback=lambda msg: None,
+            log_callback=lambda _: None,
             cancel_event=cancel_event,
         )
 
-        with patch("genglossary.runs.executor.create_llm_client"), \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
-            mock_loader.return_value.load_directory.return_value = []
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_loader.return_value.load_directory.return_value = [
+                MagicMock(file_path="/test/doc.txt", content="test")
+            ]
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
+            ]
+            mock_glossary = Glossary(terms={
+                "term1": Term(
+                    name="term1",
+                    definition="test",
+                    confidence=0.9,
+                    occurrences=[TermOccurrence(
+                        document_path="doc.txt", line_number=1, context="test"
+                    )]
+                )
+            })
+            mock_generator.return_value.generate.return_value = mock_glossary
+            mock_reviewer.return_value.review.return_value = []
 
             result = executor.execute(project_db, "full", context, doc_root="/test")
 
@@ -2239,7 +2261,7 @@ class TestExecuteReturnValue:
         cancel_event.set()  # Set before execution
         context = ExecutionContext(
             run_id=1,
-            log_callback=lambda msg: None,
+            log_callback=lambda _: None,
             cancel_event=cancel_event,
         )
 
@@ -2250,7 +2272,7 @@ class TestExecuteReturnValue:
 
             assert result is True, "Should return True when cancelled before start"
 
-    def test_execute_returns_true_when_cancelled_during_document_load(
+    def test_execute_returns_true_when_cancelled_after_document_load(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
@@ -2259,17 +2281,18 @@ class TestExecuteReturnValue:
         cancel_event = Event()
         context = ExecutionContext(
             run_id=1,
-            log_callback=lambda msg: None,
+            log_callback=lambda _: None,
             cancel_event=cancel_event,
         )
 
-        def set_cancel_after_load(*args, **kwargs):
+        def set_cancel_and_return_docs(*_args, **_kwargs):
             cancel_event.set()
-            return []
+            return [MagicMock(file_path="/test/doc.txt", content="test")]
 
-        with patch("genglossary.runs.executor.create_llm_client"), \
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
-            mock_loader.return_value.load_directory.side_effect = set_cancel_after_load
+            mock_llm_factory.return_value = MagicMock()
+            mock_loader.return_value.load_directory.side_effect = set_cancel_and_return_docs
 
             result = executor.execute(project_db, "full", context, doc_root="/test")
 
