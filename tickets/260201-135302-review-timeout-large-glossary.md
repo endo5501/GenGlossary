@@ -4,7 +4,7 @@ tags: [bug, backend, llm]
 description: "GlossaryReviewerが大量の用語をレビューする際にタイムアウトで0件になる"
 created_at: "2026-02-01T13:53:02Z"
 started_at: 2026-02-01T13:55:32Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T15:42:54Z # Do not modify manually
 ---
 
 # GlossaryReviewer タイムアウト問題
