@@ -420,7 +420,7 @@ class TestGlossaryReviewerBatchProcessing:
         return glossary
 
     def test_review_splits_into_batches(self, mock_llm_client: MagicMock) -> None:
-        """Test that 25 terms are split into 2 batches (20 + 5)."""
+        """Test that 25 terms are split into 3 batches (10 + 10 + 5)."""
         mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
 
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
@@ -428,14 +428,14 @@ class TestGlossaryReviewerBatchProcessing:
 
         reviewer.review(glossary)
 
-        assert mock_llm_client.generate_structured.call_count == 2
+        assert mock_llm_client.generate_structured.call_count == 3
 
-    def test_review_single_batch_for_20_terms(self, mock_llm_client: MagicMock) -> None:
-        """Test that 20 terms are processed in a single batch."""
+    def test_review_single_batch_for_10_terms(self, mock_llm_client: MagicMock) -> None:
+        """Test that 10 terms are processed in a single batch."""
         mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
 
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
-        glossary = self._create_glossary_with_n_terms(20)
+        glossary = self._create_glossary_with_n_terms(10)
 
         reviewer.review(glossary)
 
@@ -445,6 +445,7 @@ class TestGlossaryReviewerBatchProcessing:
         self, mock_llm_client: MagicMock
     ) -> None:
         """Test that issues from all batches are merged."""
+        # 15 terms with batch_size=10 -> 2 batches (10 + 5)
         # First batch returns 2 issues, second batch returns 1 issue
         mock_llm_client.generate_structured.side_effect = [
             MockReviewResponse(
@@ -455,13 +456,13 @@ class TestGlossaryReviewerBatchProcessing:
             ),
             MockReviewResponse(
                 issues=[
-                    {"term": "Term20", "issue_type": "unclear", "description": "Issue 3"},
+                    {"term": "Term10", "issue_type": "unclear", "description": "Issue 3"},
                 ]
             ),
         ]
 
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
-        glossary = self._create_glossary_with_n_terms(25)
+        glossary = self._create_glossary_with_n_terms(15)
 
         issues = reviewer.review(glossary)
 
@@ -473,7 +474,7 @@ class TestGlossaryReviewerBatchProcessing:
         mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
 
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
-        glossary = self._create_glossary_with_n_terms(45)  # 3 batches
+        glossary = self._create_glossary_with_n_terms(30)  # 3 batches (10 + 10 + 10)
 
         callback = MagicMock()
         reviewer.review(glossary, batch_progress_callback=callback)
@@ -501,19 +502,19 @@ class TestGlossaryReviewerBatchProcessing:
         """Test that custom batch size can be set."""
         mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
 
-        # Custom batch size of 10
-        reviewer = GlossaryReviewer(llm_client=mock_llm_client, batch_size=10)
-        glossary = self._create_glossary_with_n_terms(25)
+        # Custom batch size of 5
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client, batch_size=5)
+        glossary = self._create_glossary_with_n_terms(12)
 
         reviewer.review(glossary)
 
-        # 25 terms with batch_size=10 -> 3 batches (10 + 10 + 5)
+        # 12 terms with batch_size=5 -> 3 batches (5 + 5 + 2)
         assert mock_llm_client.generate_structured.call_count == 3
 
-    def test_default_batch_size_is_20(self, mock_llm_client: MagicMock) -> None:
-        """Test that default batch size is 20."""
+    def test_default_batch_size_is_10(self, mock_llm_client: MagicMock) -> None:
+        """Test that default batch size is 10."""
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
-        assert reviewer.batch_size == 20
+        assert reviewer.batch_size == 10
 
     def test_batch_size_validation_rejects_zero(self, mock_llm_client: MagicMock) -> None:
         """Test that batch_size=0 raises ValueError."""

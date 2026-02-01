@@ -490,7 +490,7 @@ class PipelineExecutor:
         self,
         provider: str = "ollama",
         model: str = "",
-        review_batch_size: int = 20,  # GlossaryReviewer のバッチサイズ
+        review_batch_size: int = 10,  # GlossaryReviewer のバッチサイズ
     ):
         """Initialize the PipelineExecutor.
 

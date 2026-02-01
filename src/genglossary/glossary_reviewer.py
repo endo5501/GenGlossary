@@ -38,7 +38,7 @@ class GlossaryReviewer:
     contradictions, or missing relationships.
     """
 
-    DEFAULT_BATCH_SIZE = 20
+    DEFAULT_BATCH_SIZE = 10
 
     def __init__(
         self, llm_client: BaseLLMClient, batch_size: int = DEFAULT_BATCH_SIZE
