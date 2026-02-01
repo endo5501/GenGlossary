@@ -238,9 +238,13 @@ useEffect(() => {
 **データ取得:**
 - `useFiles(projectId)` - ファイル一覧（タブ表示用）
 - `useFileDetail(projectId, fileId)` - 選択ファイルのコンテンツ
-- `useTerms(projectId)` - 用語一覧（ハイライト用）
-- `useRefined(projectId)` - Refined用語集
-- `useProvisional(projectId)` - Provisional用語集（フォールバック用）
+- `useRefined(projectId)` - Refined用語集（ハイライト用、優先）
+- `useProvisional(projectId)` - Provisional用語集（ハイライト用、Refinedがない場合のフォールバック）
+
+**用語ハイライトのロジック:**
+- Refined用語集があればその用語のみをハイライト
+- なければProvisional用語集の用語をハイライト
+- COMMON_NOUNなど除外された用語はハイライトされない（用語集に含まれないため）
 
 **用語データの優先順位:**
 1. Refined があればそれを表示
