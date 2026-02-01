@@ -20,7 +20,7 @@ def create_run(
     Returns:
         int: The ID of the newly created run.
     """
-    created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    created_at = _current_utc_iso()
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -101,6 +101,34 @@ def _validate_timezone_aware(dt: datetime, param_name: str) -> None:
         raise ValueError(f"{param_name} must be timezone-aware")
 
 
+def _to_iso_string(dt: datetime | None, param_name: str) -> str | None:
+    """Convert timezone-aware datetime to ISO string.
+
+    Args:
+        dt: Datetime to convert (must be timezone-aware if not None).
+        param_name: Parameter name for error message.
+
+    Returns:
+        ISO 8601 formatted string with second precision, or None if dt is None.
+
+    Raises:
+        ValueError: If dt is naive (no timezone info).
+    """
+    if dt is None:
+        return None
+    _validate_timezone_aware(dt, param_name)
+    return dt.isoformat(timespec="seconds")
+
+
+def _current_utc_iso() -> str:
+    """Get current UTC time as ISO string.
+
+    Returns:
+        Current UTC time as ISO 8601 formatted string with second precision.
+    """
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def update_run_status(
     conn: sqlite3.Connection,
     run_id: int,
@@ -125,15 +153,15 @@ def update_run_status(
     updates = ["status = ?"]
     values: list[Any] = [status]
 
-    if started_at is not None:
-        _validate_timezone_aware(started_at, "started_at")
+    started_at_str = _to_iso_string(started_at, "started_at")
+    if started_at_str is not None:
         updates.append("started_at = ?")
-        values.append(started_at.isoformat(timespec="seconds"))
+        values.append(started_at_str)
 
-    if finished_at is not None:
-        _validate_timezone_aware(finished_at, "finished_at")
+    finished_at_str = _to_iso_string(finished_at, "finished_at")
+    if finished_at_str is not None:
         updates.append("finished_at = ?")
-        values.append(finished_at.isoformat(timespec="seconds"))
+        values.append(finished_at_str)
 
     if error_message is not None:
         updates.append("error_message = ?")
@@ -201,11 +229,9 @@ def update_run_status_if_active(
     Raises:
         ValueError: If finished_at is naive (no timezone info).
     """
-    if finished_at is not None:
-        _validate_timezone_aware(finished_at, "finished_at")
-        finished_at_str = finished_at.isoformat(timespec="seconds")
-    else:
-        finished_at_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    finished_at_str = _to_iso_string(finished_at, "finished_at")
+    if finished_at_str is None:
+        finished_at_str = _current_utc_iso()
 
     cursor = conn.cursor()
     cursor.execute(
