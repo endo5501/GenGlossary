@@ -57,34 +57,37 @@ export function useLogStream(
     const url = `${getBaseUrl()}/api/projects/${projectId}/runs/${runId}/logs`
     const eventSource = new EventSource(url)
 
-    eventSource.onopen = () => {
+    const disconnect = () => {
+      eventSource.close()
+      setIsConnected(false)
+    }
+
+    const handleOpen = () => {
       setIsConnected(true)
       setError(null)
     }
 
-    eventSource.onmessage = (event) => {
+    const handleMessage = (event: MessageEvent) => {
       const log = parseLogMessage(event)
-      if (log) {
-        addLog(log)
-      }
+      if (log) addLog(log)
     }
 
-    eventSource.addEventListener('complete', () => {
-      eventSource.close()
-      setIsConnected(false)
+    const handleComplete = () => {
+      disconnect()
       onCompleteRef.current?.()
-    })
+    }
 
-    eventSource.onerror = () => {
+    const handleError = () => {
       setError(new Error('SSE connection error'))
-      setIsConnected(false)
-      eventSource.close()
+      disconnect()
     }
 
-    return () => {
-      eventSource.close()
-      setIsConnected(false)
-    }
+    eventSource.onopen = handleOpen
+    eventSource.onmessage = handleMessage
+    eventSource.addEventListener('complete', handleComplete)
+    eventSource.onerror = handleError
+
+    return disconnect
   }, [projectId, runId, addLog])
 
   return { logs, isConnected, error, clearLogs }
