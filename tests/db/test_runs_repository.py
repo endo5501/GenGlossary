@@ -841,6 +841,115 @@ class TestToIsoString:
             _to_iso_string(naive_dt, "my_timestamp")
 
 
+class TestGetCurrentOrLatestRun:
+    """Tests for get_current_or_latest_run function."""
+
+    def test_returns_active_run_when_exists(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """アクティブなRunがある場合はそれを返す"""
+        from genglossary.db.runs_repository import get_current_or_latest_run
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+
+        result = get_current_or_latest_run(project_db)
+        assert result is not None
+        assert result["id"] == run_id
+        assert result["status"] == "running"
+
+    def test_returns_completed_run_when_no_active(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """アクティブなRunがない場合は最新の完了Runを返す"""
+        from genglossary.db.runs_repository import get_current_or_latest_run
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+        update_run_status(project_db, run_id, "completed", finished_at=datetime.now(timezone.utc))
+
+        result = get_current_or_latest_run(project_db)
+        assert result is not None
+        assert result["id"] == run_id
+        assert result["status"] == "completed"
+
+    def test_returns_latest_run_among_multiple_completed(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """複数の完了Runがある場合は最新のものを返す"""
+        import time
+        from genglossary.db.runs_repository import get_current_or_latest_run
+
+        # Create first run and complete it
+        run_id1 = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id1, "running", started_at=datetime.now(timezone.utc))
+        update_run_status(project_db, run_id1, "completed", finished_at=datetime.now(timezone.utc))
+
+        # Ensure different created_at timestamp
+        time.sleep(1.1)
+
+        # Create second run and complete it
+        run_id2 = create_run(project_db, scope="extract")
+        update_run_status(project_db, run_id2, "running", started_at=datetime.now(timezone.utc))
+        update_run_status(project_db, run_id2, "completed", finished_at=datetime.now(timezone.utc))
+
+        result = get_current_or_latest_run(project_db)
+        assert result is not None
+        assert result["id"] == run_id2  # Most recent
+
+    def test_returns_active_over_completed(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """完了RunとアクティブRunがある場合はアクティブRunを返す"""
+        import time
+        from genglossary.db.runs_repository import get_current_or_latest_run
+
+        # Create first run and complete it
+        run_id1 = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id1, "running", started_at=datetime.now(timezone.utc))
+        update_run_status(project_db, run_id1, "completed", finished_at=datetime.now(timezone.utc))
+
+        # Ensure different created_at timestamp
+        time.sleep(1.1)
+
+        # Create second run (still running)
+        run_id2 = create_run(project_db, scope="extract")
+        update_run_status(project_db, run_id2, "running", started_at=datetime.now(timezone.utc))
+
+        result = get_current_or_latest_run(project_db)
+        assert result is not None
+        assert result["id"] == run_id2  # Active run takes priority
+        assert result["status"] == "running"
+
+    def test_returns_none_when_no_runs(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """Runがない場合はNoneを返す"""
+        from genglossary.db.runs_repository import get_current_or_latest_run
+
+        result = get_current_or_latest_run(project_db)
+        assert result is None
+
+    def test_returns_failed_run_when_no_active(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """アクティブなRunがない場合は失敗したRunも返す"""
+        from genglossary.db.runs_repository import get_current_or_latest_run
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+        update_run_status(
+            project_db, run_id, "failed",
+            finished_at=datetime.now(timezone.utc),
+            error_message="Test error"
+        )
+
+        result = get_current_or_latest_run(project_db)
+        assert result is not None
+        assert result["id"] == run_id
+        assert result["status"] == "failed"
+
+
 class TestCurrentUtcIso:
     """Tests for _current_utc_iso helper function."""
 

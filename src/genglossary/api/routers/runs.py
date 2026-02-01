@@ -121,21 +121,25 @@ async def get_current_run(
     project_id: int = Path(..., description="Project ID"),
     manager: RunManager = Depends(get_run_manager),
 ) -> RunResponse:
-    """Get the currently active run for a project.
+    """Get the current run for a project.
+
+    Returns the active run if one exists, otherwise returns the most recent run.
+    This allows the frontend to see completed/failed run status after the
+    pipeline finishes.
 
     Args:
         project_id: Project ID (path parameter).
         manager: RunManager instance.
 
     Returns:
-        RunResponse: The active run.
+        RunResponse: The current or latest run.
 
     Raises:
-        HTTPException: 404 if no active run.
+        HTTPException: 404 if no runs exist.
     """
-    row = manager.get_active_run()
+    row = manager.get_current_or_latest_run()
     if row is None:
-        raise HTTPException(status_code=404, detail="No active run")
+        raise HTTPException(status_code=404, detail="No runs found")
 
     return RunResponse.from_db_row(row)
 

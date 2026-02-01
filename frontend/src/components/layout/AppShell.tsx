@@ -5,7 +5,7 @@ import { useCallback } from 'react'
 import { GlobalTopBar } from './GlobalTopBar'
 import { LeftNavRail } from './LeftNavRail'
 import { LogPanel } from './LogPanel'
-import { useCurrentRun } from '../../api/hooks'
+import { useCurrentRun, runKeys } from '../../api/hooks'
 
 function extractProjectId(pathname: string): number | undefined {
   const match = pathname.match(/^\/projects\/(\d+)/)
@@ -24,7 +24,7 @@ export function AppShell() {
   // Invalidate current run cache when SSE stream completes
   const handleRunComplete = useCallback(() => {
     if (projectId !== undefined) {
-      queryClient.invalidateQueries({ queryKey: ['currentRun', projectId] })
+      queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
     }
   }, [queryClient, projectId])
 

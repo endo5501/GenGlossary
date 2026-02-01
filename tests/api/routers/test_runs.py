@@ -271,11 +271,53 @@ class TestGetCurrentRun:
     def test_get_current_run_returns_404_when_none(
         self, test_project_setup, client: TestClient
     ) -> None:
-        """アクティブなRunがない場合は404を返す"""
+        """Runが存在しない場合は404を返す"""
         project_id = test_project_setup["project_id"]
 
         response = client.get(f"/api/projects/{project_id}/runs/current")
         assert response.status_code == 404
+
+    def test_get_current_run_returns_completed_run(
+        self, test_project_setup, client: TestClient
+    ) -> None:
+        """アクティブなRunがない場合は最新の完了Runを返す"""
+        project_id = test_project_setup["project_id"]
+        project_db_path = test_project_setup["project_db_path"]
+
+        # Create a completed run directly in the database
+        conn = get_connection(project_db_path)
+        with transaction(conn):
+            run_id = create_run(conn, scope="full")
+            update_run_status(conn, run_id, "completed")
+        conn.close()
+
+        # Get current run - should return completed run
+        response = client.get(f"/api/projects/{project_id}/runs/current")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == run_id
+        assert data["status"] == "completed"
+
+    def test_get_current_run_returns_failed_run(
+        self, test_project_setup, client: TestClient
+    ) -> None:
+        """アクティブなRunがない場合は最新の失敗Runを返す"""
+        project_id = test_project_setup["project_id"]
+        project_db_path = test_project_setup["project_db_path"]
+
+        # Create a failed run directly in the database
+        conn = get_connection(project_db_path)
+        with transaction(conn):
+            run_id = create_run(conn, scope="full")
+            update_run_status(conn, run_id, "failed", error_message="Test error")
+        conn.close()
+
+        # Get current run - should return failed run
+        response = client.get(f"/api/projects/{project_id}/runs/current")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == run_id
+        assert data["status"] == "failed"
 
 
 class TestRunLogs:
