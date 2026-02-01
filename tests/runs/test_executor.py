@@ -1369,19 +1369,41 @@ class TestPipelineScopeEnum:
         assert PipelineScope.FROM_TERMS in _SCOPE_CLEAR_FUNCTIONS
         assert PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_CLEAR_FUNCTIONS
 
-    def test_scope_handlers_use_enum_keys(self) -> None:
-        """_SCOPE_HANDLERS が PipelineScope Enum をキーとして使用することを確認"""
-        from genglossary.runs.executor import PipelineScope, _SCOPE_HANDLERS
+    def test_execute_dispatches_to_correct_handler(self) -> None:
+        """execute() が各スコープに対して正しいハンドラーを呼び出すことを確認"""
+        from unittest.mock import MagicMock, patch
 
-        # Keys must be PipelineScope enum values
-        assert PipelineScope.FULL in _SCOPE_HANDLERS
-        assert PipelineScope.FROM_TERMS in _SCOPE_HANDLERS
-        assert PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_HANDLERS
+        from genglossary.runs.executor import PipelineExecutor, PipelineScope
 
-        # Values must be handler method names
-        assert _SCOPE_HANDLERS[PipelineScope.FULL] == "_execute_full"
-        assert _SCOPE_HANDLERS[PipelineScope.FROM_TERMS] == "_execute_from_terms"
-        assert _SCOPE_HANDLERS[PipelineScope.PROVISIONAL_TO_REFINED] == "_execute_provisional_to_refined"
+        executor = PipelineExecutor()
+
+        # Test that each scope calls the expected internal method
+        for scope in PipelineScope:
+            with patch.object(executor, "_execute_full") as mock_full, \
+                 patch.object(executor, "_execute_from_terms") as mock_from_terms, \
+                 patch.object(executor, "_execute_provisional_to_refined") as mock_provisional, \
+                 patch.object(executor, "_clear_tables_for_scope"), \
+                 patch.object(executor, "_log"), \
+                 patch.object(executor, "_check_cancellation", return_value=False):
+
+                mock_conn = MagicMock()
+                mock_context = MagicMock()
+
+                executor.execute(mock_conn, scope, mock_context, doc_root="/test")
+
+                # Verify the correct handler was called
+                if scope == PipelineScope.FULL:
+                    mock_full.assert_called_once()
+                    mock_from_terms.assert_not_called()
+                    mock_provisional.assert_not_called()
+                elif scope == PipelineScope.FROM_TERMS:
+                    mock_full.assert_not_called()
+                    mock_from_terms.assert_called_once()
+                    mock_provisional.assert_not_called()
+                elif scope == PipelineScope.PROVISIONAL_TO_REFINED:
+                    mock_full.assert_not_called()
+                    mock_from_terms.assert_not_called()
+                    mock_provisional.assert_called_once()
 
 
 class TestCancellationCheckBeforeRefinedSave:

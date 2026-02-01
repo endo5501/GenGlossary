@@ -49,12 +49,6 @@ _SCOPE_CLEAR_FUNCTIONS: dict[PipelineScope, list[Callable[[sqlite3.Connection], 
     PipelineScope.PROVISIONAL_TO_REFINED: [delete_all_issues, delete_all_refined],
 }
 
-# Map of scope to handler method names
-_SCOPE_HANDLERS: dict[PipelineScope, str] = {
-    PipelineScope.FULL: "_execute_full",
-    PipelineScope.FROM_TERMS: "_execute_from_terms",
-    PipelineScope.PROVISIONAL_TO_REFINED: "_execute_provisional_to_refined",
-}
 
 
 def _cancellable(func: Callable) -> Callable:
@@ -299,13 +293,18 @@ class PipelineExecutor:
         # Clear tables before execution
         self._clear_tables_for_scope(conn, scope_enum)
 
-        # Execute based on scope using dispatch table
-        handler_name = _SCOPE_HANDLERS.get(scope_enum)
-        if handler_name is None:
+        # Execute based on scope using dispatch table with direct method references
+        scope_handlers = {
+            PipelineScope.FULL: self._execute_full,
+            PipelineScope.FROM_TERMS: self._execute_from_terms,
+            PipelineScope.PROVISIONAL_TO_REFINED: self._execute_provisional_to_refined,
+        }
+
+        handler = scope_handlers.get(scope_enum)
+        if handler is None:
             self._log(context, "error", f"Unknown scope: {scope_enum}")
             raise ValueError(f"Unknown scope: {scope_enum}")
 
-        handler = getattr(self, handler_name)
         handler(conn, context, doc_root)
 
         self._log(context, "info", "Pipeline execution completed")
@@ -418,7 +417,7 @@ class PipelineExecutor:
         self,
         conn: sqlite3.Connection,
         context: ExecutionContext,
-        doc_root: str = ".",
+        _doc_root: str = ".",
         documents: list[Document] | None = None,
         extracted_terms: list[str] | list[ClassifiedTerm] | None = None,
     ) -> None:
@@ -427,11 +426,10 @@ class PipelineExecutor:
         Args:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
-            doc_root: Root directory for documents (unused, for unified signature).
+            _doc_root: Root directory for documents (unused, for unified signature).
             documents: Pre-loaded documents (None to load from DB).
             extracted_terms: Pre-extracted terms as strings or ClassifiedTerms (None to load from DB).
         """
-        del doc_root  # Unused, for unified handler signature
         # Load documents from DB if not provided
         if documents is None:
             documents = self._load_documents(conn, context)
@@ -473,7 +471,7 @@ class PipelineExecutor:
         self,
         conn: sqlite3.Connection,
         context: ExecutionContext,
-        doc_root: str = ".",
+        _doc_root: str = ".",
         glossary: Glossary | None = None,
         documents: list[Document] | None = None,
     ) -> None:
@@ -482,11 +480,10 @@ class PipelineExecutor:
         Args:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
-            doc_root: Root directory for documents (unused, for unified signature).
+            _doc_root: Root directory for documents (unused, for unified signature).
             glossary: Pre-generated provisional glossary (None to load from DB).
             documents: Pre-loaded documents (None to load from DB).
         """
-        del doc_root  # Unused, for unified handler signature
         # Load glossary from DB if not provided
         if glossary is None:
             self._log(context, "info", "Loading provisional glossary from database...")
