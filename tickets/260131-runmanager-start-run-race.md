@@ -3,8 +3,8 @@ priority: 4
 tags: [improvement, backend, reliability]
 description: "RunManager: Prevent race condition in start_run"
 created_at: "2026-01-31T15:20:00+09:00"
-started_at: null
-closed_at: null
+started_at: 2026-02-01T10:17:00Z
+closed_at: 2026-02-01T10:18:21Z
 ---
 
 # RunManager: Prevent race condition in start_run
@@ -75,17 +75,15 @@ WHERE status IN ('pending', 'running');
 - `src/genglossary/runs/manager.py`
 - または `src/genglossary/db/schema.py`（オプション2の場合）
 
+## Resolution
+
+**重複チケット - 既に解決済み**
+
+このチケットは `260130-runmanager-start-run-synchronization` で既に解決されています：
+- `_start_run_lock` による排他制御が実装済み（manager.py:52, 71行目）
+- 並行 `start_run()` のテストも追加済み（test_manager.py）
+- 2026-01-31 にクローズ済み
+
 ## Tasks
 
-- [ ] `start_run` にプロセスローカルロックを追加
-- [ ] またはDB制約で一意性を強制
-- [ ] テストの追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 重複確認 - `260130-runmanager-start-run-synchronization` で解決済み
