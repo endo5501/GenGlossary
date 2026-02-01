@@ -4,7 +4,7 @@ tags: [frontend, bug]
 description: "useLogStream: Clear error state when runId becomes undefined"
 created_at: "2026-01-31T04:40:32Z"
 started_at: 2026-02-01T07:34:18Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T07:46:13Z # Do not modify manually
 ---
 
 # useLogStream: Clear error state when runId becomes undefined
