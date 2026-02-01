@@ -1421,6 +1421,79 @@ class TestRunManagerFailedStatusGuard:
             ), "Info log about skipped failed status should be broadcast"
 
 
+class TestRunManagerStateConsistency:
+    """Tests for in-memory state consistency improvements.
+
+    Issues addressed:
+    1. _current_run_id was unused and should be removed.
+    2. _cancel_events should be set within _start_run_lock.
+    3. Thread start failure should cleanup _cancel_events and update DB status.
+    """
+
+    def test_current_run_id_attribute_does_not_exist(
+        self, manager: RunManager
+    ) -> None:
+        """_current_run_id属性が存在しないことを確認（未使用のため削除済み）"""
+        assert not hasattr(manager, "_current_run_id"), (
+            "_current_run_id attribute should not exist (removed as unused)"
+        )
+
+    def test_thread_start_failure_cleans_up_cancel_event(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """Thread.start()が失敗した場合、_cancel_eventsからクリーンアップされる"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            # Mock Thread to raise on start()
+            mock_thread = Mock()
+            mock_thread.start.side_effect = RuntimeError("Failed to start thread")
+            mock_thread_class.return_value = mock_thread
+
+            with pytest.raises(RuntimeError, match="Failed to start thread"):
+                manager.start_run(scope="full")
+
+            # Cancel event should be cleaned up
+            assert len(manager._cancel_events) == 0, (
+                "Cancel event should be cleaned up when thread start fails"
+            )
+
+    def test_thread_start_failure_updates_db_status_to_failed(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """Thread.start()が失敗した場合、DBステータスがfailedに更新される"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            # Mock Thread to raise on start()
+            mock_thread = Mock()
+            mock_thread.start.side_effect = RuntimeError("Failed to start thread")
+            mock_thread_class.return_value = mock_thread
+
+            with pytest.raises(RuntimeError, match="Failed to start thread"):
+                run_id = manager.start_run(scope="full")
+
+            # Get the run_id from the database (since start_run raises, we need to find it)
+            cursor = project_db.execute(
+                "SELECT id, status, error_message FROM runs ORDER BY id DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+            assert row is not None
+
+            assert row["status"] == "failed", (
+                f"Expected status 'failed' but got '{row['status']}'"
+            )
+            assert "Failed to start execution thread" in (row["error_message"] or "")
+
+    def test_thread_start_failure_reraises_exception(
+        self, manager: RunManager
+    ) -> None:
+        """Thread.start()が失敗した場合、例外が再送出される"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            mock_thread = Mock()
+            mock_thread.start.side_effect = RuntimeError("Failed to start thread")
+            mock_thread_class.return_value = mock_thread
+
+            with pytest.raises(RuntimeError, match="Failed to start thread"):
+                manager.start_run(scope="full")
+
+
 class TestRunManagerStatusMisclassification:
     """Tests for status misclassification bug fix.
 
