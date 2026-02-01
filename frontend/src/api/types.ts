@@ -19,7 +19,7 @@ export interface ProjectResponse {
 
 export interface ProjectCreateRequest {
   name: string
-  doc_root: string
+  doc_root?: string
   llm_provider?: string
   llm_model?: string
   llm_base_url?: string

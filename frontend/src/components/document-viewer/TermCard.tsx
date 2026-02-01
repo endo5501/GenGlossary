@@ -9,7 +9,7 @@ import {
   Divider,
 } from '@mantine/core'
 import { IconTrash, IconEdit, IconArrowRight } from '@tabler/icons-react'
-import type { GlossaryTermResponse, TermOccurrence } from '../../api/types'
+import type { GlossaryTermResponse } from '../../api/types'
 import { OccurrenceList } from '../common/OccurrenceList'
 
 interface TermCardProps {
