@@ -97,7 +97,7 @@ def _validate_timezone_aware(dt: datetime, param_name: str) -> None:
     Raises:
         ValueError: If datetime is naive (no timezone info).
     """
-    if dt.tzinfo is None:
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
         raise ValueError(f"{param_name} must be timezone-aware")
 
 
