@@ -2203,3 +2203,74 @@ class TestPipelineExecutorCancelEventPropagation:
 
             # Issues should NOT be saved when review was cancelled
             mock_create_issues.assert_not_called()
+
+
+class TestExecuteReturnValue:
+    """Tests for execute() return value indicating cancellation status."""
+
+    def test_execute_returns_false_when_completed_normally(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+    ) -> None:
+        """execute が正常完了時に False を返すことを確認"""
+        cancel_event = Event()
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: None,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client"), \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+            mock_loader.return_value.load_directory.return_value = []
+
+            result = executor.execute(project_db, "full", context, doc_root="/test")
+
+            assert result is False, "Should return False when completed normally"
+
+    def test_execute_returns_true_when_cancelled_before_start(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+    ) -> None:
+        """execute が開始前にキャンセルされた場合に True を返すことを確認"""
+        cancel_event = Event()
+        cancel_event.set()  # Set before execution
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: None,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client"), \
+             patch("genglossary.runs.executor.DocumentLoader"):
+
+            result = executor.execute(project_db, "full", context, doc_root="/test")
+
+            assert result is True, "Should return True when cancelled before start"
+
+    def test_execute_returns_true_when_cancelled_during_document_load(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+    ) -> None:
+        """execute がドキュメント読み込み後にキャンセルされた場合に True を返すことを確認"""
+        cancel_event = Event()
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=lambda msg: None,
+            cancel_event=cancel_event,
+        )
+
+        def set_cancel_after_load(*args, **kwargs):
+            cancel_event.set()
+            return []
+
+        with patch("genglossary.runs.executor.create_llm_client"), \
+             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+            mock_loader.return_value.load_directory.side_effect = set_cancel_after_load
+
+            result = executor.execute(project_db, "full", context, doc_root="/test")
+
+            assert result is True, "Should return True when cancelled during execution"
