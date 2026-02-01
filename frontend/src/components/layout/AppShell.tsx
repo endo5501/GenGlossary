@@ -50,7 +50,7 @@ export function AppShell() {
         <Box
           data-testid="main-content"
           style={{
-            height: hasProject ? 'calc(100vh - 60px)' : '100%',
+            height: '100%',
             display: 'flex',
             flexDirection: 'column',
           }}
@@ -59,7 +59,7 @@ export function AppShell() {
             data-testid="scrollable-content"
             style={{
               flex: 1,
-              overflowY: 'auto',
+              overflow: 'hidden',
               minHeight: 0,
             }}
           >

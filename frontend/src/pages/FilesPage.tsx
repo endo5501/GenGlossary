@@ -102,12 +102,23 @@ export function FilesPage({ projectId }: FilesPageProps) {
                   <Table.Tr
                     key={file.id}
                     style={{ cursor: 'pointer' }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View ${file.file_name}`}
                     onClick={() => {
-                      // Navigate to document viewer
                       navigate({
                         to: `/projects/${projectId}/document-viewer`,
                         search: { file: file.id },
                       })
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate({
+                          to: `/projects/${projectId}/document-viewer`,
+                          search: { file: file.id },
+                        })
+                      }
                     }}
                   >
                     <Table.Td>
@@ -126,6 +137,7 @@ export function FilesPage({ projectId }: FilesPageProps) {
                         variant="subtle"
                         color="red"
                         size="xs"
+                        aria-label={`Delete ${file.file_name}`}
                         onClick={(e) => {
                           e.stopPropagation()
                           handleDeleteFile(file.id)
