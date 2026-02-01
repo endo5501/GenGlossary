@@ -43,13 +43,13 @@ return disconnect  // eventSource.close() handles all cleanup
 
 ## Tasks
 
-- [ ] TDD: Write tests for event listener consistency
-- [ ] Refactor to use addEventListener for all events
-- [ ] Commit
-- [ ] Run tests (`pnpm test`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent
-- [ ] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] TDD: Write tests for event listener consistency
+- [x] Refactor to use addEventListener for all events
+- [x] Commit
+- [x] Run tests (`pnpm test`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent
+- [x] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
