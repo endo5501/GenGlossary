@@ -3,7 +3,7 @@ priority: 4
 tags: [improvement, backend, security]
 description: "API path validation: reject absolute paths and normalize input"
 created_at: "2026-02-01T08:41:14Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-01T10:18:41Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -65,20 +65,27 @@ def _validate_file_name(file_name: str) -> str:
 
 ## Tasks
 
-- [ ] 絶対パス拒否の実装
-- [ ] パス正規化の実装
-- [ ] バリデーション結果を返すように関数を変更
-- [ ] 重複チェックに正規化されたパスを使用
-- [ ] テスト追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
+- [x] 絶対パス拒否の実装
+- [x] パス正規化の実装
+- [x] バリデーション結果を返すように関数を変更
+- [x] 重複チェックに正規化されたパスを使用
+- [x] テスト追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
+
+## Follow-up tickets
+
+codex MCP レビューで追加の問題点が指摘され、フォローアップチケットを作成:
+
+- `260201-102637-api-windows-drive-path-validation` - Windows ドライブパス（`C:/...`）の拒否
+- `260201-102659-api-path-validation-edge-cases` - エッジケース対応（空セグメント、パス長制限、bulk IntegrityError）
 
 ## Notes
 
