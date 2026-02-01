@@ -4,7 +4,7 @@ tags: [ux, frontend, layout]
 description: "Terms画面などで上部操作ボタンと下部ログを常時表示するレイアウトに修正"
 created_at: "2026-02-01T12:48:08Z"
 started_at: 2026-02-01T22:15:13Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T22:45:47Z # Do not modify manually
 ---
 
 # 上部・下部メニューの常時表示レイアウト
