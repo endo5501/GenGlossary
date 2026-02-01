@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 3
 tags: [frontend, bug]
 description: "useLogStream: Clear error state when runId becomes undefined"
 created_at: "2026-01-31T04:40:32Z"

@@ -345,6 +345,20 @@ timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 **タイムゾーン検証**:
 `update_run_status` と `update_run_status_if_active` は naive datetime を拒否し、`ValueError` を発生させます。
 
+**ヘルパー関数**:
+タイムスタンプ処理は以下のヘルパー関数で統一されています：
+
+```python
+def _to_iso_string(dt: datetime | None, param_name: str) -> str | None:
+    """Convert timezone-aware datetime to ISO string.
+    Returns None if dt is None.
+    Raises ValueError if dt is naive.
+    """
+
+def _current_utc_iso() -> str:
+    """Get current UTC time as ISO string."""
+```
+
 ## SQLite スレッディング戦略
 
 1. **API層**: リクエストごとに接続を作成・破棄（`get_project_db()` dependency）
@@ -808,13 +822,14 @@ get_run_manager(db_path) → RunManager
 
 ## テスト構成
 
-**tests/db/test_runs_repository.py (47 tests)**
+**tests/db/test_runs_repository.py (53 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 - fail_run_if_not_terminal（終了状態の上書き防止）
 - update_run_status_if_active（汎用ステータス更新関数）
 - タイムスタンプ形式の一貫性（UTC ISO 8601形式）
 - タイムゾーン検証（naive datetime の拒否）
+- ヘルパー関数テスト（_to_iso_string, _current_utc_iso）
 
 **tests/runs/test_manager.py (52 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
@@ -851,4 +866,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 159 tests** (Repository 47 + Manager 52 + Executor 50 + API 10)
+**合計: 165 tests** (Repository 53 + Manager 52 + Executor 50 + API 10)

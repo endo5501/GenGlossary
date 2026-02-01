@@ -3,8 +3,8 @@ priority: 1
 tags: [backend, refactoring]
 description: "runs_repository: Extract helper functions for timestamp handling"
 created_at: "2026-02-01T00:24:56Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-01T06:05:13Z # Do not modify manually
+closed_at: 2026-02-01T06:15:59Z # Do not modify manually
 ---
 
 # runs_repository: Extract helper functions for timestamp handling
@@ -46,20 +46,20 @@ def _current_utc_iso() -> str:
 
 ## Tasks
 
-- [ ] Add _to_iso_string helper function
-- [ ] Add _current_utc_iso helper function
-- [ ] Refactor create_run to use helpers
-- [ ] Refactor update_run_status to use helpers
-- [ ] Refactor update_run_status_if_active to use helpers
-- [ ] Add tests
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Add _to_iso_string helper function
+- [x] Add _current_utc_iso helper function
+- [x] Refactor create_run to use helpers
+- [x] Refactor update_run_status to use helpers
+- [x] Refactor update_run_status_if_active to use helpers
+- [x] Add tests
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 

@@ -9,6 +9,8 @@ import pytest
 
 from genglossary.db.connection import get_connection
 from genglossary.db.runs_repository import (
+    _current_utc_iso,
+    _to_iso_string,
     cancel_run,
     create_run,
     get_active_run,
@@ -805,3 +807,58 @@ class TestUpdateRunStatusIfActiveWithFinishedAt:
             update_run_status_if_active(
                 project_db, run_id, "completed", finished_at=naive_datetime
             )
+
+
+class TestToIsoString:
+    """Tests for _to_iso_string helper function."""
+
+    # ISO 8601 format with UTC timezone: 2026-01-31T15:13:13+00:00
+    ISO_UTC_PATTERN = re.compile(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(\+00:00|Z)$"
+    )
+
+    def test_returns_none_for_none_input(self) -> None:
+        """Noneを渡すとNoneを返す"""
+        result = _to_iso_string(None, "test_param")
+        assert result is None
+
+    def test_returns_iso_string_for_timezone_aware_datetime(self) -> None:
+        """timezone-aware datetimeをISO文字列に変換する"""
+        dt = datetime(2026, 1, 15, 12, 30, 45, tzinfo=timezone.utc)
+        result = _to_iso_string(dt, "test_param")
+        assert result == "2026-01-15T12:30:45+00:00"
+
+    def test_raises_for_naive_datetime(self) -> None:
+        """naive datetimeはValueErrorを発生させる"""
+        naive_dt = datetime(2026, 1, 15, 12, 30, 45)
+        with pytest.raises(ValueError, match="timezone-aware"):
+            _to_iso_string(naive_dt, "test_param")
+
+    def test_uses_param_name_in_error_message(self) -> None:
+        """エラーメッセージにパラメータ名を含む"""
+        naive_dt = datetime(2026, 1, 15, 12, 30, 45)
+        with pytest.raises(ValueError, match="my_timestamp"):
+            _to_iso_string(naive_dt, "my_timestamp")
+
+
+class TestCurrentUtcIso:
+    """Tests for _current_utc_iso helper function."""
+
+    # ISO 8601 format with UTC timezone: 2026-01-31T15:13:13+00:00
+    ISO_UTC_PATTERN = re.compile(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\+00:00|Z)$"
+    )
+
+    def test_returns_utc_iso_format_string(self) -> None:
+        """UTC ISO形式の文字列を返す"""
+        result = _current_utc_iso()
+        assert self.ISO_UTC_PATTERN.match(result), f"Format mismatch: {result}"
+
+    def test_returns_current_time(self) -> None:
+        """現在時刻を返す"""
+        before = datetime.now(timezone.utc).replace(microsecond=0)
+        result = _current_utc_iso()
+        after = datetime.now(timezone.utc).replace(microsecond=0)
+
+        result_dt = datetime.fromisoformat(result)
+        assert before <= result_dt <= after + timedelta(seconds=1)
