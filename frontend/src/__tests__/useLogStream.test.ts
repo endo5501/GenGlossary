@@ -103,6 +103,54 @@ describe('useLogStream', () => {
     })
   })
 
+  describe('event listener cleanup', () => {
+    it('should remove complete event listener on cleanup to prevent memory leaks', async () => {
+      let eventSourceInstance: InstanceType<typeof MockedEventSource> | null =
+        null
+
+      // Capture the EventSource instance
+      const OriginalEventSource = window.EventSource
+      window.EventSource = class extends (
+        OriginalEventSource
+      ) {
+        constructor(url: string) {
+          super(url)
+          eventSourceInstance = this as unknown as InstanceType<
+            typeof MockedEventSource
+          >
+        }
+      } as typeof EventSource
+
+      try {
+        const { unmount } = renderHook(() => useLogStream(1, 1))
+
+        // Wait for connection
+        await waitFor(() => {
+          expect(eventSourceInstance).not.toBeNull()
+        })
+
+        // Verify addEventListener was called for 'complete'
+        expect(eventSourceInstance!.addEventListener).toHaveBeenCalledWith(
+          'complete',
+          expect.any(Function)
+        )
+
+        // Unmount to trigger cleanup
+        unmount()
+
+        // BUG: Currently removeEventListener is not called for 'complete'
+        // FIX: Cleanup should call eventSource.removeEventListener('complete', handleComplete)
+        expect(eventSourceInstance!.removeEventListener).toHaveBeenCalledWith(
+          'complete',
+          expect.any(Function)
+        )
+        expect(eventSourceInstance!.close).toHaveBeenCalled()
+      } finally {
+        window.EventSource = OriginalEventSource
+      }
+    })
+  })
+
   describe('onComplete stale closure', () => {
     it('should call the latest onComplete callback when complete event fires', async () => {
       const onComplete1 = vi.fn()
