@@ -1,0 +1,235 @@
+import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import { MantineProvider } from '@mantine/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { server } from './setup'
+import { handlers } from '../mocks/handlers'
+import { http, HttpResponse } from 'msw'
+import { DocumentViewerPage } from '../pages/DocumentViewerPage'
+import type {
+  TermResponse,
+  GlossaryTermResponse,
+  FileResponse,
+  FileDetailResponse,
+} from '../api/types'
+
+const BASE_URL = 'http://localhost:8000'
+
+// Mock files data
+const mockFiles: FileResponse[] = [
+  { id: 1, file_name: 'test.md', file_path: '/test.md' },
+]
+
+const mockFileDetail: FileDetailResponse = {
+  id: 1,
+  file_name: 'test.md',
+  file_path: '/test.md',
+  content: '量子コンピュータは量子力学を利用します。コンピュータは一般名詞です。',
+}
+
+// All extracted terms including COMMON_NOUN
+const mockTermsWithCommonNoun: TermResponse[] = [
+  { id: 1, term_text: '量子コンピュータ', category: '技術用語' },
+  { id: 2, term_text: '量子力学', category: '技術用語' },
+  { id: 3, term_text: 'コンピュータ', category: 'COMMON_NOUN' }, // Should NOT be highlighted
+]
+
+// Provisional glossary - only processed terms (no COMMON_NOUN)
+const mockProvisionalTerms: GlossaryTermResponse[] = [
+  {
+    id: 1,
+    term_name: '量子コンピュータ',
+    definition: '量子力学の原理を利用したコンピュータ',
+    confidence: 0.9,
+    occurrences: [{ document_path: 'test.md', line_number: 1, context: '量子コンピュータは...' }],
+  },
+  {
+    id: 2,
+    term_name: '量子力学',
+    definition: '物理学の一分野',
+    confidence: 0.85,
+    occurrences: [{ document_path: 'test.md', line_number: 1, context: '量子力学を利用' }],
+  },
+]
+
+// Refined glossary
+const mockRefinedTerms: GlossaryTermResponse[] = [
+  {
+    id: 1,
+    term_name: '量子コンピュータ',
+    definition: '量子力学の原理を利用した次世代コンピュータ',
+    confidence: 0.95,
+    occurrences: [{ document_path: 'test.md', line_number: 1, context: '量子コンピュータは...' }],
+  },
+]
+
+// Mock react-router
+vi.mock('@tanstack/react-router', async () => {
+  const actual = await vi.importActual('@tanstack/react-router')
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+    Link: ({ children, to, ...props }: { children: React.ReactNode; to: string; [key: string]: unknown }) => (
+      <a href={to} {...props}>{children}</a>
+    ),
+  }
+})
+
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  })
+
+  return {
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <MantineProvider>{ui}</MantineProvider>
+      </QueryClientProvider>
+    ),
+  }
+}
+
+// Base handlers for files API
+const filesHandlers = [
+  http.get(`${BASE_URL}/api/projects/:projectId/files`, () => {
+    return HttpResponse.json(mockFiles)
+  }),
+  http.get(`${BASE_URL}/api/projects/:projectId/files/:fileId`, () => {
+    return HttpResponse.json(mockFileDetail)
+  }),
+]
+
+// Runs handler (idle state)
+const runsHandler = http.get(`${BASE_URL}/api/projects/:projectId/runs/current`, () => {
+  return HttpResponse.json({
+    id: 0,
+    scope: 'full',
+    status: 'pending',
+    progress_current: 0,
+    progress_total: 0,
+    current_step: null,
+    created_at: '2024-01-15T10:00:00Z',
+    started_at: null,
+    finished_at: null,
+    triggered_by: 'manual',
+    error_message: null,
+  })
+})
+
+describe('DocumentViewerPage - Term Highlighting Filter', () => {
+  beforeEach(() => {
+    server.use(...handlers, ...filesHandlers, runsHandler)
+  })
+
+  describe('when refinedTerms exist', () => {
+    beforeEach(() => {
+      server.use(
+        http.get(`${BASE_URL}/api/projects/:projectId/terms`, () => {
+          return HttpResponse.json(mockTermsWithCommonNoun)
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+          return HttpResponse.json(mockProvisionalTerms)
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+          return HttpResponse.json(mockRefinedTerms)
+        })
+      )
+    })
+
+    it('highlights only terms from refinedTerms, not COMMON_NOUN', async () => {
+      renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+      // Wait for content to load
+      await waitFor(() => {
+        expect(screen.getByText(/量子コンピュータ/)).toBeInTheDocument()
+      })
+
+      // Find highlighted terms (background color indicates highlighting)
+      const highlightedElements = document.querySelectorAll('[style*="background"]')
+      const highlightedTexts = Array.from(highlightedElements).map(el => el.textContent)
+
+      // '量子コンピュータ' should be highlighted (in refinedTerms)
+      expect(highlightedTexts).toContain('量子コンピュータ')
+
+      // 'コンピュータ' should NOT be highlighted (COMMON_NOUN, not in refined)
+      // Note: The word 'コンピュータ' appears alone and should not be highlighted
+      const plainComputerElements = Array.from(document.querySelectorAll('span')).filter(
+        el => el.textContent === 'コンピュータ' && !el.style.backgroundColor
+      )
+      expect(plainComputerElements.length).toBeGreaterThan(0)
+
+      // '量子力学' should NOT be highlighted (not in refinedTerms, only in provisional)
+      expect(highlightedTexts).not.toContain('量子力学')
+    })
+  })
+
+  describe('when only provisionalTerms exist (no refined)', () => {
+    beforeEach(() => {
+      server.use(
+        http.get(`${BASE_URL}/api/projects/:projectId/terms`, () => {
+          return HttpResponse.json(mockTermsWithCommonNoun)
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+          return HttpResponse.json(mockProvisionalTerms)
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+          return HttpResponse.json([]) // Empty refined
+        })
+      )
+    })
+
+    it('highlights terms from provisionalTerms, not COMMON_NOUN', async () => {
+      renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+      // Wait for content to load
+      await waitFor(() => {
+        expect(screen.getByText(/量子コンピュータ/)).toBeInTheDocument()
+      })
+
+      // Find highlighted terms
+      const highlightedElements = document.querySelectorAll('[style*="background"]')
+      const highlightedTexts = Array.from(highlightedElements).map(el => el.textContent)
+
+      // '量子コンピュータ' and '量子力学' should be highlighted (in provisionalTerms)
+      expect(highlightedTexts).toContain('量子コンピュータ')
+      expect(highlightedTexts).toContain('量子力学')
+
+      // 'コンピュータ' should NOT be highlighted (COMMON_NOUN)
+      const plainComputerElements = Array.from(document.querySelectorAll('span')).filter(
+        el => el.textContent === 'コンピュータ' && !el.style.backgroundColor
+      )
+      expect(plainComputerElements.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('when no glossary terms exist', () => {
+    beforeEach(() => {
+      server.use(
+        http.get(`${BASE_URL}/api/projects/:projectId/terms`, () => {
+          return HttpResponse.json(mockTermsWithCommonNoun)
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+          return HttpResponse.json([])
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+          return HttpResponse.json([])
+        })
+      )
+    })
+
+    it('does not highlight any terms', async () => {
+      renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+      // Wait for content to load
+      await waitFor(() => {
+        expect(screen.getByText(/量子コンピュータは量子力学を利用します/)).toBeInTheDocument()
+      })
+
+      // No highlighted elements should exist
+      const highlightedElements = document.querySelectorAll('[style*="background"]')
+      expect(highlightedElements.length).toBe(0)
+    })
+  })
+})
