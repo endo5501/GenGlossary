@@ -50,7 +50,6 @@ class RunManager:
         self._cancel_events: dict[int, Event] = {}
         self._cancel_events_lock = Lock()
         self._start_run_lock = Lock()  # Synchronize start_run to prevent race conditions
-        self._current_run_id: int | None = None
         # Subscriber管理
         self._subscribers: dict[int, set[Queue]] = {}
         self._subscribers_lock = Lock()
@@ -80,17 +79,27 @@ class RunManager:
                 with transaction(conn):
                     run_id = create_run(conn, scope=scope, triggered_by=triggered_by)
 
-        self._current_run_id = run_id
+            # Create cancel event within the same lock to ensure consistency
+            cancel_event = Event()
+            with self._cancel_events_lock:
+                self._cancel_events[run_id] = cancel_event
 
-        # Create cancel event for this run
-        cancel_event = Event()
-        with self._cancel_events_lock:
-            self._cancel_events[run_id] = cancel_event
-
-        # Start background thread
-        self._thread = Thread(target=self._execute_run, args=(run_id, scope))
-        self._thread.daemon = True
-        self._thread.start()
+        # Start background thread (outside lock)
+        try:
+            self._thread = Thread(target=self._execute_run, args=(run_id, scope))
+            self._thread.daemon = True
+            self._thread.start()
+        except Exception:
+            # Cleanup on thread start failure
+            with self._cancel_events_lock:
+                self._cancel_events.pop(run_id, None)
+            with database_connection(self.db_path) as conn:
+                with transaction(conn):
+                    update_run_status(
+                        conn, run_id, "failed",
+                        error_message="Failed to start execution thread"
+                    )
+            raise
 
         return run_id
 
