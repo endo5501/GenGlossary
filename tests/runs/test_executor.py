@@ -1358,14 +1358,28 @@ class TestPipelineScopeEnum:
             # Should not raise TypeError when using enum
             executor.execute(project_db, PipelineScope.FULL, context)
 
-    def test_scope_clear_functions_use_enum(self) -> None:
-        """_SCOPE_CLEAR_FUNCTIONS が Enum をキーとして使用できることを確認"""
+    def test_scope_clear_functions_use_enum_keys(self) -> None:
+        """_SCOPE_CLEAR_FUNCTIONS が PipelineScope Enum をキーとして使用することを確認"""
         from genglossary.runs.executor import PipelineScope, _SCOPE_CLEAR_FUNCTIONS
 
-        # Keys should be PipelineScope enum values or strings that match
-        assert PipelineScope.FULL.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.FULL in _SCOPE_CLEAR_FUNCTIONS
-        assert PipelineScope.FROM_TERMS.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.FROM_TERMS in _SCOPE_CLEAR_FUNCTIONS
-        assert PipelineScope.PROVISIONAL_TO_REFINED.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_CLEAR_FUNCTIONS
+        # Keys must be PipelineScope enum values (not strings)
+        assert PipelineScope.FULL in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.FROM_TERMS in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_CLEAR_FUNCTIONS
+
+    def test_scope_handlers_use_enum_keys(self) -> None:
+        """_SCOPE_HANDLERS が PipelineScope Enum をキーとして使用することを確認"""
+        from genglossary.runs.executor import PipelineScope, _SCOPE_HANDLERS
+
+        # Keys must be PipelineScope enum values
+        assert PipelineScope.FULL in _SCOPE_HANDLERS
+        assert PipelineScope.FROM_TERMS in _SCOPE_HANDLERS
+        assert PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_HANDLERS
+
+        # Values must be handler method names
+        assert _SCOPE_HANDLERS[PipelineScope.FULL] == "_execute_full"
+        assert _SCOPE_HANDLERS[PipelineScope.FROM_TERMS] == "_execute_from_terms"
+        assert _SCOPE_HANDLERS[PipelineScope.PROVISIONAL_TO_REFINED] == "_execute_provisional_to_refined"
 
 
 class TestCancellationCheckBeforeRefinedSave:
