@@ -4,7 +4,7 @@ tags: [backend, db, bug]
 description: "Timestamp format/timezone mismatch in runs repository"
 created_at: "2026-01-31T15:13:13Z"
 started_at: 2026-02-01T00:03:41Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T00:16:23Z # Do not modify manually
 ---
 
 # Timestamp format/timezone mismatch in runs repository
