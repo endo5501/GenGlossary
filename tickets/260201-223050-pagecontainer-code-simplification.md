@@ -1,0 +1,66 @@
+---
+priority: 5
+tags: [frontend, refactoring, code-quality]
+description: "PageContainer and layout code simplification"
+created_at: "2026-02-01T22:30:50Z"
+started_at: null  # Do not modify manually
+closed_at: null   # Do not modify manually
+---
+
+# PageContainer and Layout Code Simplification
+
+## Overview
+
+Code simplification review identified several opportunities to improve the layout code in frontend components.
+
+## Issues Identified
+
+### 1. PageContainer Duplicate Layout Code (HIGH)
+
+The same layout structure is duplicated 3 times in PageContainer.tsx for error, empty, and normal states:
+
+```tsx
+<Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+  <Group data-testid="action-bar" p="md" style={{ flexShrink: 0, ... }}>
+    {actionBar}
+  </Group>
+  {/* different content */}
+</Box>
+```
+
+### 2. FilesPage Not Using PageContainer (HIGH)
+
+FilesPage implements its own layout pattern instead of reusing PageContainer.
+
+### 3. Duplicated Style Definitions (MEDIUM)
+
+Same style patterns scattered across multiple files:
+- `{ height: '100%', display: 'flex', flexDirection: 'column' }`
+- `{ flex: 1, overflowY: 'auto', minHeight: 0 }`
+
+### 4. Magic Numbers (MEDIUM)
+
+- Header height (60px) hardcoded in multiple places
+- Should use constants or theme variables
+
+## Tasks
+
+- [ ] Extract common layout styles to a shared file
+- [ ] Refactor PageContainer to eliminate duplicate code
+- [ ] Migrate FilesPage to use PageContainer
+- [ ] Extract HEADER_HEIGHT constant
+- [ ] Commit
+- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [ ] Update docs/architecture/*.md
+- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [ ] Get developer approval before closing
+
+
+## Notes
+
+- Original issue found during code review of fixed header/footer layout ticket
+- Consider using Mantine's createStyles or theme for consistent styling
