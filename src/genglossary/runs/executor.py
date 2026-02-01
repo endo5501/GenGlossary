@@ -36,6 +36,12 @@ from genglossary.utils.hash import compute_content_hash
 from genglossary.utils.path_utils import to_safe_relative_path
 
 
+class PipelineCancelledException(Exception):
+    """Raised when pipeline execution is cancelled by user request."""
+
+    pass
+
+
 class PipelineScope(Enum):
     """Enumeration of pipeline execution scopes."""
 
@@ -56,19 +62,17 @@ def _cancellable(func: Callable) -> Callable:
     """Decorator that checks for cancellation before executing a method.
 
     The decorated method must receive an ExecutionContext instance as one of its
-    positional or keyword arguments. If cancellation is detected, the method
-    returns True (indicating cancelled) without executing.
-
-    This decorator helps reduce duplication of the common pattern:
-        if self._check_cancellation(context):
-            return True
+    positional or keyword arguments. If cancellation is detected, raises
+    PipelineCancelledException without executing.
 
     Args:
         func: The method to decorate.
 
     Returns:
         Wrapped method that checks cancellation at entry.
-        Returns True if cancelled, otherwise returns the function's result.
+
+    Raises:
+        PipelineCancelledException: If cancellation was requested.
     """
     @wraps(func)
     def wrapper(self: "PipelineExecutor", *args, **kwargs):  # type: ignore[no-untyped-def]
@@ -81,8 +85,8 @@ def _cancellable(func: Callable) -> Callable:
                     context = arg
                     break
 
-        if context is not None and self._check_cancellation(context):
-            return True  # Cancelled
+        if context is not None:
+            self._check_cancellation(context)  # Raises if cancelled
         return func(self, *args, **kwargs)
     return wrapper
 
@@ -164,19 +168,18 @@ class PipelineExecutor:
         except Exception:
             pass  # Ignore callback errors to prevent pipeline interruption
 
-    def _check_cancellation(self, context: ExecutionContext) -> bool:
-        """Check if execution is cancelled.
+    def _check_cancellation(self, context: ExecutionContext) -> None:
+        """Check if execution is cancelled and raise if so.
 
         Args:
             context: Execution context containing cancel_event.
 
-        Returns:
-            bool: True if cancelled, False otherwise.
+        Raises:
+            PipelineCancelledException: If cancellation was requested.
         """
         if context.cancel_event.is_set():
             self._log(context, "info", "Execution cancelled")
-            return True
-        return False
+            raise PipelineCancelledException()
 
     @staticmethod
     def _documents_from_db_rows(rows: list[sqlite3.Row]) -> list[Document]:
@@ -275,7 +278,7 @@ class PipelineExecutor:
         scope: str | PipelineScope,
         context: ExecutionContext,
         doc_root: str = ".",
-    ) -> bool:
+    ) -> None:
         """Execute the pipeline for the given scope.
 
         Args:
@@ -284,16 +287,16 @@ class PipelineExecutor:
             context: Execution context containing run_id, log_callback, and cancel_event.
             doc_root: Root directory for documents (default: ".").
 
-        Returns:
-            bool: True if cancelled during execution, False if completed normally.
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+            ValueError: If scope is unknown.
         """
         # Normalize to PipelineScope enum
         scope_enum = scope if isinstance(scope, PipelineScope) else PipelineScope(scope)
 
         self._log(context, "info", f"Starting pipeline execution: {scope_enum.value}")
 
-        if self._check_cancellation(context):
-            return True  # Cancelled before start
+        self._check_cancellation(context)  # Raises if cancelled
 
         # Clear tables before execution
         self._clear_tables_for_scope(conn, scope_enum)
@@ -310,10 +313,8 @@ class PipelineExecutor:
             self._log(context, "error", f"Unknown scope: {scope_enum}")
             raise ValueError(f"Unknown scope: {scope_enum}")
 
-        was_cancelled = handler(conn, context, doc_root)
-        if not was_cancelled:
-            self._log(context, "info", "Pipeline execution completed")
-        return was_cancelled
+        handler(conn, context, doc_root)
+        self._log(context, "info", "Pipeline execution completed")
 
     def _load_documents(
         self, conn: sqlite3.Connection, context: ExecutionContext, doc_root: str = "."
@@ -376,7 +377,7 @@ class PipelineExecutor:
         conn: sqlite3.Connection,
         context: ExecutionContext,
         doc_root: str = ".",
-    ) -> bool:
+    ) -> None:
         """Execute full pipeline (steps 1-5).
 
         Args:
@@ -384,16 +385,15 @@ class PipelineExecutor:
             context: Execution context for logging and cancellation.
             doc_root: Root directory for documents (default: ".").
 
-        Returns:
-            bool: True if cancelled during execution, False if completed normally.
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
         """
         # Step 1: Load documents
         documents = self._load_documents(conn, context, doc_root)
         self._log(context, "info", f"Loaded {len(documents)} documents")
 
         # Step 2: Extract terms
-        if self._check_cancellation(context):
-            return True  # Cancelled
+        self._check_cancellation(context)  # Raises if cancelled
 
         self._log(context, "info", "Extracting terms...")
         extractor = TermExtractor(llm_client=self._llm_client)
@@ -420,7 +420,7 @@ class PipelineExecutor:
         self._log(context, "info", f"Extracted {len(unique_terms)} unique terms (from {len(extracted_terms)} total)")
 
         # Continue with steps 3-5 (pass unique terms to avoid duplicate LLM calls)
-        return self._execute_from_terms(conn, context, documents=documents, extracted_terms=unique_terms)
+        self._execute_from_terms(conn, context, documents=documents, extracted_terms=unique_terms)
 
     @_cancellable
     def _execute_from_terms(
@@ -430,7 +430,7 @@ class PipelineExecutor:
         _doc_root: str = ".",
         documents: list[Document] | None = None,
         extracted_terms: list[str] | list[ClassifiedTerm] | None = None,
-    ) -> bool:
+    ) -> None:
         """Execute from terms (steps 3-5).
 
         Args:
@@ -440,8 +440,8 @@ class PipelineExecutor:
             documents: Pre-loaded documents (None to load from DB).
             extracted_terms: Pre-extracted terms as strings or ClassifiedTerms (None to load from DB).
 
-        Returns:
-            bool: True if cancelled during execution, False if completed normally.
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
         """
         # Load documents from DB if not provided
         if documents is None:
@@ -454,8 +454,7 @@ class PipelineExecutor:
             extracted_terms = [row["term_text"] for row in term_rows]
 
         # Step 3: Generate glossary
-        if self._check_cancellation(context):
-            return True  # Cancelled
+        self._check_cancellation(context)  # Raises if cancelled
 
         self._log(context, "info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
@@ -475,7 +474,7 @@ class PipelineExecutor:
         self._log(context, "info", f"Generated {len(glossary.terms)} terms")
 
         # Continue with steps 4-5
-        return self._execute_provisional_to_refined(conn, context, glossary=glossary, documents=documents)
+        self._execute_provisional_to_refined(conn, context, glossary=glossary, documents=documents)
 
     @_cancellable
     def _execute_provisional_to_refined(
@@ -485,7 +484,7 @@ class PipelineExecutor:
         _doc_root: str = ".",
         glossary: Glossary | None = None,
         documents: list[Document] | None = None,
-    ) -> bool:
+    ) -> None:
         """Execute from provisional to refined (steps 4-5).
 
         Args:
@@ -495,8 +494,8 @@ class PipelineExecutor:
             glossary: Pre-generated provisional glossary (None to load from DB).
             documents: Pre-loaded documents (None to load from DB).
 
-        Returns:
-            bool: True if cancelled during execution, False if completed normally.
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
         """
         # Load glossary from DB if not provided
         if glossary is None:
@@ -516,17 +515,16 @@ class PipelineExecutor:
             documents = self._load_documents(conn, context)
 
         # Step 4: Review glossary
-        if self._check_cancellation(context):
-            return True  # Cancelled
+        self._check_cancellation(context)  # Raises if cancelled
 
         self._log(context, "info", "Reviewing glossary...")
         reviewer = GlossaryReviewer(llm_client=self._llm_client)
         issues = reviewer.review(glossary, cancel_event=context.cancel_event)
 
-        # If review was cancelled, return early without saving
+        # If review was cancelled, raise exception
         if issues is None:
             self._log(context, "info", "Review cancelled")
-            return True  # Cancelled
+            raise PipelineCancelledException()
 
         # Save issues using batch insert
         with transaction(conn):
@@ -540,8 +538,7 @@ class PipelineExecutor:
 
         # Step 5: Refine glossary
         if issues:
-            if self._check_cancellation(context):
-                return True  # Cancelled
+            self._check_cancellation(context)  # Raises if cancelled
 
             self._log(context, "info", "Refining glossary...")
             refiner = GlossaryRefiner(llm_client=self._llm_client)
@@ -560,7 +557,6 @@ class PipelineExecutor:
         # to preserve the user's work (late-cancel race condition fix)
         with transaction(conn):
             self._save_glossary_terms_batch(conn, glossary, create_refined_terms_batch)
-        return False  # Completed normally
 
     def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: PipelineScope) -> None:
         """Clear relevant tables before execution.
