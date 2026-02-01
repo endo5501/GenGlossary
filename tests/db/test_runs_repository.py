@@ -2,7 +2,7 @@
 
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -586,6 +586,18 @@ class TestTimestampFormatConsistency:
         r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(\+00:00|Z)$"
     )
 
+    def test_create_run_uses_utc_iso_format_for_created_at(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """create_runはcreated_atにUTC ISO形式のタイムスタンプを保存する"""
+        run_id = create_run(project_db, scope="full")
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert self.ISO_UTC_PATTERN.match(
+            run["created_at"]
+        ), f"created_at format mismatch: {run['created_at']}"
+
     def test_update_run_status_uses_utc_iso_format(
         self, project_db: sqlite3.Connection
     ) -> None:
@@ -680,3 +692,116 @@ class TestTimestampFormatConsistency:
         # (正規表現で検証することで、フォーマットの一致を保証)
         assert self.ISO_UTC_PATTERN.match(run1["finished_at"])
         assert self.ISO_UTC_PATTERN.match(run2["finished_at"])
+
+
+class TestTimezoneValidation:
+    """Tests for timezone-aware datetime validation."""
+
+    def test_update_run_status_rejects_naive_started_at(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """update_run_statusはnaive datetimeのstarted_atを拒否する"""
+        run_id = create_run(project_db, scope="full")
+        naive_datetime = datetime.now()  # No timezone
+
+        with pytest.raises(ValueError, match="timezone-aware"):
+            update_run_status(project_db, run_id, "running", started_at=naive_datetime)
+
+    def test_update_run_status_rejects_naive_finished_at(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """update_run_statusはnaive datetimeのfinished_atを拒否する"""
+        run_id = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id, "running", started_at=datetime.now(timezone.utc)
+        )
+        naive_datetime = datetime.now()  # No timezone
+
+        with pytest.raises(ValueError, match="timezone-aware"):
+            update_run_status(
+                project_db, run_id, "completed", finished_at=naive_datetime
+            )
+
+    def test_update_run_status_accepts_timezone_aware_datetime(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """update_run_statusはtimezone-aware datetimeを受け付ける"""
+        run_id = create_run(project_db, scope="full")
+        aware_datetime = datetime.now(timezone.utc)
+
+        # Should not raise
+        update_run_status(project_db, run_id, "running", started_at=aware_datetime)
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "running"
+
+
+class TestUpdateRunStatusIfActiveWithFinishedAt:
+    """Tests for update_run_status_if_active with explicit finished_at parameter."""
+
+    # ISO 8601 format with UTC timezone: 2026-01-31T15:13:13+00:00
+    ISO_UTC_PATTERN = re.compile(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(\+00:00|Z)$"
+    )
+
+    def test_uses_provided_finished_at(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """明示的に渡されたfinished_atを使用する"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id, "running", started_at=datetime.now(timezone.utc)
+        )
+
+        # Use a specific timestamp
+        finished = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        update_run_status_if_active(
+            project_db, run_id, "completed", finished_at=finished
+        )
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["finished_at"] == "2026-01-15T12:00:00+00:00"
+
+    def test_defaults_to_current_time_when_finished_at_not_provided(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """finished_atが渡されない場合は現在時刻を使用する"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id, "running", started_at=datetime.now(timezone.utc)
+        )
+
+        before = datetime.now(timezone.utc).replace(microsecond=0)
+        update_run_status_if_active(project_db, run_id, "completed")
+        after = datetime.now(timezone.utc).replace(microsecond=0)
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        # Verify it's in the expected format
+        assert self.ISO_UTC_PATTERN.match(run["finished_at"])
+        # Verify the timestamp is between before and after (second precision)
+        finished = datetime.fromisoformat(run["finished_at"])
+        assert before <= finished <= after + timedelta(seconds=1)
+
+    def test_rejects_naive_finished_at(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """naive datetimeのfinished_atを拒否する"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id, "running", started_at=datetime.now(timezone.utc)
+        )
+        naive_datetime = datetime.now()
+
+        with pytest.raises(ValueError, match="timezone-aware"):
+            update_run_status_if_active(
+                project_db, run_id, "completed", finished_at=naive_datetime
+            )
