@@ -69,16 +69,17 @@ const handleError = () => {
 
 ## Tasks
 
-- [ ] TDDでテストを先に作成（既存テストが網羅的か確認）
-- [ ] リファクタリング実装
-- [ ] Commit
-- [ ] Run tests (\`pnpm test\`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Run tests (\`pnpm test\`) before closing and pass all tests (No exceptions)
+- [x] TDDでテストを先に作成（既存テストが網羅的か確認）
+- [x] リファクタリング実装
+- [x] Commit
+- [x] Run tests (\`pnpm test\`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Run tests (\`pnpm test\`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
 
 - code-simplifier エージェントで発見 (260131-044032-uselogstream-clear-error-state チケット作業中)
 - 機能変更なし、リファクタリングのみ
+- codex MCP レビューで removeEventListener 欠落を発見 → 別チケット作成: 260201-075029-uselogstream-event-listener-cleanup
