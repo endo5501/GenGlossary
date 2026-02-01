@@ -3,7 +3,7 @@
 import sqlite3
 import traceback
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
 
@@ -111,7 +111,7 @@ class RunManager:
             # Update status to running
             with transaction(conn):
                 update_run_status(
-                    conn, run_id, "running", started_at=datetime.now()
+                    conn, run_id, "running", started_at=datetime.now(timezone.utc)
                 )
 
             # ログコールバックを作成

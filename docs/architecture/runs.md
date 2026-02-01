@@ -193,7 +193,7 @@ class RunManager:
             # スレッド内で新しい接続を作成
             conn = get_connection(self.db_path)
 
-            update_run_status(conn, run_id, "running", started_at=datetime.now())
+            update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
 
             # Get cancel event (guaranteed to exist, created in start_run)
             with self._cancel_events_lock:
@@ -314,6 +314,29 @@ class RunManager:
         except Exception as e:
             self._broadcast_log(run_id, {"level": "warning", "message": f"Failed to create fallback connection: {e}"})
 ```
+
+## タイムスタンプ形式
+
+すべてのタイムスタンプ（`started_at`, `finished_at`）は **UTC ISO 8601形式** で保存されます。
+
+**形式**: `YYYY-MM-DDTHH:MM:SS+00:00`
+
+**例**: `2026-02-01T00:15:30+00:00`
+
+**実装**:
+```python
+from datetime import datetime, timezone
+
+# started_at, finished_at の設定
+timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+# → "2026-02-01T00:15:30+00:00"
+```
+
+**使用箇所**:
+- `update_run_status`: `started_at`, `finished_at` パラメータ
+- `update_run_status_if_active`: 内部で `finished_at` を自動設定
+
+**注意**: `created_at` はスキーマで `datetime('now')` を使用しており、別の形式（`YYYY-MM-DD HH:MM:SS`、UTC）になっています。
 
 ## SQLite スレッディング戦略
 

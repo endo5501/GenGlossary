@@ -1,7 +1,8 @@
 """Tests for runs_repository module."""
 
+import re
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -575,3 +576,107 @@ class TestUpdateRunStatusIfActive:
         rows_updated = update_run_status_if_active(project_db, 999, "completed")
 
         assert rows_updated == 0
+
+
+class TestTimestampFormatConsistency:
+    """Tests for timestamp format consistency across repository functions."""
+
+    # ISO 8601 format with UTC timezone: 2026-01-31T15:13:13+00:00
+    ISO_UTC_PATTERN = re.compile(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(\+00:00|Z)$"
+    )
+
+    def test_update_run_status_uses_utc_iso_format(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """update_run_statusはUTC ISO形式のタイムスタンプを保存する"""
+        run_id = create_run(project_db, scope="full")
+        started = datetime.now(timezone.utc)
+        finished = datetime.now(timezone.utc)
+
+        update_run_status(
+            project_db, run_id, "completed",
+            started_at=started, finished_at=finished
+        )
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert self.ISO_UTC_PATTERN.match(
+            run["started_at"]
+        ), f"started_at format mismatch: {run['started_at']}"
+        assert self.ISO_UTC_PATTERN.match(
+            run["finished_at"]
+        ), f"finished_at format mismatch: {run['finished_at']}"
+
+    def test_update_run_status_if_active_uses_utc_iso_format(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """update_run_status_if_activeはUTC ISO形式のタイムスタンプを保存する"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id, "running",
+            started_at=datetime.now(timezone.utc)
+        )
+
+        update_run_status_if_active(project_db, run_id, "completed")
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert self.ISO_UTC_PATTERN.match(
+            run["finished_at"]
+        ), f"finished_at format mismatch: {run['finished_at']}"
+
+    def test_cancel_run_uses_utc_iso_format(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """cancel_runはUTC ISO形式のタイムスタンプを保存する"""
+        run_id = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id, "running",
+            started_at=datetime.now(timezone.utc)
+        )
+
+        cancel_run(project_db, run_id)
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert self.ISO_UTC_PATTERN.match(
+            run["finished_at"]
+        ), f"finished_at format mismatch: {run['finished_at']}"
+
+    def test_timestamps_are_consistent_between_functions(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """異なる関数で保存されたタイムスタンプのフォーマットが一致する"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        # Run 1: update_run_statusでfinished_atを設定
+        run_id1 = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id1, "running",
+            started_at=datetime.now(timezone.utc)
+        )
+        update_run_status(
+            project_db, run_id1, "completed",
+            finished_at=datetime.now(timezone.utc)
+        )
+
+        # Run 2: update_run_status_if_activeでfinished_atを設定
+        run_id2 = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id2, "running",
+            started_at=datetime.now(timezone.utc)
+        )
+        update_run_status_if_active(project_db, run_id2, "completed")
+
+        run1 = get_run(project_db, run_id1)
+        run2 = get_run(project_db, run_id2)
+        assert run1 is not None
+        assert run2 is not None
+
+        # 両方のタイムスタンプが同じフォーマットであることを確認
+        # (正規表現で検証することで、フォーマットの一致を保証)
+        assert self.ISO_UTC_PATTERN.match(run1["finished_at"])
+        assert self.ISO_UTC_PATTERN.match(run2["finished_at"])
