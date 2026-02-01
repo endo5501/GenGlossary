@@ -3,7 +3,7 @@ priority: 1
 tags: [bug, backend, critical]
 description: "Pipeline完了後も状態がRunningのまま更新されない問題"
 created_at: "2026-02-01T12:48:12Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-01T16:41:48Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -33,18 +33,18 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] バックエンドの状態更新ロジック確認
-- [ ] フロントエンドの状態取得/更新ロジック確認
-- [ ] 原因特定と修正
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] バックエンドの状態更新ロジック確認
+- [x] フロントエンドの状態取得/更新ロジック確認
+- [x] 原因特定と修正
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
