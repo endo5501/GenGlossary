@@ -1409,14 +1409,18 @@ class TestPipelineScopeEnum:
 class TestCancellationCheckBeforeRefinedSave:
     """Tests for cancellation check before refined glossary is saved."""
 
-    def test_cancellation_prevents_refined_save_when_no_issues(
+    def test_late_cancel_still_saves_refined_when_no_issues(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """issues が空でもキャンセル時は refined が保存されないことを確認"""
+        """issues が空の場合、レビュー完了後のキャンセルでも refined が保存されることを確認
+
+        Late-cancel race condition fix: once review completes, results are saved
+        even if cancel arrives before the final save.
+        """
         context = ExecutionContext(
             run_id=1,
             log_callback=log_callback,
@@ -1443,7 +1447,7 @@ class TestCancellationCheckBeforeRefinedSave:
             # Reviewer returns empty issues list
             mock_reviewer.return_value.review.return_value = []
 
-            # Set cancel after review completes (simulate user cancel during "no issues" path)
+            # Set cancel after review completes (simulate late cancel)
             original_log = executor._log
 
             def log_and_cancel(ctx, level, message, **kwargs):
@@ -1453,10 +1457,13 @@ class TestCancellationCheckBeforeRefinedSave:
                     cancel_event.set()
 
             with patch.object(executor, "_log", log_and_cancel):
-                executor.execute(project_db, "provisional_to_refined", context)
+                result = executor.execute(project_db, "provisional_to_refined", context)
 
-            # Refined terms batch should NOT be saved because of cancellation
-            mock_create_refined_batch.assert_not_called()
+            # Refined terms batch SHOULD be saved even with late cancel
+            # (late-cancel race condition fix: preserve user's work)
+            mock_create_refined_batch.assert_called_once()
+            # Result is False because pipeline completed successfully
+            assert result is False
 
 
 class TestDuplicateFilteringBeforeGenerate:
@@ -2134,14 +2141,18 @@ class TestPipelineExecutorCancelEventPropagation:
             assert "cancel_event" in call_kwargs
             assert call_kwargs["cancel_event"] is cancel_event
 
-    def test_provisional_glossary_not_saved_when_cancelled_during_generate(
+    def test_provisional_glossary_saved_even_with_late_cancel(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         cancel_event: Event,
         log_callback,
     ) -> None:
-        """generate() 中にキャンセルされた場合、provisional が保存されないことを確認"""
+        """generate() が完了した後のキャンセルでも provisional が保存されることを確認
+
+        Late-cancel race condition fix: once generation completes (returns a value),
+        results are saved even if cancel arrives before the save.
+        """
         context = ExecutionContext(
             run_id=1,
             log_callback=log_callback,
@@ -2152,23 +2163,33 @@ class TestPipelineExecutorCancelEventPropagation:
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
              patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator_cls, \
-             patch("genglossary.runs.executor.create_provisional_terms_batch") as mock_create_prov:
+             patch("genglossary.runs.executor.create_provisional_terms_batch") as mock_create_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls:
 
             mock_llm_factory.return_value = MagicMock()
             mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
             mock_list_terms.return_value = [{"term_text": "term1"}]
 
-            # Simulate cancellation during generate
-            def generate_with_cancel(*args, **kwargs):
-                cancel_event.set()  # Cancelled during generate
-                return Glossary(terms={})  # Return partial/empty result
+            # Simulate late cancel: generate completes, then cancel is set
+            def generate_with_late_cancel(*_args, **_kwargs):
+                cancel_event.set()  # Cancel arrives after generate completes
+                return Glossary(terms={"term1": Term(
+                    name="term1",
+                    definition="test",
+                    confidence=0.9,
+                    occurrences=[TermOccurrence(document_path="test.txt", line_number=1, context="ctx")]
+                )})
 
-            mock_generator_cls.return_value.generate.side_effect = generate_with_cancel
+            mock_generator_cls.return_value.generate.side_effect = generate_with_late_cancel
+            # Reviewer returns None because cancelled
+            mock_reviewer_cls.return_value.review.return_value = None
 
-            executor.execute(project_db, "from_terms", context)
+            result = executor.execute(project_db, "from_terms", context)
 
-            # Provisional terms should NOT be saved because of cancellation
-            mock_create_prov.assert_not_called()
+            # Provisional terms SHOULD be saved (late-cancel fix)
+            mock_create_prov.assert_called_once()
+            # Result is True because pipeline was cancelled (reviewer detected cancel)
+            assert result is True
 
     def test_issues_not_saved_when_review_cancelled(
         self,

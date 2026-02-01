@@ -466,11 +466,9 @@ class PipelineExecutor:
             cancel_event=context.cancel_event,
         )
 
-        # Check cancellation before saving provisional glossary
-        if self._check_cancellation(context):
-            return True  # Cancelled
-
         # Save provisional glossary using batch insert
+        # Note: No cancellation check here - once generation is complete, we always save
+        # to preserve the user's work (late-cancel race condition fix)
         with transaction(conn):
             self._save_glossary_terms_batch(conn, glossary, create_provisional_terms_batch)
 
@@ -557,11 +555,9 @@ class PipelineExecutor:
         else:
             self._log(context, "info", "No issues found, copying provisional to refined")
 
-        # Check cancellation before saving refined glossary
-        if self._check_cancellation(context):
-            return True  # Cancelled
-
         # Save refined glossary (either refined or copied from provisional) using batch insert
+        # Note: No cancellation check here - once refinement is complete, we always save
+        # to preserve the user's work (late-cancel race condition fix)
         with transaction(conn):
             self._save_glossary_terms_batch(conn, glossary, create_refined_terms_batch)
         return False  # Completed normally
