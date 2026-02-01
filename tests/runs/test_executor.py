@@ -461,11 +461,12 @@ class TestPipelineExecutorConfiguration:
         mock_delete_issues = MagicMock()
         mock_delete_refined = MagicMock()
 
-        # Patch _SCOPE_CLEAR_FUNCTIONS to use our mocks
+        # Patch _SCOPE_CLEAR_FUNCTIONS to use our mocks (using Enum keys)
+        from genglossary.runs.executor import PipelineScope
         mock_scope_clear_functions = {
-            "full": [mock_delete_terms, mock_delete_prov, mock_delete_issues, mock_delete_refined],
-            "from_terms": [mock_delete_prov, mock_delete_issues, mock_delete_refined],
-            "provisional_to_refined": [mock_delete_issues, mock_delete_refined],
+            PipelineScope.FULL: [mock_delete_terms, mock_delete_prov, mock_delete_issues, mock_delete_refined],
+            PipelineScope.FROM_TERMS: [mock_delete_prov, mock_delete_issues, mock_delete_refined],
+            PipelineScope.PROVISIONAL_TO_REFINED: [mock_delete_issues, mock_delete_refined],
         }
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -1312,7 +1313,8 @@ class TestPipelineExecutorUnknownScope:
     ) -> None:
         """不明なスコープはValueErrorを発生させる"""
         with patch("genglossary.runs.executor.create_llm_client"):
-            with pytest.raises(ValueError, match="Unknown scope"):
+            # Invalid scope string raises ValueError from PipelineScope enum conversion
+            with pytest.raises(ValueError, match="invalid_scope.*is not a valid PipelineScope"):
                 executor.execute(project_db, "invalid_scope", execution_context)
 
 
