@@ -1,5 +1,5 @@
 ---
-priority: 8
+priority: 3
 tags: [refactoring, code-quality]
 description: "Code simplification: FileDetailResponse inheritance and DocumentViewer utilities"
 created_at: "2026-02-01T12:01:33Z"
