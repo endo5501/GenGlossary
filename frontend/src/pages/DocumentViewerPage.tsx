@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Box, Title, Grid } from '@mantine/core'
 import { useFiles, useFileDetail } from '../api/hooks/useFiles'
-import { useTerms } from '../api/hooks/useTerms'
 import { useRefined } from '../api/hooks/useRefined'
 import { useProvisional } from '../api/hooks/useProvisional'
 import { DocumentPane, TermCard } from '../components/document-viewer'
@@ -22,7 +21,6 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
     projectId,
     selectedFileId ?? undefined
   )
-  const { data: terms = [] } = useTerms(projectId)
   const { data: refinedTerms = [] } = useRefined(projectId)
   const { data: provisionalTerms = [] } = useProvisional(projectId)
 
