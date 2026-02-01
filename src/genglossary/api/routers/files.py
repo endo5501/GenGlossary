@@ -42,15 +42,8 @@ def _validate_file_name(file_name: str) -> str:
     Raises:
         HTTPException: If file name is invalid.
     """
-    # Reject absolute paths (Unix-style)
-    if file_name.startswith("/"):
-        raise HTTPException(
-            status_code=400,
-            detail="Absolute paths not allowed",
-        )
-
-    # Reject Windows drive paths (e.g., C:/path, D:\path)
-    if re.match(r"^[A-Za-z]:", file_name):
+    # Reject absolute paths (Unix-style or Windows drive paths)
+    if file_name.startswith("/") or re.match(r"^[A-Za-z]:", file_name):
         raise HTTPException(
             status_code=400,
             detail="Absolute paths not allowed",
