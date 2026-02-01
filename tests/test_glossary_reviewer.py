@@ -400,8 +400,107 @@ class TestGlossaryReviewerPromptInjectionPrevention:
         assert escaped_tags == 1, f"Expected 1 escaped tag, found {escaped_tags}"
 
 
-class TestGlossaryReviewerLogging:
-    """Test suite for GlossaryReviewer logging behavior."""
+class TestGlossaryReviewerBatchProcessing:
+    """Test suite for GlossaryReviewer batch processing."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    def _create_glossary_with_n_terms(self, n: int) -> Glossary:
+        """Helper to create a glossary with n terms."""
+        glossary = Glossary()
+        for i in range(n):
+            term = Term(
+                name=f"Term{i}",
+                definition=f"Definition for term {i}",
+                confidence=0.8,
+            )
+            glossary.add_term(term)
+        return glossary
+
+    def test_review_splits_into_batches(self, mock_llm_client: MagicMock) -> None:
+        """Test that 25 terms are split into 2 batches (20 + 5)."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(25)
+
+        reviewer.review(glossary)
+
+        assert mock_llm_client.generate_structured.call_count == 2
+
+    def test_review_single_batch_for_20_terms(self, mock_llm_client: MagicMock) -> None:
+        """Test that 20 terms are processed in a single batch."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(20)
+
+        reviewer.review(glossary)
+
+        assert mock_llm_client.generate_structured.call_count == 1
+
+    def test_review_merges_issues_from_all_batches(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that issues from all batches are merged."""
+        # First batch returns 2 issues, second batch returns 1 issue
+        mock_llm_client.generate_structured.side_effect = [
+            MockReviewResponse(
+                issues=[
+                    {"term": "Term0", "issue_type": "unclear", "description": "Issue 1"},
+                    {"term": "Term1", "issue_type": "unclear", "description": "Issue 2"},
+                ]
+            ),
+            MockReviewResponse(
+                issues=[
+                    {"term": "Term20", "issue_type": "unclear", "description": "Issue 3"},
+                ]
+            ),
+        ]
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(25)
+
+        issues = reviewer.review(glossary)
+
+        assert issues is not None
+        assert len(issues) == 3
+
+    def test_batch_progress_callback_is_called(self, mock_llm_client: MagicMock) -> None:
+        """Test that batch_progress_callback is called for each batch."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(45)  # 3 batches
+
+        callback = MagicMock()
+        reviewer.review(glossary, batch_progress_callback=callback)
+
+        assert callback.call_count == 3
+        callback.assert_any_call(1, 3)
+        callback.assert_any_call(2, 3)
+        callback.assert_any_call(3, 3)
+
+    def test_batch_progress_callback_not_called_for_single_batch(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that callback is still called even for a single batch."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(10)
+
+        callback = MagicMock()
+        reviewer.review(glossary, batch_progress_callback=callback)
+
+        callback.assert_called_once_with(1, 1)
+
+
+class TestGlossaryReviewerErrorHandling:
+    """Test suite for GlossaryReviewer error handling."""
 
     @pytest.fixture
     def mock_llm_client(self) -> MagicMock:
@@ -412,28 +511,33 @@ class TestGlossaryReviewerLogging:
     def sample_glossary(self) -> Glossary:
         """Create a sample glossary for testing."""
         glossary = Glossary()
-        glossary.add_term(Term(name="TestTerm", definition="Test definition", confidence=0.8))
+        glossary.add_term(
+            Term(name="TestTerm", definition="Test definition", confidence=0.8)
+        )
         return glossary
 
-    def test_review_logs_warning_on_llm_exception(
-        self,
-        mock_llm_client: MagicMock,
-        sample_glossary: Glossary,
-        caplog: pytest.LogCaptureFixture,
+    def test_review_propagates_llm_exception(
+        self, mock_llm_client: MagicMock, sample_glossary: Glossary
     ) -> None:
-        """Test that review logs a warning when LLM call raises an exception."""
+        """Test that LLM exceptions are propagated to caller."""
         mock_llm_client.generate_structured.side_effect = RuntimeError("LLM API error")
 
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
 
-        with caplog.at_level(logging.WARNING, logger="genglossary.glossary_reviewer"):
-            result = reviewer.review(sample_glossary)
+        with pytest.raises(RuntimeError, match="LLM API error"):
+            reviewer.review(sample_glossary)
 
-        # Should return empty list (graceful degradation)
-        assert result == []
+    def test_review_propagates_timeout_exception(
+        self, mock_llm_client: MagicMock, sample_glossary: Glossary
+    ) -> None:
+        """Test that timeout exceptions are propagated to caller."""
+        import httpx
 
-        # Should log warning instead of print
-        assert len(caplog.records) == 1
-        assert caplog.records[0].levelno == logging.WARNING
-        assert "Failed to review glossary" in caplog.text
-        assert "LLM API error" in caplog.text
+        mock_llm_client.generate_structured.side_effect = httpx.ReadTimeout(
+            "Read timed out"
+        )
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+
+        with pytest.raises(httpx.ReadTimeout):
+            reviewer.review(sample_glossary)
