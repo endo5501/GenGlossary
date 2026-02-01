@@ -3,7 +3,7 @@ priority: 2
 tags: [refactoring, backend, code-quality]
 description: "Refactor runs status update functions to eliminate duplication"
 created_at: "2026-01-31T15:00:00Z"
-started_at: null
+started_at: 2026-01-31T15:00:32Z
 closed_at: null
 ---
 
@@ -36,17 +36,17 @@ code-simplifier レビューで指摘された重複パターンの改善。
 
 ## Tasks
 
-- [ ] Repository層: `update_run_status_if_active` 関数を作成
-- [ ] Repository層: 既存3関数を薄いラッパーに変更
-- [ ] Manager層: `_try_update_status` メソッドを作成
-- [ ] Manager層: 既存3メソッドを薄いラッパーに変更
-- [ ] テスト更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Repository層: `update_run_status_if_active` 関数を作成
+- [x] Repository層: 既存3関数を薄いラッパーに変更
+- [x] Manager層: `_try_update_status` メソッドを作成
+- [x] Manager層: 既存3メソッドを薄いラッパーに変更
+- [x] テスト更新
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
