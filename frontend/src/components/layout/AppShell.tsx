@@ -50,7 +50,7 @@ export function AppShell() {
         <Box
           data-testid="main-content"
           style={{
-            height: '100%',
+            height: 'calc(100vh - 60px)',
             display: 'flex',
             flexDirection: 'column',
           }}
