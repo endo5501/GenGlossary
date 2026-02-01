@@ -133,6 +133,7 @@ export function AddFileDialog({ projectId, opened, onClose }: AddFileDialogProps
           maxSize={MAX_FILE_SIZE}
           accept={['text/markdown', 'text/plain']}
           loading={loading}
+          useFsAccessApi={false}
         >
           <Group justify="center" gap="xl" mih={120} style={{ pointerEvents: 'none' }}>
             <Dropzone.Accept>
