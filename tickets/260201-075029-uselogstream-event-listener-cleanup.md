@@ -4,7 +4,7 @@ tags: [frontend, bugfix]
 description: "useLogStream: Add removeEventListener for complete event to prevent memory leaks"
 created_at: "2026-02-01T07:50:29Z"
 started_at: 2026-02-01T11:18:02Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T11:21:56Z # Do not modify manually
 ---
 
 # useLogStream: Add removeEventListener for complete event
