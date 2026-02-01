@@ -24,16 +24,19 @@ export function DocumentPane({
   onTermClick,
 }: DocumentPaneProps) {
   const renderHighlightedContent = (text: string) => {
-    if (terms.length === 0) {
+    // Filter out empty/whitespace-only terms to avoid regex issues
+    const validTerms = terms.filter((t) => t.trim().length > 0)
+
+    if (validTerms.length === 0) {
       return <Text style={{ whiteSpace: 'pre-wrap' }}>{text}</Text>
     }
 
     // Escape special regex characters and sort by length (longest first)
-    const escapedTerms = terms
+    const escapedTerms = validTerms
       .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .sort((a, b) => b.length - a.length)
 
-    const pattern = new RegExp(`(${escapedTerms.join('|')})`, 'g')
+    const pattern = new RegExp(`(${escapedTerms.join('|')})`, 'gi')
     const parts = text.split(pattern)
 
     return (

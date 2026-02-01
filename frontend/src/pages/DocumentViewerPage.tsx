@@ -33,6 +33,11 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
     }
   }, [files, selectedFileId])
 
+  // Clear selected term when file changes
+  useEffect(() => {
+    setSelectedTerm(null)
+  }, [selectedFileId])
+
   // Extract term texts for highlighting
   const termTexts = useMemo(() => terms.map((t) => t.term_text), [terms])
 
