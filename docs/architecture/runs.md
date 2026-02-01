@@ -18,7 +18,7 @@ CREATE TABLE runs (
     progress_current INTEGER,
     progress_total INTEGER,
     current_step TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL  -- Set by Python, not SQLite default
 );
 ```
 
@@ -63,13 +63,18 @@ def update_run_status_if_active(
     conn: sqlite3.Connection,
     run_id: int,
     status: str,
-    error_message: str | None = None
+    error_message: str | None = None,
+    finished_at: datetime | None = None
 ) -> int:
     """アクティブな状態（pending/running）のRunのみステータスを更新
 
     終了状態（completed, cancelled, failed）のRunは更新しない。
     cancel_run, complete_run_if_not_cancelled, fail_run_if_not_terminal の
     共通ロジックを統合した汎用関数。
+
+    Args:
+        finished_at: 終了タイムスタンプ（省略時は現在のUTC時刻を使用）
+                     timezone-aware datetime のみ受け付ける
 
     Returns:
         更新された行数（0なら既に終了状態または存在しない）
@@ -317,7 +322,7 @@ class RunManager:
 
 ## タイムスタンプ形式
 
-すべてのタイムスタンプ（`started_at`, `finished_at`）は **UTC ISO 8601形式** で保存されます。
+すべてのタイムスタンプ（`created_at`, `started_at`, `finished_at`）は **UTC ISO 8601形式** で保存されます。
 
 **形式**: `YYYY-MM-DDTHH:MM:SS+00:00`
 
@@ -327,16 +332,18 @@ class RunManager:
 ```python
 from datetime import datetime, timezone
 
-# started_at, finished_at の設定
+# タイムスタンプの設定
 timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 # → "2026-02-01T00:15:30+00:00"
 ```
 
 **使用箇所**:
-- `update_run_status`: `started_at`, `finished_at` パラメータ
-- `update_run_status_if_active`: 内部で `finished_at` を自動設定
+- `create_run`: `created_at` を Python で設定
+- `update_run_status`: `started_at`, `finished_at` パラメータ（timezone-aware datetime のみ受け付ける）
+- `update_run_status_if_active`: `finished_at` パラメータ（省略時は現在のUTC時刻を自動設定）
 
-**注意**: `created_at` はスキーマで `datetime('now')` を使用しており、別の形式（`YYYY-MM-DD HH:MM:SS`、UTC）になっています。
+**タイムゾーン検証**:
+`update_run_status` と `update_run_status_if_active` は naive datetime を拒否し、`ValueError` を発生させます。
 
 ## SQLite スレッディング戦略
 
@@ -801,11 +808,13 @@ get_run_manager(db_path) → RunManager
 
 ## テスト構成
 
-**tests/db/test_runs_repository.py (36 tests)**
+**tests/db/test_runs_repository.py (47 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - complete_run_if_not_cancelled（レースコンディション防止）
 - fail_run_if_not_terminal（終了状態の上書き防止）
 - update_run_status_if_active（汎用ステータス更新関数）
+- タイムスタンプ形式の一貫性（UTC ISO 8601形式）
+- タイムゾーン検証（naive datetime の拒否）
 
 **tests/runs/test_manager.py (52 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
@@ -842,4 +851,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 148 tests** (Repository 36 + Manager 52 + Executor 50 + API 10)
+**合計: 159 tests** (Repository 47 + Manager 52 + Executor 50 + API 10)

@@ -20,13 +20,14 @@ def create_run(
     Returns:
         int: The ID of the newly created run.
     """
+    created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO runs (scope, triggered_by)
-        VALUES (?, ?)
+        INSERT INTO runs (scope, triggered_by, created_at)
+        VALUES (?, ?, ?)
         """,
-        (scope, triggered_by),
+        (scope, triggered_by, created_at),
     )
 
     run_id = cursor.lastrowid
@@ -86,6 +87,20 @@ def list_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return cursor.fetchall()
 
 
+def _validate_timezone_aware(dt: datetime, param_name: str) -> None:
+    """Validate that a datetime is timezone-aware.
+
+    Args:
+        dt: Datetime to validate.
+        param_name: Parameter name for error message.
+
+    Raises:
+        ValueError: If datetime is naive (no timezone info).
+    """
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        raise ValueError(f"{param_name} must be timezone-aware")
+
+
 def update_run_status(
     conn: sqlite3.Connection,
     run_id: int,
@@ -100,18 +115,23 @@ def update_run_status(
         conn: Project database connection.
         run_id: Run ID to update.
         status: New status ('pending', 'running', 'completed', 'failed', 'cancelled').
-        started_at: Started timestamp (optional).
-        finished_at: Finished timestamp (optional).
+        started_at: Started timestamp (optional, must be timezone-aware).
+        finished_at: Finished timestamp (optional, must be timezone-aware).
         error_message: Error message if failed (optional).
+
+    Raises:
+        ValueError: If started_at or finished_at is naive (no timezone info).
     """
     updates = ["status = ?"]
     values: list[Any] = [status]
 
     if started_at is not None:
+        _validate_timezone_aware(started_at, "started_at")
         updates.append("started_at = ?")
         values.append(started_at.isoformat(timespec="seconds"))
 
     if finished_at is not None:
+        _validate_timezone_aware(finished_at, "finished_at")
         updates.append("finished_at = ?")
         values.append(finished_at.isoformat(timespec="seconds"))
 
@@ -160,6 +180,7 @@ def update_run_status_if_active(
     run_id: int,
     status: str,
     error_message: str | None = None,
+    finished_at: datetime | None = None,
 ) -> int:
     """Update run status only if run is active (pending or running).
 
@@ -171,11 +192,21 @@ def update_run_status_if_active(
         run_id: Run ID to update.
         status: New status ('completed', 'cancelled', 'failed').
         error_message: Error message if status is 'failed' (optional).
+        finished_at: Finished timestamp (optional, must be timezone-aware).
+            If not provided, uses current UTC time.
 
     Returns:
         Number of rows updated (0 if run was already in terminal state or not found).
+
+    Raises:
+        ValueError: If finished_at is naive (no timezone info).
     """
-    finished_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if finished_at is not None:
+        _validate_timezone_aware(finished_at, "finished_at")
+        finished_at_str = finished_at.isoformat(timespec="seconds")
+    else:
+        finished_at_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -185,7 +216,7 @@ def update_run_status_if_active(
             error_message = ?
         WHERE id = ? AND status IN ('pending', 'running')
         """,
-        (status, finished_at, error_message, run_id),
+        (status, finished_at_str, error_message, run_id),
     )
     return cursor.rowcount
 
