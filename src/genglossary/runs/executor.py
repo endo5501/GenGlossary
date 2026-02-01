@@ -43,11 +43,12 @@ class PipelineScope(Enum):
     PROVISIONAL_TO_REFINED = "provisional_to_refined"
 
 # Map of scope to clear functions for table cleanup
-_SCOPE_CLEAR_FUNCTIONS: dict[str, list[Callable[[sqlite3.Connection], None]]] = {
-    "full": [delete_all_terms, delete_all_provisional, delete_all_issues, delete_all_refined],
-    "from_terms": [delete_all_provisional, delete_all_issues, delete_all_refined],
-    "provisional_to_refined": [delete_all_issues, delete_all_refined],
+_SCOPE_CLEAR_FUNCTIONS: dict[PipelineScope, list[Callable[[sqlite3.Connection], None]]] = {
+    PipelineScope.FULL: [delete_all_terms, delete_all_provisional, delete_all_issues, delete_all_refined],
+    PipelineScope.FROM_TERMS: [delete_all_provisional, delete_all_issues, delete_all_refined],
+    PipelineScope.PROVISIONAL_TO_REFINED: [delete_all_issues, delete_all_refined],
 }
+
 
 
 def _cancellable(func: Callable) -> Callable:
@@ -281,27 +282,30 @@ class PipelineExecutor:
             context: Execution context containing run_id, log_callback, and cancel_event.
             doc_root: Root directory for documents (default: ".").
         """
-        # Convert PipelineScope enum to string value
-        scope_value = scope.value if isinstance(scope, PipelineScope) else scope
+        # Normalize to PipelineScope enum
+        scope_enum = scope if isinstance(scope, PipelineScope) else PipelineScope(scope)
 
-        self._log(context, "info", f"Starting pipeline execution: {scope_value}")
+        self._log(context, "info", f"Starting pipeline execution: {scope_enum.value}")
 
         if self._check_cancellation(context):
             return
 
         # Clear tables before execution
-        self._clear_tables_for_scope(conn, scope_value)
+        self._clear_tables_for_scope(conn, scope_enum)
 
-        # Execute based on scope
-        if scope_value == PipelineScope.FULL.value:
-            self._execute_full(conn, context, doc_root)
-        elif scope_value == PipelineScope.FROM_TERMS.value:
-            self._execute_from_terms(conn, context)
-        elif scope_value == PipelineScope.PROVISIONAL_TO_REFINED.value:
-            self._execute_provisional_to_refined(conn, context)
-        else:
-            self._log(context, "error", f"Unknown scope: {scope_value}")
-            raise ValueError(f"Unknown scope: {scope_value}")
+        # Execute based on scope using dispatch table with direct method references
+        scope_handlers = {
+            PipelineScope.FULL: self._execute_full,
+            PipelineScope.FROM_TERMS: self._execute_from_terms,
+            PipelineScope.PROVISIONAL_TO_REFINED: self._execute_provisional_to_refined,
+        }
+
+        handler = scope_handlers.get(scope_enum)
+        if handler is None:
+            self._log(context, "error", f"Unknown scope: {scope_enum}")
+            raise ValueError(f"Unknown scope: {scope_enum}")
+
+        handler(conn, context, doc_root)
 
         self._log(context, "info", "Pipeline execution completed")
 
@@ -406,13 +410,14 @@ class PipelineExecutor:
         self._log(context, "info", f"Extracted {len(unique_terms)} unique terms (from {len(extracted_terms)} total)")
 
         # Continue with steps 3-5 (pass unique terms to avoid duplicate LLM calls)
-        self._execute_from_terms(conn, context, documents, unique_terms)
+        self._execute_from_terms(conn, context, documents=documents, extracted_terms=unique_terms)
 
     @_cancellable
     def _execute_from_terms(
         self,
         conn: sqlite3.Connection,
         context: ExecutionContext,
+        _doc_root: str = ".",
         documents: list[Document] | None = None,
         extracted_terms: list[str] | list[ClassifiedTerm] | None = None,
     ) -> None:
@@ -421,6 +426,7 @@ class PipelineExecutor:
         Args:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
+            _doc_root: Root directory for documents (unused, for unified signature).
             documents: Pre-loaded documents (None to load from DB).
             extracted_terms: Pre-extracted terms as strings or ClassifiedTerms (None to load from DB).
         """
@@ -458,13 +464,14 @@ class PipelineExecutor:
         self._log(context, "info", f"Generated {len(glossary.terms)} terms")
 
         # Continue with steps 4-5
-        self._execute_provisional_to_refined(conn, context, glossary, documents)
+        self._execute_provisional_to_refined(conn, context, glossary=glossary, documents=documents)
 
     @_cancellable
     def _execute_provisional_to_refined(
         self,
         conn: sqlite3.Connection,
         context: ExecutionContext,
+        _doc_root: str = ".",
         glossary: Glossary | None = None,
         documents: list[Document] | None = None,
     ) -> None:
@@ -473,6 +480,7 @@ class PipelineExecutor:
         Args:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
+            _doc_root: Root directory for documents (unused, for unified signature).
             glossary: Pre-generated provisional glossary (None to load from DB).
             documents: Pre-loaded documents (None to load from DB).
         """
@@ -541,12 +549,12 @@ class PipelineExecutor:
         with transaction(conn):
             self._save_glossary_terms_batch(conn, glossary, create_refined_terms_batch)
 
-    def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: str) -> None:
+    def _clear_tables_for_scope(self, conn: sqlite3.Connection, scope: PipelineScope) -> None:
         """Clear relevant tables before execution.
 
         Args:
             conn: Project database connection.
-            scope: Execution scope.
+            scope: Execution scope (PipelineScope enum).
         """
         clear_funcs = _SCOPE_CLEAR_FUNCTIONS.get(scope, [])
         with transaction(conn):

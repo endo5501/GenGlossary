@@ -461,11 +461,12 @@ class TestPipelineExecutorConfiguration:
         mock_delete_issues = MagicMock()
         mock_delete_refined = MagicMock()
 
-        # Patch _SCOPE_CLEAR_FUNCTIONS to use our mocks
+        # Patch _SCOPE_CLEAR_FUNCTIONS to use our mocks (using Enum keys)
+        from genglossary.runs.executor import PipelineScope
         mock_scope_clear_functions = {
-            "full": [mock_delete_terms, mock_delete_prov, mock_delete_issues, mock_delete_refined],
-            "from_terms": [mock_delete_prov, mock_delete_issues, mock_delete_refined],
-            "provisional_to_refined": [mock_delete_issues, mock_delete_refined],
+            PipelineScope.FULL: [mock_delete_terms, mock_delete_prov, mock_delete_issues, mock_delete_refined],
+            PipelineScope.FROM_TERMS: [mock_delete_prov, mock_delete_issues, mock_delete_refined],
+            PipelineScope.PROVISIONAL_TO_REFINED: [mock_delete_issues, mock_delete_refined],
         }
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
@@ -1312,7 +1313,8 @@ class TestPipelineExecutorUnknownScope:
     ) -> None:
         """不明なスコープはValueErrorを発生させる"""
         with patch("genglossary.runs.executor.create_llm_client"):
-            with pytest.raises(ValueError, match="Unknown scope"):
+            # Invalid scope string raises ValueError from PipelineScope enum conversion
+            with pytest.raises(ValueError, match="invalid_scope.*is not a valid PipelineScope"):
                 executor.execute(project_db, "invalid_scope", execution_context)
 
 
@@ -1358,14 +1360,50 @@ class TestPipelineScopeEnum:
             # Should not raise TypeError when using enum
             executor.execute(project_db, PipelineScope.FULL, context)
 
-    def test_scope_clear_functions_use_enum(self) -> None:
-        """_SCOPE_CLEAR_FUNCTIONS が Enum をキーとして使用できることを確認"""
+    def test_scope_clear_functions_use_enum_keys(self) -> None:
+        """_SCOPE_CLEAR_FUNCTIONS が PipelineScope Enum をキーとして使用することを確認"""
         from genglossary.runs.executor import PipelineScope, _SCOPE_CLEAR_FUNCTIONS
 
-        # Keys should be PipelineScope enum values or strings that match
-        assert PipelineScope.FULL.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.FULL in _SCOPE_CLEAR_FUNCTIONS
-        assert PipelineScope.FROM_TERMS.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.FROM_TERMS in _SCOPE_CLEAR_FUNCTIONS
-        assert PipelineScope.PROVISIONAL_TO_REFINED.value in _SCOPE_CLEAR_FUNCTIONS or PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_CLEAR_FUNCTIONS
+        # Keys must be PipelineScope enum values (not strings)
+        assert PipelineScope.FULL in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.FROM_TERMS in _SCOPE_CLEAR_FUNCTIONS
+        assert PipelineScope.PROVISIONAL_TO_REFINED in _SCOPE_CLEAR_FUNCTIONS
+
+    def test_execute_dispatches_to_correct_handler(self) -> None:
+        """execute() が各スコープに対して正しいハンドラーを呼び出すことを確認"""
+        from unittest.mock import MagicMock, patch
+
+        from genglossary.runs.executor import PipelineExecutor, PipelineScope
+
+        executor = PipelineExecutor()
+
+        # Test that each scope calls the expected internal method
+        for scope in PipelineScope:
+            with patch.object(executor, "_execute_full") as mock_full, \
+                 patch.object(executor, "_execute_from_terms") as mock_from_terms, \
+                 patch.object(executor, "_execute_provisional_to_refined") as mock_provisional, \
+                 patch.object(executor, "_clear_tables_for_scope"), \
+                 patch.object(executor, "_log"), \
+                 patch.object(executor, "_check_cancellation", return_value=False):
+
+                mock_conn = MagicMock()
+                mock_context = MagicMock()
+
+                executor.execute(mock_conn, scope, mock_context, doc_root="/test")
+
+                # Verify the correct handler was called
+                if scope == PipelineScope.FULL:
+                    mock_full.assert_called_once()
+                    mock_from_terms.assert_not_called()
+                    mock_provisional.assert_not_called()
+                elif scope == PipelineScope.FROM_TERMS:
+                    mock_full.assert_not_called()
+                    mock_from_terms.assert_called_once()
+                    mock_provisional.assert_not_called()
+                elif scope == PipelineScope.PROVISIONAL_TO_REFINED:
+                    mock_full.assert_not_called()
+                    mock_from_terms.assert_not_called()
+                    mock_provisional.assert_called_once()
 
 
 class TestCancellationCheckBeforeRefinedSave:
