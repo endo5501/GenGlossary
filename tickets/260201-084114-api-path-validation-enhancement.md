@@ -4,7 +4,7 @@ tags: [improvement, backend, security]
 description: "API path validation: reject absolute paths and normalize input"
 created_at: "2026-02-01T08:41:14Z"
 started_at: 2026-02-01T10:18:41Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T10:50:15Z # Do not modify manually
 ---
 
 # API path validation enhancement
