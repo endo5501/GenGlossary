@@ -37,11 +37,13 @@ def _validate_file_name(file_name: str) -> None:
     Raises:
         HTTPException: If file name is invalid.
     """
-    # Reject path traversal attempts
-    if ".." in file_name:
+    # Reject path traversal attempts (check path segments, not substring)
+    # This allows filenames like "notes..md" but rejects "../secret.txt"
+    segments = file_name.split("/")
+    if ".." in segments:
         raise HTTPException(
             status_code=400,
-            detail="File name cannot contain '..'",
+            detail="File name cannot contain '..' path segments",
         )
 
     # Reject Windows backslashes (POSIX format only)

@@ -175,6 +175,17 @@ def test_create_file_rejects_backslash(test_project_setup, client: TestClient):
     assert "forward" in response.json()["detail"].lower() or "slash" in response.json()["detail"].lower()
 
 
+def test_create_file_allows_double_dots_in_filename(test_project_setup, client: TestClient):
+    """Test POST /api/projects/{id}/files allows .. in filename (not path segment)."""
+    project_id = test_project_setup["project_id"]
+
+    # Double dots in filename (not a path segment) should be allowed
+    payload = {"file_name": "notes..md", "content": "content"}
+    response = client.post(f"/api/projects/{project_id}/files", json=payload)
+    assert response.status_code == 201
+    assert response.json()["file_name"] == "notes..md"
+
+
 def test_create_file_returns_409_for_duplicate_file(
     test_project_setup, client: TestClient
 ):
