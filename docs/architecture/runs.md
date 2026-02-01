@@ -476,17 +476,21 @@ class PipelineExecutor:
         Raises:
             ValueError: 不明なスコープが指定された場合
         """
-        # Enum を文字列値に変換
-        scope_value = scope.value if isinstance(scope, PipelineScope) else scope
+        # Enum に正規化（文字列の場合は変換）
+        scope_enum = scope if isinstance(scope, PipelineScope) else PipelineScope(scope)
 
-        if scope_value == PipelineScope.FULL.value:
-            self._execute_full(conn, context, doc_root)
-        elif scope_value == PipelineScope.FROM_TERMS.value:
-            self._execute_from_terms(conn, context)
-        elif scope_value == PipelineScope.PROVISIONAL_TO_REFINED.value:
-            self._execute_provisional_to_refined(conn, context)
-        else:
-            raise ValueError(f"Unknown scope: {scope_value}")
+        # ディスパッチテーブルでスコープに対応するハンドラーを取得
+        scope_handlers = {
+            PipelineScope.FULL: self._execute_full,
+            PipelineScope.FROM_TERMS: self._execute_from_terms,
+            PipelineScope.PROVISIONAL_TO_REFINED: self._execute_provisional_to_refined,
+        }
+
+        handler = scope_handlers.get(scope_enum)
+        if handler is None:
+            raise ValueError(f"Unknown scope: {scope_enum}")
+
+        handler(conn, context, doc_root)
 ```
 
 ### 進捗コールバック
