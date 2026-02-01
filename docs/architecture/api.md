@@ -629,6 +629,7 @@ def _validate_file_name(file_name: str) -> str:
     """ファイル名を検証・正規化
 
     - 絶対パス（/で始まる）を拒否
+    - Windowsドライブパス（C:/path, D:/path）を拒否
     - 相対パスを許可（例: 'chapter1/intro.md'）
     - パストラバーサル（..）を拒否
     - Windowsバックスラッシュを拒否（POSIX形式のみ）
@@ -672,7 +673,7 @@ async def create_files_bulk(
 - SHA256ハッシュで重複検出
 - `.txt`, `.md` のみ許可
 - POSIX形式の相対パスを許可（`chapter1/intro.md` など）
-- 絶対パスと `\` を拒否、`.` セグメントは正規化で除去
+- 絶対パス（Unix `/...` およびWindows `C:/...`）と `\` を拒否、`.` セグメントは正規化で除去
 - bulk APIは全ファイルのバリデーション後に一括作成
 
 ## middleware/

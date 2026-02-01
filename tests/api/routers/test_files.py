@@ -308,6 +308,68 @@ def test_get_files_returns_404_for_missing_project(client: TestClient):
     assert response.status_code == 404
 
 
+class TestWindowsDrivePathRejection:
+    """Tests for Windows drive path rejection (e.g., C:/path/to/file.md)."""
+
+    def test_create_file_rejects_windows_drive_path(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files rejects Windows drive paths."""
+        project_id = test_project_setup["project_id"]
+
+        # Windows drive path should be rejected
+        payload = {"file_name": "C:/Windows/system32/file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "absolute" in response.json()["detail"].lower()
+
+    def test_create_file_rejects_lowercase_drive_letter(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files rejects lowercase drive letters."""
+        project_id = test_project_setup["project_id"]
+
+        # Lowercase drive letter should also be rejected
+        payload = {"file_name": "d:/path/to/file.txt", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "absolute" in response.json()["detail"].lower()
+
+    def test_create_file_allows_colon_not_at_start(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that colons not in drive position are allowed."""
+        project_id = test_project_setup["project_id"]
+
+        # Colon in filename (not drive pattern) should be allowed
+        # Note: This may not be valid on all filesystems, but the validation
+        # only targets drive letters at the start
+        payload = {"file_name": "notes/2025-01-01: Meeting.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        # This should pass validation (colon is not at position 1)
+        assert response.status_code == 201
+
+    def test_create_files_bulk_rejects_windows_drive_path(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files/bulk rejects Windows drive paths."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "valid.md", "content": "content"},
+                {"file_name": "E:/data/file.txt", "content": "bad"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 400
+        assert "absolute" in response.json()["detail"].lower()
+
+
 class TestPathValidationEnhancement:
     """Tests for absolute path rejection and path normalization."""
 

@@ -3,8 +3,8 @@ priority: 5
 tags: [security, backend]
 description: "API path validation: reject Windows drive paths"
 created_at: "2026-02-01T10:26:37Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-01T11:32:50Z # Do not modify manually
+closed_at: 2026-02-01T11:41:22Z # Do not modify manually
 ---
 
 # API path validation: reject Windows drive paths
@@ -29,18 +29,19 @@ codex MCP レビューで指摘された問題。`C:/Windows/system32/...` の�
 
 ## Tasks
 
-- [ ] ドライブレター形式の拒否を実装
-- [ ] テスト追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] ドライブレター形式の拒否を実装
+- [x] テスト追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
 - 260201-084114-api-path-validation-enhancement の codex レビューで指摘
+- codex レビューから派生チケット作成: 260201-113740-api-path-unicode-normalization
