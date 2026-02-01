@@ -1,6 +1,5 @@
 """Tests for GlossaryReviewer - Step 3: Review glossary for issues."""
 
-import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -400,40 +399,247 @@ class TestGlossaryReviewerPromptInjectionPrevention:
         assert escaped_tags == 1, f"Expected 1 escaped tag, found {escaped_tags}"
 
 
-class TestGlossaryReviewerLogging:
-    """Test suite for GlossaryReviewer logging behavior."""
+class TestGlossaryReviewerBatchProcessing:
+    """Test suite for GlossaryReviewer batch processing."""
 
     @pytest.fixture
     def mock_llm_client(self) -> MagicMock:
         """Create a mock LLM client."""
         return MagicMock(spec=BaseLLMClient)
 
-    @pytest.fixture
-    def sample_glossary(self) -> Glossary:
-        """Create a sample glossary for testing."""
+    def _create_glossary_with_n_terms(self, n: int) -> Glossary:
+        """Helper to create a glossary with n terms."""
         glossary = Glossary()
-        glossary.add_term(Term(name="TestTerm", definition="Test definition", confidence=0.8))
+        for i in range(n):
+            term = Term(
+                name=f"Term{i}",
+                definition=f"Definition for term {i}",
+                confidence=0.8,
+            )
+            glossary.add_term(term)
         return glossary
 
-    def test_review_logs_warning_on_llm_exception(
-        self,
-        mock_llm_client: MagicMock,
-        sample_glossary: Glossary,
-        caplog: pytest.LogCaptureFixture,
+    def test_review_splits_into_batches(self, mock_llm_client: MagicMock) -> None:
+        """Test that 25 terms are split into 3 batches (10 + 10 + 5)."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(25)
+
+        reviewer.review(glossary)
+
+        assert mock_llm_client.generate_structured.call_count == 3
+
+    def test_review_single_batch_for_10_terms(self, mock_llm_client: MagicMock) -> None:
+        """Test that 10 terms are processed in a single batch."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(10)
+
+        reviewer.review(glossary)
+
+        assert mock_llm_client.generate_structured.call_count == 1
+
+    def test_review_merges_issues_from_all_batches(
+        self, mock_llm_client: MagicMock
     ) -> None:
-        """Test that review logs a warning when LLM call raises an exception."""
+        """Test that issues from all batches are merged."""
+        # 15 terms with batch_size=10 -> 2 batches (10 + 5)
+        # First batch returns 2 issues, second batch returns 1 issue
+        mock_llm_client.generate_structured.side_effect = [
+            MockReviewResponse(
+                issues=[
+                    {"term": "Term0", "issue_type": "unclear", "description": "Issue 1"},
+                    {"term": "Term1", "issue_type": "unclear", "description": "Issue 2"},
+                ]
+            ),
+            MockReviewResponse(
+                issues=[
+                    {"term": "Term10", "issue_type": "unclear", "description": "Issue 3"},
+                ]
+            ),
+        ]
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(15)
+
+        issues = reviewer.review(glossary)
+
+        assert issues is not None
+        assert len(issues) == 3
+
+    def test_batch_progress_callback_is_called(self, mock_llm_client: MagicMock) -> None:
+        """Test that batch_progress_callback is called for each batch."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(30)  # 3 batches (10 + 10 + 10)
+
+        callback = MagicMock()
+        reviewer.review(glossary, batch_progress_callback=callback)
+
+        assert callback.call_count == 3
+        callback.assert_any_call(1, 3)
+        callback.assert_any_call(2, 3)
+        callback.assert_any_call(3, 3)
+
+    def test_batch_progress_callback_not_called_for_single_batch(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that callback is still called even for a single batch."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(10)
+
+        callback = MagicMock()
+        reviewer.review(glossary, batch_progress_callback=callback)
+
+        callback.assert_called_once_with(1, 1)
+
+    def test_custom_batch_size(self, mock_llm_client: MagicMock) -> None:
+        """Test that custom batch size can be set."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        # Custom batch size of 5
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client, batch_size=5)
+        glossary = self._create_glossary_with_n_terms(12)
+
+        reviewer.review(glossary)
+
+        # 12 terms with batch_size=5 -> 3 batches (5 + 5 + 2)
+        assert mock_llm_client.generate_structured.call_count == 3
+
+    def test_default_batch_size_is_10(self, mock_llm_client: MagicMock) -> None:
+        """Test that default batch size is 10."""
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        assert reviewer.batch_size == 10
+
+    def test_batch_size_validation_rejects_zero(self, mock_llm_client: MagicMock) -> None:
+        """Test that batch_size=0 raises ValueError."""
+        with pytest.raises(ValueError, match="batch_size must be at least 1"):
+            GlossaryReviewer(llm_client=mock_llm_client, batch_size=0)
+
+    def test_batch_size_validation_rejects_negative(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that negative batch_size raises ValueError."""
+        with pytest.raises(ValueError, match="batch_size must be at least 1"):
+            GlossaryReviewer(llm_client=mock_llm_client, batch_size=-5)
+
+    def test_callback_exception_does_not_abort_review(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that callback exception is caught and review continues."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(
+            issues=[{"term": "Term0", "issue_type": "unclear", "description": "Test"}]
+        )
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(5)
+
+        # Callback that raises exception
+        def bad_callback(current: int, total: int) -> None:
+            raise RuntimeError("Callback error")
+
+        # Review should complete despite callback error
+        issues = reviewer.review(glossary, batch_progress_callback=bad_callback)
+        assert issues is not None
+        assert len(issues) == 1
+
+    def test_cancellation_checked_before_empty_glossary_return(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that cancellation is checked before empty glossary early return."""
+        from threading import Event
+
+        cancel_event = Event()
+        cancel_event.set()
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        empty_glossary = Glossary()
+
+        # Should return None (cancelled) not [] (empty)
+        result = reviewer.review(empty_glossary, cancel_event=cancel_event)
+        assert result is None
+
+
+class TestGlossaryReviewerErrorHandling:
+    """Test suite for GlossaryReviewer error handling."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    def _create_glossary_with_n_terms(self, n: int) -> Glossary:
+        """Helper to create a glossary with n terms."""
+        glossary = Glossary()
+        for i in range(n):
+            term = Term(
+                name=f"Term{i}",
+                definition=f"Definition for term {i}",
+                confidence=0.8,
+            )
+            glossary.add_term(term)
+        return glossary
+
+    def test_batch_error_skips_and_continues(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that batch errors are skipped and processing continues."""
+        # 3 batches: batch 1 succeeds, batch 2 fails, batch 3 succeeds
+        mock_llm_client.generate_structured.side_effect = [
+            MockReviewResponse(
+                issues=[{"term": "Term0", "issue_type": "unclear", "description": "Issue 1"}]
+            ),
+            RuntimeError("LLM API error"),  # Batch 2 fails
+            MockReviewResponse(
+                issues=[{"term": "Term20", "issue_type": "unclear", "description": "Issue 2"}]
+            ),
+        ]
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(25)  # 3 batches with size 10
+
+        issues = reviewer.review(glossary)
+
+        # Should return issues from successful batches only
+        assert issues is not None
+        assert len(issues) == 2  # Issues from batch 1 and 3
+
+    def test_all_batches_fail_returns_empty_list(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that if all batches fail, empty list is returned."""
         mock_llm_client.generate_structured.side_effect = RuntimeError("LLM API error")
 
         reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(15)  # 2 batches
+
+        issues = reviewer.review(glossary)
+
+        # Should return empty list (not raise exception)
+        assert issues is not None
+        assert len(issues) == 0
+
+    def test_batch_error_logs_warning(
+        self, mock_llm_client: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test that batch errors are logged as warnings."""
+        import logging
+
+        mock_llm_client.generate_structured.side_effect = [
+            MockReviewResponse(issues=[]),
+            RuntimeError("Parse error"),
+        ]
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        glossary = self._create_glossary_with_n_terms(15)
 
         with caplog.at_level(logging.WARNING, logger="genglossary.glossary_reviewer"):
-            result = reviewer.review(sample_glossary)
+            reviewer.review(glossary)
 
-        # Should return empty list (graceful degradation)
-        assert result == []
-
-        # Should log warning instead of print
-        assert len(caplog.records) == 1
-        assert caplog.records[0].levelno == logging.WARNING
-        assert "Failed to review glossary" in caplog.text
-        assert "LLM API error" in caplog.text
+        assert "Batch 2/2 failed" in caplog.text
+        assert "Parse error" in caplog.text

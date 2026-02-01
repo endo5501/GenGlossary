@@ -486,6 +486,21 @@ class PipelineExecutor:
         各実行の状態（run_id, log_callback, cancel_event）を分離します。
     """
 
+    def __init__(
+        self,
+        provider: str = "ollama",
+        model: str = "",
+        review_batch_size: int = 10,  # GlossaryReviewer のバッチサイズ
+    ):
+        """Initialize the PipelineExecutor.
+
+        Args:
+            review_batch_size: レビューステップでのバッチサイズ。
+                大量の用語（50件以上）でのタイムアウトを防ぐため、
+                この数ずつLLMに送信します。デフォルト20件。
+        """
+        ...
+
     def execute(
         self,
         conn: sqlite3.Connection,
@@ -603,11 +618,38 @@ def generate(
 def review(
     self,
     glossary: Glossary,
-    cancel_event: Event | None = None,      # ← 追加
+    cancel_event: Event | None = None,
+    batch_progress_callback: Callable[[int, int], None] | None = None,  # バッチ進捗
 ) -> list[GlossaryIssue] | None:  # ← None はキャンセルを意味
+    """バッチ処理でレビューを実行（タイムアウト回避）
+
+    大量の用語をレビューする際のタイムアウトやトークン制限を防ぐため、
+    用語をバッチに分割（デフォルト10件/バッチ）してLLMに送信します。
+
+    エラー耐性:
+        バッチ処理中にエラーが発生した場合（JSON解析失敗、タイムアウト等）、
+        そのバッチをスキップして次のバッチに進みます。成功したバッチの
+        issuesのみを返却し、パイプライン全体が停止することを防ぎます。
+
+    Args:
+        batch_progress_callback: コールバック(current_batch, total_batches)
+            各バッチ処理前に呼び出される（ベストエフォート、例外は無視）
+    """
     if cancel_event is not None and cancel_event.is_set():
         return None  # キャンセルと「問題なし」を区別
-    # LLM 呼び出し...
+
+    # バッチに分割して処理
+    batches = [terms[i:i+batch_size] for i in range(0, len(terms), batch_size)]
+    for batch in batches:
+        if cancel_event and cancel_event.is_set():
+            return None
+        if batch_progress_callback:
+            batch_progress_callback(current_batch, total_batches)
+        try:
+            # LLM 呼び出し（バッチ単位）...
+        except Exception:
+            # エラー時はスキップして次のバッチへ（警告ログ出力）
+            continue
 
 # GlossaryRefiner
 def refine(

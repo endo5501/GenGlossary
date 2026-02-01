@@ -1,6 +1,7 @@
 """Glossary reviewer - Step 3: Review glossary for issues using LLM."""
 
 import logging
+from collections.abc import Callable
 from threading import Event
 from typing import Any
 
@@ -37,16 +38,30 @@ class GlossaryReviewer:
     contradictions, or missing relationships.
     """
 
-    def __init__(self, llm_client: BaseLLMClient) -> None:
+    DEFAULT_BATCH_SIZE = 10
+
+    def __init__(
+        self, llm_client: BaseLLMClient, batch_size: int = DEFAULT_BATCH_SIZE
+    ) -> None:
         """Initialize the GlossaryReviewer.
 
         Args:
             llm_client: The LLM client to use for review.
+            batch_size: Number of terms to process per batch. Defaults to 20.
+
+        Raises:
+            ValueError: If batch_size is less than 1.
         """
+        if batch_size < 1:
+            raise ValueError("batch_size must be at least 1")
         self.llm_client = llm_client
+        self.batch_size = batch_size
 
     def review(
-        self, glossary: Glossary, cancel_event: Event | None = None
+        self,
+        glossary: Glossary,
+        cancel_event: Event | None = None,
+        batch_progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[GlossaryIssue] | None:
         """Review the glossary and identify issues.
 
@@ -54,40 +69,98 @@ class GlossaryReviewer:
             glossary: The glossary to review.
             cancel_event: Optional threading.Event for cancellation. If set,
                 returns None without calling LLM.
+            batch_progress_callback: Optional callback(current_batch, total_batches)
+                called before processing each batch.
 
         Returns:
             A list of identified issues, or None if cancelled.
             - None: cancelled, no review was performed
             - []: review was performed, no issues found
         """
-        if glossary.term_count == 0:
-            return []
-
-        # Check for cancellation before calling LLM
+        # Check for cancellation first (before any other checks)
         if cancel_event is not None and cancel_event.is_set():
             return None
 
-        try:
-            prompt = self._create_review_prompt(glossary)
-            response = self.llm_client.generate_structured(prompt, ReviewResponse)
-            return self._parse_issues(response.issues)
-        except Exception as e:
-            # If review fails, log warning and continue without issues
-            logger.warning("Failed to review glossary: %s", e, exc_info=True)
+        if glossary.term_count == 0:
             return []
 
-    def _create_review_prompt(self, glossary: Glossary) -> str:
+        # Split terms into batches
+        all_terms = glossary.all_term_names
+        batches = [
+            all_terms[i : i + self.batch_size]
+            for i in range(0, len(all_terms), self.batch_size)
+        ]
+
+        all_issues: list[GlossaryIssue] = []
+        failed_batches: list[int] = []
+        for batch_idx, batch_terms in enumerate(batches):
+            # Check for cancellation before each batch
+            if cancel_event is not None and cancel_event.is_set():
+                return None
+
+            # Report progress (best-effort, don't abort on callback errors)
+            if batch_progress_callback is not None:
+                try:
+                    batch_progress_callback(batch_idx + 1, len(batches))
+                except Exception as e:
+                    logger.warning("Batch progress callback failed: %s", e)
+
+            # Review this batch (skip on error, continue with next batch)
+            try:
+                issues = self._review_batch(glossary, batch_terms)
+                all_issues.extend(issues)
+            except Exception as e:
+                failed_batches.append(batch_idx + 1)
+                logger.warning(
+                    "Batch %d/%d failed, skipping: %s",
+                    batch_idx + 1,
+                    len(batches),
+                    e,
+                )
+
+        if failed_batches:
+            logger.warning(
+                "Review completed with %d/%d batches failed: %s",
+                len(failed_batches),
+                len(batches),
+                failed_batches,
+            )
+
+        return all_issues
+
+    def _review_batch(
+        self, glossary: Glossary, term_names: list[str]
+    ) -> list[GlossaryIssue]:
+        """Review a batch of terms.
+
+        Args:
+            glossary: The full glossary (for term lookup).
+            term_names: List of term names to review in this batch.
+
+        Returns:
+            List of issues found in this batch.
+        """
+        prompt = self._create_review_prompt(glossary, term_names)
+        response = self.llm_client.generate_structured(prompt, ReviewResponse)
+        return self._parse_issues(response.issues)
+
+    def _create_review_prompt(
+        self, glossary: Glossary, term_names: list[str] | None = None
+    ) -> str:
         """Create the prompt for glossary review.
 
         Args:
             glossary: The glossary to review.
+            term_names: Optional list of specific terms to review.
+                If None, reviews all terms.
 
         Returns:
             The formatted prompt string.
         """
         # Build term list with definitions and confidence
+        target_terms = term_names if term_names is not None else glossary.all_term_names
         term_lines: list[str] = []
-        for term_name in glossary.all_term_names:
+        for term_name in target_terms:
             term = glossary.get_term(term_name)
             if term is not None:
                 confidence_pct = int(term.confidence * 100)

@@ -118,14 +118,22 @@ class PipelineExecutor:
         each execute() call.
     """
 
-    def __init__(self, provider: str = "ollama", model: str = ""):
+    def __init__(
+        self,
+        provider: str = "ollama",
+        model: str = "",
+        review_batch_size: int = GlossaryReviewer.DEFAULT_BATCH_SIZE,
+    ):
         """Initialize the PipelineExecutor.
 
         Args:
             provider: LLM provider name (default: 'ollama').
             model: LLM model name (default: '').
+            review_batch_size: Number of terms per batch for review step.
+                Defaults to GlossaryReviewer.DEFAULT_BATCH_SIZE (20).
         """
         self._llm_client = create_llm_client(provider=provider, model=model)
+        self._review_batch_size = review_batch_size
 
     def _log(
         self,
@@ -457,11 +465,15 @@ class PipelineExecutor:
         self._log(context, "info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
         progress_cb = self._create_progress_callback(context, "provisional")
-        glossary = generator.generate(
-            extracted_terms, documents,
-            term_progress_callback=progress_cb,
-            cancel_event=context.cancel_event,
-        )
+        try:
+            glossary = generator.generate(
+                extracted_terms, documents,
+                term_progress_callback=progress_cb,
+                cancel_event=context.cancel_event,
+            )
+        except Exception as e:
+            self._log(context, "error", f"Generation failed: {e}")
+            raise
 
         # Save provisional glossary using batch insert
         # Note: No cancellation check here - once generation is complete, we always save
@@ -516,8 +528,22 @@ class PipelineExecutor:
         self._check_cancellation(context)  # Raises if cancelled
 
         self._log(context, "info", "Reviewing glossary...")
-        reviewer = GlossaryReviewer(llm_client=self._llm_client)
-        issues = reviewer.review(glossary, cancel_event=context.cancel_event)
+        reviewer = GlossaryReviewer(
+            llm_client=self._llm_client, batch_size=self._review_batch_size
+        )
+
+        def on_batch_progress(current: int, total: int) -> None:
+            self._log(context, "info", f"Reviewing batch {current}/{total}...")
+
+        try:
+            issues = reviewer.review(
+                glossary,
+                cancel_event=context.cancel_event,
+                batch_progress_callback=on_batch_progress,
+            )
+        except Exception as e:
+            self._log(context, "error", f"Review failed: {e}")
+            raise
 
         # If review was cancelled, raise exception
         if issues is None:
@@ -541,11 +567,15 @@ class PipelineExecutor:
             self._log(context, "info", "Refining glossary...")
             refiner = GlossaryRefiner(llm_client=self._llm_client)
             progress_cb = self._create_progress_callback(context, "refined")
-            glossary = refiner.refine(
-                glossary, issues, documents,
-                term_progress_callback=progress_cb,
-                cancel_event=context.cancel_event,
-            )
+            try:
+                glossary = refiner.refine(
+                    glossary, issues, documents,
+                    term_progress_callback=progress_cb,
+                    cancel_event=context.cancel_event,
+                )
+            except Exception as e:
+                self._log(context, "error", f"Refinement failed: {e}")
+                raise
             self._log(context, "info", f"Refined {len(glossary.terms)} terms")
         else:
             self._log(context, "info", "No issues found, copying provisional to refined")

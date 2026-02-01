@@ -3,8 +3,8 @@ priority: 1
 tags: [bug, backend, llm]
 description: "GlossaryReviewerが大量の用語をレビューする際にタイムアウトで0件になる"
 created_at: "2026-02-01T13:53:02Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-01T13:55:32Z # Do not modify manually
+closed_at: 2026-02-01T15:42:54Z # Do not modify manually
 ---
 
 # GlossaryReviewer タイムアウト問題
@@ -44,18 +44,18 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] バッチ処理の設計・実装
-- [ ] タイムアウトエラーの明示的な報告
-- [ ] 既存テストの更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] バッチ処理の設計・実装
+- [x] タイムアウトエラーの明示的な報告
+- [x] 既存テストの更新
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
@@ -63,3 +63,106 @@ closed_at: null   # Do not modify manually
 - 発見経緯: Issues画面空問題の調査中に発見
 - 影響: 用語数が多いプロジェクトではIssue検出が機能しない
 - 暫定対応: 用語数を減らすか、手動でバッチ実行
+
+---
+
+## 設計（承認済み）
+
+### 方針
+
+バッチ処理を導入してタイムアウトを回避する。エラー時は例外を上位に伝播させ、ログ画面に表示する。
+
+### 1. 基本アーキテクチャ
+
+**変更対象**: `GlossaryReviewer.review()` メソッド
+
+- 用語リストを20件ごとのバッチに分割
+- 各バッチを順次LLMに送信してレビュー
+- 全バッチの結果をマージして返却
+
+```python
+def review(self, glossary: Glossary, cancel_event: Event | None = None) -> list[GlossaryIssue] | None:
+    if glossary.term_count == 0:
+        return []
+
+    all_terms = glossary.all_term_names
+    batches = [all_terms[i:i+20] for i in range(0, len(all_terms), 20)]
+
+    all_issues: list[GlossaryIssue] = []
+    for batch_terms in batches:
+        if cancel_event is not None and cancel_event.is_set():
+            return None
+        issues = self._review_batch(glossary, batch_terms)
+        all_issues.extend(issues)
+
+    return all_issues
+```
+
+### 2. バッチレビューの実装
+
+**新規メソッド**: `_review_batch()` - 既存ロジックを抽出
+
+- `_create_review_prompt()` を変更して用語リストを受け取るように
+- **エラーハンドリング**: 例外をそのまま上位に伝播（graceful degradation削除）
+
+### 3. エラーハンドリングとログ出力
+
+**executor側** (`executor.py`):
+
+```python
+try:
+    issues = reviewer.review(glossary, cancel_event=context.cancel_event)
+except Exception as e:
+    self._log(context, "error", f"Review failed: {e}")
+    raise
+```
+
+**ログ出力例**:
+- 成功時: `"Found 12 issues"` (info)
+- 失敗時: `"Review failed: ReadTimeout"` (error)
+
+### 4. バッチ進捗コールバック
+
+**GlossaryReviewer.review()** に `batch_progress_callback` パラメータを追加:
+
+```python
+def review(
+    self,
+    glossary: Glossary,
+    cancel_event: Event | None = None,
+    batch_progress_callback: Callable[[int, int], None] | None = None,
+) -> list[GlossaryIssue] | None:
+```
+
+**executor側**:
+
+```python
+def on_batch_progress(current: int, total: int) -> None:
+    self._log(context, "info", f"Reviewing batch {current}/{total}...")
+
+issues = reviewer.review(
+    glossary,
+    cancel_event=context.cancel_event,
+    batch_progress_callback=on_batch_progress,
+)
+```
+
+**ログ出力例** (97用語の場合):
+```
+Reviewing glossary...
+Reviewing batch 1/5...
+Reviewing batch 2/5...
+Reviewing batch 3/5...
+Reviewing batch 4/5...
+Reviewing batch 5/5...
+Found 12 issues
+```
+
+### 5. テスト方針
+
+**新規テスト**:
+1. **バッチ分割テスト**: 25用語 → 2バッチ(20+5)に分割されることを確認
+2. **コールバックテスト**: `batch_progress_callback` が正しく呼ばれることを確認
+3. **エラー伝播テスト**: LLMエラー時に例外が上位に伝播することを確認
+
+**モック方針**: `llm_client.generate_structured()` をモックして複数回呼び出しを検証
