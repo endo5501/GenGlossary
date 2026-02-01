@@ -4,7 +4,7 @@ tags: [gui, frontend, document-viewer]
 description: "Document Viewer 完全実装"
 created_at: "2026-01-27T16:33:25Z"
 started_at: 2026-02-01T11:42:32Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T12:36:07Z # Do not modify manually
 ---
 
 # Document Viewer 完全実装
