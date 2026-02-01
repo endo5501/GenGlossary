@@ -188,8 +188,57 @@ const progressPercent = progress && progress.total > 0
 | `ProvisionalPage` | 暫定用語集の表示と編集 |
 | `IssuesPage` | 精査で見つかった問題一覧 |
 | `RefinedPage` | 最終用語集の表示とエクスポート |
-| `DocumentViewerPage` | ドキュメント閲覧ページ |
+| `DocumentViewerPage` | ドキュメント閲覧ページ（左右2ペイン構成） |
 | `SettingsPage` | プロジェクト設定ページ（名前、LLM設定の編集） |
+
+#### DocumentViewerPage の設計
+
+左右2ペイン構成でドキュメント原文と用語カードを表示。
+
+**レイアウト:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Document Viewer                          │
+├─────────────────────────────┬───────────────────────────────┤
+│      左ペイン (60%)          │       右ペイン (40%)           │
+│  ┌─────────────────────┐    │   ┌───────────────────────┐   │
+│  │  ドキュメントタブ      │    │   │     用語カード         │   │
+│  │  [doc1.txt] [doc2.md]│    │   │                       │   │
+│  ├─────────────────────┤    │   │  用語名: ○○○          │   │
+│  │                     │    │   │  定義: ...            │   │
+│  │  ドキュメント本文      │    │   │  出現箇所: ...        │   │
+│  │  (用語ハイライト付き)  │    │   │                       │   │
+│  │                     │    │   │  [除外][編集][ジャンプ] │   │
+│  └─────────────────────┘    │   └───────────────────────┘   │
+└─────────────────────────────┴───────────────────────────────┘
+```
+
+**コンポーネント構成:**
+- `DocumentPane`: 左ペイン（タブ + 本文表示 + 用語ハイライト）
+- `TermCard`: 右ペイン（用語詳細表示）
+
+**状態管理:**
+```typescript
+const [selectedFileId, setSelectedFileId] = useState<number | null>(null)
+const [selectedTerm, setSelectedTerm] = useState<string | null>(null)
+
+// ファイル切り替え時に選択用語をクリア
+useEffect(() => {
+  setSelectedTerm(null)
+}, [selectedFileId])
+```
+
+**データ取得:**
+- `useFiles(projectId)` - ファイル一覧（タブ表示用）
+- `useFileDetail(projectId, fileId)` - 選択ファイルのコンテンツ
+- `useTerms(projectId)` - 用語一覧（ハイライト用）
+- `useRefined(projectId)` - Refined用語集
+- `useProvisional(projectId)` - Provisional用語集（フォールバック用）
+
+**用語データの優先順位:**
+1. Refined があればそれを表示
+2. なければ Provisional を表示
+3. どちらもなければ「未定義」と表示
 
 #### 用語集関連ページの共通パターン
 
@@ -340,6 +389,51 @@ const handleClose = () => {
 - `useEffect`の依存配列には実際に使用している値（`project.name`）を指定
 - `handleClose`での状態リセットは`useEffect`と重複するため削除
 
+### Document Viewer コンポーネント（components/document-viewer/）
+
+| コンポーネント | 説明 |
+|---------------|------|
+| `DocumentPane` | 左ペイン：タブでドキュメント選択、本文表示、用語ハイライト |
+| `TermCard` | 右ペイン：用語詳細（定義、出現箇所、アクションボタン） |
+
+#### DocumentPane
+
+ドキュメントの本文を表示し、用語をハイライトしてクリッカブルにするコンポーネント。
+
+**主な機能:**
+- ファイル一覧をタブ表示
+- 選択ファイルのコンテンツ表示
+- 用語のハイライト（青色背景）
+- 選択中の用語のハイライト（黄色背景）
+- 用語クリックで `onTermClick` コールバック呼び出し
+
+**用語ハイライトの実装:**
+```typescript
+// 空の用語をフィルタリング（regex崩壊防止）
+const validTerms = terms.filter((t) => t.trim().length > 0)
+
+// 大文字小文字を無視してマッチング
+const pattern = new RegExp(`(${escapedTerms.join('|')})`, 'gi')
+
+// テキストを分割してクリッカブルなspanに変換
+const parts = text.split(pattern)
+```
+
+#### TermCard
+
+選択された用語の詳細情報を表示するコンポーネント。
+
+**表示内容:**
+- 用語名とデータソースバッジ（Refined/Provisional）
+- 定義テキスト
+- 出現箇所リスト（OccurrenceList使用）
+- アクションボタン（除外/編集/ジャンプ）- 初期実装では disabled
+
+**状態遷移:**
+1. 用語未選択 → "Click a term in the document to view details"
+2. 用語選択＆定義なし → "This term has no definition yet"
+3. 用語選択＆定義あり → 詳細情報を表示
+
 ### 共通コンポーネント（components/common/）
 
 | コンポーネント | 説明 |
@@ -440,6 +534,7 @@ API レスポンスの TypeScript 型定義。
 | 型 | 説明 |
 |---|------|
 | `FileResponse` | ファイル情報（id, file_name, content_hash） |
+| `FileDetailResponse` | ファイル詳細（id, file_name, content_hash, content） |
 | `TermResponse` | 抽出された用語（id, term_text, category） |
 | `TermOccurrence` | 用語の出現箇所（line_number, context） |
 | `GlossaryTermResponse` | 用語集エントリ（term_name, definition, confidence, occurrences） |
