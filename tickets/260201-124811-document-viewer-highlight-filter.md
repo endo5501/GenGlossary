@@ -4,7 +4,7 @@ tags: [bug, frontend]
 description: "Document ViewerでCOMMON_NOUNの単語がハイライトされる問題を修正"
 created_at: "2026-02-01T12:48:11Z"
 started_at: 2026-02-01T22:48:29Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-01T23:03:00Z # Do not modify manually
 ---
 
 # Document Viewer ハイライトフィルタリング
