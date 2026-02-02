@@ -4,7 +4,7 @@ import { useFiles, useFileDetail } from '../api/hooks/useFiles'
 import { useRefined } from '../api/hooks/useRefined'
 import { useProvisional } from '../api/hooks/useProvisional'
 import { DocumentPane, TermCard } from '../components/document-viewer'
-import type { GlossaryTermResponse } from '../api/types'
+import { findTermData } from '../utils/termUtils'
 
 interface DocumentViewerPageProps {
   projectId: number
@@ -45,18 +45,6 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
       ),
     [refinedTerms, provisionalTerms]
   )
-
-  // Find term data for selected term
-  const findTermData = (
-    termList: GlossaryTermResponse[],
-    termText: string
-  ): GlossaryTermResponse | null => {
-    return (
-      termList.find(
-        (t) => t.term_name.toLowerCase() === termText.toLowerCase()
-      ) ?? null
-    )
-  }
 
   const refinedData = selectedTerm
     ? findTermData(refinedTerms, selectedTerm)
