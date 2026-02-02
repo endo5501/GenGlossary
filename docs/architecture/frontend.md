@@ -24,6 +24,8 @@ React + TypeScript で構築されたシングルページアプリケーショ�
 frontend/src/
 ├── main.tsx              # エントリーポイント
 ├── theme/theme.ts        # Mantineテーマ設定
+├── styles/               # 共通スタイル
+│   └── layout.css        # レイアウト用CSSクラスと変数
 ├── api/                  # API通信層
 ├── components/           # Reactコンポーネント
 ├── store/                # Zustand 状態管理
@@ -36,6 +38,7 @@ frontend/src/
 ```tsx
 import { Notifications } from '@mantine/notifications'
 import '@mantine/notifications/styles.css'
+import './styles/layout.css'  // 共通レイアウトスタイル
 
 // MantineProvider + RouterProvider + Notifications でアプリをラップ
 <MantineProvider theme={theme}>
@@ -43,6 +46,23 @@ import '@mantine/notifications/styles.css'
   <RouterProvider router={router} />
 </MantineProvider>
 ```
+
+### 共通スタイル（styles/layout.css）
+
+レイアウト用の CSS クラスと CSS 変数を定義します。
+
+```css
+:root {
+  --header-height: 60px;  /* グローバルヘッダーの高さ */
+}
+
+.page-layout { height: 100%; display: flex; flex-direction: column; }
+.scrollable-content { flex: 1; overflow-y: auto; min-height: 0; }
+.action-bar { flex-shrink: 0; border-bottom: 1px solid var(--mantine-color-gray-3); }
+```
+
+**CSS変数の使用:**
+- `--header-height`: AppShell や DocumentViewerPage で高さ計算に使用
 
 ### テーマ設定（theme/theme.ts）
 
@@ -487,25 +507,57 @@ interface PageContainerProps {
   emptyTestId?: string     // 空状態のテスト用ID
   error?: Error | null     // エラーオブジェクト
   onRetry?: () => void     // リトライ時のコールバック
+  // カスタムレンダリング（オプション）
+  renderLoading?: () => ReactNode
+  renderEmpty?: () => ReactNode
+  renderError?: (error: Error, onRetry?: () => void) => ReactNode
 }
 ```
 
 **レイアウト構造:**
+
+CSS クラス（`styles/layout.css`）を使用してレイアウトを管理します：
+
+```css
+.page-layout { height: 100%; display: flex; flex-direction: column; }
+.action-bar { flex-shrink: 0; border-bottom: 1px solid var(--mantine-color-gray-3); }
+.scrollable-content { flex: 1; overflow-y: auto; min-height: 0; }
+```
+
 ```
 ┌─────────────────────────────────────┐
-│ ActionBar (flexShrink: 0)           │ ← 固定
+│ ActionBar (.action-bar)             │ ← 固定
 ├─────────────────────────────────────┤
 │                                     │
-│ Content (flex: 1, overflowY: auto)  │ ← スクロール
+│ Content (.scrollable-content)       │ ← スクロール
 │                                     │
 └─────────────────────────────────────┘
 ```
 
 **状態遷移:**
-1. `isLoading: true` → ローディングスピナー表示
-2. `error` が存在 → エラーメッセージとリトライボタン表示
-3. `isEmpty: true` → 空状態メッセージ表示
+1. `isLoading: true` → `renderLoading` があればカスタム表示、なければデフォルトスピナー
+2. `error` が存在 → `renderError` があればカスタム表示、なければデフォルトエラー
+3. `isEmpty: true` → `renderEmpty` があればカスタム表示、なければデフォルト空状態
 4. それ以外 → `children` を表示
+
+**カスタムレンダリングの例（FilesPage）:**
+```tsx
+<PageContainer
+  isLoading={isLoading}
+  isEmpty={!files || files.length === 0}
+  emptyMessage="No files"
+  actionBar={<Title>Files</Title>}
+  renderLoading={() => <Skeleton height={200} />}
+  renderEmpty={() => (
+    <Card>
+      <Text>No files registered</Text>
+      <Button>Add Files</Button>
+    </Card>
+  )}
+>
+  <Table>...</Table>
+</PageContainer>
+```
 
 #### OccurrenceList
 

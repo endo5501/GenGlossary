@@ -1,0 +1,26 @@
+/* Common layout styles and CSS variables */
+
+:root {
+  --header-height: 60px;
+}
+
+/* Page layout container (flex column, full height) */
+.page-layout {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollable content area */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--mantine-spacing-md);
+}
+
+/* Action bar (sticky header in page) */
+.action-bar {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--mantine-color-gray-3);
+}

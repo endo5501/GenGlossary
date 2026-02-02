@@ -7,6 +7,7 @@ import { RouterProvider } from '@tanstack/react-router'
 
 import '@mantine/core/styles.css'
 import '@mantine/notifications/styles.css'
+import './styles/layout.css'
 
 import { theme } from './theme/theme'
 import { router } from './routes'
