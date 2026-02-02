@@ -275,7 +275,10 @@ def update_run_status_if_active(
         """,
         (status, finished_at_str, error_message, run_id),
     )
-    return cursor.rowcount
+    rowcount = cursor.rowcount
+    if rowcount > 0:
+        conn.commit()  # Commit immediately for real-time UI updates
+    return rowcount
 
 
 def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
