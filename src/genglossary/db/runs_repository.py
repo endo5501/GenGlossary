@@ -4,6 +4,24 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
+VALID_STATUSES = {"pending", "running", "completed", "failed", "cancelled"}
+TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
+
+
+def _validate_status(status: str, allowed: set[str] | None = None) -> None:
+    """Validate status value.
+
+    Args:
+        status: Status value to validate.
+        allowed: Set of allowed status values. Defaults to VALID_STATUSES.
+
+    Raises:
+        ValueError: If status is not in the allowed set.
+    """
+    allowed = allowed or VALID_STATUSES
+    if status not in allowed:
+        raise ValueError(f"Invalid status: {status}. Must be one of {allowed}")
+
 
 def create_run(
     conn: sqlite3.Connection,
@@ -178,8 +196,10 @@ def update_run_status(
         error_message: Error message if failed (optional).
 
     Raises:
-        ValueError: If started_at or finished_at is naive (no timezone info).
+        ValueError: If status is invalid, or started_at/finished_at is naive.
     """
+    _validate_status(status)
+
     updates = ["status = ?"]
     values: list[Any] = [status]
 
@@ -193,7 +213,11 @@ def update_run_status(
         updates.append("finished_at = ?")
         values.append(finished_at_str)
 
-    if error_message is not None:
+    # Clear error_message on non-terminal status transition
+    if status not in TERMINAL_STATUSES:
+        updates.append("error_message = ?")
+        values.append(None)
+    elif error_message is not None:
         updates.append("error_message = ?")
         values.append(error_message)
 
@@ -249,7 +273,7 @@ def update_run_status_if_active(
     Args:
         conn: Project database connection.
         run_id: Run ID to update.
-        status: New status ('completed', 'cancelled', 'failed').
+        status: New terminal status ('completed', 'cancelled', 'failed').
         error_message: Error message if status is 'failed' (optional).
         finished_at: Finished timestamp (optional, must be timezone-aware).
             If not provided, uses current UTC time.
@@ -258,8 +282,10 @@ def update_run_status_if_active(
         Number of rows updated (0 if run was already in terminal state or not found).
 
     Raises:
-        ValueError: If finished_at is naive (no timezone info).
+        ValueError: If status is not terminal, or finished_at is naive.
     """
+    _validate_status(status, TERMINAL_STATUSES)
+
     finished_at_str = _to_iso_string(finished_at, "finished_at")
     if finished_at_str is None:
         finished_at_str = _current_utc_iso()
@@ -299,7 +325,7 @@ def update_run_status_if_running(
     Args:
         conn: Project database connection.
         run_id: Run ID to update.
-        status: New terminal status (typically 'completed').
+        status: New terminal status ('completed', 'failed', 'cancelled').
         finished_at: Finished timestamp (optional, must be timezone-aware).
             If not provided, uses current UTC time.
 
@@ -307,8 +333,10 @@ def update_run_status_if_running(
         Number of rows updated (0 if run is not running or not found).
 
     Raises:
-        ValueError: If finished_at is naive (no timezone info).
+        ValueError: If status is not terminal, or finished_at is naive.
     """
+    _validate_status(status, TERMINAL_STATUSES)
+
     finished_at_str = _to_iso_string(finished_at, "finished_at")
     if finished_at_str is None:
         finished_at_str = _current_utc_iso()

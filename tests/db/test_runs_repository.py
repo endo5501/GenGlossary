@@ -1077,3 +1077,241 @@ class TestCurrentUtcIso:
 
         result_dt = datetime.fromisoformat(result)
         assert before <= result_dt <= after + timedelta(seconds=1)
+
+
+class TestStatusConstants:
+    """Tests for status constants."""
+
+    def test_valid_statuses_contains_expected_values(self) -> None:
+        """VALID_STATUSESは期待される値を含む"""
+        from genglossary.db.runs_repository import VALID_STATUSES
+
+        assert VALID_STATUSES == {"pending", "running", "completed", "failed", "cancelled"}
+
+    def test_terminal_statuses_contains_expected_values(self) -> None:
+        """TERMINAL_STATUSESは期待される値を含む"""
+        from genglossary.db.runs_repository import TERMINAL_STATUSES
+
+        assert TERMINAL_STATUSES == {"completed", "failed", "cancelled"}
+
+    def test_terminal_statuses_is_subset_of_valid_statuses(self) -> None:
+        """TERMINAL_STATUSESはVALID_STATUSESのサブセット"""
+        from genglossary.db.runs_repository import TERMINAL_STATUSES, VALID_STATUSES
+
+        assert TERMINAL_STATUSES.issubset(VALID_STATUSES)
+
+
+class TestValidateStatus:
+    """Tests for _validate_status helper function."""
+
+    def test_accepts_valid_status(self) -> None:
+        """有効なstatusを受け付ける"""
+        from genglossary.db.runs_repository import _validate_status
+
+        # Should not raise
+        _validate_status("pending")
+        _validate_status("running")
+        _validate_status("completed")
+        _validate_status("failed")
+        _validate_status("cancelled")
+
+    def test_rejects_invalid_status(self) -> None:
+        """無効なstatusを拒否する"""
+        from genglossary.db.runs_repository import _validate_status
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            _validate_status("invalid")
+
+    def test_rejects_typo_status(self) -> None:
+        """タイポしたstatusを拒否する"""
+        from genglossary.db.runs_repository import _validate_status
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            _validate_status("compleeted")
+
+    def test_accepts_terminal_status_with_terminal_allowed(self) -> None:
+        """terminal statusのみ許可する場合、terminal statusを受け付ける"""
+        from genglossary.db.runs_repository import TERMINAL_STATUSES, _validate_status
+
+        # Should not raise
+        _validate_status("completed", TERMINAL_STATUSES)
+        _validate_status("failed", TERMINAL_STATUSES)
+        _validate_status("cancelled", TERMINAL_STATUSES)
+
+    def test_rejects_non_terminal_status_with_terminal_allowed(self) -> None:
+        """terminal statusのみ許可する場合、非terminal statusを拒否する"""
+        from genglossary.db.runs_repository import TERMINAL_STATUSES, _validate_status
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            _validate_status("pending", TERMINAL_STATUSES)
+        with pytest.raises(ValueError, match="Invalid status"):
+            _validate_status("running", TERMINAL_STATUSES)
+
+    def test_error_message_includes_allowed_values(self) -> None:
+        """エラーメッセージに許可される値が含まれる"""
+        from genglossary.db.runs_repository import TERMINAL_STATUSES, _validate_status
+
+        with pytest.raises(ValueError) as exc_info:
+            _validate_status("invalid", TERMINAL_STATUSES)
+
+        error_message = str(exc_info.value)
+        assert "completed" in error_message
+        assert "failed" in error_message
+        assert "cancelled" in error_message
+
+
+class TestUpdateRunStatusValidation:
+    """Tests for status validation in update_run_status."""
+
+    def test_rejects_invalid_status(self, project_db: sqlite3.Connection) -> None:
+        """無効なstatusを拒否する"""
+        run_id = create_run(project_db, scope="full")
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            update_run_status(project_db, run_id, "invalid")
+
+    def test_rejects_typo_status(self, project_db: sqlite3.Connection) -> None:
+        """タイポしたstatusを拒否する"""
+        run_id = create_run(project_db, scope="full")
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            update_run_status(project_db, run_id, "runnning")
+
+    def test_accepts_all_valid_statuses(self, project_db: sqlite3.Connection) -> None:
+        """全ての有効なstatusを受け付ける"""
+        for status in ["pending", "running", "completed", "failed", "cancelled"]:
+            run_id = create_run(project_db, scope="full")
+            # Should not raise
+            update_run_status(project_db, run_id, status)
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == status
+
+
+class TestUpdateRunStatusIfActiveValidation:
+    """Tests for status validation in update_run_status_if_active."""
+
+    def test_rejects_non_terminal_status(self, project_db: sqlite3.Connection) -> None:
+        """非terminal statusを拒否する"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = create_run(project_db, scope="full")
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            update_run_status_if_active(project_db, run_id, "pending")
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            update_run_status_if_active(project_db, run_id, "running")
+
+    def test_accepts_terminal_statuses(self, project_db: sqlite3.Connection) -> None:
+        """terminal statusを受け付ける"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        for status in ["completed", "failed", "cancelled"]:
+            run_id = create_run(project_db, scope="full")
+            # Should not raise
+            update_run_status_if_active(project_db, run_id, status)
+
+
+class TestUpdateRunStatusIfRunningValidation:
+    """Tests for status validation in update_run_status_if_running."""
+
+    def test_rejects_non_terminal_status(self, project_db: sqlite3.Connection) -> None:
+        """非terminal statusを拒否する"""
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            update_run_status_if_running(project_db, run_id, "pending")
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            update_run_status_if_running(project_db, run_id, "running")
+
+    def test_accepts_terminal_statuses(self, project_db: sqlite3.Connection) -> None:
+        """terminal statusを受け付ける"""
+        for status in ["completed", "failed", "cancelled"]:
+            run_id = create_run(project_db, scope="full")
+            update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+            # Should not raise
+            update_run_status_if_running(project_db, run_id, status)
+
+
+class TestErrorMessageClearing:
+    """Tests for error_message clearing on non-terminal status transition."""
+
+    def test_clears_error_message_on_running_transition(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """running状態への遷移時にerror_messageがクリアされる"""
+        run_id = create_run(project_db, scope="full")
+        # Set to failed with error message
+        update_run_status(
+            project_db, run_id, "failed",
+            finished_at=datetime.now(timezone.utc),
+            error_message="Original error"
+        )
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["error_message"] == "Original error"
+
+        # Transition to running (retry scenario)
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["error_message"] is None
+
+    def test_clears_error_message_on_pending_transition(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """pending状態への遷移時にerror_messageがクリアされる"""
+        run_id = create_run(project_db, scope="full")
+        # Set to failed with error message
+        update_run_status(
+            project_db, run_id, "failed",
+            finished_at=datetime.now(timezone.utc),
+            error_message="Original error"
+        )
+
+        # Transition to pending (reset scenario)
+        update_run_status(project_db, run_id, "pending")
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["error_message"] is None
+
+    def test_does_not_clear_error_message_on_terminal_transition(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """terminal状態への遷移時にerror_messageはクリアされない"""
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+
+        # Set error message on failed transition
+        update_run_status(
+            project_db, run_id, "failed",
+            finished_at=datetime.now(timezone.utc),
+            error_message="Test error"
+        )
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["error_message"] == "Test error"
+
+    def test_preserves_error_message_when_explicitly_set_on_failed(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """failed遷移時に明示的に設定されたerror_messageは保持される"""
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+
+        update_run_status(
+            project_db, run_id, "failed",
+            finished_at=datetime.now(timezone.utc),
+            error_message="New error"
+        )
+
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["error_message"] == "New error"
