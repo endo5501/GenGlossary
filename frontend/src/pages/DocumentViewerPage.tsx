@@ -62,7 +62,7 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
       <Box
         style={{
           display: 'flex',
-          height: 'calc(100% - 60px)',
+          height: 'calc(100% - var(--header-height))',
           gap: 'var(--mantine-spacing-md)',
         }}
       >
