@@ -1496,6 +1496,151 @@ class TestRunManagerStateConsistency:
             with pytest.raises(RuntimeError, match="Failed to start thread"):
                 manager.start_run(scope="full")
 
+    def test_thread_start_failure_sets_finished_at(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """Thread.start()が失敗した場合、finished_atが設定される"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            mock_thread = Mock()
+            mock_thread.start.side_effect = RuntimeError("Failed to start thread")
+            mock_thread_class.return_value = mock_thread
+
+            with pytest.raises(RuntimeError, match="Failed to start thread"):
+                manager.start_run(scope="full")
+
+            # Get the run from the database
+            cursor = project_db.execute(
+                "SELECT id, finished_at FROM runs ORDER BY id DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+            assert row is not None
+
+            assert row["finished_at"] is not None, (
+                "finished_at should be set when thread start fails"
+            )
+
+    def test_thread_start_failure_resets_thread_reference(
+        self, manager: RunManager
+    ) -> None:
+        """Thread.start()が失敗した場合、self._threadがNoneにリセットされる"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            mock_thread = Mock()
+            mock_thread.start.side_effect = RuntimeError("Failed to start thread")
+            mock_thread_class.return_value = mock_thread
+
+            with pytest.raises(RuntimeError, match="Failed to start thread"):
+                manager.start_run(scope="full")
+
+            # _thread should be reset to None
+            assert manager._thread is None, (
+                "_thread should be None when thread start fails"
+            )
+
+    def test_thread_start_failure_sends_completion_signal(
+        self, manager: RunManager
+    ) -> None:
+        """Thread.start()が失敗した場合、完了シグナルが送信される"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            mock_thread = Mock()
+            mock_thread.start.side_effect = RuntimeError("Failed to start thread")
+            mock_thread_class.return_value = mock_thread
+
+            # Register subscriber before starting run
+            # We need to predict the run_id (will be 1 for first run)
+            queue = manager.register_subscriber(run_id=1)
+
+            with pytest.raises(RuntimeError, match="Failed to start thread"):
+                manager.start_run(scope="full")
+
+            # Check that completion signal was sent
+            completion_signal_found = False
+            while not queue.empty():
+                log = queue.get_nowait()
+                if log is not None and log.get("complete"):
+                    completion_signal_found = True
+                    break
+
+            assert completion_signal_found, (
+                "Completion signal should be sent when thread start fails"
+            )
+
+    def test_thread_start_failure_cleans_up_subscribers(
+        self, manager: RunManager
+    ) -> None:
+        """Thread.start()が失敗した場合、subscribersがクリーンアップされる"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            mock_thread = Mock()
+            mock_thread.start.side_effect = RuntimeError("Failed to start thread")
+            mock_thread_class.return_value = mock_thread
+
+            # Register subscriber before starting run
+            queue = manager.register_subscriber(run_id=1)
+
+            with pytest.raises(RuntimeError, match="Failed to start thread"):
+                manager.start_run(scope="full")
+
+            # Subscribers should be cleaned up
+            with manager._subscribers_lock:
+                assert 1 not in manager._subscribers, (
+                    "Subscribers should be cleaned up when thread start fails"
+                )
+
+    def test_thread_start_failure_does_not_mask_original_exception(
+        self, manager: RunManager
+    ) -> None:
+        """Thread.start()が失敗し、DB更新も失敗した場合、元の例外がマスクされない"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            mock_thread = Mock()
+            original_error = RuntimeError("Original thread start error")
+            mock_thread.start.side_effect = original_error
+            mock_thread_class.return_value = mock_thread
+
+            # Make DB update also fail
+            with patch(
+                "genglossary.runs.manager.update_run_status",
+                side_effect=sqlite3.OperationalError("database is locked"),
+            ):
+                with pytest.raises(RuntimeError) as exc_info:
+                    manager.start_run(scope="full")
+
+                # The original exception should be raised, not the DB error
+                assert "Original thread start error" in str(exc_info.value), (
+                    f"Original exception should be raised, got: {exc_info.value}"
+                )
+
+    def test_thread_start_failure_logs_warning_when_db_update_fails(
+        self, manager: RunManager
+    ) -> None:
+        """Thread.start()が失敗し、DB更新も失敗した場合、warningログが送信される"""
+        with patch("genglossary.runs.manager.Thread") as mock_thread_class:
+            mock_thread = Mock()
+            mock_thread.start.side_effect = RuntimeError("Failed to start thread")
+            mock_thread_class.return_value = mock_thread
+
+            # Register subscriber before starting run
+            queue = manager.register_subscriber(run_id=1)
+
+            # Make DB update fail
+            with patch(
+                "genglossary.runs.manager.update_run_status",
+                side_effect=sqlite3.OperationalError("database is locked"),
+            ):
+                with pytest.raises(RuntimeError):
+                    manager.start_run(scope="full")
+
+            # Check that warning log was broadcast
+            warning_log_found = False
+            while not queue.empty():
+                log = queue.get_nowait()
+                if log is not None and log.get("level") == "warning":
+                    if "Failed to update run status" in log.get("message", ""):
+                        warning_log_found = True
+                        break
+
+            assert warning_log_found, (
+                "Warning log should be broadcast when DB update fails during thread start failure"
+            )
+
 
 class TestRunManagerStatusMisclassification:
     """Tests for status misclassification bug fix.
