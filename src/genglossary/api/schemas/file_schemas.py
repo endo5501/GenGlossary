@@ -41,12 +41,12 @@ class FileResponse(BaseModel):
         return [cls.from_db_row(row) for row in rows]
 
 
-class FileDetailResponse(BaseModel):
-    """Response schema for a document file with content."""
+class FileDetailResponse(FileResponse):
+    """Response schema for a document file with content.
 
-    id: int = Field(..., description="Document ID")
-    file_name: str = Field(..., description="File name")
-    content_hash: str = Field(..., description="Content hash")
+    Inherits id, file_name, content_hash from FileResponse.
+    """
+
     content: str = Field(..., description="File content")
 
     @classmethod
