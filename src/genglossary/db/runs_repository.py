@@ -231,6 +231,7 @@ def update_run_progress(
         """,
         (current, total, current_step, run_id),
     )
+    conn.commit()  # Commit immediately for real-time UI updates
 
 
 def update_run_status_if_active(
