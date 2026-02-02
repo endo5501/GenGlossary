@@ -22,6 +22,7 @@ from genglossary.db.provisional_repository import (
     list_all_provisional,
 )
 from genglossary.db.refined_repository import create_refined_terms_batch, delete_all_refined
+from genglossary.db.runs_repository import update_run_progress
 from genglossary.db.term_repository import create_terms_batch, delete_all_terms, list_all_terms
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
@@ -139,6 +140,15 @@ class PipelineExecutor:
         self._llm_client = create_llm_client(provider=provider, model=model)
         self._review_batch_size = review_batch_size
 
+    def close(self) -> None:
+        """Close the LLM client to cancel any ongoing requests.
+
+        This method can be called from another thread to force-cancel
+        ongoing LLM API calls by closing the underlying HTTP connection.
+        """
+        if hasattr(self._llm_client, 'close'):
+            self._llm_client.close()
+
     def _log(
         self,
         context: ExecutionContext,
@@ -250,16 +260,19 @@ class PipelineExecutor:
 
     def _create_progress_callback(
         self,
+        conn: sqlite3.Connection,
         context: ExecutionContext,
         step_name: str,
     ) -> Callable[[int, int, str], None]:
         """Create a progress callback for LLM processing steps.
 
-        The callback logs progress with extended fields (step, current, total, term name).
+        The callback logs progress with extended fields (step, current, total, term name)
+        and updates the database with the current step and progress.
 
         Args:
+            conn: Project database connection.
             context: Execution context for logging.
-            step_name: Name of the current step (e.g., 'provisional', 'refined').
+            step_name: Name of the current step (e.g., 'extract', 'provisional', 'issues', 'refined').
 
         Returns:
             A callback function that takes (current, total, term_name) arguments.
@@ -280,6 +293,8 @@ class PipelineExecutor:
                 # Only include current_term if not empty
                 current_term=term_name or None,
             )
+            # Update database with current step and progress
+            update_run_progress(conn, context.run_id, current, total, step_name)
         return callback
 
     def execute(
@@ -574,7 +589,7 @@ class PipelineExecutor:
         extractor = TermExtractor(llm_client=self._llm_client)
 
         # Create progress callback for batch progress
-        progress_cb = self._create_progress_callback(context, "extract")
+        progress_cb = self._create_progress_callback(conn, context, "extract")
 
         extracted_terms = extractor.extract_terms(
             documents,
@@ -627,7 +642,7 @@ class PipelineExecutor:
 
         self._log(context, "info", "Generating glossary...")
         generator = GlossaryGenerator(llm_client=self._llm_client)
-        progress_cb = self._create_progress_callback(context, "provisional")
+        progress_cb = self._create_progress_callback(conn, context, "provisional")
         try:
             glossary = generator.generate(
                 extracted_terms, documents,
@@ -671,8 +686,10 @@ class PipelineExecutor:
             llm_client=self._llm_client, batch_size=self._review_batch_size
         )
 
+        progress_cb = self._create_progress_callback(conn, context, "issues")
+
         def on_batch_progress(current: int, total: int) -> None:
-            self._log(context, "info", f"Reviewing batch {current}/{total}...")
+            progress_cb(current, total, "")
 
         try:
             issues = reviewer.review(
@@ -728,7 +745,7 @@ class PipelineExecutor:
 
             self._log(context, "info", "Refining glossary...")
             refiner = GlossaryRefiner(llm_client=self._llm_client)
-            progress_cb = self._create_progress_callback(context, "refined")
+            progress_cb = self._create_progress_callback(conn, context, "refined")
             try:
                 glossary = refiner.refine(
                     glossary, issues, documents,

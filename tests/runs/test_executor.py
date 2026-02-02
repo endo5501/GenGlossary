@@ -718,22 +718,27 @@ class TestPipelineExecutorProgressCallback:
             cancel_event=cancel_event,
         )
 
-        # Create progress callback
-        progress_cb = executor._create_progress_callback(context, "provisional")
+        with patch("genglossary.runs.executor.update_run_progress") as mock_update:
+            # Create progress callback with mock connection
+            mock_conn = MagicMock()
+            progress_cb = executor._create_progress_callback(mock_conn, context, "provisional")
 
-        # Call the progress callback
-        progress_cb(5, 20, "量子コンピュータ")
+            # Call the progress callback
+            progress_cb(5, 20, "量子コンピュータ")
 
-        # Verify log message
-        assert len(logs) == 1
-        log = logs[0]
-        assert log["run_id"] == 1
-        assert log["level"] == "info"
-        assert log["step"] == "provisional"
-        assert log["progress_current"] == 5
-        assert log["progress_total"] == 20
-        assert log["current_term"] == "量子コンピュータ"
-        assert "25%" in log["message"]
+            # Verify log message
+            assert len(logs) == 1
+            log = logs[0]
+            assert log["run_id"] == 1
+            assert log["level"] == "info"
+            assert log["step"] == "provisional"
+            assert log["progress_current"] == 5
+            assert log["progress_total"] == 20
+            assert log["current_term"] == "量子コンピュータ"
+            assert "25%" in log["message"]
+
+            # Verify database was updated
+            mock_update.assert_called_once_with(mock_conn, 1, 5, 20, "provisional")
 
     def test_create_progress_callback_calculates_percentage(
         self,
@@ -748,17 +753,19 @@ class TestPipelineExecutorProgressCallback:
             cancel_event=cancel_event,
         )
 
-        progress_cb = executor._create_progress_callback(context, "refined")
+        with patch("genglossary.runs.executor.update_run_progress"):
+            mock_conn = MagicMock()
+            progress_cb = executor._create_progress_callback(mock_conn, context, "refined")
 
-        # Test various percentages
-        progress_cb(1, 10, "term1")  # 10%
-        progress_cb(5, 10, "term5")  # 50%
-        progress_cb(10, 10, "term10")  # 100%
+            # Test various percentages
+            progress_cb(1, 10, "term1")  # 10%
+            progress_cb(5, 10, "term5")  # 50%
+            progress_cb(10, 10, "term10")  # 100%
 
-        assert len(logs) == 3
-        assert "10%" in logs[0]["message"]
-        assert "50%" in logs[1]["message"]
-        assert "100%" in logs[2]["message"]
+            assert len(logs) == 3
+            assert "10%" in logs[0]["message"]
+            assert "50%" in logs[1]["message"]
+            assert "100%" in logs[2]["message"]
 
     def test_create_progress_callback_handles_zero_total(
         self,
@@ -773,13 +780,15 @@ class TestPipelineExecutorProgressCallback:
             cancel_event=cancel_event,
         )
 
-        progress_cb = executor._create_progress_callback(context, "provisional")
+        with patch("genglossary.runs.executor.update_run_progress"):
+            mock_conn = MagicMock()
+            progress_cb = executor._create_progress_callback(mock_conn, context, "provisional")
 
-        # Should not raise error
-        progress_cb(0, 0, "")
+            # Should not raise error
+            progress_cb(0, 0, "")
 
-        assert len(logs) == 1
-        assert "0%" in logs[0]["message"]
+            assert len(logs) == 1
+            assert "0%" in logs[0]["message"]
 
     def test_create_progress_callback_handles_empty_term_name(
         self,
@@ -798,19 +807,21 @@ class TestPipelineExecutorProgressCallback:
             cancel_event=cancel_event,
         )
 
-        progress_cb = executor._create_progress_callback(context, "provisional")
+        with patch("genglossary.runs.executor.update_run_progress"):
+            mock_conn = MagicMock()
+            progress_cb = executor._create_progress_callback(mock_conn, context, "provisional")
 
-        # Call with empty term_name
-        progress_cb(1, 10, "")
+            # Call with empty term_name
+            progress_cb(1, 10, "")
 
-        assert len(logs) == 1
-        message = logs[0]["message"]
-        # Should NOT start with ": " (bad format from empty term_name)
-        assert not message.startswith(": "), f"Message should not start with ': ', got: {message}"
-        # Should contain percentage
-        assert "10%" in message
-        # current_term should be omitted when empty
-        assert "current_term" not in logs[0] or logs[0]["current_term"] == ""
+            assert len(logs) == 1
+            message = logs[0]["message"]
+            # Should NOT start with ": " (bad format from empty term_name)
+            assert not message.startswith(": "), f"Message should not start with ': ', got: {message}"
+            # Should contain percentage
+            assert "10%" in message
+            # current_term should be omitted when empty
+            assert "current_term" not in logs[0] or logs[0]["current_term"] == ""
 
     def test_create_progress_callback_handles_whitespace_term_name(
         self,
@@ -825,18 +836,20 @@ class TestPipelineExecutorProgressCallback:
             cancel_event=cancel_event,
         )
 
-        progress_cb = executor._create_progress_callback(context, "provisional")
+        with patch("genglossary.runs.executor.update_run_progress"):
+            mock_conn = MagicMock()
+            progress_cb = executor._create_progress_callback(mock_conn, context, "provisional")
 
-        # Call with whitespace-only term_name
-        progress_cb(1, 10, "   ")
+            # Call with whitespace-only term_name
+            progress_cb(1, 10, "   ")
 
-        assert len(logs) == 1
-        message = logs[0]["message"]
-        # Should NOT start with whitespace + ": " (bad format)
-        assert not message.startswith(": "), f"Message should not start with ': ', got: {message}"
-        assert "   :" not in message, "Whitespace should be stripped"
-        # Should contain percentage
-        assert "10%" in message
+            assert len(logs) == 1
+            message = logs[0]["message"]
+            # Should NOT start with whitespace + ": " (bad format)
+            assert not message.startswith(": "), f"Message should not start with ': ', got: {message}"
+            assert "   :" not in message, "Whitespace should be stripped"
+            # Should contain percentage
+            assert "10%" in message
 
 
 class TestPipelineExecutorLogExtended:
@@ -1092,6 +1105,56 @@ class TestPipelineExecutorProgressCallbackIntegration:
             # Verify log has step='extract' and progress fields
             assert len(logs) == 1
             assert logs[0]["step"] == "extract"
+            assert logs[0]["progress_current"] == 3
+            assert logs[0]["progress_total"] == 10
+
+    def test_execute_review_progress_callback_sends_step_field(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """レビューの進捗コールバックが step='issues' を含むログを出力する"""
+        logs: list[dict] = []
+        callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_prov.return_value = [
+                {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
+            ]
+
+            # Capture the batch_progress_callback and simulate calling it
+            captured_callback = None
+
+            def capture_review(*args, **kwargs):
+                nonlocal captured_callback
+                captured_callback = kwargs.get("batch_progress_callback")
+                return []
+
+            mock_reviewer_cls.return_value.review.side_effect = capture_review
+
+            executor.execute(project_db, "review", context)
+
+            # Verify callback was captured
+            assert captured_callback is not None
+
+            # Clear logs and call the callback
+            logs.clear()
+            captured_callback(3, 10)
+
+            # Verify log has step='issues' and progress fields
+            assert len(logs) == 1
+            assert logs[0]["step"] == "issues"
             assert logs[0]["progress_current"] == 3
             assert logs[0]["progress_total"] == 10
 

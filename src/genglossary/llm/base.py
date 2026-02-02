@@ -51,6 +51,15 @@ class BaseLLMClient(ABC):
         """
         pass
 
+    def close(self) -> None:
+        """Close the client and release resources.
+
+        This method can be called from another thread to cancel
+        ongoing requests. Default implementation does nothing.
+        Subclasses should override to close HTTP connections etc.
+        """
+        pass
+
     # Common helper methods (available to subclasses)
 
     def _build_json_prompt(self, prompt: str, response_model: Type[T]) -> str:

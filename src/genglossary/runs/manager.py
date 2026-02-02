@@ -55,6 +55,9 @@ class RunManager:
         self._cancel_events: dict[int, Event] = {}
         self._cancel_events_lock = Lock()
         self._start_run_lock = Lock()  # Synchronize start_run to prevent race conditions
+        # Executor管理 (for cancellation)
+        self._executors: dict[int, PipelineExecutor] = {}
+        self._executors_lock = Lock()
         # Subscriber管理
         self._subscribers: dict[int, set[Queue]] = {}
         self._subscribers_lock = Lock()
@@ -149,6 +152,10 @@ class RunManager:
                 model=self.llm_model,
             )
 
+            # Store executor for cancellation support
+            with self._executors_lock:
+                self._executors[run_id] = executor
+
             # Execute pipeline - exceptions indicate cancellation or failure
             try:
                 executor.execute(
@@ -160,6 +167,10 @@ class RunManager:
             except Exception as e:
                 pipeline_error = e
                 pipeline_traceback = traceback.format_exc()
+            finally:
+                # Cleanup executor reference
+                with self._executors_lock:
+                    self._executors.pop(run_id, None)
 
             # Finalize run status (separate from pipeline execution)
             self._finalize_run_status(
@@ -196,16 +207,26 @@ class RunManager:
     def cancel_run(self, run_id: int) -> None:
         """Cancel a running run by setting its cancellation event.
 
+        This method sets the cancel event AND closes the LLM client
+        to force-cancel any ongoing LLM API requests.
+
         Note: The database status will be updated by the execution thread
         when it detects the cancellation.
 
         Args:
             run_id: Run ID to cancel.
         """
+        # Set the cancel event
         with self._cancel_events_lock:
             cancel_event = self._cancel_events.get(run_id)
             if cancel_event is not None:
                 cancel_event.set()
+
+        # Close the executor's LLM client to force-cancel ongoing requests
+        with self._executors_lock:
+            executor = self._executors.get(run_id)
+            if executor is not None:
+                executor.close()
 
     def get_active_run(self) -> sqlite3.Row | None:
         """Get the currently active run.

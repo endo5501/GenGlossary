@@ -218,7 +218,7 @@ def update_run_progress(
         run_id: Run ID to update.
         current: Current progress value.
         total: Total progress value.
-        current_step: Current step name ('terms', 'provisional', 'issues', 'refined').
+        current_step: Current step name ('extract', 'provisional', 'issues', 'refined').
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -231,6 +231,7 @@ def update_run_progress(
         """,
         (current, total, current_step, run_id),
     )
+    conn.commit()  # Commit immediately for real-time UI updates
 
 
 def update_run_status_if_active(
@@ -274,7 +275,10 @@ def update_run_status_if_active(
         """,
         (status, finished_at_str, error_message, run_id),
     )
-    return cursor.rowcount
+    rowcount = cursor.rowcount
+    if rowcount > 0:
+        conn.commit()  # Commit immediately for real-time UI updates
+    return rowcount
 
 
 def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:

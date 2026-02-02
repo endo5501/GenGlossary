@@ -10,7 +10,11 @@ from fastapi.responses import StreamingResponse
 
 from genglossary.api.dependencies import get_project_db, get_run_manager
 from genglossary.api.schemas.run_schemas import RunResponse, RunStartRequest
-from genglossary.db.runs_repository import get_run, list_runs
+from genglossary.db.runs_repository import (
+    cancel_run as db_cancel_run,
+    get_run,
+    list_runs,
+)
 from genglossary.runs.manager import RunManager
 
 router = APIRouter(prefix="/api/projects/{project_id}/runs", tags=["runs"])
@@ -93,7 +97,11 @@ async def cancel_run(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
+    # Signal cancellation to running thread
     manager.cancel_run(run_id)
+
+    # Immediately update DB status for instant UI feedback
+    db_cancel_run(project_db, run_id)
 
     return {"message": "Run cancelled successfully"}
 

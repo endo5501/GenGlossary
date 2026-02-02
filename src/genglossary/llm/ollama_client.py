@@ -144,7 +144,15 @@ class OllamaClient(BaseLLMClient):
         # This should never be reached, but for type safety
         raise httpx.HTTPError("Maximum retries exceeded")
 
-    def __del__(self):
-        """Clean up HTTP client on deletion."""
+    def close(self) -> None:
+        """Close the HTTP client to cancel ongoing requests.
+
+        This can be called from another thread to force-cancel ongoing
+        LLM API calls by closing the underlying HTTP connection.
+        """
         if hasattr(self, 'client'):
             self.client.close()
+
+    def __del__(self):
+        """Clean up HTTP client on deletion."""
+        self.close()
