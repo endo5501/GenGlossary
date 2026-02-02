@@ -4,7 +4,7 @@ tags: [improvement, backend, threading]
 description: "RunManager: Handle thread start failure edge cases"
 created_at: "2026-02-01T10:12:22Z"
 started_at: 2026-02-02T22:41:21Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-02T22:57:42Z # Do not modify manually
 ---
 
 # RunManager: Handle thread start failure edge cases
