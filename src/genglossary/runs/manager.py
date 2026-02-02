@@ -101,12 +101,34 @@ class RunManager:
             # Cleanup on thread start failure
             with self._cancel_events_lock:
                 self._cancel_events.pop(run_id, None)
-            with database_connection(self.db_path) as conn:
-                with transaction(conn):
-                    update_run_status(
-                        conn, run_id, "failed",
-                        error_message="Failed to start execution thread"
-                    )
+
+            # Reset thread reference (it was never started)
+            self._thread = None
+
+            # Try to update DB status, but don't mask the original exception
+            try:
+                with database_connection(self.db_path) as conn:
+                    with transaction(conn):
+                        update_run_status(
+                            conn, run_id, "failed",
+                            error_message="Failed to start execution thread",
+                            finished_at=datetime.now(timezone.utc),
+                        )
+            except Exception as db_error:
+                self._broadcast_log(
+                    run_id,
+                    {
+                        "run_id": run_id,
+                        "level": "warning",
+                        "message": f"Failed to update run status after thread start failure: {db_error}",
+                    },
+                )
+
+            # Send completion signal and cleanup subscribers
+            self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
+            with self._subscribers_lock:
+                self._subscribers.pop(run_id, None)
+
             raise
 
         return run_id

@@ -258,12 +258,31 @@ class RunManager:
             # Cleanup on thread start failure
             with self._cancel_events_lock:
                 self._cancel_events.pop(run_id, None)
-            with database_connection(self.db_path) as conn:
-                with transaction(conn):
-                    update_run_status(
-                        conn, run_id, "failed",
-                        error_message="Failed to start execution thread"
-                    )
+
+            # Reset thread reference (it was never started)
+            self._thread = None
+
+            # Try to update DB status, but don't mask the original exception
+            try:
+                with database_connection(self.db_path) as conn:
+                    with transaction(conn):
+                        update_run_status(
+                            conn, run_id, "failed",
+                            error_message="Failed to start execution thread",
+                            finished_at=datetime.now(timezone.utc),
+                        )
+            except Exception as db_error:
+                self._broadcast_log(run_id, {
+                    "run_id": run_id,
+                    "level": "warning",
+                    "message": f"Failed to update run status: {db_error}",
+                })
+
+            # Send completion signal and cleanup subscribers
+            self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
+            with self._subscribers_lock:
+                self._subscribers.pop(run_id, None)
+
             raise
 
         return run_id
@@ -1049,7 +1068,7 @@ get_run_manager(db_path) → RunManager
 - 各関数の status validation テスト
 - error_message 自動クリアテスト
 
-**tests/runs/test_manager.py (56 tests)**
+**tests/runs/test_manager.py (65 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - start_run synchronization（並行呼び出しの競合状態防止）
 - per-run cancellation（各runに個別のキャンセルイベント）
@@ -1060,6 +1079,7 @@ get_run_manager(db_path) → RunManager
 - status update fallback logic（no-opと失敗の区別）
 - failed status guard（終了状態への上書き防止）
 - state consistency（DB状態とインメモリ状態の整合性）
+  - thread start failure edge cases（finished_at設定、_thread リセット、完了シグナル送信、subscriber クリーンアップ、例外マスキング防止）
 
 **tests/runs/test_executor.py (50 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -1085,4 +1105,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 203 tests** (Repository 87 + Manager 56 + Executor 50 + API 10)
+**合計: 212 tests** (Repository 87 + Manager 65 + Executor 50 + API 10)
