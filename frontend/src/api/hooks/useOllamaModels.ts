@@ -29,20 +29,34 @@ export function useOllamaModels(baseUrl: string) {
     return () => clearTimeout(timer)
   }, [baseUrl])
 
+  // Trim whitespace and check if URL is valid
+  const trimmedUrl = debouncedUrl.trim()
+  const isValidUrl = trimmedUrl.length > 0
+
   const query = useQuery({
-    queryKey: ollamaKeys.models(debouncedUrl),
-    queryFn: () => ollamaApi.listModels(debouncedUrl),
-    enabled: debouncedUrl.length > 0,
+    queryKey: ollamaKeys.models(trimmedUrl),
+    queryFn: () => ollamaApi.listModels(trimmedUrl),
+    enabled: isValidUrl,
     retry: false,
   })
 
   const models = query.data?.models.map((m) => m.name) ?? []
-  const error =
-    query.error instanceof ApiError ? query.error.detail ?? null : null
+
+  // Handle both ApiError and other errors
+  let error: string | null = null
+  if (query.error) {
+    if (query.error instanceof ApiError) {
+      error = query.error.detail ?? 'Failed to fetch models'
+    } else if (query.error instanceof Error) {
+      error = query.error.message
+    } else {
+      error = 'Failed to fetch models'
+    }
+  }
 
   return {
     models,
-    isLoading: query.isLoading && debouncedUrl.length > 0,
+    isLoading: query.isLoading && isValidUrl,
     error,
     refetch: query.refetch,
   }
