@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Box, Title, Grid } from '@mantine/core'
+import { Box, Title } from '@mantine/core'
 import { useFiles, useFileDetail } from '../api/hooks/useFiles'
 import { useRefined } from '../api/hooks/useRefined'
 import { useProvisional } from '../api/hooks/useProvisional'
@@ -71,8 +71,14 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
         Document Viewer
       </Title>
 
-      <Grid h="calc(100% - 60px)" gutter="md">
-        <Grid.Col span={7}>
+      <Box
+        style={{
+          display: 'flex',
+          height: 'calc(100% - 60px)',
+          gap: 'var(--mantine-spacing-md)',
+        }}
+      >
+        <Box style={{ flex: 7, minWidth: 0, height: '100%' }}>
           <DocumentPane
             files={files}
             selectedFileId={selectedFileId}
@@ -83,15 +89,15 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
             selectedTerm={selectedTerm}
             onTermClick={setSelectedTerm}
           />
-        </Grid.Col>
-        <Grid.Col span={5}>
+        </Box>
+        <Box style={{ flex: 5, minWidth: 0, height: '100%' }}>
           <TermCard
             selectedTerm={selectedTerm}
             refinedData={refinedData}
             provisionalData={provisionalData}
           />
-        </Grid.Col>
-      </Grid>
+        </Box>
+      </Box>
     </Box>
   )
 }
