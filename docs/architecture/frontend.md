@@ -185,6 +185,24 @@ const progressPercent = progress && progress.total > 0
 | `/document-viewer` | IconFileText | Documents |
 | `/settings` | IconSettings | Settings |
 
+#### 処理中インジケーター
+
+パイプライン実行中、現在処理しているステップに対応するメニュー項目にスピナーを表示する。
+
+**ステップとメニューのマッピング:**
+
+| `current_step` | メニュー |
+|----------------|----------|
+| `extract` | Terms |
+| `provisional` | Provisional |
+| `issues` | Issues |
+| `refined` | Refined |
+
+**実装:**
+- `useCurrentRun` フックで `run.status` と `run.current_step` を取得
+- `status === 'running'` かつ `current_step` がマッピングに存在する場合、スピナー表示
+- アクセシビリティ: `aria-busy` 属性と `aria-label="Processing"` を設定
+
 ### ページコンポーネント（pages/）
 
 | コンポーネント | 説明 |

@@ -17,7 +17,7 @@ CREATE TABLE runs (
     error_message TEXT,
     progress_current INTEGER,
     progress_total INTEGER,
-    current_step TEXT,
+    current_step TEXT,  -- 'extract', 'provisional', 'issues', 'refined'
     created_at TEXT NOT NULL  -- Set by Python, not SQLite default
 );
 ```
