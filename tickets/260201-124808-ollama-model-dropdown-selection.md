@@ -3,7 +3,7 @@ priority: 3
 tags: [ux, frontend, feature]
 description: "Ollamaモデル選択時に接続先からモデル一覧を取得しドロップダウンで選択可能にする"
 created_at: "2026-02-01T12:48:08Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-02T13:33:30Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -49,3 +49,54 @@ Ollamaモデルを選択する際、接続先のOllamaサーバーから利用�
 ## Notes
 
 - Ollamaサーバーに接続できない場合は、従来通り手動入力を許可する
+
+---
+
+## 設計（2026-02-02 承認済み）
+
+### バックエンドAPI
+
+**新規エンドポイント: `GET /api/ollama/models`**
+
+| 項目 | 内容 |
+|------|------|
+| クエリパラメータ | `base_url` (optional, default: `http://localhost:11434`) |
+| 成功レスポンス | `{"models": [{"name": "llama2"}, {"name": "llama3.2"}, ...]}` |
+| エラーレスポンス | `{"detail": "Failed to connect to Ollama server"}` (503) |
+
+**新規ファイル:**
+- `src/genglossary/api/routers/ollama.py` - Ollamaルーター
+- `src/genglossary/api/schemas/ollama_schemas.py` - スキーマ
+
+**実装:** `OllamaClient` に `list_models()` メソッドを追加
+
+### フロントエンド
+
+**UI変更:**
+1. Ollama選択時もベースURL入力欄を表示（デフォルト: `http://localhost:11434`）
+2. モデル選択を `TextInput` → `Select`（ドロップダウン）に変更
+3. 接続エラー時は `TextInput` にフォールバック + 警告メッセージ
+
+**新規ファイル:**
+- `frontend/src/api/hooks/useOllamaModels.ts` - モデル一覧取得フック（Debounce 500ms）
+
+**対象コンポーネント:**
+- SettingsPage
+- CreateProject画面
+
+### エラーハンドリング
+
+| 状態 | UI表示 |
+|------|--------|
+| 取得中 | ドロップダウン無効化 + ローディング |
+| 取得成功 | ドロップダウンでモデル選択 |
+| 取得失敗 | TextInput + 警告「Ollamaサーバーに接続できません。モデル名を手動で入力してください」|
+
+### 実装タスク（順序）
+
+1. `OllamaClient.list_models()` メソッド追加（TDD）
+2. `/api/ollama/models` エンドポイント作成（TDD）
+3. `useOllamaModels` フック作成（TDD）
+4. SettingsPage のUI変更
+5. CreateProject のUI変更
+6. 結合テスト・動作確認
