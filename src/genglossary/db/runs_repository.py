@@ -218,7 +218,7 @@ def update_run_progress(
         run_id: Run ID to update.
         current: Current progress value.
         total: Total progress value.
-        current_step: Current step name ('terms', 'provisional', 'issues', 'refined').
+        current_step: Current step name ('extract', 'provisional', 'issues', 'refined').
     """
     cursor = conn.cursor()
     cursor.execute(

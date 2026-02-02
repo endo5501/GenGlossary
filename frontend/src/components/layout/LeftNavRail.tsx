@@ -73,10 +73,10 @@ export function LeftNavRail() {
             to={getPath(item.basePath, projectId, item.projectScoped)}
             label={item.label}
             leftSection={
-              processing ? <Loader size={20} /> : <item.icon size={20} />
+              processing ? <Loader size={20} aria-label="Processing" /> : <item.icon size={20} />
             }
             active={isActive(location.pathname, item.basePath, projectId, item.projectScoped)}
-            aria-busy={processing ? 'true' : undefined}
+            aria-busy={processing || undefined}
           />
         )
       })}
