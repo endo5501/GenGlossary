@@ -21,7 +21,7 @@ These are low-priority improvements for code maintainability.
 - [x] ~~TypeScript: Simplify badge logic in `TermCard.tsx`~~ (Skipped: current ternary is sufficient for 2 states)
 - [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 ## Design
 
