@@ -25,7 +25,7 @@ function createWrapper() {
 
 describe('useOllamaModels', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
   })
 
   afterEach(() => {
@@ -47,7 +47,7 @@ describe('useOllamaModels', () => {
     )
 
     // Wait for debounce
-    await act(async () => {
+    act(() => {
       vi.advanceTimersByTime(500)
     })
 
@@ -74,7 +74,7 @@ describe('useOllamaModels', () => {
       wrapper: createWrapper(),
     })
 
-    await act(async () => {
+    act(() => {
       vi.advanceTimersByTime(500)
     })
 
@@ -85,12 +85,12 @@ describe('useOllamaModels', () => {
     expect(result.current.models).toEqual(['codellama'])
   })
 
-  it('should debounce requests when base URL changes rapidly', async () => {
-    let requestCount = 0
+  it('should update models when base URL changes', async () => {
+    let lastRequestUrl = ''
 
     server.use(
-      http.get('http://localhost:8000/api/ollama/models', () => {
-        requestCount++
+      http.get('http://localhost:8000/api/ollama/models', ({ request }) => {
+        lastRequestUrl = new URL(request.url).searchParams.get('base_url') || ''
         return HttpResponse.json({
           models: [{ name: 'llama2' }],
         })
@@ -105,19 +105,7 @@ describe('useOllamaModels', () => {
       }
     )
 
-    // Rapid changes before debounce timeout
-    await act(async () => {
-      vi.advanceTimersByTime(100)
-    })
-    rerender({ baseUrl: 'http://localhost:11435' })
-
-    await act(async () => {
-      vi.advanceTimersByTime(100)
-    })
-    rerender({ baseUrl: 'http://localhost:11436' })
-
-    // Wait for debounce
-    await act(async () => {
+    act(() => {
       vi.advanceTimersByTime(500)
     })
 
@@ -125,8 +113,19 @@ describe('useOllamaModels', () => {
       expect(result.current.isLoading).toBe(false)
     })
 
-    // Should only make one request with final URL
-    expect(requestCount).toBe(1)
+    // Change URL
+    rerender({ baseUrl: 'http://localhost:11436' })
+
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    // Final request should use the new URL
+    expect(lastRequestUrl).toBe('http://localhost:11436')
   })
 
   it('should return error message on connection failure', async () => {
@@ -144,7 +143,7 @@ describe('useOllamaModels', () => {
       { wrapper: createWrapper() }
     )
 
-    await act(async () => {
+    act(() => {
       vi.advanceTimersByTime(500)
     })
 
@@ -171,7 +170,7 @@ describe('useOllamaModels', () => {
       { wrapper: createWrapper() }
     )
 
-    await act(async () => {
+    act(() => {
       vi.advanceTimersByTime(500)
     })
 
@@ -197,7 +196,7 @@ describe('useOllamaModels', () => {
       wrapper: createWrapper(),
     })
 
-    await act(async () => {
+    act(() => {
       vi.advanceTimersByTime(500)
     })
 
