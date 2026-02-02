@@ -132,15 +132,17 @@ describe('SettingsPage', () => {
     expect(providerInput).toHaveValue('Ollama')
   })
 
-  it('hides Base URL field when Ollama is selected', async () => {
+  it('shows Base URL field when Ollama is selected', async () => {
     renderWithProviders(<SettingsPage projectId={1} />)
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-form')).toBeInTheDocument()
     })
 
-    // Initially ollama is selected, base_url should not be visible
-    expect(screen.queryByLabelText(/base url/i)).not.toBeInTheDocument()
+    // Ollama is selected, base_url should be visible with default value
+    const baseUrlInput = screen.getByLabelText(/base url/i)
+    expect(baseUrlInput).toBeInTheDocument()
+    expect(baseUrlInput).toHaveValue('http://localhost:11434')
   })
 
   it('updates Base URL when editing', async () => {

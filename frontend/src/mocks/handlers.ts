@@ -150,6 +150,17 @@ export const mockCurrentRun: RunResponse = {
 const BASE_URL = 'http://localhost:8000'
 
 export const handlers = [
+  // Ollama
+  http.get(`${BASE_URL}/api/ollama/models`, () => {
+    return HttpResponse.json({
+      models: [
+        { name: 'llama2' },
+        { name: 'llama3.2' },
+        { name: 'codellama' },
+      ],
+    })
+  }),
+
   // Projects
   http.get(`${BASE_URL}/api/projects`, () => {
     return HttpResponse.json(mockProjects)
