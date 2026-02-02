@@ -3,7 +3,7 @@ priority: 6
 tags: [backend, validation]
 description: "runs_repository: Add status validation and error_message clearing"
 created_at: "2026-02-01T00:28:46Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-02T22:27:28Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -55,6 +55,34 @@ def _validate_status(status: str, allowed: set[str] | None = None) -> None:
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
+
+## Design
+
+### 定数
+```python
+VALID_STATUSES = {"pending", "running", "completed", "failed", "cancelled"}
+TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
+```
+
+### ヘルパー関数
+```python
+def _validate_status(status: str, allowed: set[str] | None = None) -> None:
+    """Validate status value."""
+    allowed = allowed or VALID_STATUSES
+    if status not in allowed:
+        raise ValueError(f"Invalid status: {status}. Must be one of {allowed}")
+```
+
+### 変更する関数
+
+| 関数 | バリデーション | error_message クリア |
+|------|---------------|---------------------|
+| `update_run_status` | VALID_STATUSES | 非terminal時に自動クリア |
+| `update_run_status_if_active` | TERMINAL_STATUSES | - |
+| `update_run_status_if_running` | TERMINAL_STATUSES | - |
+
+### error_message 自動クリアのロジック
+`update_run_status` で status が `pending` または `running` の場合、`error_message = NULL` を設定する（呼び出し側が明示的に渡していなくても）。
 
 ## Notes
 
