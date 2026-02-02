@@ -28,6 +28,8 @@ frontend/src/
 │   └── layout.css        # レイアウト用CSSクラスと変数
 ├── api/                  # API通信層
 ├── components/           # Reactコンポーネント
+├── constants/            # 共通定数
+│   └── llm.ts            # LLM関連の定数（プロバイダー、デフォルトURL）
 ├── store/                # Zustand 状態管理
 │   └── logStore.ts       # ログと進捗の状態管理
 └── routes/               # ルーティング設定
@@ -396,25 +398,18 @@ const handleAdd = () => {
 #### CreateProjectDialog の設計
 
 ```typescript
-// LLM Provider は Select コンポーネントで選択
-const LLM_PROVIDERS = [
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'openai', label: 'OpenAI' },
-]
-
 // フォームフィールド
 // - Project Name: TextInput (必須)
-// - LLM Provider: Select (デフォルト: ollama)
-// - LLM Model: TextInput
-// - Base URL: TextInput (OpenAI選択時のみ表示)
+// - LLM Settings: LlmSettingsForm コンポーネント
+//   - Provider: Select (デフォルト: ollama)
+//   - Base URL: TextInput
+//   - Model: Select (Ollama接続時) / TextInput (それ以外)
 //
 // NOTE: Document Rootはバックエンドで自動生成されるため、入力欄はありません
 ```
 
 **設計ポイント:**
-- LLM Provider は入力ミス防止のため Select コンポーネントを使用
-- SettingsPage と同じ `LLM_PROVIDERS` 定数を使用（将来的には共通化を検討）
-- Base URL は OpenAI 選択時のみ条件付き表示（SettingsPage と同様のパターン）
+- LLM 設定は `LlmSettingsForm` 共通コンポーネントを使用
 - Document Root はバックエンドで `{data_dir}/projects/{project_name}/` に自動生成される
 
 #### CloneProjectDialog の設計
@@ -482,6 +477,50 @@ const parts = text.split(pattern)
 1. 用語未選択 → "Click a term in the document to view details"
 2. 用語選択＆定義なし → "This term has no definition yet"
 3. 用語選択＆定義あり → 詳細情報を表示
+
+### 入力コンポーネント（components/inputs/）
+
+| コンポーネント | 説明 |
+|---------------|------|
+| `LlmSettingsForm` | LLM設定フォーム（Provider, Base URL, Model） |
+
+#### LlmSettingsForm
+
+SettingsPage と CreateProjectDialog で共通化された LLM 設定 UI コンポーネント。
+
+```typescript
+interface LlmSettingsFormProps {
+  provider: string
+  model: string
+  baseUrl: string
+  onProviderChange: (provider: string) => void
+  onModelChange: (model: string) => void
+  onBaseUrlChange: (baseUrl: string) => void
+  modelLabel?: string        // デフォルト: "Model"
+  comboboxProps?: ComboboxProps  // テスト用
+}
+```
+
+**内部動作:**
+- `useOllamaModels` フックを内部で使用
+- プロバイダー変更時、`ollama` なら自動的に `onBaseUrlChange(DEFAULT_OLLAMA_BASE_URL)` を呼ぶ
+- Ollama 接続エラー時はアラートを表示し、TextInput にフォールバック
+- Ollama 接続成功時はモデル一覧を Select で表示
+
+**UI 構成:**
+```
+┌─────────────────────────────────────┐
+│ Provider (Select)                   │
+│ [Ollama ▼]                          │
+├─────────────────────────────────────┤
+│ Base URL (TextInput)                │
+│ [http://localhost:11434]            │
+├─────────────────────────────────────┤
+│ ⚠ Ollamaサーバーに接続できません     │  ← エラー時のみ
+├─────────────────────────────────────┤
+│ Model (Select or TextInput)         │
+└─────────────────────────────────────┘
+```
 
 ### 共通コンポーネント（components/common/）
 
