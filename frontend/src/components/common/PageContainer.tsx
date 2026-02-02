@@ -11,6 +11,9 @@ interface PageContainerProps {
   emptyTestId?: string
   error?: Error | null
   onRetry?: () => void
+  renderLoading?: () => ReactNode
+  renderEmpty?: () => ReactNode
+  renderError?: (error: Error, onRetry?: () => void) => ReactNode
 }
 
 export function PageContainer({
@@ -23,8 +26,25 @@ export function PageContainer({
   emptyTestId = 'page-empty',
   error,
   onRetry,
+  renderLoading,
+  renderEmpty,
+  renderError,
 }: PageContainerProps) {
+  const renderContent = (content: ReactNode) => (
+    <Box className="page-layout">
+      <Group className="action-bar" data-testid="action-bar" p="md">
+        {actionBar}
+      </Group>
+      <Box className="scrollable-content">
+        {content}
+      </Box>
+    </Box>
+  )
+
   if (isLoading) {
+    if (renderLoading) {
+      return <>{renderLoading()}</>
+    }
     return (
       <Center data-testid={loadingTestId} h={200}>
         <Loader />
@@ -33,58 +53,33 @@ export function PageContainer({
   }
 
   if (error) {
-    return (
-      <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Group
-          data-testid="action-bar"
-          p="md"
-          style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-gray-3)' }}
-        >
-          {actionBar}
-        </Group>
-        <Center data-testid="page-error" style={{ flex: 1 }}>
-          <Box style={{ textAlign: 'center' }}>
-            <Text c="red">Error: {error.message}</Text>
-            {onRetry && (
-              <Button variant="outline" onClick={onRetry} mt="md">
-                Retry
-              </Button>
-            )}
-          </Box>
-        </Center>
-      </Box>
+    if (renderError) {
+      return renderContent(renderError(error, onRetry))
+    }
+    return renderContent(
+      <Center data-testid="page-error" style={{ flex: 1 }}>
+        <Box style={{ textAlign: 'center' }}>
+          <Text c="red">Error: {error.message}</Text>
+          {onRetry && (
+            <Button variant="outline" onClick={onRetry} mt="md">
+              Retry
+            </Button>
+          )}
+        </Box>
+      </Center>
     )
   }
 
   if (isEmpty) {
-    return (
-      <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Group
-          data-testid="action-bar"
-          p="md"
-          style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-gray-3)' }}
-        >
-          {actionBar}
-        </Group>
-        <Center data-testid={emptyTestId} style={{ flex: 1 }}>
-          <Text c="dimmed">{emptyMessage}</Text>
-        </Center>
-      </Box>
+    if (renderEmpty) {
+      return renderContent(renderEmpty())
+    }
+    return renderContent(
+      <Center data-testid={emptyTestId} style={{ flex: 1 }}>
+        <Text c="dimmed">{emptyMessage}</Text>
+      </Center>
     )
   }
 
-  return (
-    <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Group
-        data-testid="action-bar"
-        p="md"
-        style={{ flexShrink: 0, borderBottom: '1px solid var(--mantine-color-gray-3)' }}
-      >
-        {actionBar}
-      </Group>
-      <Box style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 'var(--mantine-spacing-md)' }}>
-        {children}
-      </Box>
-    </Box>
-  )
+  return renderContent(children)
 }
