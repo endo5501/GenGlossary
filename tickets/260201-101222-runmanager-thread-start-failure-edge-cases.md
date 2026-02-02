@@ -3,7 +3,7 @@ priority: 6
 tags: [improvement, backend, threading]
 description: "RunManager: Handle thread start failure edge cases"
 created_at: "2026-02-01T10:12:22Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-02T22:41:21Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -53,3 +53,54 @@ closed_at: null   # Do not modify manually
 
 - 260131-134730-runmanager-start-run-state-consistency チケットの codex MCP レビューで指摘
 - 現状は重大な問題ではないが、堅牢性向上のために対処が望ましい
+
+## 設計（承認済み）
+
+### 変更内容
+
+`start_run()` の except ブロックを以下のように変更：
+
+```python
+except Exception:
+    # Cleanup on thread start failure
+    with self._cancel_events_lock:
+        self._cancel_events.pop(run_id, None)
+
+    # Reset thread reference (it was never started)
+    self._thread = None
+
+    # Try to update DB status, but don't mask the original exception
+    try:
+        with database_connection(self.db_path) as conn:
+            with transaction(conn):
+                update_run_status(
+                    conn, run_id, "failed",
+                    error_message="Failed to start execution thread",
+                    finished_at=datetime.now(timezone.utc),
+                )
+    except Exception as db_error:
+        self._broadcast_log(
+            run_id,
+            {
+                "run_id": run_id,
+                "level": "warning",
+                "message": f"Failed to update run status after thread start failure: {db_error}",
+            },
+        )
+
+    # Send completion signal and cleanup subscribers
+    self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
+    with self._subscribers_lock:
+        self._subscribers.pop(run_id, None)
+
+    raise
+```
+
+### 解決される問題
+
+| 問題 | 解決策 |
+|------|--------|
+| 1. 例外マスキング | DB更新を try/except でラップ |
+| 2. finished_at 未設定 | `finished_at=datetime.now(timezone.utc)` を追加 |
+| 3. 完了シグナル・クリーンアップなし | `_broadcast_log` と `_subscribers.pop` を追加 |
+| 4. `_thread` が未開始状態で残る | `self._thread = None` を追加 |
