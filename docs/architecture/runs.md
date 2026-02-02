@@ -419,7 +419,7 @@ timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 | `update_run_status_if_running` | ❌ | ✅ |
 
 **タイムゾーン検証**:
-`update_run_status` と `update_run_status_if_active` は naive datetime を拒否し、`ValueError` を発生させます。
+`update_run_status`、`update_run_status_if_active`、`update_run_status_if_running` は naive datetime を拒否し、`ValueError` を発生させます。
 
 **ヘルパー関数**:
 タイムスタンプ処理は以下のヘルパー関数で統一されています：
@@ -998,7 +998,7 @@ get_run_manager(db_path) → RunManager
 
 ## テスト構成
 
-**tests/db/test_runs_repository.py (66 tests)**
+**tests/db/test_runs_repository.py (67 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - update_run_status_if_running（running状態のみ更新）
 - complete_run_if_not_cancelled（running状態のみ完了可能）
@@ -1044,4 +1044,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 182 tests** (Repository 66 + Manager 56 + Executor 50 + API 10)
+**合計: 183 tests** (Repository 67 + Manager 56 + Executor 50 + API 10)

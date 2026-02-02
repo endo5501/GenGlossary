@@ -388,6 +388,19 @@ class TestUpdateRunStatusIfRunning:
 
         assert rows_updated == 0
 
+    def test_rejects_naive_finished_at(
+        self, project_db: sqlite3.Connection
+    ) -> None:
+        """naive datetimeのfinished_atを拒否する"""
+        run_id = create_run(project_db, scope="full")
+        update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
+        naive_datetime = datetime.now()  # No timezone
+
+        with pytest.raises(ValueError, match="timezone-aware"):
+            update_run_status_if_running(
+                project_db, run_id, "completed", finished_at=naive_datetime
+            )
+
 
 class TestCompleteRunIfNotCancelled:
     """Tests for complete_run_if_not_cancelled function."""

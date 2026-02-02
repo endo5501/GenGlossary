@@ -293,10 +293,13 @@ def update_run_status_if_running(
     runs in 'running' state, not 'pending'. This ensures that a run
     cannot transition to 'completed' without first being started.
 
+    This function always sets finished_at, making it suitable for
+    terminal state transitions. Currently used by complete_run_if_not_cancelled.
+
     Args:
         conn: Project database connection.
         run_id: Run ID to update.
-        status: New status ('completed').
+        status: New terminal status (typically 'completed').
         finished_at: Finished timestamp (optional, must be timezone-aware).
             If not provided, uses current UTC time.
 
