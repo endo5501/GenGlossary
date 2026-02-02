@@ -1,4 +1,4 @@
-import { Stack, NavLink } from '@mantine/core'
+import { Stack, NavLink, Loader } from '@mantine/core'
 import {
   IconFiles,
   IconList,
@@ -9,6 +9,7 @@ import {
   IconSettings,
 } from '@tabler/icons-react'
 import { Link, useLocation } from '@tanstack/react-router'
+import { useCurrentRun } from '../../api/hooks/useRuns'
 
 interface NavItem {
   label: string
@@ -26,6 +27,13 @@ const navItems: NavItem[] = [
   { label: 'Document Viewer', icon: IconEye, basePath: '/document-viewer', projectScoped: true },
   { label: 'Settings', icon: IconSettings, basePath: '/settings', projectScoped: true },
 ]
+
+const STEP_TO_MENU: Record<string, string> = {
+  extract: '/terms',
+  provisional: '/provisional',
+  issues: '/issues',
+  refined: '/refined',
+}
 
 function extractProjectId(pathname: string): number | undefined {
   const match = pathname.match(/^\/projects\/(\d+)/)
@@ -47,19 +55,31 @@ function isActive(pathname: string, basePath: string, projectId: number | undefi
 export function LeftNavRail() {
   const location = useLocation()
   const projectId = extractProjectId(location.pathname)
+  const { data: run } = useCurrentRun(projectId)
+
+  const isProcessing = (basePath: string): boolean => {
+    if (run?.status !== 'running' || !run.current_step) return false
+    return STEP_TO_MENU[run.current_step] === basePath
+  }
 
   return (
     <Stack gap={0}>
-      {navItems.map((item) => (
-        <NavLink
-          key={item.basePath}
-          component={Link}
-          to={getPath(item.basePath, projectId, item.projectScoped)}
-          label={item.label}
-          leftSection={<item.icon size={20} />}
-          active={isActive(location.pathname, item.basePath, projectId, item.projectScoped)}
-        />
-      ))}
+      {navItems.map((item) => {
+        const processing = isProcessing(item.basePath)
+        return (
+          <NavLink
+            key={item.basePath}
+            component={Link}
+            to={getPath(item.basePath, projectId, item.projectScoped)}
+            label={item.label}
+            leftSection={
+              processing ? <Loader size={20} /> : <item.icon size={20} />
+            }
+            active={isActive(location.pathname, item.basePath, projectId, item.projectScoped)}
+            aria-busy={processing ? 'true' : undefined}
+          />
+        )
+      })}
     </Stack>
   )
 }

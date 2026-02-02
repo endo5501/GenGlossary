@@ -671,8 +671,10 @@ class PipelineExecutor:
             llm_client=self._llm_client, batch_size=self._review_batch_size
         )
 
+        progress_cb = self._create_progress_callback(context, "issues")
+
         def on_batch_progress(current: int, total: int) -> None:
-            self._log(context, "info", f"Reviewing batch {current}/{total}...")
+            progress_cb(current, total, "")
 
         try:
             issues = reviewer.review(
