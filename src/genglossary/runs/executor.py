@@ -574,14 +574,12 @@ class PipelineExecutor:
         extractor = TermExtractor(llm_client=self._llm_client)
 
         # Create progress callback for batch progress
-        term_progress_cb = self._create_progress_callback(context, "extract")
-
-        def batch_progress(current: int, total: int) -> None:
-            """Adapt ProgressCallback to TermProgressCallback."""
-            term_progress_cb(current, total, "")
+        progress_cb = self._create_progress_callback(context, "extract")
 
         extracted_terms = extractor.extract_terms(
-            documents, progress_callback=batch_progress, return_categories=True
+            documents,
+            progress_callback=lambda current, total: progress_cb(current, total, ""),
+            return_categories=True,
         )
 
         # Build unique list (skip duplicates)
