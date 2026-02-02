@@ -980,6 +980,121 @@ class TestPipelineExecutorProgressCallbackIntegration:
             assert "term_progress_callback" in call_kwargs
             assert callable(call_kwargs["term_progress_callback"])
 
+    def test_execute_extract_passes_progress_callback_to_extractor(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """TermExtractor に progress_callback が渡される"""
+        logs: list[dict] = []
+        callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+
+            mock_extractor_cls.return_value.extract_terms.return_value = []
+
+            executor.execute(project_db, "extract", context)
+
+            # Verify progress_callback was passed to extract_terms
+            mock_extractor_cls.return_value.extract_terms.assert_called_once()
+            call_kwargs = mock_extractor_cls.return_value.extract_terms.call_args.kwargs
+            assert "progress_callback" in call_kwargs
+            assert callable(call_kwargs["progress_callback"])
+
+    def test_execute_extract_logs_start_message_in_japanese(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """用語抽出開始時に日本語のメッセージがログ出力される"""
+        logs: list[dict] = []
+        callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_extractor_cls.return_value.extract_terms.return_value = []
+
+            executor.execute(project_db, "extract", context)
+
+            # Find the extract start message
+            extract_start_logs = [
+                log for log in logs
+                if log.get("level") == "info" and "用語抽出を開始" in log.get("message", "")
+            ]
+            assert len(extract_start_logs) == 1
+            assert "用語抽出を開始しました" in extract_start_logs[0]["message"]
+
+    def test_execute_extract_progress_callback_sends_step_field(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """用語抽出の進捗コールバックが step='extract' を含むログを出力する"""
+        logs: list[dict] = []
+        callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+
+            # Capture the progress callback and simulate calling it
+            captured_callback = None
+
+            def capture_extract_terms(*args, **kwargs):
+                nonlocal captured_callback
+                captured_callback = kwargs.get("progress_callback")
+                return []
+
+            mock_extractor_cls.return_value.extract_terms.side_effect = capture_extract_terms
+
+            executor.execute(project_db, "extract", context)
+
+            # Verify callback was captured
+            assert captured_callback is not None
+
+            # Clear logs and call the callback
+            logs.clear()
+            captured_callback(3, 10)
+
+            # Verify log has step='extract' and progress fields
+            assert len(logs) == 1
+            assert logs[0]["step"] == "extract"
+            assert logs[0]["progress_current"] == 3
+            assert logs[0]["progress_total"] == 10
+
 
 class TestPipelineExecutorLogCallbackExceptionHandling:
     """Tests for log callback exception handling."""

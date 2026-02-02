@@ -570,9 +570,19 @@ class PipelineExecutor:
         """
         self._check_cancellation(context)
 
-        self._log(context, "info", "Extracting terms...")
+        self._log(context, "info", "用語抽出を開始しました...")
         extractor = TermExtractor(llm_client=self._llm_client)
-        extracted_terms = extractor.extract_terms(documents, return_categories=True)
+
+        # Create progress callback for batch progress
+        term_progress_cb = self._create_progress_callback(context, "extract")
+
+        def batch_progress(current: int, total: int) -> None:
+            """Adapt ProgressCallback to TermProgressCallback."""
+            term_progress_cb(current, total, "")
+
+        extracted_terms = extractor.extract_terms(
+            documents, progress_callback=batch_progress, return_categories=True
+        )
 
         # Build unique list (skip duplicates)
         seen_terms: set[str] = set()
