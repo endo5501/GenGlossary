@@ -12,6 +12,7 @@ from genglossary.api.routers import (
     files_router,
     health_router,
     issues_router,
+    ollama_router,
     projects_router,
     provisional_router,
     refined_router,
@@ -65,5 +66,6 @@ def create_app() -> FastAPI:
     app.include_router(refined_router)
     app.include_router(files_router)
     app.include_router(runs_router)
+    app.include_router(ollama_router, prefix="/api")
 
     return app

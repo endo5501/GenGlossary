@@ -200,7 +200,7 @@ describe('Create Project Dialog', () => {
     expect(providerSelect).toHaveValue('OpenAI')
   })
 
-  it('shows Base URL field when OpenAI is selected', async () => {
+  it('shows Base URL field for both Ollama and OpenAI', async () => {
     const { user } = renderWithProviders(<HomePage />)
 
     await waitFor(() => {
@@ -215,8 +215,10 @@ describe('Create Project Dialog', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
 
-    // Base URL field should NOT be visible with Ollama (default)
-    expect(screen.queryByLabelText(/base url/i)).not.toBeInTheDocument()
+    // Base URL field should be visible with Ollama (default) with default URL
+    const baseUrlInput = screen.getByLabelText(/base url/i)
+    expect(baseUrlInput).toBeInTheDocument()
+    expect(baseUrlInput).toHaveValue('http://localhost:11434')
 
     // Select OpenAI
     const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
@@ -226,13 +228,13 @@ describe('Create Project Dialog', () => {
     })
     await user.click(screen.getByText('OpenAI'))
 
-    // Base URL field should now be visible
+    // Base URL field should still be visible (but empty for OpenAI)
     await waitFor(() => {
-      expect(screen.getByLabelText(/base url/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/base url/i)).toHaveValue('')
     })
   })
 
-  it('hides Base URL field when switching back to Ollama', async () => {
+  it('resets Base URL to default when switching back to Ollama', async () => {
     const { user } = renderWithProviders(<HomePage />)
 
     await waitFor(() => {
@@ -255,9 +257,9 @@ describe('Create Project Dialog', () => {
     })
     await user.click(screen.getByText('OpenAI'))
 
-    // Base URL should be visible
+    // Base URL should be empty for OpenAI
     await waitFor(() => {
-      expect(screen.getByLabelText(/base url/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/base url/i)).toHaveValue('')
     })
 
     // Switch back to Ollama
@@ -267,9 +269,9 @@ describe('Create Project Dialog', () => {
     })
     await user.click(screen.getByText('Ollama'))
 
-    // Base URL should be hidden again
+    // Base URL should be reset to default Ollama URL
     await waitFor(() => {
-      expect(screen.queryByLabelText(/base url/i)).not.toBeInTheDocument()
+      expect(screen.getByLabelText(/base url/i)).toHaveValue('http://localhost:11434')
     })
   })
 })

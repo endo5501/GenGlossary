@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -12,9 +13,13 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
+import { IconAlertCircle } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { useProject, useUpdateProject } from '../api/hooks/useProjects'
+import { useOllamaModels } from '../api/hooks/useOllamaModels'
 import { ApiError } from '../api/client'
+
+const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434'
 
 interface SettingsPageProps {
   projectId: number
@@ -42,19 +47,39 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
       setName(project.name)
       setProvider(project.llm_provider)
       setModel(project.llm_model)
-      setBaseUrl(project.llm_base_url)
+      // Use default URL for Ollama if not set
+      setBaseUrl(
+        project.llm_base_url ||
+          (project.llm_provider === 'ollama' ? DEFAULT_OLLAMA_BASE_URL : '')
+      )
       setNameError('')
     }
   }, [project, projectId])
 
+  // Fetch Ollama models when provider is ollama
+  const ollamaBaseUrl = provider === 'ollama' ? baseUrl : ''
+  const {
+    models: ollamaModels,
+    isLoading: isLoadingModels,
+    error: ollamaError,
+  } = useOllamaModels(ollamaBaseUrl)
+
   // Check if there are changes
   const hasChanges = useMemo(() => {
     if (!project) return false
+    // For base URL comparison, treat empty string and default Ollama URL as equivalent
+    // when provider is Ollama
+    const effectiveProjectBaseUrl =
+      project.llm_base_url ||
+      (project.llm_provider === 'ollama' ? DEFAULT_OLLAMA_BASE_URL : '')
+    const effectiveBaseUrl =
+      baseUrl || (provider === 'ollama' ? DEFAULT_OLLAMA_BASE_URL : '')
+
     return (
       name !== project.name ||
       provider !== project.llm_provider ||
       model !== project.llm_model ||
-      baseUrl !== project.llm_base_url
+      effectiveBaseUrl !== effectiveProjectBaseUrl
     )
   }, [project, name, provider, model, baseUrl])
 
@@ -166,8 +191,10 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
               onChange={(value) => {
                 if (value) {
                   setProvider(value)
-                  // Clear base URL when switching to Ollama
+                  // Set default base URL when switching to Ollama
                   if (value === 'ollama') {
+                    setBaseUrl(DEFAULT_OLLAMA_BASE_URL)
+                  } else {
                     setBaseUrl('')
                   }
                 }
@@ -176,19 +203,54 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
             />
 
             <TextInput
-              label="Model"
-              placeholder="e.g., llama3.2, gpt-4"
-              value={model}
-              onChange={(e) => setModel(e.currentTarget.value)}
+              label="Base URL"
+              placeholder={
+                provider === 'ollama'
+                  ? DEFAULT_OLLAMA_BASE_URL
+                  : 'https://api.openai.com/v1'
+              }
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.currentTarget.value)}
+              description={
+                provider === 'ollama'
+                  ? 'Ollama server URL'
+                  : 'Custom API endpoint for OpenAI-compatible providers'
+              }
             />
 
-            {provider === 'openai' && (
+            {provider === 'ollama' && ollamaError && (
+              <Alert
+                icon={<IconAlertCircle size={16} />}
+                color="yellow"
+                title="Ollamaサーバーに接続できません"
+              >
+                モデル名を手動で入力してください
+              </Alert>
+            )}
+
+            {provider === 'ollama' && !ollamaError && ollamaModels.length > 0 ? (
+              <Select
+                label="Model"
+                placeholder="Select a model"
+                data={ollamaModels.map((m) => ({ value: m, label: m }))}
+                value={model}
+                onChange={(value) => setModel(value || '')}
+                searchable
+                disabled={isLoadingModels}
+                rightSection={isLoadingModels ? <Loader size="xs" /> : undefined}
+              />
+            ) : (
               <TextInput
-                label="Base URL"
-                placeholder="https://api.openai.com/v1"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.currentTarget.value)}
-                description="Custom API endpoint for OpenAI-compatible providers"
+                label="Model"
+                placeholder={provider === 'ollama' ? 'e.g., llama3.2' : 'e.g., gpt-4'}
+                value={model}
+                onChange={(e) => setModel(e.currentTarget.value)}
+                disabled={provider === 'ollama' && isLoadingModels && !ollamaError}
+                rightSection={
+                  provider === 'ollama' && isLoadingModels && !ollamaError ? (
+                    <Loader size="xs" />
+                  ) : undefined
+                }
               />
             )}
 

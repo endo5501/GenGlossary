@@ -101,6 +101,21 @@ class OllamaClient(BaseLLMClient):
         except httpx.HTTPError:
             return False
 
+    def list_models(self) -> list[str]:
+        """Get list of available models from Ollama server.
+
+        Returns:
+            List of model names available on the server.
+
+        Raises:
+            httpx.HTTPError: If the request fails.
+        """
+        url = f"{self.base_url}/api/tags"
+        response = self.client.get(url)
+        response.raise_for_status()
+        data = response.json()
+        return [model["name"] for model in data.get("models", [])]
+
     def _request_with_retry(self, url: str, payload: dict) -> httpx.Response:
         """Make HTTP request with exponential backoff retry.
 
