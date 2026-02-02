@@ -1151,8 +1151,13 @@ class TestValidateStatus:
         """エラーメッセージに許可される値が含まれる"""
         from genglossary.db.runs_repository import TERMINAL_STATUSES, _validate_status
 
-        with pytest.raises(ValueError, match="completed.*failed.*cancelled|failed.*cancelled.*completed"):
+        with pytest.raises(ValueError) as exc_info:
             _validate_status("invalid", TERMINAL_STATUSES)
+
+        error_message = str(exc_info.value)
+        assert "completed" in error_message
+        assert "failed" in error_message
+        assert "cancelled" in error_message
 
 
 class TestUpdateRunStatusValidation:
