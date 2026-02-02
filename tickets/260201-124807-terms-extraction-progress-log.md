@@ -4,7 +4,7 @@ tags: [ux, frontend]
 description: "Terms抽出画面に進捗ログ・作業開始メッセージを表示する"
 created_at: "2026-02-01T12:48:07Z"
 started_at: 2026-02-02T13:18:22Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-02T13:32:36Z # Do not modify manually
 ---
 
 # Terms抽出の進捗ログ表示
