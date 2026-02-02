@@ -554,7 +554,7 @@ class PipelineExecutor:
 
 ### 進捗コールバック
 
-用語集生成・精査ステップでは、各用語の処理進捗をリアルタイムでログストリームに送信します。
+用語抽出・用語集生成・精査ステップでは、処理進捗をリアルタイムでログストリームに送信します。
 
 ```python
 # types.py
@@ -594,10 +594,21 @@ def _create_progress_callback(
 }
 ```
 
+**TermExtractor での使用（バッチ進捗）:**
+```python
+# executor.py
+progress_cb = self._create_progress_callback(context, "extract")
+extracted_terms = extractor.extract_terms(
+    documents,
+    progress_callback=lambda current, total: progress_cb(current, total, ""),
+    return_categories=True,
+)
+```
+
 **GlossaryGenerator / GlossaryRefiner での使用:**
 ```python
 # executor.py
-progress_cb = self._create_progress_callback(conn, "provisional")
+progress_cb = self._create_progress_callback(context, "provisional")
 glossary = generator.generate(
     extracted_terms, documents,
     cancel_event=context.cancel_event,  # キャンセルイベント伝播
