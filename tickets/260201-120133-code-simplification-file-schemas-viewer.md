@@ -3,7 +3,7 @@ priority: 3
 tags: [refactoring, code-quality]
 description: "Code simplification: FileDetailResponse inheritance and DocumentViewer utilities"
 created_at: "2026-02-01T12:01:33Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-02T13:08:14Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -18,10 +18,43 @@ These are low-priority improvements for code maintainability.
 
 - [ ] Python: Make `FileDetailResponse` inherit from `FileResponse` to eliminate code duplication
 - [ ] TypeScript: Extract `findTermData` function from `DocumentViewerPage.tsx` to a utility file
-- [ ] TypeScript: Simplify badge logic in `TermCard.tsx` using object map instead of repeated ternary operators
+- [x] ~~TypeScript: Simplify badge logic in `TermCard.tsx`~~ (Skipped: current ternary is sufficient for 2 states)
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
+
+## Design
+
+### Task 1: Python - FileDetailResponse Inheritance
+
+**File**: `src/genglossary/api/schemas/file_schemas.py`
+
+Change `FileDetailResponse` to inherit from `FileResponse`:
+```python
+class FileDetailResponse(FileResponse):
+    content: str = Field(..., description="File content")
+```
+
+Update `from_db_row` to call parent and add `content`.
+
+### Task 2: TypeScript - Extract findTermData
+
+**New file**: `frontend/src/utils/termUtils.ts`
+
+```typescript
+import type { GlossaryTermResponse } from '../api/types'
+
+export function findTermData(
+  termList: GlossaryTermResponse[],
+  termText: string
+): GlossaryTermResponse | null {
+  return termList.find(
+    (t) => t.term_name.toLowerCase() === termText.toLowerCase()
+  ) ?? null
+}
+```
+
+Update `DocumentViewerPage.tsx` to import and use this utility.
 
 ## Notes
 
