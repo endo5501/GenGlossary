@@ -198,3 +198,56 @@ def test_generate_structured_with_fallback_regex(ollama_client):
     assert isinstance(result, SampleResponse)
     assert result.answer == "test"
     assert result.confidence == 0.8
+
+
+@respx.mock
+def test_list_models_success(ollama_client):
+    """Test successful model listing."""
+    respx.get("http://localhost:11434/api/tags").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "models": [
+                    {"name": "llama2", "size": 3826793677},
+                    {"name": "llama3.2", "size": 2019393189},
+                    {"name": "codellama", "size": 3791811617},
+                ]
+            }
+        )
+    )
+
+    result = ollama_client.list_models()
+    assert result == ["llama2", "llama3.2", "codellama"]
+
+
+@respx.mock
+def test_list_models_empty(ollama_client):
+    """Test model listing when no models are available."""
+    respx.get("http://localhost:11434/api/tags").mock(
+        return_value=httpx.Response(200, json={"models": []})
+    )
+
+    result = ollama_client.list_models()
+    assert result == []
+
+
+@respx.mock
+def test_list_models_connection_error(ollama_client):
+    """Test model listing when connection fails."""
+    respx.get("http://localhost:11434/api/tags").mock(
+        side_effect=httpx.ConnectError("Connection refused")
+    )
+
+    with pytest.raises(httpx.ConnectError):
+        ollama_client.list_models()
+
+
+@respx.mock
+def test_list_models_timeout_error(ollama_client):
+    """Test model listing when request times out."""
+    respx.get("http://localhost:11434/api/tags").mock(
+        side_effect=httpx.TimeoutException("Request timeout")
+    )
+
+    with pytest.raises(httpx.TimeoutException):
+        ollama_client.list_models()
