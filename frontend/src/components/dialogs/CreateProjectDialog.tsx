@@ -1,15 +1,9 @@
 import { useState } from 'react'
-import { Modal, TextInput, Button, Stack, Group, Select, Alert, Loader } from '@mantine/core'
-import { IconAlertCircle } from '@tabler/icons-react'
+import { Modal, TextInput, Button, Stack, Group } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
 import { useCreateProject } from '../../api/hooks'
-import { useOllamaModels } from '../../api/hooks/useOllamaModels'
-
-const LLM_PROVIDERS = [
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'openai', label: 'OpenAI' },
-]
-
-const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434'
+import { LlmSettingsForm } from '../inputs/LlmSettingsForm'
+import { DEFAULT_OLLAMA_BASE_URL } from '../../constants/llm'
 
 interface CreateProjectDialogProps {
   opened: boolean
@@ -24,14 +18,6 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
   const [errors, setErrors] = useState<{ name?: string }>({})
 
   const createMutation = useCreateProject()
-
-  // Fetch Ollama models when provider is ollama
-  const ollamaBaseUrl = llmProvider === 'ollama' ? baseUrl : ''
-  const {
-    models: ollamaModels,
-    isLoading: isLoadingModels,
-    error: ollamaError,
-  } = useOllamaModels(ollamaBaseUrl)
 
   const handleSubmit = async () => {
     // Validation
@@ -59,6 +45,11 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
       handleClose()
     } catch (error) {
       console.error('Failed to create project:', error)
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to create project. Please try again.',
+        color: 'red',
+      })
     }
   }
 
@@ -83,74 +74,15 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
           required
         />
 
-        <Select
-          label="LLM Provider"
-          data={LLM_PROVIDERS}
-          value={llmProvider}
-          onChange={(value) => {
-            if (value) {
-              setLlmProvider(value)
-              // Set default base URL when switching providers
-              if (value === 'ollama') {
-                setBaseUrl(DEFAULT_OLLAMA_BASE_URL)
-              } else {
-                setBaseUrl('')
-              }
-            }
-          }}
+        <LlmSettingsForm
+          provider={llmProvider}
+          model={llmModel}
+          baseUrl={baseUrl}
+          onProviderChange={setLlmProvider}
+          onModelChange={setLlmModel}
+          onBaseUrlChange={setBaseUrl}
+          modelLabel="LLM Model"
         />
-
-        <TextInput
-          label="Base URL"
-          placeholder={
-            llmProvider === 'ollama'
-              ? DEFAULT_OLLAMA_BASE_URL
-              : 'https://api.openai.com/v1'
-          }
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.currentTarget.value)}
-          description={
-            llmProvider === 'ollama'
-              ? 'Ollama server URL'
-              : 'Custom API endpoint for OpenAI-compatible providers'
-          }
-        />
-
-        {llmProvider === 'ollama' && ollamaError && (
-          <Alert
-            icon={<IconAlertCircle size={16} />}
-            color="yellow"
-            title="Ollamaサーバーに接続できません"
-          >
-            モデル名を手動で入力してください
-          </Alert>
-        )}
-
-        {llmProvider === 'ollama' && !ollamaError && ollamaModels.length > 0 ? (
-          <Select
-            label="LLM Model"
-            placeholder="Select a model"
-            data={ollamaModels.map((m) => ({ value: m, label: m }))}
-            value={llmModel}
-            onChange={(value) => setLlmModel(value || '')}
-            searchable
-            disabled={isLoadingModels}
-            rightSection={isLoadingModels ? <Loader size="xs" /> : undefined}
-          />
-        ) : (
-          <TextInput
-            label="LLM Model"
-            placeholder={llmProvider === 'ollama' ? 'e.g., llama3.2' : 'e.g., gpt-4'}
-            value={llmModel}
-            onChange={(e) => setLlmModel(e.currentTarget.value)}
-            disabled={llmProvider === 'ollama' && isLoadingModels && !ollamaError}
-            rightSection={
-              llmProvider === 'ollama' && isLoadingModels && !ollamaError ? (
-                <Loader size="xs" />
-              ) : undefined
-            }
-          />
-        )}
 
         <Group justify="flex-end" gap="sm">
           <Button variant="default" onClick={handleClose}>
