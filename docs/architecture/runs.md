@@ -78,8 +78,7 @@ def update_run_status_if_active(
     """アクティブな状態（pending/running）のRunのみステータスを更新
 
     終了状態（completed, cancelled, failed）のRunは更新しない。
-    cancel_run, complete_run_if_not_cancelled, fail_run_if_not_terminal の
-    共通ロジックを統合した汎用関数。
+    cancel_run, fail_run_if_not_terminal の共通ロジックを統合した汎用関数。
 
     Args:
         finished_at: 終了タイムスタンプ（省略時は現在のUTC時刻を使用）
@@ -90,10 +89,31 @@ def update_run_status_if_active(
     """
     ...
 
+def update_run_status_if_running(
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    finished_at: datetime | None = None
+) -> int:
+    """running状態のRunのみステータスを更新
+
+    update_run_status_if_active とは異なり、pending状態のRunは更新しない。
+    これにより、開始されていないRunが直接completedに遷移することを防ぐ。
+
+    Args:
+        finished_at: 終了タイムスタンプ（省略時は現在のUTC時刻を使用）
+                     timezone-aware datetime のみ受け付ける
+
+    Returns:
+        更新された行数（0ならrunning状態でないか存在しない）
+    """
+    ...
+
 def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
     """Runをキャンセル（status='cancelled', finished_at設定）
 
     update_run_status_if_active の薄いラッパー。
+    pending/running どちらからもキャンセル可能。
 
     Returns:
         更新された行数（0なら既に終了状態または存在しない）
@@ -101,15 +121,19 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
     return update_run_status_if_active(conn, run_id, "cancelled")
 
 def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool:
-    """Runを原子的に完了（キャンセル済みまたは終了済みでなければ）
+    """Runを原子的に完了（running状態の場合のみ）
 
-    update_run_status_if_active の薄いラッパー。
+    update_run_status_if_running の薄いラッパー。
     レースコンディション防止: 別スレッドからキャンセルされても上書きしない。
 
+    Note:
+        pending状態のRunは完了できない。必ず先にrunning状態に
+        遷移してから完了する必要がある（started_atが設定される）。
+
     Returns:
-        bool: completedに更新できればTrue、既に終了状態ならFalse
+        bool: completedに更新できればTrue、running状態でなければFalse
     """
-    return update_run_status_if_active(conn, run_id, "completed") > 0
+    return update_run_status_if_running(conn, run_id, "completed") > 0
 
 def fail_run_if_not_terminal(
     conn: sqlite3.Connection, run_id: int, error_message: str
@@ -117,6 +141,7 @@ def fail_run_if_not_terminal(
     """Runを原子的にfailedに更新（終了状態でなければ）
 
     update_run_status_if_active の薄いラッパー。
+    pending/running どちらからもfailed遷移可能。
     終了状態（completed, cancelled, failed）のrunは上書きしない。
 
     Returns:
@@ -375,9 +400,26 @@ timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 - `create_run`: `created_at` を Python で設定
 - `update_run_status`: `started_at`, `finished_at` パラメータ（timezone-aware datetime のみ受け付ける）
 - `update_run_status_if_active`: `finished_at` パラメータ（省略時は現在のUTC時刻を自動設定）
+- `update_run_status_if_running`: `finished_at` パラメータ（省略時は現在のUTC時刻を自動設定）
+
+## 状態遷移の制約
+
+| 遷移元 | → running | → completed | → cancelled | → failed |
+|--------|-----------|-------------|-------------|----------|
+| pending | ✅ 可能 | ❌ 不可 | ✅ 可能 | ✅ 可能 |
+| running | - | ✅ 可能 | ✅ 可能 | ✅ 可能 |
+
+**重要**: `pending` から `completed` への直接遷移は不可。必ず `running` を経由する必要がある。
+これにより `started_at` が設定されていないRunが `completed` になることを防ぐ。
+
+**関数とサポートする遷移元**:
+| 関数 | pending | running |
+|------|---------|---------|
+| `update_run_status_if_active` | ✅ | ✅ |
+| `update_run_status_if_running` | ❌ | ✅ |
 
 **タイムゾーン検証**:
-`update_run_status` と `update_run_status_if_active` は naive datetime を拒否し、`ValueError` を発生させます。
+`update_run_status`、`update_run_status_if_active`、`update_run_status_if_running` は naive datetime を拒否し、`ValueError` を発生させます。
 
 **ヘルパー関数**:
 タイムスタンプ処理は以下のヘルパー関数で統一されています：
@@ -956,9 +998,10 @@ get_run_manager(db_path) → RunManager
 
 ## テスト構成
 
-**tests/db/test_runs_repository.py (53 tests)**
+**tests/db/test_runs_repository.py (67 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
-- complete_run_if_not_cancelled（レースコンディション防止）
+- update_run_status_if_running（running状態のみ更新）
+- complete_run_if_not_cancelled（running状態のみ完了可能）
 - fail_run_if_not_terminal（終了状態の上書き防止）
 - update_run_status_if_active（汎用ステータス更新関数）
 - タイムスタンプ形式の一貫性（UTC ISO 8601形式）
@@ -1001,4 +1044,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 169 tests** (Repository 53 + Manager 56 + Executor 50 + API 10)
+**合計: 183 tests** (Repository 67 + Manager 56 + Executor 50 + API 10)
