@@ -24,6 +24,26 @@ CREATE TABLE runs (
 
 ## runs_repository.py (Runs CRUD)
 
+### Status Constants
+
+```python
+VALID_STATUSES = {"pending", "running", "completed", "failed", "cancelled"}
+TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
+
+def _validate_status(status: str, allowed: set[str] | None = None) -> None:
+    """Validate status value.
+
+    Args:
+        status: Status value to validate.
+        allowed: Set of allowed status values. Defaults to VALID_STATUSES.
+
+    Raises:
+        ValueError: If status is not in the allowed set.
+    """
+```
+
+### CRUD Functions
+
 ```python
 def create_run(
     conn: sqlite3.Connection,
@@ -65,7 +85,15 @@ def update_run_status(
     finished_at: datetime | None = None,
     error_message: str | None = None
 ) -> None:
-    """Runステータスを更新"""
+    """Runステータスを更新
+
+    Status Validation:
+        VALID_STATUSES のみ受け付ける。不正な値は ValueError を発生。
+
+    Error Message Clearing:
+        非 terminal status (pending/running) への遷移時、error_message を自動的に NULL にクリア。
+        これにより、failed → running → completed の遷移で古いエラーメッセージが残らない。
+    """
     ...
 
 def update_run_status_if_active(
@@ -79,6 +107,11 @@ def update_run_status_if_active(
 
     終了状態（completed, cancelled, failed）のRunは更新しない。
     cancel_run, fail_run_if_not_terminal の共通ロジックを統合した汎用関数。
+
+    Status Validation:
+        TERMINAL_STATUSES のみ受け付ける（completed, failed, cancelled）。
+        pending や running は ValueError を発生。finished_at を自動設定するため、
+        terminal status 以外は意味をなさない。
 
     Args:
         finished_at: 終了タイムスタンプ（省略時は現在のUTC時刻を使用）
@@ -99,6 +132,10 @@ def update_run_status_if_running(
 
     update_run_status_if_active とは異なり、pending状態のRunは更新しない。
     これにより、開始されていないRunが直接completedに遷移することを防ぐ。
+
+    Status Validation:
+        TERMINAL_STATUSES のみ受け付ける（completed, failed, cancelled）。
+        update_run_status_if_active と一貫性を保つ。
 
     Args:
         finished_at: 終了タイムスタンプ（省略時は現在のUTC時刻を使用）
@@ -998,7 +1035,7 @@ get_run_manager(db_path) → RunManager
 
 ## テスト構成
 
-**tests/db/test_runs_repository.py (67 tests)**
+**tests/db/test_runs_repository.py (87 tests)**
 - CRUD操作、ステータス遷移、プロジェクト隔離
 - update_run_status_if_running（running状態のみ更新）
 - complete_run_if_not_cancelled（running状態のみ完了可能）
@@ -1007,6 +1044,10 @@ get_run_manager(db_path) → RunManager
 - タイムスタンプ形式の一貫性（UTC ISO 8601形式）
 - タイムゾーン検証（naive datetime の拒否）
 - ヘルパー関数テスト（_to_iso_string, _current_utc_iso）
+- Status Constants テスト（VALID_STATUSES, TERMINAL_STATUSES）
+- _validate_status ヘルパー関数テスト
+- 各関数の status validation テスト
+- error_message 自動クリアテスト
 
 **tests/runs/test_manager.py (56 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
@@ -1044,4 +1085,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 183 tests** (Repository 67 + Manager 56 + Executor 50 + API 10)
+**合計: 203 tests** (Repository 87 + Manager 56 + Executor 50 + API 10)
