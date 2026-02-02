@@ -893,7 +893,10 @@ async def list_terms(
 - `GET /api/projects/{project_id}/runs/current` - アクティブRun取得
 - `GET /api/projects/{project_id}/runs/{run_id}/logs` - SSEログストリーミング
 
-**合計: 38エンドポイント** (システム4 + Projects API 6 + データAPI 28)
+**Ollama API (Ollamaサーバー連携) - 1エンドポイント:**
+- `GET /api/ollama/models` - 利用可能なモデル一覧を取得（`base_url` クエリパラメータでサーバー指定可能）
+
+**合計: 39エンドポイント** (システム4 + Projects API 6 + Ollama API 1 + データAPI 28)
 
 ## API実装のポイント
 
