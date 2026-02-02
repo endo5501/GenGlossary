@@ -4,7 +4,7 @@ tags: [frontend, refactoring]
 description: "LLM設定UI（OllamaモデルSelect/TextInput）の共通コンポーネント化"
 created_at: "2026-02-02T13:52:35Z"
 started_at: 2026-02-02T16:36:15Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-02T22:04:29Z # Do not modify manually
 ---
 
 # LLM設定UIコンポーネントの共通化
