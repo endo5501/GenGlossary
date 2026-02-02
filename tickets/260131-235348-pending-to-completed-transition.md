@@ -4,7 +4,7 @@ tags: [backend, db, design]
 description: "Completion can occur from pending state without started_at"
 created_at: "2026-01-31T23:53:48Z"
 started_at: 2026-02-02T22:05:38Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-02T22:25:44Z # Do not modify manually
 ---
 
 # Completion can occur from pending state without started_at
