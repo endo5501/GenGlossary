@@ -24,19 +24,19 @@ Ollama モデルドロップダウン機能の実装（#260201-124808）で、�
 
 ## Tasks
 
-- [ ] `frontend/src/constants/llm.ts` を作成し、LLM関連の定数を集約
-- [ ] `frontend/src/components/inputs/LlmSettingsForm.tsx` コンポーネントを作成（テストファースト）
-- [ ] SettingsPage を LlmSettingsForm を使用するようリファクタリング
-- [ ] CreateProjectDialog を LlmSettingsForm を使用するようリファクタリング
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `frontend/src/constants/llm.ts` を作成し、LLM関連の定数を集約
+- [x] `frontend/src/components/inputs/LlmSettingsForm.tsx` コンポーネントを作成（テストファースト）
+- [x] SettingsPage を LlmSettingsForm を使用するようリファクタリング
+- [x] CreateProjectDialog を LlmSettingsForm を使用するようリファクタリング
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Design
 
