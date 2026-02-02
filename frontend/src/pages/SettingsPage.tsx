@@ -1,34 +1,25 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
-  Alert,
   Box,
   Button,
   Card,
   Center,
   Group,
   Loader,
-  Select,
   Stack,
   Text,
   TextInput,
   Title,
 } from '@mantine/core'
-import { IconAlertCircle } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { useProject, useUpdateProject } from '../api/hooks/useProjects'
-import { useOllamaModels } from '../api/hooks/useOllamaModels'
 import { ApiError } from '../api/client'
-
-const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434'
+import { LlmSettingsForm } from '../components/inputs/LlmSettingsForm'
+import { DEFAULT_OLLAMA_BASE_URL } from '../constants/llm'
 
 interface SettingsPageProps {
   projectId: number
 }
-
-const LLM_PROVIDERS = [
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'openai', label: 'OpenAI' },
-]
 
 export function SettingsPage({ projectId }: SettingsPageProps) {
   const { data: project, isLoading, error } = useProject(projectId)
@@ -55,14 +46,6 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
       setNameError('')
     }
   }, [project, projectId])
-
-  // Fetch Ollama models when provider is ollama
-  const ollamaBaseUrl = provider === 'ollama' ? baseUrl : ''
-  const {
-    models: ollamaModels,
-    isLoading: isLoadingModels,
-    error: ollamaError,
-  } = useOllamaModels(ollamaBaseUrl)
 
   // Check if there are changes
   const hasChanges = useMemo(() => {
@@ -184,75 +167,14 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
               LLM Settings
             </Title>
 
-            <Select
-              label="Provider"
-              data={LLM_PROVIDERS}
-              value={provider}
-              onChange={(value) => {
-                if (value) {
-                  setProvider(value)
-                  // Set default base URL when switching to Ollama
-                  if (value === 'ollama') {
-                    setBaseUrl(DEFAULT_OLLAMA_BASE_URL)
-                  } else {
-                    setBaseUrl('')
-                  }
-                }
-              }}
-              required
+            <LlmSettingsForm
+              provider={provider}
+              model={model}
+              baseUrl={baseUrl}
+              onProviderChange={setProvider}
+              onModelChange={setModel}
+              onBaseUrlChange={setBaseUrl}
             />
-
-            <TextInput
-              label="Base URL"
-              placeholder={
-                provider === 'ollama'
-                  ? DEFAULT_OLLAMA_BASE_URL
-                  : 'https://api.openai.com/v1'
-              }
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.currentTarget.value)}
-              description={
-                provider === 'ollama'
-                  ? 'Ollama server URL'
-                  : 'Custom API endpoint for OpenAI-compatible providers'
-              }
-            />
-
-            {provider === 'ollama' && ollamaError && (
-              <Alert
-                icon={<IconAlertCircle size={16} />}
-                color="yellow"
-                title="Ollamaサーバーに接続できません"
-              >
-                モデル名を手動で入力してください
-              </Alert>
-            )}
-
-            {provider === 'ollama' && !ollamaError && ollamaModels.length > 0 ? (
-              <Select
-                label="Model"
-                placeholder="Select a model"
-                data={ollamaModels.map((m) => ({ value: m, label: m }))}
-                value={model}
-                onChange={(value) => setModel(value || '')}
-                searchable
-                disabled={isLoadingModels}
-                rightSection={isLoadingModels ? <Loader size="xs" /> : undefined}
-              />
-            ) : (
-              <TextInput
-                label="Model"
-                placeholder={provider === 'ollama' ? 'e.g., llama3.2' : 'e.g., gpt-4'}
-                value={model}
-                onChange={(e) => setModel(e.currentTarget.value)}
-                disabled={provider === 'ollama' && isLoadingModels && !ollamaError}
-                rightSection={
-                  provider === 'ollama' && isLoadingModels && !ollamaError ? (
-                    <Loader size="xs" />
-                  ) : undefined
-                }
-              />
-            )}
 
             <Group justify="flex-end" mt="md">
               <Button

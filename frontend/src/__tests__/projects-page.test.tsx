@@ -180,7 +180,7 @@ describe('Create Project Dialog', () => {
     })
 
     // LLM Provider should be a Select component (Mantine Select uses textbox role)
-    const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
+    const providerSelect = screen.getByRole('textbox', { name: /provider/i })
     expect(providerSelect).toBeInTheDocument()
     // Default value should be Ollama
     expect(providerSelect).toHaveValue('Ollama')
@@ -221,7 +221,7 @@ describe('Create Project Dialog', () => {
     expect(baseUrlInput).toHaveValue('http://localhost:11434')
 
     // Select OpenAI
-    const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
+    const providerSelect = screen.getByRole('textbox', { name: /provider/i })
     await user.click(providerSelect)
     await waitFor(() => {
       expect(screen.getByText('OpenAI')).toBeInTheDocument()
@@ -250,7 +250,7 @@ describe('Create Project Dialog', () => {
     })
 
     // Select OpenAI
-    const providerSelect = screen.getByRole('textbox', { name: /llm provider/i })
+    const providerSelect = screen.getByRole('textbox', { name: /provider/i })
     await user.click(providerSelect)
     await waitFor(() => {
       expect(screen.getByText('OpenAI')).toBeInTheDocument()
