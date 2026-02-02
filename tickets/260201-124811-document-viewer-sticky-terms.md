@@ -4,7 +4,7 @@ tags: [ux, frontend, layout]
 description: "Document Viewerで右側の用語タイルを常時表示（スティッキー）にする"
 created_at: "2026-02-01T12:48:11Z"
 started_at: 2026-02-01T23:03:53Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-02T13:03:01Z # Do not modify manually
 ---
 
 # Document Viewer 用語タイルの常時表示
