@@ -4,7 +4,7 @@ tags: [ux, frontend, feature]
 description: "Ollamaモデル選択時に接続先からモデル一覧を取得しドロップダウンで選択可能にする"
 created_at: "2026-02-01T12:48:08Z"
 started_at: 2026-02-02T13:33:30Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-02T14:10:54Z # Do not modify manually
 ---
 
 # Ollamaモデルのドロップダウン選択
