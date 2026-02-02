@@ -281,6 +281,51 @@ def update_run_status_if_active(
     return rowcount
 
 
+def update_run_status_if_running(
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    finished_at: datetime | None = None,
+) -> int:
+    """Update run status only if run is currently running.
+
+    Unlike update_run_status_if_active, this function only updates
+    runs in 'running' state, not 'pending'. This ensures that a run
+    cannot transition to 'completed' without first being started.
+
+    Args:
+        conn: Project database connection.
+        run_id: Run ID to update.
+        status: New status ('completed').
+        finished_at: Finished timestamp (optional, must be timezone-aware).
+            If not provided, uses current UTC time.
+
+    Returns:
+        Number of rows updated (0 if run is not running or not found).
+
+    Raises:
+        ValueError: If finished_at is naive (no timezone info).
+    """
+    finished_at_str = _to_iso_string(finished_at, "finished_at")
+    if finished_at_str is None:
+        finished_at_str = _current_utc_iso()
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE runs
+        SET status = ?,
+            finished_at = ?
+        WHERE id = ? AND status = 'running'
+        """,
+        (status, finished_at_str, run_id),
+    )
+    rowcount = cursor.rowcount
+    if rowcount > 0:
+        conn.commit()  # Commit immediately for real-time UI updates
+    return rowcount
+
+
 def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
     """Cancel a run.
 
@@ -297,22 +342,25 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
 
 
 def complete_run_if_not_cancelled(conn: sqlite3.Connection, run_id: int) -> bool:
-    """Complete a run only if it is still running.
+    """Complete a run only if it is currently running.
 
     This function atomically checks the run status before updating
     to completed, preventing race conditions between cancellation
     and completion. It also avoids overwriting other terminal states
     like 'failed' or 'completed'.
 
+    Runs in 'pending' state cannot be completed directly - they must
+    first transition to 'running' state.
+
     Args:
         conn: Project database connection.
         run_id: Run ID to complete.
 
     Returns:
-        bool: True if the run was updated to completed, False if already
-              in a terminal state or not found.
+        bool: True if the run was updated to completed, False if not
+              running, already in a terminal state, or not found.
     """
-    return update_run_status_if_active(conn, run_id, "completed") > 0
+    return update_run_status_if_running(conn, run_id, "completed") > 0
 
 
 def fail_run_if_not_terminal(
