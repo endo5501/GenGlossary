@@ -84,9 +84,15 @@ export function SettingsPage({ projectId }: SettingsPageProps) {
     setNameError('')
 
     try {
+      const trimmedBaseUrl = baseUrl.trim()
       await updateMutation.mutateAsync({
         id: projectId,
-        data: { name, llm_provider: provider, llm_model: model, llm_base_url: baseUrl },
+        data: {
+          name,
+          llm_provider: provider,
+          llm_model: model,
+          llm_base_url: trimmedBaseUrl || undefined,
+        },
       })
 
       notifications.show({

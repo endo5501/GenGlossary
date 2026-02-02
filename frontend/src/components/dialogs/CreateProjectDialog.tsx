@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Modal, TextInput, Button, Stack, Group } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
 import { useCreateProject } from '../../api/hooks'
 import { LlmSettingsForm } from '../inputs/LlmSettingsForm'
 import { DEFAULT_OLLAMA_BASE_URL } from '../../constants/llm'
@@ -44,6 +45,11 @@ export function CreateProjectDialog({ opened, onClose }: CreateProjectDialogProp
       handleClose()
     } catch (error) {
       console.error('Failed to create project:', error)
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to create project. Please try again.',
+        color: 'red',
+      })
     }
   }
 
