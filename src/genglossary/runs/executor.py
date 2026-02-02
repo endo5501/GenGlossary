@@ -140,6 +140,15 @@ class PipelineExecutor:
         self._llm_client = create_llm_client(provider=provider, model=model)
         self._review_batch_size = review_batch_size
 
+    def close(self) -> None:
+        """Close the LLM client to cancel any ongoing requests.
+
+        This method can be called from another thread to force-cancel
+        ongoing LLM API calls by closing the underlying HTTP connection.
+        """
+        if hasattr(self._llm_client, 'close'):
+            self._llm_client.close()
+
     def _log(
         self,
         context: ExecutionContext,
