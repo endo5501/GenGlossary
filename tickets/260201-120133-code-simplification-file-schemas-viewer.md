@@ -16,11 +16,11 @@ These are low-priority improvements for code maintainability.
 
 ## Tasks
 
-- [ ] Python: Make `FileDetailResponse` inherit from `FileResponse` to eliminate code duplication
-- [ ] TypeScript: Extract `findTermData` function from `DocumentViewerPage.tsx` to a utility file
+- [x] Python: Make `FileDetailResponse` inherit from `FileResponse` to eliminate code duplication
+- [x] TypeScript: Extract `findTermData` function from `DocumentViewerPage.tsx` to a utility file
 - [x] ~~TypeScript: Simplify badge logic in `TermCard.tsx`~~ (Skipped: current ternary is sufficient for 2 states)
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Design
