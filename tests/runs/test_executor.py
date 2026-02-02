@@ -1095,6 +1095,56 @@ class TestPipelineExecutorProgressCallbackIntegration:
             assert logs[0]["progress_current"] == 3
             assert logs[0]["progress_total"] == 10
 
+    def test_execute_review_progress_callback_sends_step_field(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """レビューの進捗コールバックが step='issues' を含むログを出力する"""
+        logs: list[dict] = []
+        callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_prov.return_value = [
+                {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
+            ]
+
+            # Capture the batch_progress_callback and simulate calling it
+            captured_callback = None
+
+            def capture_review(*args, **kwargs):
+                nonlocal captured_callback
+                captured_callback = kwargs.get("batch_progress_callback")
+                return []
+
+            mock_reviewer_cls.return_value.review.side_effect = capture_review
+
+            executor.execute(project_db, "review", context)
+
+            # Verify callback was captured
+            assert captured_callback is not None
+
+            # Clear logs and call the callback
+            logs.clear()
+            captured_callback(3, 10)
+
+            # Verify log has step='issues' and progress fields
+            assert len(logs) == 1
+            assert logs[0]["step"] == "issues"
+            assert logs[0]["progress_current"] == 3
+            assert logs[0]["progress_total"] == 10
+
 
 class TestPipelineExecutorLogCallbackExceptionHandling:
     """Tests for log callback exception handling."""
