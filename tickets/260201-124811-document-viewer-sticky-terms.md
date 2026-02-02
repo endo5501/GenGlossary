@@ -3,7 +3,7 @@ priority: 2
 tags: [ux, frontend, layout]
 description: "Document Viewerで右側の用語タイルを常時表示（スティッキー）にする"
 created_at: "2026-02-01T12:48:11Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-01T23:03:53Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -27,19 +27,37 @@ Document Viewerにて、画面をスクロールすると右側の用語タイ�
 
 ## Tasks
 
-- [ ] 右側パネルのスティッキーレイアウト実装
-- [ ] スクロール時の動作確認
-- [ ] 様々な画面サイズでのテスト
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 右側パネルのスティッキーレイアウト実装
+- [x] スクロール時の動作確認
+- [x] 様々な画面サイズでのテスト
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
+## Implementation Summary
+
+### Changes Made
+
+1. **DocumentViewerPage.tsx**: GridからFlexboxレイアウトに変更
+   - 高さの伝播問題を解決
+   - 左右パネルの比率を7:5で維持
+
+2. **DocumentPane.tsx**: Tabsに`h="100%"`を追加
+   - ScrollAreaの高さ計算が正しく機能するように修正
+   - スクロール問題を解決
+
+3. **TermCard.tsx**: 全てのPaperに`position: sticky; top: 0`を追加
+   - 用語タイルが常に画面上部に固定表示される
+
+### Also Fixed
+
+- tickets/260201-230132-document-viewer-scroll-fix.md のスクロール問題も同時に解決
 
 ## Notes
 

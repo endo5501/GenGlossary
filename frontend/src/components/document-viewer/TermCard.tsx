@@ -25,7 +25,7 @@ export function TermCard({
 }: TermCardProps) {
   if (!selectedTerm) {
     return (
-      <Paper withBorder p="xl" h="100%">
+      <Paper withBorder p="xl" h="100%" style={{ position: 'sticky', top: 0 }}>
         <Stack align="center" justify="center" h="100%">
           <Text c="dimmed">Click a term in the document to view details</Text>
         </Stack>
@@ -39,7 +39,7 @@ export function TermCard({
 
   if (!termData) {
     return (
-      <Paper withBorder p="xl" h="100%">
+      <Paper withBorder p="xl" h="100%" style={{ position: 'sticky', top: 0 }}>
         <Stack>
           <Title order={4}>{selectedTerm}</Title>
           <Badge color="gray">Not defined</Badge>
@@ -53,7 +53,7 @@ export function TermCard({
   }
 
   return (
-    <Paper withBorder p="md" h="100%">
+    <Paper withBorder p="md" h="100%" style={{ position: 'sticky', top: 0 }}>
       <Stack gap="md">
         <Group justify="space-between">
           <Title order={4}>{termData.term_name}</Title>

@@ -75,6 +75,7 @@ export function DocumentPane({
       <Tabs
         value={selectedFileId?.toString() ?? ''}
         onChange={(value) => value && onFileSelect(parseInt(value, 10))}
+        h="100%"
       >
         <Tabs.List>
           {files.map((file) => (
