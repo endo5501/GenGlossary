@@ -3,7 +3,7 @@ priority: 2
 tags: [bug, excluded-terms]
 description: "common_noun自動除外が動作していない"
 created_at: "2026-02-03T19:24:59Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-03T19:27:51Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
