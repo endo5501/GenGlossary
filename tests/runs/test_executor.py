@@ -2649,3 +2649,40 @@ class TestPipelineCancelledException:
         with patch("genglossary.runs.executor.create_llm_client"):
             with pytest.raises(PipelineCancelledException):
                 executor._execute_full(project_db, context, doc_root="/test/path")
+
+
+class TestDoExtractExcludedTermRepo:
+    """Tests for _do_extract passing excluded_term_repo to TermExtractor."""
+
+    def test_do_extract_passes_conn_as_excluded_term_repo(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """_do_extract は TermExtractor に conn を excluded_term_repo として渡す"""
+        from genglossary.models.document import Document
+
+        # Create a test document
+        documents = [Document(file_path="/test/doc.txt", content="テスト文書です。量子コンピュータを使用します。")]
+
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor_class:
+            mock_extractor = MagicMock()
+            mock_extractor.extract_terms.return_value = []
+            mock_extractor_class.return_value = mock_extractor
+
+            with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory:
+                mock_llm_client = MagicMock()
+                mock_llm_factory.return_value = mock_llm_client
+
+                # Set up LLM client on executor
+                executor._llm_client = mock_llm_client
+
+                # Call _do_extract
+                executor._do_extract(project_db, execution_context, documents)
+
+                # Verify TermExtractor was instantiated with excluded_term_repo=conn
+                mock_extractor_class.assert_called_once()
+                call_kwargs = mock_extractor_class.call_args.kwargs
+                assert "excluded_term_repo" in call_kwargs
+                assert call_kwargs["excluded_term_repo"] is project_db
