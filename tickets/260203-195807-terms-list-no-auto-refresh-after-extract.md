@@ -4,7 +4,7 @@ tags: [bug, frontend, ux]
 description: "Extract操作後に用語一覧が自動更新されない"
 created_at: "2026-02-03T19:58:07Z"
 started_at: 2026-02-03T22:18:37Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-03T22:58:19Z # Do not modify manually
 ---
 
 # Extract操作後に用語一覧が自動更新されない
