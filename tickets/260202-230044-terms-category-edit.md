@@ -3,7 +3,7 @@ priority: 4
 tags: [frontend, ux]
 description: "Terms画面でカテゴリを編集可能にする"
 created_at: "2026-02-02T23:00:44Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-03T22:59:20Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -46,6 +46,46 @@ closed_at: null   # Do not modify manually
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
+
+## Design
+
+### 概要
+
+詳細パネル（`term-detail-panel`）内のカテゴリ表示部分にインライン編集機能を追加。Badge の横に編集アイコンを配置し、クリックでテキスト入力に切り替わる。
+
+### UI動作フロー
+
+```
+[通常表示]
+  Category: [Badge: 技術用語] [✏️]
+
+     ↓ 編集アイコンクリック
+
+[編集モード]
+  Category: [TextInput: 技術用語____] [✓] [✗]
+
+     ↓ ✓クリック or Enter
+
+[保存中]
+  Category: [TextInput: disabled] [spinner]
+
+     ↓ 成功
+
+[通常表示に戻る]
+```
+
+### 変更ファイル
+
+- `frontend/src/pages/TermsPage.tsx` のみ
+
+### 実装内容
+
+1. **状態追加**: `isEditingCategory`, `editingCategoryValue`
+2. **useUpdateTerm フック追加**: 既存フックをimport
+3. **詳細パネル内UIの変更**:
+   - 通常時: Badge + 編集アイコン（IconPencil）
+   - 編集時: TextInput + 保存/キャンセルボタン
+4. **保存処理**: 空文字は `null` として送信（カテゴリ削除）
 
 ## Notes
 
