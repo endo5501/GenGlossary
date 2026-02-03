@@ -4,7 +4,7 @@ tags: [refactoring, code-quality]
 description: "除外用語機能のコード簡素化"
 created_at: "2026-02-03T18:47:24Z"
 started_at: 2026-02-03T19:07:03Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-03T19:12:02Z # Do not modify manually
 ---
 
 # 除外用語機能のコード簡素化
