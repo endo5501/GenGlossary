@@ -586,7 +586,7 @@ class PipelineExecutor:
         self._check_cancellation(context)
 
         self._log(context, "info", "用語抽出を開始しました...")
-        extractor = TermExtractor(llm_client=self._llm_client)
+        extractor = TermExtractor(llm_client=self._llm_client, excluded_term_repo=conn)
 
         # Create progress callback for batch progress
         progress_cb = self._create_progress_callback(conn, context, "extract")
