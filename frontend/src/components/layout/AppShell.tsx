@@ -5,7 +5,14 @@ import { useCallback } from 'react'
 import { GlobalTopBar } from './GlobalTopBar'
 import { LeftNavRail } from './LeftNavRail'
 import { LogPanel } from './LogPanel'
-import { useCurrentRun, runKeys } from '../../api/hooks'
+import {
+  useCurrentRun,
+  runKeys,
+  termKeys,
+  provisionalKeys,
+  issueKeys,
+  refinedKeys,
+} from '../../api/hooks'
 
 function extractProjectId(pathname: string): number | undefined {
   const match = pathname.match(/^\/projects\/(\d+)/)
@@ -21,10 +28,15 @@ export function AppShell() {
   const { data: currentRun } = useCurrentRun(projectId)
   const runId = currentRun?.status === 'running' ? currentRun.id : undefined
 
-  // Invalidate current run cache when SSE stream completes
+  // Invalidate caches when SSE stream completes (run finished)
+  // All data lists are refreshed since run completion may affect any of them
   const handleRunComplete = useCallback(() => {
     if (projectId !== undefined) {
       queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
+      queryClient.invalidateQueries({ queryKey: termKeys.list(projectId) })
+      queryClient.invalidateQueries({ queryKey: provisionalKeys.list(projectId) })
+      queryClient.invalidateQueries({ queryKey: issueKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: refinedKeys.list(projectId) })
     }
   }, [queryClient, projectId])
 
