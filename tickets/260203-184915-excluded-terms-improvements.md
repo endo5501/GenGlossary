@@ -4,7 +4,7 @@ tags: [backend, bug-fix, performance]
 description: "除外用語機能の品質改善（codexレビュー指摘事項）"
 created_at: "2026-02-03T18:49:15Z"
 started_at: 2026-02-03T19:00:16Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-03T19:05:48Z # Do not modify manually
 ---
 
 # 除外用語機能の品質改善
