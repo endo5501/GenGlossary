@@ -1,5 +1,5 @@
 ---
-priority: 5
+priority: 2
 tags: [refactoring, code-quality]
 description: "除外用語機能のコード簡素化"
 created_at: "2026-02-03T18:47:24Z"

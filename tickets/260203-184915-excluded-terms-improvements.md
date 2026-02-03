@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 1
 tags: [backend, bug-fix, performance]
 description: "除外用語機能の品質改善（codexレビュー指摘事項）"
 created_at: "2026-02-03T18:49:15Z"
