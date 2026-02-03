@@ -4,7 +4,7 @@ tags: [bug, excluded-terms]
 description: "除外用語が用語一覧に表示される問題"
 created_at: "2026-02-03T19:24:59Z"
 started_at: 2026-02-03T19:38:53Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-03T19:48:08Z # Do not modify manually
 ---
 
 # 除外用語が用語一覧に表示される問題
