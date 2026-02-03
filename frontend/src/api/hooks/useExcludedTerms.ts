@@ -13,20 +13,13 @@ export const excludedTermKeys = {
   list: (projectId: number) => [...excludedTermKeys.lists(), projectId] as const,
 }
 
-const excludedTermApi = {
-  list: (projectId: number) =>
-    apiClient.get<ExcludedTermListResponse>(`/api/projects/${projectId}/excluded-terms`),
-  create: (projectId: number, data: ExcludedTermCreateRequest) =>
-    apiClient.post<ExcludedTermResponse>(`/api/projects/${projectId}/excluded-terms`, data),
-  delete: (projectId: number, termId: number) =>
-    apiClient.delete<void>(`/api/projects/${projectId}/excluded-terms/${termId}`),
-}
-
 export function useExcludedTerms(projectId: number | undefined) {
   return useQuery({
     queryKey: excludedTermKeys.list(projectId!),
     queryFn: async () => {
-      const response = await excludedTermApi.list(projectId!)
+      const response = await apiClient.get<ExcludedTermListResponse>(
+        `/api/projects/${projectId}/excluded-terms`
+      )
       return response.items
     },
     enabled: projectId !== undefined,
@@ -37,7 +30,8 @@ export function useCreateExcludedTerm(projectId: number) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: ExcludedTermCreateRequest) => excludedTermApi.create(projectId, data),
+    mutationFn: (data: ExcludedTermCreateRequest) =>
+      apiClient.post<ExcludedTermResponse>(`/api/projects/${projectId}/excluded-terms`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: excludedTermKeys.list(projectId) })
       // Also invalidate terms list as the term might be removed from there
@@ -50,7 +44,8 @@ export function useDeleteExcludedTerm(projectId: number) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (termId: number) => excludedTermApi.delete(projectId, termId),
+    mutationFn: (termId: number) =>
+      apiClient.delete<void>(`/api/projects/${projectId}/excluded-terms/${termId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: excludedTermKeys.list(projectId) })
       // Also invalidate terms list as the deleted term might reappear there
