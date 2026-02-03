@@ -4,7 +4,7 @@ AIを活用した用語集自動生成ツール
 
 ## 概要
 
-GenGlossaryは、ドキュメントから用語を自動抽出し、その文脈に基づいた定義を生成する用語集自動作成ツールです。ローカルで動作するOllamaに加え、OpenAI、Azure OpenAI、llama.cpp、LM Studioなど、OpenAI互換APIをサポートします。
+GenGlossaryは、ドキュメントから用語を自動抽出し、その文脈に基づいた定義を生成する用語集自動作成ツールです。Webブラウザから操作できるGUIを提供し、直感的な操作で用語集を作成・管理できます。
 
 ### 主な機能
 
@@ -12,13 +12,19 @@ GenGlossaryは、ドキュメントから用語を自動抽出し、その文脈
 - AIによる文脈に基づいた定義生成
 - 用語間の関連性の自動検出
 - 用語集の自動精査・改善
+- Webブラウザから操作できるGUI
 - Markdown形式での出力
 
-## インストール
+### 対応LLM
+
+ローカルで動作するOllamaに加え、OpenAI、Azure OpenAI、llama.cpp、LM Studioなど、OpenAI互換APIをサポートします。
+
+## クイックスタート
 
 ### 前提条件
 
 - Python 3.11以上
+- Node.js 18以上
 - [uv](https://docs.astral.sh/uv/) (パッケージマネージャー)
 - [Ollama](https://ollama.ai/) (ローカルLLM)
 
@@ -29,85 +35,44 @@ GenGlossaryは、ドキュメントから用語を自動抽出し、その文脈
 git clone https://github.com/yourusername/GenGlossary.git
 cd GenGlossary
 
-# 依存関係をインストール
+# バックエンドの依存関係をインストール
 uv sync
+
+# フロントエンドの依存関係をインストール
+cd frontend
+npm install
+cd ..
 
 # Ollamaのモデルをダウンロード（未取得の場合）
 ollama pull dengcao/Qwen3-30B-A3B-Instruct-2507:latest
 ```
 
-## 使用方法
-
-### 基本的な使い方
-
-```bash
-# ドキュメントから用語集を生成
-uv run genglossary generate --input ./target_docs --output ./output/glossary.md
-```
-
-### オプション
-
-```bash
-uv run genglossary generate [OPTIONS]
-
-Options:
-  -i, --input DIRECTORY         入力ドキュメントのディレクトリ (デフォルト: ./target_docs)
-  -o, --output PATH             出力する用語集ファイルのパス (デフォルト: ./output/glossary.md)
-  --llm-provider [ollama|openai]  LLMプロバイダー (デフォルト: ollama)
-  -m, --model TEXT              使用するモデル名（プロバイダーごとのデフォルトあり）
-  --openai-base-url TEXT        OpenAI互換APIのベースURL
-  --db-path PATH                SQLiteデータベースのパス (デフォルト: ./genglossary.db)
-  --no-db                       データベース保存をスキップ
-  -v, --verbose                 詳細ログを表示
-  --help                        ヘルプを表示
-```
-
-### 使用例
-
-```bash
-# Ollamaで詳細ログ付きで実行
-uv run genglossary generate -i ./docs -o ./glossary.md --verbose
-
-# Ollama: 別のモデルを使用
-uv run genglossary generate -m llama3.2
-
-# OpenAI APIを使用
-uv run genglossary generate --llm-provider openai -m gpt-4o-mini
-
-# Azure OpenAIを使用
-uv run genglossary generate --llm-provider openai --openai-base-url https://your-resource.openai.azure.com
-
-# llama.cpp (OpenAI互換モード) を使用
-uv run genglossary generate --llm-provider openai --openai-base-url http://localhost:8080/v1 -m local-model
-```
-
-## Web UI（GUI）
-
-GenGlossaryはWebブラウザから操作できるGUIを提供します。CLIと同等の機能をグラフィカルなインターフェースで利用できます。
-
 ### 起動方法
 
-```bash
-# バックエンドサーバーを起動（ポート8000）
-uv run genglossary api serve --reload
+**ターミナル1: バックエンドサーバーを起動**
 
-# 別のターミナルでフロントエンドを起動（ポート5173）
+```bash
+uv run genglossary api serve --reload
+```
+
+**ターミナル2: フロントエンドを起動**
+
+```bash
 cd frontend
-npm install  # 初回のみ
 npm run dev
 ```
 
 ブラウザで http://localhost:5173 を開くとWeb UIにアクセスできます。
 
-### 画面構成
+## Web UIの使い方
 
-#### プロジェクト一覧（ホーム）
+### プロジェクト一覧（ホーム画面）
 
 - **プロジェクト一覧**: 名前、最終更新日時、ドキュメント数、用語数を表示
 - **プロジェクト概要カード**: 選択したプロジェクトの詳細と操作ボタン（開く/複製/削除）
 - **新規作成**: プロジェクト名とLLM設定を指定して作成
 
-#### プロジェクト詳細画面
+### プロジェクト詳細画面
 
 左サイドバーから各機能にアクセスできます：
 
@@ -121,7 +86,7 @@ npm run dev
 | **Document Viewer** | 原文ドキュメントの閲覧 |
 | **Settings** | プロジェクト名、LLM設定の編集 |
 
-#### グローバル操作バー
+### グローバル操作バー
 
 画面上部に以下の操作を配置：
 
@@ -129,7 +94,7 @@ npm run dev
 - **Stop ボタン**: 実行中のパイプラインをキャンセル
 - **実行状態**: 現在の状態（Up-to-date / Running / Failed など）を表示
 
-#### ログパネル
+### ログパネル
 
 画面下部に折りたたみ可能なログビューアを配置。パイプライン実行中のログをリアルタイムで確認できます。
 
@@ -140,50 +105,14 @@ npm run dev
 - **Tab**: 項目間を移動
 - **Enter / Space**: 項目を選択
 
-### 用語抽出の分析（デバッグモード）
+## 処理フロー
 
-用語抽出の品質を確認するため、中間結果を表示できます：
+GenGlossaryは以下の4ステップで用語集を生成します：
 
-```bash
-# 用語抽出の分析を実行
-uv run genglossary analyze-terms --input ./target_docs
-```
-
-このコマンドは以下の情報を表示します：
-
-- **SudachiPy抽出候補**: 形態素解析で抽出された固有名詞候補
-- **LLM承認用語**: LLMが用語集に含めるべきと判断した用語
-- **LLM除外用語**: LLMが除外した用語
-- **統計**: 候補数と承認率
-
-**オプション:**
-
-```bash
-uv run genglossary analyze-terms [OPTIONS]
-
-Options:
-  -i, --input DIRECTORY  入力ドキュメントのディレクトリ（必須）
-  -m, --model TEXT       使用するOllamaモデル名
-  --help                 ヘルプを表示
-```
-
-**使用例:**
-
-```bash
-# 用語抽出の品質を確認
-uv run genglossary analyze-terms -i ./examples/case2
-
-# 出力例:
-# ■ SudachiPy抽出候補 (19件)
-#   中央, 代理, 大陸, 近衛, ...
-#
-# ■ LLM承認用語 (5件)
-#   アソリウス島騎士団, 魔神代理領, ...
-#
-# ■ 統計
-#   候補数: 19
-#   承認率: 26.3% (5/19)
-```
+1. **用語抽出**: ドキュメントを解析し、重要な専門用語を抽出
+2. **用語集生成**: 各用語の出現箇所と文脈から暫定的な定義を生成
+3. **精査**: 生成された用語集を精査し、不明点や矛盾を検出
+4. **改善**: 検出された問題に基づいて定義を改善
 
 ## 設定
 
@@ -233,9 +162,6 @@ GenGlossaryは以下のLLMプロバイダーをサポートします：
 # Ollamaのセットアップ
 ollama pull dengcao/Qwen3-30B-A3B-Instruct-2507:latest
 ollama serve
-
-# 使用
-uv run genglossary generate -i ./docs
 ```
 
 #### 2. OpenAI API
@@ -245,9 +171,6 @@ OpenAIの公式API。高品質なGPTモデルを使用できます。
 ```bash
 # 環境変数を設定
 export OPENAI_API_KEY=sk-your-api-key-here
-
-# 使用
-uv run genglossary generate --llm-provider openai -i ./docs
 ```
 
 #### 3. Azure OpenAI Service
@@ -260,9 +183,6 @@ export OPENAI_BASE_URL=https://your-resource.openai.azure.com
 export OPENAI_API_KEY=your-azure-key
 export OPENAI_MODEL=your-deployment-name
 export AZURE_OPENAI_API_VERSION=2024-02-15-preview
-
-# 使用
-uv run genglossary generate --llm-provider openai -i ./docs
 ```
 
 #### 4. llama.cpp / LM Studio
@@ -272,13 +192,6 @@ OpenAI互換モードで動作するローカルLLM。
 ```bash
 # llama.cppサーバーを起動
 ./llama-server -m model.gguf --port 8080
-
-# 使用
-uv run genglossary generate \
-  --llm-provider openai \
-  --openai-base-url http://localhost:8080/v1 \
-  -m local-model \
-  -i ./docs
 ```
 
 ### サポートするファイル形式
@@ -286,14 +199,14 @@ uv run genglossary generate \
 - Markdown (.md)
 - テキスト (.txt)
 
-## 処理フロー
+## CLI（コマンドライン）
 
-GenGlossaryは以下の4ステップで用語集を生成します：
+GenGlossaryはコマンドラインからも操作できます。詳細は [CLI使用ガイド](docs/cli-usage.md) を参照してください。
 
-1. **用語抽出**: ドキュメントを解析し、重要な専門用語を抽出
-2. **用語集生成**: 各用語の出現箇所と文脈から暫定的な定義を生成
-3. **精査**: 生成された用語集を精査し、不明点や矛盾を検出
-4. **改善**: 検出された問題に基づいて定義を改善
+```bash
+# 基本的な使い方
+uv run genglossary generate --input ./target_docs --output ./output/glossary.md
+```
 
 ## 開発
 
@@ -429,7 +342,6 @@ LLMの出力が期待した形式でない場合、パースエラーが発生�
 
 ```bash
 ollama pull llama3.2
-uv run genglossary generate -m llama3.2
 ```
 
 ## ライセンス
@@ -443,117 +355,3 @@ MIT License
 3. 変更をコミット (`git commit -m 'Add new feature'`)
 4. ブランチをプッシュ (`git push origin feature/new-feature`)
 5. プルリクエストを作成
-
-## データベース機能 (SQLite)
-
-GenGlossaryは、生成した用語集をSQLiteデータベースに保存し、管理する機能を提供します。
-
-### DB保存がデフォルト
-
-```bash
-# データベースに保存しながら用語集を生成
-uv run genglossary generate -i ./docs -o ./glossary.md
-# ./genglossary.db に自動保存されます
-```
-
-### DB保存をスキップ
-
-```bash
-uv run genglossary generate -i ./docs -o ./glossary.md --no-db
-```
-
-### カスタムDBパス指定
-
-```bash
-uv run genglossary generate -i ./docs -o ./glossary.md --db-path ./custom.db
-```
-
-### データベースコマンド
-
-#### 初期化
-
-```bash
-# データベースを初期化
-uv run genglossary db init --path ./genglossary.db
-```
-
-#### メタデータ表示
-
-```bash
-uv run genglossary db info
-```
-
-#### 抽出用語の管理
-
-```bash
-# 用語一覧を表示
-uv run genglossary db terms list
-
-# 用語詳細を表示
-uv run genglossary db terms show 1
-
-# 用語を更新
-uv run genglossary db terms update 1 --text "量子計算機" --category "technical"
-
-# 用語を削除
-uv run genglossary db terms delete 1
-
-# テキストファイルから用語をインポート（1行1用語）
-uv run genglossary db terms import --file terms.txt
-```
-
-#### 再生成コマンド
-
-```bash
-# 抽出用語の再生成
-uv run genglossary db terms regenerate --input ./target_docs
-
-# 暫定用語集を再生成
-uv run genglossary db provisional regenerate
-
-# 精査を再実行
-uv run genglossary db issues regenerate
-
-# 最終用語集を再生成
-uv run genglossary db refined regenerate
-```
-
-#### 暫定用語集の管理
-
-```bash
-# 暫定用語集の一覧を表示
-uv run genglossary db provisional list
-
-# 暫定用語の詳細を表示
-uv run genglossary db provisional show 1
-
-# 暫定用語を更新
-uv run genglossary db provisional update 1 --definition "新しい定義" --confidence 0.95
-```
-
-#### 最終用語集の管理
-
-```bash
-# 最終用語集の一覧を表示
-uv run genglossary db refined list
-
-# 最終用語の詳細を表示
-uv run genglossary db refined show 1
-
-# 最終用語を更新
-uv run genglossary db refined update 1 --definition "新しい定義" --confidence 0.98
-
-# 最終用語集をMarkdown形式でエクスポート
-uv run genglossary db refined export-md --output ./exported.md
-```
-
-### データベーススキーマ
-
-GenGlossaryは以下のテーブルを使用します：
-
-- `metadata`: 入力パスやLLM設定
-- `documents`: 処理したドキュメント
-- `terms_extracted`: 抽出された用語
-- `glossary_provisional`: 暫定用語集
-- `glossary_refined`: 最終用語集
-- `glossary_issues`: 用語集の問題点
