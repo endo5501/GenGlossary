@@ -3,7 +3,7 @@ priority: 1
 tags: [backend, bug-fix, performance]
 description: "除外用語機能の品質改善（codexレビュー指摘事項）"
 created_at: "2026-02-03T18:49:15Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-03T19:00:16Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -145,12 +145,12 @@ onSuccess: () => {
 
 ## Tasks
 
-- [ ] `src/genglossary/db/excluded_term_repository.py`: `get_excluded_term_by_id`関数を追加
-- [ ] `src/genglossary/api/routers/excluded_terms.py`: レースコンディション対策（existsチェック削除）
-- [ ] `src/genglossary/db/excluded_term_repository.py`: `bulk_add_excluded_terms`に正規化処理追加
-- [ ] `frontend/src/api/hooks/useExcludedTerms.ts`: `useDeleteExcludedTerm`でtermKeysもinvalidate
-- [ ] Commit
-- [ ] Run tests (`uv run pytest` & `pnpm test`)
+- [x] `src/genglossary/db/excluded_term_repository.py`: `get_excluded_term_by_id`関数を追加
+- [x] `src/genglossary/api/routers/excluded_terms.py`: レースコンディション対策（existsチェック削除）
+- [x] `src/genglossary/db/excluded_term_repository.py`: `bulk_add_excluded_terms`に正規化処理追加
+- [x] `frontend/src/api/hooks/useExcludedTerms.ts`: `useDeleteExcludedTerm`でtermKeysもinvalidate
+- [x] Commit
+- [x] Run tests (`uv run pytest` & `pnpm test`)
 
 ## Notes
 
