@@ -1,5 +1,6 @@
 """Term extractor - SudachiPy morphological analysis + LLM judgment."""
 
+import sqlite3
 from typing import Literal, overload
 
 from pydantic import BaseModel
@@ -94,20 +95,30 @@ class TermExtractor:
 
     This class handles the first step of the glossary generation pipeline:
     1. Extract proper nouns using SudachiPy morphological analysis
-    2. Send candidates to LLM for judgment on glossary suitability
+    2. Filter out excluded terms (if excluded_term_repo is provided)
+    3. Send candidates to LLM for judgment on glossary suitability
+    4. Automatically add common_noun terms to exclusion list
 
     Attributes:
         llm_client: The LLM client for term judgment.
     """
 
-    def __init__(self, llm_client: BaseLLMClient) -> None:
+    def __init__(
+        self,
+        llm_client: BaseLLMClient,
+        excluded_term_repo: sqlite3.Connection | None = None,
+    ) -> None:
         """Initialize the TermExtractor.
 
         Args:
             llm_client: The LLM client to use for term judgment.
+            excluded_term_repo: Optional database connection for excluded terms.
+                If provided, excluded terms will be filtered before LLM classification,
+                and terms classified as common_noun will be automatically added.
         """
         self.llm_client = llm_client
         self._morphological_analyzer = MorphologicalAnalyzer()
+        self._excluded_term_repo = excluded_term_repo
 
     def _filter_empty_documents(self, documents: list[Document]) -> list[Document]:
         """Filter out empty or whitespace-only documents.
@@ -119,6 +130,42 @@ class TermExtractor:
             List of non-empty documents.
         """
         return [doc for doc in documents if doc.content and doc.content.strip()]
+
+    def _filter_excluded_terms(self, candidates: list[str]) -> list[str]:
+        """Filter out terms that are in the exclusion list.
+
+        Args:
+            candidates: List of candidate terms from morphological analysis.
+
+        Returns:
+            List of candidates with excluded terms removed.
+        """
+        if not self._excluded_term_repo:
+            return candidates
+
+        from genglossary.db.excluded_term_repository import get_excluded_term_texts
+
+        excluded = get_excluded_term_texts(self._excluded_term_repo)
+        return [c for c in candidates if c not in excluded]
+
+    def _add_common_nouns_to_exclusion(
+        self, classification: "TermClassificationResponse"
+    ) -> None:
+        """Add common_noun terms to the exclusion list.
+
+        Args:
+            classification: Classification results from LLM.
+        """
+        if not self._excluded_term_repo:
+            return
+
+        from genglossary.db.excluded_term_repository import bulk_add_excluded_terms
+
+        common_nouns = classification.classified_terms.get(
+            TermCategory.COMMON_NOUN.value, []
+        )
+        if common_nouns:
+            bulk_add_excluded_terms(self._excluded_term_repo, common_nouns, "auto")
 
     def _combine_document_content(self, documents: list[Document]) -> str:
         """Combine document content for use in prompts.
@@ -186,7 +233,12 @@ class TermExtractor:
         if not candidates:
             return []
 
-        # Step 2: Classify terms (Phase 1 of LLM processing)
+        # Step 2: Filter out excluded terms (if repo is provided)
+        candidates = self._filter_excluded_terms(candidates)
+        if not candidates:
+            return []
+
+        # Step 3: Classify terms (Phase 1 of LLM processing)
         classification = self._classify_terms(
             candidates,
             non_empty_docs,
@@ -194,7 +246,10 @@ class TermExtractor:
             progress_callback=progress_callback,
         )
 
-        # Step 3: Return based on return_categories flag
+        # Step 4: Add common_noun terms to exclusion list (if repo is provided)
+        self._add_common_nouns_to_exclusion(classification)
+
+        # Step 5: Return based on return_categories flag
         if return_categories:
             # Return all categories as ClassifiedTerm objects
             return self._get_classified_terms(classification)
@@ -252,6 +307,9 @@ class TermExtractor:
         candidates = self._extract_candidates(non_empty_docs, filter_contained=True)
         post_filter_count = len(candidates)
 
+        # Step 1c: Filter out excluded terms (if repo is provided)
+        candidates = self._filter_excluded_terms(candidates)
+
         if not candidates:
             return TermExtractionAnalysis(
                 sudachi_candidates=[],
@@ -270,7 +328,10 @@ class TermExtractor:
             progress_callback=progress_callback,
         )
 
-        # Step 3: Select terms (Phase 2 of LLM processing)
+        # Step 3: Add common_noun terms to exclusion list (if repo is provided)
+        self._add_common_nouns_to_exclusion(classification)
+
+        # Step 4: Select terms (Phase 2 of LLM processing)
         approved = self._select_terms(classification, non_empty_docs)
 
         # Calculate rejected terms (candidates not in approved)

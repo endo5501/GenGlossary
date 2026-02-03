@@ -120,7 +120,8 @@ class TestExcludedTermsFiltering:
         db_connection: sqlite3.Connection,
     ) -> None:
         """Test that excluded terms are not sent to LLM for classification."""
-        add_excluded_term(db_connection, "未亡人", "auto")
+        # Use a unique term that doesn't appear in prompt examples
+        add_excluded_term(db_connection, "除外対象用語", "auto")
 
         mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
             classifications=[
@@ -132,7 +133,7 @@ class TestExcludedTermsFiltering:
             "genglossary.term_extractor.MorphologicalAnalyzer"
         ) as mock_analyzer_class:
             mock_analyzer = MagicMock()
-            mock_analyzer.extract_proper_nouns.return_value = ["東京", "未亡人"]
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "除外対象用語"]
             mock_analyzer_class.return_value = mock_analyzer
 
             extractor = TermExtractor(
@@ -145,8 +146,8 @@ class TestExcludedTermsFiltering:
             call_args = mock_llm_client.generate_structured.call_args
             prompt = call_args[0][0]
 
-            # "未亡人" should NOT be in the prompt (filtered before LLM call)
-            assert "未亡人" not in prompt
+            # "除外対象用語" should NOT be in the prompt (filtered before LLM call)
+            assert "除外対象用語" not in prompt
             # "東京" should be in the prompt
             assert "東京" in prompt
 
