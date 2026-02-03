@@ -12,6 +12,7 @@ from genglossary.config import Config
 from genglossary.db.connection import get_connection
 from genglossary.db.project_repository import get_project
 from genglossary.db.registry_schema import initialize_registry
+from genglossary.db.schema import initialize_db
 from genglossary.models.project import Project
 from genglossary.runs.manager import RunManager
 
@@ -83,6 +84,9 @@ def get_project_db(
 ) -> Generator[sqlite3.Connection, None, None]:
     """Get project-specific database connection.
 
+    Ensures the project database schema is up-to-date by running
+    initialize_db, which applies any missing schema migrations.
+
     Args:
         project: Project instance from get_project_by_id.
 
@@ -90,6 +94,7 @@ def get_project_db(
         sqlite3.Connection: Project database connection.
     """
     conn = get_connection(project.db_path)
+    initialize_db(conn)
     try:
         yield conn
     finally:

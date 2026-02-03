@@ -109,11 +109,11 @@ def initialize_db(conn: sqlite3.Connection) -> None:
     _ensure_metadata_input_path(conn)
     _migrate_documents_table_v4(conn)
 
-    # Set schema version if not already set
+    # Set schema version if not already set (INSERT OR IGNORE handles race conditions)
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM schema_version WHERE version = ?", (SCHEMA_VERSION,))
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+    cursor.execute(
+        "INSERT OR IGNORE INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,)
+    )
 
     conn.commit()
 
