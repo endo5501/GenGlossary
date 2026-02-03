@@ -112,11 +112,11 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] `src/genglossary/term_extractor.py`: `_process_terms`を`dict.fromkeys`で簡素化
-- [ ] `src/genglossary/term_extractor.py`: import文を関数外に移動
-- [ ] `frontend/src/api/hooks/useExcludedTerms.ts`: `excludedTermApi`中間レイヤーを削除
-- [ ] Commit
-- [ ] Run tests (`uv run pytest` & `pnpm test`)
+- [x] `src/genglossary/term_extractor.py`: `_process_terms`を`dict.fromkeys`で簡素化
+- [x] `src/genglossary/term_extractor.py`: import文を関数外に移動
+- [x] `frontend/src/api/hooks/useExcludedTerms.ts`: `excludedTermApi`中間レイヤーを削除
+- [x] Commit
+- [x] Run tests (`uv run pytest` & `pnpm test`)
 
 ## Notes
 
