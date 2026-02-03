@@ -132,6 +132,28 @@ const mockRunRunning: RunResponse = {
   error_message: null,
 }
 
+// Mock data for excluded terms
+const mockExcludedTerms = [
+  {
+    id: 1,
+    term_text: '未亡人',
+    source: 'auto' as const,
+    created_at: '2024-01-15T10:00:00Z',
+  },
+  {
+    id: 2,
+    term_text: '行方不明',
+    source: 'auto' as const,
+    created_at: '2024-01-15T10:01:00Z',
+  },
+  {
+    id: 3,
+    term_text: '一般用語',
+    source: 'manual' as const,
+    created_at: '2024-01-15T10:02:00Z',
+  },
+]
+
 // Test wrapper with providers
 // Create a simple wrapper that provides all necessary contexts without RouterProvider
 // Since the pages themselves don't use useNavigate, we don't need RouterProvider for them
@@ -276,6 +298,25 @@ const runsHandlers = [
   }),
 ]
 
+// Excluded terms API handlers
+const excludedTermsHandlers = [
+  http.get(`${BASE_URL}/api/projects/:projectId/excluded-terms`, () => {
+    return HttpResponse.json({ items: mockExcludedTerms, total: mockExcludedTerms.length })
+  }),
+  http.post(`${BASE_URL}/api/projects/:projectId/excluded-terms`, async ({ request }) => {
+    const body = await request.json() as { term_text: string }
+    return HttpResponse.json({
+      id: mockExcludedTerms.length + 1,
+      term_text: body.term_text,
+      source: 'manual',
+      created_at: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+  http.delete(`${BASE_URL}/api/projects/:projectId/excluded-terms/:termId`, () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+]
+
 // All test handlers
 const allTestHandlers = [
   ...handlers,
@@ -284,6 +325,7 @@ const allTestHandlers = [
   ...issuesHandlers,
   ...refinedHandlers,
   ...runsHandlers,
+  ...excludedTermsHandlers,
 ]
 
 describe('TermsPage', () => {
@@ -853,5 +895,152 @@ describe('LogPanel with SSE', () => {
   it('has log display area', () => {
     renderWithProviders(<LogPanel projectId={1} runId={1} />)
     expect(screen.getByTestId('log-display')).toBeInTheDocument()
+  })
+})
+
+describe('Excluded Terms', () => {
+  beforeEach(() => {
+    server.use(...allTestHandlers)
+  })
+
+  it('displays excluded terms tab', async () => {
+    renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Tab should be visible
+    expect(screen.getByRole('tab', { name: /除外用語/i })).toBeInTheDocument()
+  })
+
+  it('switches to excluded terms tab and displays excluded terms', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Click on excluded terms tab
+    await user.click(screen.getByRole('tab', { name: /除外用語/i }))
+
+    // Should display excluded terms
+    await waitFor(() => {
+      expect(screen.getByText('未亡人')).toBeInTheDocument()
+    })
+    expect(screen.getByText('行方不明')).toBeInTheDocument()
+    expect(screen.getByText('一般用語')).toBeInTheDocument()
+  })
+
+  it('displays source badges for excluded terms', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Click on excluded terms tab
+    await user.click(screen.getByRole('tab', { name: /除外用語/i }))
+
+    // Wait for excluded terms to load
+    await waitFor(() => {
+      expect(screen.getByText('未亡人')).toBeInTheDocument()
+    })
+
+    // Should display source badges
+    expect(screen.getAllByText('自動').length).toBeGreaterThan(0)
+    expect(screen.getByText('手動')).toBeInTheDocument()
+  })
+
+  it('has add to excluded button in terms list', async () => {
+    renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Should have add to excluded buttons
+    expect(screen.getAllByRole('button', { name: /add to excluded/i }).length).toBeGreaterThan(0)
+  })
+
+  it('can add term to excluded list', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Find and click the add to excluded button for first term
+    const addButtons = screen.getAllByRole('button', { name: /add to excluded/i })
+    await user.click(addButtons[0])
+
+    // The action should complete without error
+    // (The mutation will be called and terms/excluded list will be refreshed)
+  })
+
+  it('can delete excluded term', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Click on excluded terms tab
+    await user.click(screen.getByRole('tab', { name: /除外用語/i }))
+
+    // Wait for excluded terms to load
+    await waitFor(() => {
+      expect(screen.getByText('未亡人')).toBeInTheDocument()
+    })
+
+    // Find and click the delete button for first excluded term
+    const deleteButtons = screen.getAllByRole('button', { name: /remove from excluded/i })
+    await user.click(deleteButtons[0])
+
+    // The action should complete without error
+  })
+
+  it('has add excluded term button in excluded tab', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Click on excluded terms tab
+    await user.click(screen.getByRole('tab', { name: /除外用語/i }))
+
+    // Wait for tab to switch
+    await waitFor(() => {
+      expect(screen.getByText('未亡人')).toBeInTheDocument()
+    })
+
+    // Should have add excluded term button
+    expect(screen.getByRole('button', { name: /add excluded term/i })).toBeInTheDocument()
+  })
+
+  it('opens add excluded term modal when clicking add button', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Click on excluded terms tab
+    await user.click(screen.getByRole('tab', { name: /除外用語/i }))
+
+    // Wait for tab to switch
+    await waitFor(() => {
+      expect(screen.getByText('未亡人')).toBeInTheDocument()
+    })
+
+    // Click add button
+    await user.click(screen.getByRole('button', { name: /add excluded term/i }))
+
+    // Modal should open
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    expect(screen.getByText('除外用語を追加')).toBeInTheDocument()
   })
 })
