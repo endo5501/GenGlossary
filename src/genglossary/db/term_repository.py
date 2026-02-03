@@ -65,7 +65,10 @@ def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     cursor.execute(
         """
         SELECT * FROM terms_extracted
-        WHERE term_text NOT IN (SELECT term_text FROM terms_excluded)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM terms_excluded
+            WHERE terms_excluded.term_text = terms_extracted.term_text
+        )
         ORDER BY id
         """
     )
