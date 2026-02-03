@@ -692,9 +692,13 @@ def _create_progress_callback(
 }
 ```
 
-**TermExtractor での使用（バッチ進捗）:**
+**TermExtractor での使用（バッチ進捗・除外用語）:**
 ```python
 # executor.py
+extractor = TermExtractor(
+    llm_client=self._llm_client,
+    excluded_term_repo=conn,  # common_noun自動除外用
+)
 progress_cb = self._create_progress_callback(context, "extract")
 extracted_terms = extractor.extract_terms(
     documents,
