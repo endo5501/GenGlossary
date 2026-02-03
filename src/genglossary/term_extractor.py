@@ -10,6 +10,10 @@ from genglossary.models.document import Document
 from genglossary.models.term import ClassifiedTerm, TermCategory
 from genglossary.morphological_analyzer import MorphologicalAnalyzer
 from genglossary.types import ProgressCallback
+from genglossary.db.excluded_term_repository import (
+    bulk_add_excluded_terms,
+    get_excluded_term_texts,
+)
 from genglossary.utils.callback import safe_callback
 from genglossary.utils.prompt_escape import wrap_user_data
 
@@ -143,8 +147,6 @@ class TermExtractor:
         if not self._excluded_term_repo:
             return candidates
 
-        from genglossary.db.excluded_term_repository import get_excluded_term_texts
-
         excluded = get_excluded_term_texts(self._excluded_term_repo)
         return [c for c in candidates if c not in excluded]
 
@@ -158,8 +160,6 @@ class TermExtractor:
         """
         if not self._excluded_term_repo:
             return
-
-        from genglossary.db.excluded_term_repository import bulk_add_excluded_terms
 
         common_nouns = classification.classified_terms.get(
             TermCategory.COMMON_NOUN.value, []
@@ -466,25 +466,7 @@ JSON形式で回答してください: {{"approved_terms": ["用語1", "用語2"
         Returns:
             Processed list with duplicates removed and whitespace stripped.
         """
-        seen: set[str] = set()
-        result: list[str] = []
-
-        for term in terms:
-            # Strip whitespace
-            stripped = term.strip()
-
-            # Skip empty terms
-            if not stripped:
-                continue
-
-            # Skip duplicates (preserve first occurrence order)
-            if stripped in seen:
-                continue
-
-            seen.add(stripped)
-            result.append(stripped)
-
-        return result
+        return list(dict.fromkeys(t.strip() for t in terms if t.strip()))
 
     def _process_batch_response(
         self,
