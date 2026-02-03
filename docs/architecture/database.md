@@ -261,7 +261,11 @@ def create_term(
     ...
 
 def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """全ての抽出用語を取得（run_id削除により、run_idフィルタ不要）"""
+    """全ての抽出用語を取得（除外用語は自動的にフィルタリング）
+
+    terms_excludedテーブルに登録された用語は結果から除外されます。
+    NOT EXISTSサブクエリを使用し、term_textの完全一致でフィルタリング。
+    """
     ...
 
 def get_term(conn: sqlite3.Connection, term_id: int) -> sqlite3.Row | None:
