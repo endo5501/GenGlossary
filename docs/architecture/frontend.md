@@ -131,8 +131,33 @@ navbar={hasProject ? { width: 200, breakpoint: 'sm' } : undefined}
 {hasProject && <MantineAppShell.Navbar>...</MantineAppShell.Navbar>}
 
 // LogPanelはプロジェクト詳細のみ
-{hasProject && <LogPanel projectId={projectId} runId={runId} />}
+{hasProject && <LogPanel projectId={projectId} runId={runId} onRunComplete={handleRunComplete} />}
 ```
+
+**Run完了時のキャッシュ無効化:**
+
+SSEストリームの`complete`イベント発火時に、`handleRunComplete`コールバックですべてのデータリストを無効化します。これにより、Run完了後に最新のデータが自動的に表示されます。
+
+```typescript
+const handleRunComplete = useCallback(() => {
+  if (projectId === undefined) return
+
+  queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
+  queryClient.invalidateQueries({ queryKey: termKeys.list(projectId) })
+  queryClient.invalidateQueries({ queryKey: provisionalKeys.list(projectId) })
+  queryClient.invalidateQueries({ queryKey: issueKeys.list(projectId) })
+  queryClient.invalidateQueries({ queryKey: refinedKeys.list(projectId) })
+}, [queryClient, projectId])
+```
+
+**無効化されるクエリ:**
+| クエリキー | 対応するRun scope |
+|-----------|------------------|
+| `runKeys.current` | すべて（現在の実行状態） |
+| `termKeys.list` | extract（用語抽出） |
+| `provisionalKeys.list` | generate（暫定用語集生成） |
+| `issueKeys.list` | review（精査） |
+| `refinedKeys.list` | refine（改善） |
 
 #### LogPanel の進捗表示
 
