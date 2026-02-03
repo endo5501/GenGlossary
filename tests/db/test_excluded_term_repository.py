@@ -114,7 +114,7 @@ class TestDeleteExcludedTerm:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that delete_excluded_term removes the term."""
-        term_id = add_excluded_term(
+        term_id, _ = add_excluded_term(
             db_with_schema,
             term_text="量子コンピュータ",
             source="auto",

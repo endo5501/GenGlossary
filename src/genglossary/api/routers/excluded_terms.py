@@ -15,7 +15,7 @@ from genglossary.db.excluded_term_repository import (
     add_excluded_term,
     delete_excluded_term,
     get_all_excluded_terms,
-    term_exists_in_excluded,
+    get_excluded_term_by_id,
 )
 
 router = APIRouter(
@@ -71,29 +71,26 @@ async def create_excluded_term(
     """
     from fastapi.responses import JSONResponse
 
-    # Check if term already exists
-    already_exists = term_exists_in_excluded(project_db, request.term_text)
-
+    # Add term atomically - returns (id, created) to avoid race condition
     with transaction(project_db):
-        term_id = add_excluded_term(project_db, request.term_text, "manual")
+        term_id, created = add_excluded_term(project_db, request.term_text, "manual")
 
-    # Get the term to return
-    terms = get_all_excluded_terms(project_db)
-    term = next((t for t in terms if t.id == term_id), None)
+    # Get the term by ID directly (O(1) instead of O(n))
+    term = get_excluded_term_by_id(project_db, term_id)
     assert term is not None
 
     response_data = ExcludedTermResponse.from_model(term)
 
-    if already_exists:
-        # Return 200 for existing term
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content=response_data.model_dump(mode="json"),
-        )
-    else:
+    if created:
         # Return 201 for new term
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
+            content=response_data.model_dump(mode="json"),
+        )
+    else:
+        # Return 200 for existing term
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
             content=response_data.model_dump(mode="json"),
         )
 

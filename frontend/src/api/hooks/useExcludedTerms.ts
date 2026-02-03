@@ -53,6 +53,8 @@ export function useDeleteExcludedTerm(projectId: number) {
     mutationFn: (termId: number) => excludedTermApi.delete(projectId, termId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: excludedTermKeys.list(projectId) })
+      // Also invalidate terms list as the deleted term might reappear there
+      queryClient.invalidateQueries({ queryKey: termKeys.list(projectId) })
     },
   })
 }

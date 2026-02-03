@@ -201,7 +201,7 @@ class TestDeleteExcludedTerm:
         # Add a term to delete
         conn = get_connection(project_db_path)
         with transaction(conn):
-            term_id = add_excluded_term(conn, "削除対象", "manual")
+            term_id, _ = add_excluded_term(conn, "削除対象", "manual")
         conn.close()
 
         response = client.delete(
