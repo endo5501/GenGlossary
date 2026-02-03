@@ -96,6 +96,22 @@ class Project(BaseModel):
     status: ProjectStatus
 ```
 
+### excluded_term.py (v5)
+```python
+from typing import Literal
+
+class ExcludedTerm(BaseModel):
+    """除外用語を表すモデル
+
+    LLMが'common_noun'に分類した用語や、ユーザーが手動で除外した用語を管理。
+    用語抽出時に除外リストと照合し、再分類を省略してパフォーマンスを向上。
+    """
+    id: int
+    term_text: str           # 除外する用語テキスト（一意）
+    source: Literal["auto", "manual"]  # 'auto': LLM自動分類、'manual': ユーザー手動追加
+    created_at: datetime
+```
+
 ## 2. llm/ - LLMクライアント層
 
 **役割**: LLMとの通信を抽象化
@@ -210,12 +226,28 @@ class DocumentLoader:
 ### term_extractor.py (ステップ1)
 ```python
 from typing import overload
+import sqlite3
 
 class TermExtractor:
-    """用語抽出を行うクラス（SudachiPy形態素解析 + LLM分類）"""
+    """用語抽出を行うクラス（SudachiPy形態素解析 + LLM分類）
 
-    def __init__(self, llm_client: BaseLLMClient):
+    除外用語リストと連携し、既知のcommon_noun用語をLLM分類前にフィルタリング。
+    これにより不要なLLM APIコールを削減し、パフォーマンスを向上。
+    """
+
+    def __init__(
+        self,
+        llm_client: BaseLLMClient,
+        excluded_term_repo: sqlite3.Connection | None = None
+    ):
+        """
+        Args:
+            llm_client: LLMクライアント
+            excluded_term_repo: 除外用語DBへの接続（オプション）
+                指定時は除外用語フィルタと自動追加が有効化される
+        """
         self.llm_client = llm_client
+        self._excluded_term_repo = excluded_term_repo
 
     @overload
     def extract_terms(

@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS glossary_refined (
     definition TEXT NOT NULL,
     confidence REAL DEFAULT 0.0,
     occurrences TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Excluded terms (v5: terms to skip during extraction)
+CREATE TABLE IF NOT EXISTS terms_excluded (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    term_text TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

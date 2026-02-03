@@ -10,11 +10,23 @@ import {
   TextInput,
   Modal,
   ActionIcon,
+  Tabs,
+  Tooltip,
+  LoadingOverlay,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
+import { IconPlus, IconRefresh, IconTrash, IconBan, IconList } from '@tabler/icons-react'
 import { useState } from 'react'
-import { useTerms, useCreateTerm, useDeleteTerm, useExtractTerms, useCurrentRun } from '../api/hooks'
+import {
+  useTerms,
+  useCreateTerm,
+  useDeleteTerm,
+  useExtractTerms,
+  useCurrentRun,
+  useExcludedTerms,
+  useCreateExcludedTerm,
+  useDeleteExcludedTerm,
+} from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 
 interface TermsPageProps {
@@ -23,16 +35,23 @@ interface TermsPageProps {
 
 export function TermsPage({ projectId }: TermsPageProps) {
   const { data: terms, isLoading } = useTerms(projectId)
+  const { data: excludedTerms, isLoading: isLoadingExcluded } = useExcludedTerms(projectId)
   const { data: currentRun } = useCurrentRun(projectId)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const selectedTerm = terms?.find((t) => t.id === selectedId) ?? null
   const [opened, { open, close }] = useDisclosure(false)
+  const [excludedModalOpened, { open: openExcludedModal, close: closeExcludedModal }] =
+    useDisclosure(false)
   const [newTermText, setNewTermText] = useState('')
   const [newTermCategory, setNewTermCategory] = useState('')
+  const [newExcludedTermText, setNewExcludedTermText] = useState('')
+  const [activeTab, setActiveTab] = useState<string | null>('terms')
 
   const createTerm = useCreateTerm(projectId)
   const deleteTerm = useDeleteTerm(projectId)
   const extractTerms = useExtractTerms(projectId)
+  const createExcludedTerm = useCreateExcludedTerm(projectId)
+  const deleteExcludedTerm = useDeleteExcludedTerm(projectId)
 
   const isRunning = currentRun?.status === 'running'
 
@@ -60,7 +79,28 @@ export function TermsPage({ projectId }: TermsPageProps) {
     })
   }
 
-  const actionBar = (
+  const handleAddToExcluded = (termText: string) => {
+    createExcludedTerm.mutate({ term_text: termText })
+  }
+
+  const handleDeleteExcludedTerm = (termId: number) => {
+    deleteExcludedTerm.mutate(termId)
+  }
+
+  const handleAddExcludedTerm = () => {
+    if (!newExcludedTermText.trim()) return
+    createExcludedTerm.mutate(
+      { term_text: newExcludedTermText.trim() },
+      {
+        onSuccess: () => {
+          setNewExcludedTermText('')
+          closeExcludedModal()
+        },
+      }
+    )
+  }
+
+  const termsActionBar = (
     <>
       <Button
         leftSection={<IconRefresh size={16} />}
@@ -81,79 +121,190 @@ export function TermsPage({ projectId }: TermsPageProps) {
     </>
   )
 
+  const excludedActionBar = (
+    <Button
+      leftSection={<IconPlus size={16} />}
+      onClick={openExcludedModal}
+      aria-label="Add excluded term"
+    >
+      Add
+    </Button>
+  )
+
+  const actionBar = activeTab === 'terms' ? termsActionBar : excludedActionBar
+
+  const isTermsEmpty = !terms || terms.length === 0
+  const isExcludedEmpty = !excludedTerms || excludedTerms.length === 0
+  const isEmpty = activeTab === 'terms' ? isTermsEmpty : isExcludedEmpty
+  const emptyMessage =
+    activeTab === 'terms'
+      ? 'No terms found. Extract terms from documents or add manually.'
+      : 'No excluded terms. Add terms to exclude them from extraction.'
+
   return (
     <PageContainer
-      isLoading={isLoading}
-      isEmpty={!terms || terms.length === 0}
-      emptyMessage="No terms found. Extract terms from documents or add manually."
+      isLoading={isLoading && activeTab === 'terms'}
+      isEmpty={isEmpty}
+      emptyMessage={emptyMessage}
       actionBar={actionBar}
       loadingTestId="terms-loading"
-      emptyTestId="terms-empty"
+      emptyTestId={activeTab === 'terms' ? 'terms-empty' : 'excluded-terms-empty'}
     >
-      <Box style={{ flex: 1 }}>
-        <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Term</Table.Th>
-              <Table.Th>Category</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {terms?.map((term) => (
-              <Table.Tr
-                key={term.id}
-                onClick={() => setSelectedId(term.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    setSelectedId(term.id)
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-selected={selectedId === term.id}
-                style={{ cursor: 'pointer' }}
-                bg={selectedId === term.id ? 'var(--mantine-color-blue-light)' : undefined}
-              >
-                <Table.Td>{term.term_text}</Table.Td>
-                <Table.Td>
-                  {term.category ? (
-                    <Badge variant="light">{term.category}</Badge>
-                  ) : (
-                    <Text c="dimmed" size="sm">
-                      -
-                    </Text>
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Box>
+      <Tabs value={activeTab} onChange={setActiveTab}>
+        <Tabs.List mb="md">
+          <Tabs.Tab value="terms" leftSection={<IconList size={16} />}>
+            用語一覧
+          </Tabs.Tab>
+          <Tabs.Tab value="excluded" leftSection={<IconBan size={16} />}>
+            除外用語
+          </Tabs.Tab>
+        </Tabs.List>
 
-      {selectedTerm && (
-        <Paper data-testid="term-detail-panel" withBorder p="md">
-          <Group justify="space-between" mb="md">
-            <Text fw={600} size="lg">
-              {selectedTerm.term_text}
-            </Text>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={() => handleDeleteTerm(selectedTerm.id)}
-              aria-label="Delete term"
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Group>
+        <Tabs.Panel value="terms">
+          <Box style={{ flex: 1 }}>
+            <Table highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Term</Table.Th>
+                  <Table.Th>Category</Table.Th>
+                  <Table.Th w={100}>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {terms?.map((term) => (
+                  <Table.Tr
+                    key={term.id}
+                    onClick={() => setSelectedId(term.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedId(term.id)
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-selected={selectedId === term.id}
+                    style={{ cursor: 'pointer' }}
+                    bg={selectedId === term.id ? 'var(--mantine-color-blue-light)' : undefined}
+                  >
+                    <Table.Td>{term.term_text}</Table.Td>
+                    <Table.Td>
+                      {term.category ? (
+                        <Badge variant="light">{term.category}</Badge>
+                      ) : (
+                        <Text c="dimmed" size="sm">
+                          -
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs">
+                        <Tooltip label="除外に追加">
+                          <ActionIcon
+                            variant="subtle"
+                            color="orange"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleAddToExcluded(term.term_text)
+                            }}
+                            aria-label="Add to excluded"
+                            loading={createExcludedTerm.isPending}
+                          >
+                            <IconBan size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label="削除">
+                          <ActionIcon
+                            variant="subtle"
+                            color="red"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteTerm(term.id)
+                            }}
+                            aria-label="Delete term"
+                          >
+                            <IconTrash size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Box>
 
-          {selectedTerm.category && (
-            <Badge variant="light" mb="md">
-              {selectedTerm.category}
-            </Badge>
+          {selectedTerm && (
+            <Paper data-testid="term-detail-panel" withBorder p="md" mt="md">
+              <Group justify="space-between" mb="md">
+                <Text fw={600} size="lg">
+                  {selectedTerm.term_text}
+                </Text>
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  onClick={() => handleDeleteTerm(selectedTerm.id)}
+                  aria-label="Delete term"
+                >
+                  <IconTrash size={16} />
+                </ActionIcon>
+              </Group>
+
+              {selectedTerm.category && (
+                <Badge variant="light" mb="md">
+                  {selectedTerm.category}
+                </Badge>
+              )}
+            </Paper>
           )}
-        </Paper>
-      )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value="excluded">
+          <Box style={{ flex: 1, position: 'relative' }}>
+            <LoadingOverlay visible={isLoadingExcluded} />
+            <Table highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Term</Table.Th>
+                  <Table.Th>Source</Table.Th>
+                  <Table.Th>Created At</Table.Th>
+                  <Table.Th w={80}>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {excludedTerms?.map((term) => (
+                  <Table.Tr key={term.id}>
+                    <Table.Td>{term.term_text}</Table.Td>
+                    <Table.Td>
+                      <Badge variant="light" color={term.source === 'auto' ? 'blue' : 'green'}>
+                        {term.source === 'auto' ? '自動' : '手動'}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed">
+                        {new Date(term.created_at).toLocaleDateString('ja-JP')}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Tooltip label="除外リストから削除">
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          onClick={() => handleDeleteExcludedTerm(term.id)}
+                          aria-label="Remove from excluded"
+                          loading={deleteExcludedTerm.isPending}
+                        >
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Box>
+        </Tabs.Panel>
+      </Tabs>
 
       <Modal opened={opened} onClose={close} title="Add Term">
         <Stack>
@@ -176,6 +327,26 @@ export function TermsPage({ projectId }: TermsPageProps) {
             </Button>
             <Button onClick={handleAddTerm} loading={createTerm.isPending}>
               Add
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={excludedModalOpened} onClose={closeExcludedModal} title="除外用語を追加">
+        <Stack>
+          <TextInput
+            label="用語"
+            placeholder="除外する用語を入力"
+            value={newExcludedTermText}
+            onChange={(e) => setNewExcludedTermText(e.target.value)}
+            required
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={closeExcludedModal}>
+              キャンセル
+            </Button>
+            <Button onClick={handleAddExcludedTerm} loading={createExcludedTerm.isPending}>
+              追加
             </Button>
           </Group>
         </Stack>
