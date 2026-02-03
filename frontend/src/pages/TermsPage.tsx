@@ -109,13 +109,24 @@ export function TermsPage({ projectId }: TermsPageProps) {
     setIsEditingCategory(true)
   }
 
-  const handleCancelEditCategory = () => {
+  const resetCategoryEdit = () => {
     setIsEditingCategory(false)
     setEditingCategoryValue('')
   }
 
+  const handleCancelEditCategory = () => {
+    resetCategoryEdit()
+  }
+
+  const handleSelectTerm = (termId: number) => {
+    if (termId !== selectedId) {
+      resetCategoryEdit()
+    }
+    setSelectedId(termId)
+  }
+
   const handleSaveCategory = () => {
-    if (!selectedTerm) return
+    if (!selectedTerm || updateTerm.isPending) return
     const trimmedValue = editingCategoryValue.trim()
     updateTerm.mutate(
       {
@@ -123,10 +134,7 @@ export function TermsPage({ projectId }: TermsPageProps) {
         data: { category: trimmedValue || null },
       },
       {
-        onSuccess: () => {
-          setIsEditingCategory(false)
-          setEditingCategoryValue('')
-        },
+        onSuccess: resetCategoryEdit,
       }
     )
   }
@@ -205,11 +213,11 @@ export function TermsPage({ projectId }: TermsPageProps) {
                 {terms?.map((term) => (
                   <Table.Tr
                     key={term.id}
-                    onClick={() => setSelectedId(term.id)}
+                    onClick={() => handleSelectTerm(term.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
-                        setSelectedId(term.id)
+                        handleSelectTerm(term.id)
                       }
                     }}
                     tabIndex={0}
@@ -294,6 +302,7 @@ export function TermsPage({ projectId }: TermsPageProps) {
                       }
                     }}
                     placeholder="カテゴリを入力"
+                    aria-label="カテゴリ"
                     size="sm"
                     disabled={updateTerm.isPending}
                   />

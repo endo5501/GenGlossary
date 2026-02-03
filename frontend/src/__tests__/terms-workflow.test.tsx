@@ -1077,6 +1077,36 @@ describe('Category Editing', () => {
       expect(savedCategory).toBe('Enterで保存')
     })
   })
+
+  it('resets edit mode when selecting a different term', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Select first term and enter edit mode
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
+
+    // Verify we're in edit mode
+    expect(within(detailPanel).getByRole('textbox')).toBeInTheDocument()
+
+    // Select a different term
+    await user.click(screen.getByText('量子ビット'))
+
+    // Should exit edit mode (no textbox visible)
+    await waitFor(() => {
+      const updatedPanel = screen.getByTestId('term-detail-panel')
+      expect(within(updatedPanel).queryByRole('textbox')).not.toBeInTheDocument()
+    })
+  })
 })
 
 describe('Excluded Terms', () => {
