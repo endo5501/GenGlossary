@@ -1,5 +1,6 @@
 """API routers."""
 
+from genglossary.api.routers.excluded_terms import router as excluded_terms_router
 from genglossary.api.routers.files import router as files_router
 from genglossary.api.routers.health import router as health_router
 from genglossary.api.routers.issues import router as issues_router
@@ -11,13 +12,14 @@ from genglossary.api.routers.runs import router as runs_router
 from genglossary.api.routers.terms import router as terms_router
 
 __all__ = [
-    "health_router",
-    "terms_router",
-    "provisional_router",
-    "issues_router",
-    "refined_router",
+    "excluded_terms_router",
     "files_router",
-    "runs_router",
-    "projects_router",
+    "health_router",
+    "issues_router",
     "ollama_router",
+    "projects_router",
+    "provisional_router",
+    "refined_router",
+    "runs_router",
+    "terms_router",
 ]

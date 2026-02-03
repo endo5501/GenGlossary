@@ -9,6 +9,7 @@ from genglossary.api.middleware import (
     StructuredLoggingMiddleware,
 )
 from genglossary.api.routers import (
+    excluded_terms_router,
     files_router,
     health_router,
     issues_router,
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(projects_router)
     app.include_router(terms_router)
+    app.include_router(excluded_terms_router)
     app.include_router(provisional_router)
     app.include_router(issues_router)
     app.include_router(refined_router)
