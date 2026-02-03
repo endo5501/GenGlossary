@@ -11,7 +11,7 @@ def add_excluded_term(
     conn: sqlite3.Connection,
     term_text: str,
     source: Literal["auto", "manual"],
-) -> int:
+) -> tuple[int, bool]:
     """Add a term to the exclusion list.
 
     If the term already exists, returns the existing term's ID without
@@ -23,7 +23,8 @@ def add_excluded_term(
         source: How the term was added ('auto' or 'manual').
 
     Returns:
-        int: The ID of the excluded term (new or existing).
+        tuple[int, bool]: A tuple of (term_id, created) where created is True
+            if a new term was inserted, False if the term already existed.
     """
     cursor = conn.cursor()
 
@@ -38,7 +39,7 @@ def add_excluded_term(
     )
 
     if cursor.lastrowid and cursor.rowcount > 0:
-        return cast(int, cursor.lastrowid)
+        return cast(int, cursor.lastrowid), True
 
     # Term already exists, get its ID
     cursor.execute(
@@ -46,7 +47,7 @@ def add_excluded_term(
         (term_text,),
     )
     row = cursor.fetchone()
-    return cast(int, row["id"])
+    return cast(int, row["id"]), False
 
 
 def delete_excluded_term(conn: sqlite3.Connection, term_id: int) -> bool:
@@ -86,6 +87,33 @@ def get_all_excluded_terms(conn: sqlite3.Connection) -> list[ExcludedTerm]:
         )
         for row in rows
     ]
+
+
+def get_excluded_term_by_id(
+    conn: sqlite3.Connection, term_id: int
+) -> ExcludedTerm | None:
+    """Get an excluded term by its ID.
+
+    Args:
+        conn: Database connection.
+        term_id: The ID of the term to retrieve.
+
+    Returns:
+        ExcludedTerm | None: The excluded term if found, None otherwise.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM terms_excluded WHERE id = ?", (term_id,))
+    row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    return ExcludedTerm(
+        id=row["id"],
+        term_text=row["term_text"],
+        source=row["source"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+    )
 
 
 def term_exists_in_excluded(conn: sqlite3.Connection, term_text: str) -> bool:
@@ -130,6 +158,8 @@ def bulk_add_excluded_terms(
     """Add multiple terms to the exclusion list.
 
     Skips terms that already exist in the exclusion list.
+    Normalizes term texts by stripping leading/trailing whitespace
+    and skipping empty strings.
 
     Args:
         conn: Database connection.
@@ -142,10 +172,16 @@ def bulk_add_excluded_terms(
     if not terms:
         return 0
 
+    # Normalize: strip whitespace and filter empty strings
+    normalized_terms = [t.strip() for t in terms if t.strip()]
+
+    if not normalized_terms:
+        return 0
+
     cursor = conn.cursor()
     added_count = 0
 
-    for term_text in terms:
+    for term_text in normalized_terms:
         cursor.execute(
             """
             INSERT INTO terms_excluded (term_text, source)
