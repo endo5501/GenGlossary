@@ -3,7 +3,7 @@ priority: 3
 tags: [bug, frontend, ux]
 description: "Extract操作後に用語一覧が自動更新されない"
 created_at: "2026-02-03T19:58:07Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-03T22:18:37Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -32,18 +32,18 @@ Extract（用語抽出）などの操作を行った後、用語一覧画面が�
 
 ## Tasks
 
-- [ ] 問題の原因を調査（React Queryのinvalidation漏れ、SSEハンドリング等）
-- [ ] Extract完了時のデータ再取得処理を実装
-- [ ] 他の操作（追加・削除・除外）でも同様の問題がないか確認
-- [ ] テストの追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] 問題の原因を調査（React Queryのinvalidation漏れ、SSEハンドリング等）
+- [x] Extract完了時のデータ再取得処理を実装
+- [x] 他の操作（追加・削除・除外）でも同様の問題がないか確認
+- [x] テストの追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 
@@ -51,3 +51,22 @@ Extract（用語抽出）などの操作を行った後、用語一覧画面が�
 
 - Run完了時のSSEイベントを受け取った後、React Queryのキャッシュをinvalidateする必要がある可能性
 - `queryClient.invalidateQueries` の呼び出しが適切に行われているか確認
+
+## 解決方法
+
+**根本原因**: SSE 'complete' イベント後に `termKeys.list` がinvalidateされていなかった
+
+**修正内容**:
+1. `AppShell.tsx`の`handleRunComplete`で、Run完了時にすべてのデータリストをinvalidate
+2. `issueKeys.lists()` → `issueKeys.list(projectId)` に修正（特定プロジェクトのみ無効化）
+3. 早期リターンパターンで可読性向上
+
+**コードレビューで見つかった追加課題**:
+- エッジケース: ナビゲーション中にSSE完了イベントが発火すると間違ったプロジェクトのキャッシュが無効化される可能性
+- 別チケットとして登録: `260203-222752-handlerunomplete-projectid-from-sse-context`
+
+**コミット**:
+- `ef06546`: Fix auto-refresh of data lists after run completion
+- `2c2b0dd`: Refactor handleRunComplete with early return and fix issueKeys
+- `e3f56c3`: Add ticket: handleRunComplete should receive projectId from SSE context
+- `17a6be1`: Update frontend.md: document cache invalidation on run completion
