@@ -9,6 +9,7 @@ from genglossary.db.excluded_term_repository import (
     bulk_add_excluded_terms,
     delete_excluded_term,
     get_all_excluded_terms,
+    get_excluded_term_by_id,
     get_excluded_term_texts,
     term_exists_in_excluded,
 )
@@ -25,11 +26,11 @@ def db_with_schema(in_memory_db: sqlite3.Connection) -> sqlite3.Connection:
 class TestAddExcludedTerm:
     """Test add_excluded_term function."""
 
-    def test_add_excluded_term_returns_id(
+    def test_add_excluded_term_returns_id_and_created_flag(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that add_excluded_term returns the term ID."""
-        term_id = add_excluded_term(
+        """Test that add_excluded_term returns tuple of (term_id, created)."""
+        term_id, created = add_excluded_term(
             db_with_schema,
             term_text="量子コンピュータ",
             source="auto",
@@ -37,12 +38,13 @@ class TestAddExcludedTerm:
 
         assert isinstance(term_id, int)
         assert term_id > 0
+        assert created is True
 
     def test_add_excluded_term_stores_data(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that add_excluded_term stores data correctly."""
-        term_id = add_excluded_term(
+        term_id, _ = add_excluded_term(
             db_with_schema,
             term_text="量子コンピュータ",
             source="manual",
@@ -57,24 +59,52 @@ class TestAddExcludedTerm:
         assert row["source"] == "manual"
         assert row["created_at"] is not None
 
-    def test_add_existing_term_returns_existing_id(
+    def test_add_existing_term_returns_existing_id_with_false_flag(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that adding an existing term returns its ID without error."""
-        term_id_1 = add_excluded_term(
+        """Test that adding an existing term returns its ID with created=False."""
+        term_id_1, created_1 = add_excluded_term(
             db_with_schema,
             term_text="量子コンピュータ",
             source="auto",
         )
 
-        # Adding the same term should return the existing ID
-        term_id_2 = add_excluded_term(
+        # Adding the same term should return the existing ID with created=False
+        term_id_2, created_2 = add_excluded_term(
             db_with_schema,
             term_text="量子コンピュータ",
             source="manual",  # source is different, but term exists
         )
 
         assert term_id_1 == term_id_2
+        assert created_1 is True
+        assert created_2 is False
+
+
+class TestGetExcludedTermById:
+    """Test get_excluded_term_by_id function."""
+
+    def test_returns_term_when_exists(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that get_excluded_term_by_id returns the term when it exists."""
+        term_id, _ = add_excluded_term(db_with_schema, "量子コンピュータ", "manual")
+
+        term = get_excluded_term_by_id(db_with_schema, term_id)
+
+        assert term is not None
+        assert term.id == term_id
+        assert term.term_text == "量子コンピュータ"
+        assert term.source == "manual"
+        assert term.created_at is not None
+
+    def test_returns_none_when_not_exists(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that get_excluded_term_by_id returns None for non-existent ID."""
+        term = get_excluded_term_by_id(db_with_schema, 999)
+
+        assert term is None
 
 
 class TestDeleteExcludedTerm:
@@ -232,3 +262,40 @@ class TestBulkAddExcludedTerms:
         all_terms = get_all_excluded_terms(db_with_schema)
         for term in all_terms:
             assert term.source == "auto"
+
+    def test_bulk_add_normalizes_whitespace(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that bulk_add strips leading/trailing whitespace."""
+        terms = ["  用語1  ", "\t用語2\n", "用語3"]
+
+        count = bulk_add_excluded_terms(db_with_schema, terms, "auto")
+
+        assert count == 3
+        texts = get_excluded_term_texts(db_with_schema)
+        assert texts == {"用語1", "用語2", "用語3"}
+
+    def test_bulk_add_skips_empty_strings(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that bulk_add skips empty strings and whitespace-only strings."""
+        terms = ["用語1", "", "  ", "用語2", "\t\n"]
+
+        count = bulk_add_excluded_terms(db_with_schema, terms, "auto")
+
+        assert count == 2
+        texts = get_excluded_term_texts(db_with_schema)
+        assert texts == {"用語1", "用語2"}
+
+    def test_bulk_add_deduplicates_after_normalization(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that bulk_add handles duplicates that appear after normalization."""
+        terms = ["用語1", "  用語1  ", "用語1"]  # All same after strip
+
+        count = bulk_add_excluded_terms(db_with_schema, terms, "auto")
+
+        # Should only add 1 unique term
+        assert count == 1
+        texts = get_excluded_term_texts(db_with_schema)
+        assert texts == {"用語1"}
