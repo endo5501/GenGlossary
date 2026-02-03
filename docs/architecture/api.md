@@ -138,6 +138,40 @@ ProvisionalResponse = GlossaryTermResponse  # Provisional用
 RefinedResponse = GlossaryTermResponse      # Refined用
 ```
 
+### excluded_term_schemas.py (除外用語スキーマ - v5)
+```python
+from typing import Literal
+from datetime import datetime
+
+class ExcludedTermResponse(BaseModel):
+    """Response schema for an excluded term."""
+    id: int = Field(..., description="Excluded term ID")
+    term_text: str = Field(..., description="Excluded term text")
+    source: Literal["auto", "manual"] = Field(..., description="Source of exclusion")
+    created_at: datetime = Field(..., description="Creation timestamp")
+
+    @classmethod
+    def from_model(cls, model: ExcludedTerm) -> "ExcludedTermResponse":
+        """Create from ExcludedTerm model."""
+        return cls(
+            id=model.id,
+            term_text=model.term_text,
+            source=model.source,
+            created_at=model.created_at,
+        )
+
+
+class ExcludedTermListResponse(BaseModel):
+    """Response schema for excluded term list."""
+    items: list[ExcludedTermResponse] = Field(..., description="List of excluded terms")
+    total: int = Field(..., description="Total count")
+
+
+class ExcludedTermCreateRequest(BaseModel):
+    """Request schema for creating an excluded term."""
+    term_text: str = Field(..., min_length=1, description="Term text to exclude")
+```
+
 ### issue_schemas.py (Issues用スキーマ)
 ```python
 class IssueResponse(BaseModel):
@@ -503,6 +537,45 @@ async def delete_term_endpoint(
     delete_term(project_db, term_id)
 ```
 
+### excluded_terms.py (除外用語API - v5)
+```python
+router = APIRouter(prefix="/api/projects/{project_id}/excluded-terms", tags=["excluded-terms"])
+
+@router.get("", response_model=ExcludedTermListResponse)
+async def list_excluded_terms(
+    project_id: int = Path(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> ExcludedTermListResponse:
+    """除外用語の一覧を取得"""
+    terms = get_all_excluded_terms(project_db)
+    return ExcludedTermListResponse(
+        items=ExcludedTermResponse.from_models(terms),
+        total=len(terms),
+    )
+
+@router.post("", response_model=ExcludedTermResponse)
+async def create_excluded_term(
+    project_id: int = Path(...),
+    request: ExcludedTermCreateRequest = Body(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> JSONResponse:
+    """除外用語を追加（既存の場合は200、新規の場合は201）"""
+    # ON CONFLICT DO NOTHINGで重複を許容
+    # 新規追加時は201、既存時は200を返す
+    ...
+
+@router.delete("/{term_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_excluded_term(
+    project_id: int = Path(...),
+    term_id: int = Path(...),
+    project_db: sqlite3.Connection = Depends(get_project_db),
+) -> None:
+    """除外用語を削除"""
+    success = delete_excluded_term(project_db, term_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Excluded term not found")
+```
+
 ### provisional.py (Provisional API - 暫定用語集)
 ```python
 router = APIRouter(prefix="/api/projects/{project_id}/provisional", tags=["provisional"])
@@ -852,6 +925,11 @@ async def list_terms(
 - `PATCH /api/projects/{project_id}/terms/{term_id}` - 用語更新
 - `DELETE /api/projects/{project_id}/terms/{term_id}` - 用語削除
 
+**Excluded Terms API (除外用語管理) - 3エンドポイント (v5):**
+- `GET /api/projects/{project_id}/excluded-terms` - 除外用語一覧取得
+- `POST /api/projects/{project_id}/excluded-terms` - 除外用語追加（201 新規作成 / 200 既存）
+- `DELETE /api/projects/{project_id}/excluded-terms/{term_id}` - 除外用語削除
+
 **Provisional API (暫定用語集) - 5エンドポイント:**
 - `GET /api/projects/{project_id}/provisional` - 暫定用語集一覧取得
 - `GET /api/projects/{project_id}/provisional/{entry_id}` - 暫定用語詳細取得
@@ -896,7 +974,7 @@ async def list_terms(
 **Ollama API (Ollamaサーバー連携) - 1エンドポイント:**
 - `GET /api/ollama/models` - 利用可能なモデル一覧を取得（`base_url` クエリパラメータでサーバー指定可能）
 
-**合計: 39エンドポイント** (システム4 + Projects API 6 + Ollama API 1 + データAPI 28)
+**合計: 42エンドポイント** (システム4 + Projects API 6 + Ollama API 1 + Excluded Terms API 3 + データAPI 28)
 
 ## API実装のポイント
 

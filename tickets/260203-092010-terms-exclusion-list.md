@@ -69,44 +69,44 @@ SudachiPy形態素解析 → 除外用語一覧でフィルタ → 残りをLLM�
 ## Tasks
 
 ### Phase 1: データベース拡張
-- [ ] `terms_excluded` テーブルをスキーマに追加（SCHEMA_VERSION=5）
+- [x] `terms_excluded` テーブルをスキーマに追加（SCHEMA_VERSION=5）
   - `id`: INTEGER PRIMARY KEY
   - `term_text`: TEXT NOT NULL UNIQUE
   - `source`: TEXT NOT NULL ('auto' | 'manual')
   - `created_at`: TEXT NOT NULL
-- [ ] マイグレーション処理の追加
-- [ ] `excluded_term_repository.py` の作成（CRUD操作）
+- [x] マイグレーション処理の追加
+- [x] `excluded_term_repository.py` の作成（CRUD操作）
 
 ### Phase 2: バックエンドAPI
-- [ ] `/api/projects/{project_id}/excluded-terms` エンドポイント追加
+- [x] `/api/projects/{project_id}/excluded-terms` エンドポイント追加
   - `GET`: 除外用語一覧取得
   - `POST`: 除外用語追加（手動）
   - `DELETE /{term_id}`: 除外用語削除
-- [ ] スキーマ定義（`ExcludedTermResponse`, `ExcludedTermCreateRequest`）
+- [x] スキーマ定義（`ExcludedTermResponse`, `ExcludedTermCreateRequest`）
 
 ### Phase 3: 用語抽出ロジック改修
-- [ ] `TermExtractor._classify_terms()` の前に除外用語フィルタを追加
-- [ ] `common_noun` 分類時に除外用語一覧へ自動追加
-- [ ] フィルタリング統計情報の追加（スキップ数など）
+- [x] `TermExtractor._classify_terms()` の前に除外用語フィルタを追加
+- [x] `common_noun` 分類時に除外用語一覧へ自動追加
+- [x] フィルタリング統計情報の追加（スキップ数など）
 
 ### Phase 4: フロントエンドUI
-- [ ] `useExcludedTerms` フック作成
-- [ ] Terms画面に除外用語一覧セクション追加
+- [x] `useExcludedTerms` フック作成
+- [x] Terms画面に除外用語一覧セクション追加
   - テーブル表示（用語、追加元、追加日時）
   - 削除ボタン
-- [ ] 用語を除外用語一覧に追加するUI
+- [x] 用語を除外用語一覧に追加するUI
   - 用語詳細パネルに「除外に追加」ボタン
   - または用語行にコンテキストメニュー
-- [ ] 手動で除外用語を追加するモーダル
+- [x] 手動で除外用語を追加するモーダル
 
 ### Phase 5: 統合・テスト
-- [ ] E2Eテスト追加
-- [ ] パフォーマンス改善の検証
+- [x] E2Eテスト追加
+- [x] パフォーマンス改善の検証
 
 ### 品質タスク
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
 - [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
 - [ ] Update docs/architecture/*.md

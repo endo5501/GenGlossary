@@ -1,6 +1,10 @@
-# データベース層 (Schema v4)
+# データベース層 (Schema v5)
 
 **役割**: SQLiteへのデータ永続化とCRUD操作
+
+**Schema v5の主な変更点**:
+- `terms_excluded`テーブルを追加（除外用語一覧）
+- `excluded_term_repository.py`を追加（除外用語のCRUD操作）
 
 **Schema v4の主な変更点**:
 - `documents`テーブルの`file_path`を`file_name`にリネーム
@@ -117,12 +121,12 @@ def batch_insert(
 
 ## schema.py
 ```python
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 def initialize_db(conn: sqlite3.Connection) -> None:
-    """データベーススキーマを初期化 (Schema v4)"""
+    """データベーススキーマを初期化 (Schema v5)"""
     # テーブル作成: metadata, documents, terms_extracted,
-    # glossary_provisional, glossary_issues, glossary_refined, runs
+    # glossary_provisional, glossary_issues, glossary_refined, runs, terms_excluded
     # metadataテーブルは単一行（id=1固定）でLLM設定や入力パスを保存
     # runsテーブルはバックグラウンド実行の履歴を管理
     #
@@ -134,6 +138,12 @@ def initialize_db(conn: sqlite3.Connection) -> None:
     #     - パストラバーサル (..) は許可されない
     #   content TEXT NOT NULL           -- ファイル内容
     #   content_hash TEXT NOT NULL      -- SHA256ハッシュ
+    #
+    # terms_excludedテーブル (v5):
+    #   id INTEGER PRIMARY KEY AUTOINCREMENT
+    #   term_text TEXT NOT NULL UNIQUE  -- 除外する用語（一意制約）
+    #   source TEXT NOT NULL            -- 'auto'（LLM自動分類）| 'manual'（ユーザー手動追加）
+    #   created_at TEXT NOT NULL        -- 作成日時
     ...
 
 def get_schema_version(conn: sqlite3.Connection) -> int:
@@ -290,6 +300,56 @@ def create_terms_batch(
 
     Raises:
         sqlite3.IntegrityError: term_textが既に存在する場合
+    """
+    ...
+```
+
+## excluded_term_repository.py (v5)
+```python
+from typing import Literal
+from genglossary.models.excluded_term import ExcludedTerm
+
+def add_excluded_term(
+    conn: sqlite3.Connection,
+    term_text: str,
+    source: Literal["auto", "manual"]
+) -> int:
+    """除外用語を追加（ON CONFLICT DO NOTHINGで重複を許容）
+
+    Returns:
+        追加または既存のエントリのID
+    """
+    ...
+
+def delete_excluded_term(conn: sqlite3.Connection, term_id: int) -> bool:
+    """除外用語を削除
+
+    Returns:
+        削除が成功した場合True、用語が存在しない場合False
+    """
+    ...
+
+def get_all_excluded_terms(conn: sqlite3.Connection) -> list[ExcludedTerm]:
+    """全ての除外用語を取得（created_at降順）"""
+    ...
+
+def term_exists_in_excluded(conn: sqlite3.Connection, term_text: str) -> bool:
+    """指定した用語テキストが除外リストに存在するか確認"""
+    ...
+
+def get_excluded_term_texts(conn: sqlite3.Connection) -> set[str]:
+    """除外用語のテキスト一覧をsetで取得（高速フィルタ用）"""
+    ...
+
+def bulk_add_excluded_terms(
+    conn: sqlite3.Connection,
+    term_texts: list[str],
+    source: Literal["auto", "manual"]
+) -> int:
+    """複数の除外用語を一括追加（ON CONFLICT DO NOTHINGで重複を許容）
+
+    Returns:
+        実際に追加された件数
     """
     ...
 ```
