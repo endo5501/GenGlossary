@@ -3,7 +3,7 @@ priority: 3
 tags: [backend, frontend, database, performance]
 description: "除外用語一覧を追加し、用語抽出の効率化とユーザー制御を実現"
 created_at: "2026-02-03T09:20:10Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-03T18:15:15Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -145,3 +145,114 @@ SudachiPy形態素解析 → 除外用語一覧でフィルタ → 残りをLLM�
 - 一度分類した`common_noun`は再分類不要
 - ファイル更新時のLLM APIコール数が大幅削減
 - 大量ドキュメントでの抽出時間短縮
+
+---
+
+## 設計書
+
+### 設計判断
+
+| 項目 | 決定 | 理由 |
+|------|------|------|
+| スコープ | 一括実装（Phase 1-4） | エンドツーエンドで動作確認しやすい |
+| 除外用語のスコープ | グローバル | 現行の `terms_extracted` と一貫性 |
+| 既存データ移行 | 行わない | 次回抽出時に自動追加される |
+| フロントエンドUI | タブ切り替え | 画面がすっきり、操作に集中 |
+| 除外追加UI | 行アクションボタン | 既存UIパターンと一貫性 |
+
+### データベース設計
+
+`terms_excluded` テーブル（SCHEMA_VERSION=5）:
+
+```sql
+CREATE TABLE IF NOT EXISTS terms_excluded (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    term_text TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL,  -- 'auto' | 'manual'
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| `id` | INTEGER | 主キー（自動採番） |
+| `term_text` | TEXT | 除外用語（一意制約） |
+| `source` | TEXT | 追加元: `auto`=LLM分類、`manual`=ユーザー |
+| `created_at` | TEXT | 追加日時 |
+
+### リポジトリ層
+
+新規ファイル: `src/genglossary/db/excluded_term_repository.py`
+
+```python
+class ExcludedTermRepository:
+    def __init__(self, conn: sqlite3.Connection): ...
+    def add(self, term_text: str, source: Literal["auto", "manual"]) -> int: ...
+    def remove(self, term_id: int) -> bool: ...
+    def get_all(self) -> list[ExcludedTerm]: ...
+    def exists(self, term_text: str) -> bool: ...
+    def get_term_texts(self) -> set[str]: ...
+    def bulk_add(self, terms: list[str], source: Literal["auto", "manual"]) -> int: ...
+```
+
+モデル: `src/genglossary/models/excluded_term.py`
+
+```python
+class ExcludedTerm(BaseModel):
+    id: int
+    term_text: str
+    source: Literal["auto", "manual"]
+    created_at: datetime
+```
+
+### バックエンドAPI
+
+新規ファイル: `src/genglossary/api/routers/excluded_terms.py`
+
+| メソッド | パス | 説明 |
+|----------|------|------|
+| `GET` | `/api/excluded-terms` | 除外用語一覧を取得 |
+| `POST` | `/api/excluded-terms` | 除外用語を手動追加 |
+| `DELETE` | `/api/excluded-terms/{term_id}` | 除外用語を削除 |
+
+スキーマ:
+
+```python
+class ExcludedTermCreateRequest(BaseModel):
+    term_text: str
+
+class ExcludedTermResponse(BaseModel):
+    id: int
+    term_text: str
+    source: Literal["auto", "manual"]
+    created_at: datetime
+
+class ExcludedTermListResponse(BaseModel):
+    items: list[ExcludedTermResponse]
+    total: int
+```
+
+### 用語抽出ロジック改修
+
+変更ファイル: `src/genglossary/term_extractor.py`
+
+1. コンストラクタに `excluded_term_repo: ExcludedTermRepository | None` を追加
+2. `_filter_excluded_terms()` メソッド追加（分類前に除外用語をフィルタ）
+3. `_classify_terms()` 完了後に `common_noun` を除外リストに自動追加
+
+### フロントエンドUI
+
+新規ファイル:
+- `frontend/src/api/hooks/useExcludedTerms.ts`
+- `frontend/src/components/ExcludedTermsTable.tsx`
+
+変更ファイル: `frontend/src/pages/TermsPage.tsx`
+- タブUI追加（「用語一覧」「除外用語」）
+- 用語行に「除外に追加」アクションボタン追加
+
+### 実装順序
+
+1. **Phase 1: データベース** - モデル、テーブル、リポジトリ
+2. **Phase 2: バックエンドAPI** - ルーター、スキーマ
+3. **Phase 3: 用語抽出ロジック** - フィルタ、自動追加
+4. **Phase 4: フロントエンド** - フック、コンポーネント、UI
