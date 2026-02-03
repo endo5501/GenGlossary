@@ -133,6 +133,62 @@ class TestListAllTerms:
 
         assert len(terms) == 2
 
+    def test_list_all_terms_excludes_terms_in_excluded_list(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that list_all_terms excludes terms that are in excluded list."""
+        from genglossary.db.excluded_term_repository import add_excluded_term
+
+        # Create terms
+        create_term(db_with_schema, term_text="量子コンピュータ", category="technical")
+        create_term(db_with_schema, term_text="量子ビット", category="technical")
+        create_term(db_with_schema, term_text="重ね合わせ", category="concept")
+
+        # Add one term to excluded list
+        add_excluded_term(db_with_schema, "量子ビット", "manual")
+
+        # list_all_terms should exclude "量子ビット"
+        terms = list_all_terms(db_with_schema)
+
+        assert len(terms) == 2
+        term_texts = [t["term_text"] for t in terms]
+        assert "量子コンピュータ" in term_texts
+        assert "重ね合わせ" in term_texts
+        assert "量子ビット" not in term_texts
+
+    def test_list_all_terms_returns_all_when_no_excluded_terms(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that list_all_terms returns all terms when excluded list is empty."""
+        # Create terms
+        create_term(db_with_schema, term_text="量子コンピュータ", category="technical")
+        create_term(db_with_schema, term_text="量子ビット", category="technical")
+
+        # No excluded terms added
+
+        terms = list_all_terms(db_with_schema)
+
+        assert len(terms) == 2
+
+    def test_list_all_terms_only_excludes_exact_match(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that list_all_terms only excludes exact text match, not partial."""
+        from genglossary.db.excluded_term_repository import add_excluded_term
+
+        # Create terms
+        create_term(db_with_schema, term_text="量子コンピュータ", category="technical")
+        create_term(db_with_schema, term_text="量子", category="technical")
+
+        # Exclude only "量子" (not "量子コンピュータ")
+        add_excluded_term(db_with_schema, "量子", "manual")
+
+        terms = list_all_terms(db_with_schema)
+
+        # "量子コンピュータ" should still be included
+        assert len(terms) == 1
+        assert terms[0]["term_text"] == "量子コンピュータ"
+
 
 class TestUpdateTerm:
     """Test update_term function."""

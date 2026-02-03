@@ -52,16 +52,26 @@ def get_term(conn: sqlite3.Connection, term_id: int) -> sqlite3.Row | None:
 
 
 def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """List all extracted terms.
+    """List all extracted terms, excluding those in the excluded terms list.
 
     Args:
         conn: Database connection.
 
     Returns:
-        list[sqlite3.Row]: List of all term records ordered by id.
+        list[sqlite3.Row]: List of all term records ordered by id,
+            excluding terms that are in the terms_excluded table.
     """
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM terms_extracted ORDER BY id")
+    cursor.execute(
+        """
+        SELECT * FROM terms_extracted
+        WHERE NOT EXISTS (
+            SELECT 1 FROM terms_excluded
+            WHERE terms_excluded.term_text = terms_extracted.term_text
+        )
+        ORDER BY id
+        """
+    )
     return cursor.fetchall()
 
 
