@@ -4,7 +4,7 @@ tags: [backend, frontend, database, performance]
 description: "除外用語一覧を追加し、用語抽出の効率化とユーザー制御を実現"
 created_at: "2026-02-03T09:20:10Z"
 started_at: 2026-02-03T18:15:15Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-03T18:58:52Z # Do not modify manually
 ---
 
 # 除外用語一覧機能の追加
