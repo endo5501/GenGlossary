@@ -89,6 +89,25 @@ export interface TermUpdateRequest {
   category?: string
 }
 
+// Excluded term types
+export type ExcludedTermSource = 'auto' | 'manual'
+
+export interface ExcludedTermResponse {
+  id: number
+  term_text: string
+  source: ExcludedTermSource
+  created_at: string
+}
+
+export interface ExcludedTermListResponse {
+  items: ExcludedTermResponse[]
+  total: number
+}
+
+export interface ExcludedTermCreateRequest {
+  term_text: string
+}
+
 // Provisional update request
 export interface ProvisionalUpdateRequest {
   definition?: string

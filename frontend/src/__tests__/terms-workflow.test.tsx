@@ -353,7 +353,7 @@ describe('TermsPage', () => {
       expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
     })
 
-    expect(screen.getByRole('button', { name: /add/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /add term/i })).toBeInTheDocument()
   })
 
   it('has re-extract button in action bar', async () => {
