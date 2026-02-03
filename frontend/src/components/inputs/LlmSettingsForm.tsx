@@ -1,4 +1,4 @@
-import { Select, TextInput, Alert, Loader, ComboboxProps } from '@mantine/core'
+import { Select, TextInput, Alert, Loader, type ComboboxProps } from '@mantine/core'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { useOllamaModels } from '../../api/hooks/useOllamaModels'
 import { DEFAULT_OLLAMA_BASE_URL, LLM_PROVIDERS } from '../../constants/llm'
