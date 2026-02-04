@@ -200,17 +200,32 @@ class RunManager:
     ログストリーミングを提供します。
     """
 
-    def __init__(self, db_path: str):
+    def __init__(
+        self,
+        db_path: str,
+        doc_root: str = ".",
+        llm_provider: str = "ollama",
+        llm_model: str = "",
+        llm_base_url: str = "",
+    ):
         """RunManagerを初期化
 
         Args:
             db_path: プロジェクトDBのパス（Connection ではなくパス）
+            doc_root: ドキュメントのルートディレクトリ
+            llm_provider: LLMプロバイダ名（"ollama" または "openai"）
+            llm_model: LLMモデル名
+            llm_base_url: LLM APIのベースURL
 
         Note:
             各スレッドが独自の接続を作成することで、SQLiteの
             threading制限とSegmentation Faultを回避します。
         """
         self.db_path = db_path
+        self.doc_root = doc_root
+        self.llm_provider = llm_provider
+        self.llm_model = llm_model
+        self.llm_base_url = llm_base_url
         self._thread: Thread | None = None
         self._cancel_events: dict[int, Event] = {}  # Per-run cancellation
         self._cancel_events_lock = Lock()
@@ -601,11 +616,15 @@ class PipelineExecutor:
         self,
         provider: str = "ollama",
         model: str = "",
+        base_url: str | None = None,
         review_batch_size: int = 10,  # GlossaryReviewer のバッチサイズ
     ):
         """Initialize the PipelineExecutor.
 
         Args:
+            provider: LLMプロバイダ名（"ollama" または "openai"）
+            model: LLMモデル名
+            base_url: LLM APIのベースURL（省略時は環境設定値）
             review_batch_size: レビューステップでのバッチサイズ。
                 大量の用語（50件以上）でのタイムアウトを防ぐため、
                 この数ずつLLMに送信します。デフォルト20件。
