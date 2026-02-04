@@ -38,6 +38,7 @@ class RunManager:
         doc_root: str = ".",
         llm_provider: str = "ollama",
         llm_model: str = "",
+        llm_base_url: str = "",
     ):
         """Initialize the RunManager.
 
@@ -46,11 +47,13 @@ class RunManager:
             doc_root: Root directory for documents (default: ".").
             llm_provider: LLM provider name (default: "ollama").
             llm_model: LLM model name (default: "").
+            llm_base_url: Base URL for the LLM API (default: "").
         """
         self.db_path = db_path
         self.doc_root = doc_root
         self.llm_provider = llm_provider
         self.llm_model = llm_model
+        self.llm_base_url = llm_base_url
         self._thread: Thread | None = None
         self._cancel_events: dict[int, Event] = {}
         self._cancel_events_lock = Lock()
@@ -172,6 +175,7 @@ class RunManager:
             executor = PipelineExecutor(
                 provider=self.llm_provider,
                 model=self.llm_model,
+                base_url=self.llm_base_url or None,
             )
 
             # Store executor for cancellation support

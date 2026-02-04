@@ -127,6 +127,7 @@ def _settings_match(manager: RunManager, project: Project) -> bool:
         manager.doc_root == project.doc_root
         and manager.llm_provider == project.llm_provider
         and manager.llm_model == project.llm_model
+        and manager.llm_base_url == project.llm_base_url
     )
 
 
@@ -144,6 +145,7 @@ def _create_and_register_manager(project: Project) -> RunManager:
         doc_root=project.doc_root,
         llm_provider=project.llm_provider,
         llm_model=project.llm_model,
+        llm_base_url=project.llm_base_url,
     )
     _run_manager_registry[project.db_path] = manager
     return manager

@@ -257,3 +257,79 @@ def test_run_manager_keeps_old_instance_when_settings_change_and_run_active(tmp_
 
         assert manager2 is manager1
         assert manager2.doc_root == str(tmp_path / "docs")  # Old settings preserved
+
+
+def test_run_manager_has_llm_base_url(tmp_path: Path):
+    """RunManagerにllm_base_urlが設定されることを確認"""
+    from genglossary.api.dependencies import get_run_manager, _run_manager_registry
+    from genglossary.models.project import Project
+    from genglossary.db.schema import initialize_db
+
+    # Create test project database
+    project_db = tmp_path / "project.db"
+    conn = get_connection(str(project_db))
+    initialize_db(conn)
+    conn.close()
+
+    # Create project with llm_base_url
+    project = Project(
+        id=1,
+        name="Test Project",
+        doc_root=str(tmp_path / "docs"),
+        db_path=str(project_db),
+        llm_provider="openai",
+        llm_model="gpt-4",
+        llm_base_url="http://127.0.0.1:8080/v1",
+    )
+
+    # Clear registry
+    _run_manager_registry.clear()
+
+    # Get manager
+    manager = get_run_manager(project)
+
+    # Verify llm_base_url is set
+    assert manager.llm_base_url == "http://127.0.0.1:8080/v1"
+
+
+def test_run_manager_recreates_when_llm_base_url_changes(tmp_path: Path):
+    """llm_base_url変更時、実行中のRunがなければ新しいRunManagerを作成"""
+    from genglossary.api.dependencies import get_run_manager, _run_manager_registry
+    from genglossary.models.project import Project
+    from genglossary.db.schema import initialize_db
+    from unittest.mock import patch
+
+    # Create test project database
+    project_db = tmp_path / "project.db"
+    conn = get_connection(str(project_db))
+    initialize_db(conn)
+    conn.close()
+
+    # Create project with initial llm_base_url
+    project = Project(
+        id=1,
+        name="Test Project",
+        doc_root=str(tmp_path / "docs"),
+        db_path=str(project_db),
+        llm_provider="openai",
+        llm_model="gpt-4",
+        llm_base_url="http://localhost:8080/v1",
+    )
+
+    # Clear registry
+    _run_manager_registry.clear()
+
+    # Get initial manager
+    manager1 = get_run_manager(project)
+    assert manager1.llm_base_url == "http://localhost:8080/v1"
+
+    # Mock get_active_run to return None (no active run)
+    with patch.object(manager1, "get_active_run", return_value=None):
+        # Update llm_base_url only
+        project.llm_base_url = "http://192.168.1.100:8080/v1"
+
+        # Get manager again - should be recreated with new llm_base_url
+        manager2 = get_run_manager(project)
+
+        assert manager2.llm_base_url == "http://192.168.1.100:8080/v1"
+        assert manager2 is not manager1

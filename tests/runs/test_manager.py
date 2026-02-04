@@ -1896,3 +1896,56 @@ class TestPipelineCancelledExceptionHandling:
             assert run["error_message"] is None or run["error_message"] == "", (
                 f"error_message should be empty for cancellation, got '{run['error_message']}'"
             )
+
+
+class TestRunManagerLlmBaseUrl:
+    """Tests for llm_base_url parameter propagation to PipelineExecutor."""
+
+    def test_manager_passes_llm_base_url_to_executor(
+        self, project_db_path: str
+    ) -> None:
+        """RunManagerがllm_base_urlをPipelineExecutorに渡すことを確認"""
+        custom_url = "http://192.168.1.100:11434"
+
+        manager = RunManager(
+            db_path=project_db_path,
+            llm_provider="ollama",
+            llm_model="test-model",
+            llm_base_url=custom_url,
+        )
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            run_id = manager.start_run(scope="full")
+
+            # Wait for thread to start and create executor
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            mock_executor.assert_called_once()
+            call_kwargs = mock_executor.call_args.kwargs
+            assert call_kwargs.get("base_url") == custom_url
+
+    def test_manager_passes_none_base_url_when_not_provided(
+        self, project_db_path: str
+    ) -> None:
+        """RunManagerがllm_base_urlを指定しない場合、Noneが渡されることを確認"""
+        manager = RunManager(
+            db_path=project_db_path,
+            llm_provider="ollama",
+            llm_model="test-model",
+        )
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            manager.start_run(scope="full")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            mock_executor.assert_called_once()
+            call_kwargs = mock_executor.call_args.kwargs
+            # base_url should be None when llm_base_url is empty (fallback to config)
+            assert call_kwargs.get("base_url") is None

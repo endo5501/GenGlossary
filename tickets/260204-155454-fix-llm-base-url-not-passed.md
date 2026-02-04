@@ -3,7 +3,7 @@ priority: 1
 tags: [bug, backend, llm]
 description: "Project llm_base_url is not passed to LLM client, causing OpenAI-compatible APIs (like llama.cpp) to fail"
 created_at: "2026-02-04T15:54:54Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-04T15:55:52Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -73,7 +73,23 @@ OPENAI_BASE_URL=http://127.0.0.1:8080/v1 uv run uvicorn genglossary.api.app:app 
 
 ### Affected Files
 
-- `src/genglossary/api/dependencies.py`
-- `src/genglossary/runs/manager.py`
-- `src/genglossary/runs/executor.py`
-- `src/genglossary/llm/factory.py`（変更不要だが参考）
+- `src/genglossary/llm/factory.py` - `openai_base_url`を`base_url`にリネーム、Ollamaにも適用
+- `src/genglossary/runs/executor.py` - `base_url`パラメータを追加
+- `src/genglossary/runs/manager.py` - `llm_base_url`パラメータを追加
+- `src/genglossary/api/dependencies.py` - `llm_base_url`を渡す、`_settings_match`を更新
+
+### Design
+
+```
+Project.llm_base_url
+    ↓
+dependencies._create_and_register_manager(llm_base_url=project.llm_base_url)
+    ↓
+RunManager(llm_base_url=...)
+    ↓
+PipelineExecutor(base_url=self.llm_base_url)
+    ↓
+create_llm_client(base_url=...)
+    ↓
+OllamaClient(base_url=...) / OpenAICompatibleClient(base_url=...)
+```
