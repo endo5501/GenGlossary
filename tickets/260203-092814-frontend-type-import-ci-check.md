@@ -4,7 +4,7 @@ tags: [frontend, dx, ci]
 description: "フロントエンドのTypeScriptビルドエラーを事前に検出する仕組みを追加"
 created_at: "2026-02-03T09:28:14Z"
 started_at: 2026-02-04T15:24:22Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-04T15:49:28Z # Do not modify manually
 ---
 
 # フロントエンドビルドエラー早期検出の仕組み追加
