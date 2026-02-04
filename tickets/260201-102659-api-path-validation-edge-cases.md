@@ -4,7 +4,7 @@ tags: [improvement, backend]
 description: "API path validation: handle edge cases (empty segments, length limits)"
 created_at: "2026-02-01T10:26:59Z"
 started_at: 2026-02-04T12:57:38Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-04T13:08:15Z # Do not modify manually
 ---
 
 # API path validation: handle edge cases
