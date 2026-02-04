@@ -25,6 +25,8 @@ from genglossary.utils.hash import compute_content_hash
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
 ALLOWED_EXTENSIONS = {".txt", ".md"}
+MAX_SEGMENT_BYTES = 255
+MAX_PATH_BYTES = 1024
 
 
 def _validate_file_name(file_name: str) -> str:
@@ -68,9 +70,24 @@ def _validate_file_name(file_name: str) -> str:
             detail="File name cannot contain '..' path segments",
         )
 
-    # Normalize: remove '.' segments
-    normalized_segments = [s for s in segments if s != "."]
+    # Normalize: remove '.' and empty segments
+    normalized_segments = [s for s in segments if s and s != "."]
     normalized = "/".join(normalized_segments)
+
+    # Check segment length limits (255 bytes each)
+    for segment in normalized_segments:
+        if len(segment.encode("utf-8")) > MAX_SEGMENT_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Path segment too long (max {MAX_SEGMENT_BYTES} bytes)",
+            )
+
+    # Check total path length limit (1024 bytes)
+    if len(normalized.encode("utf-8")) > MAX_PATH_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path too long (max {MAX_PATH_BYTES} bytes)",
+        )
 
     # Check extension on normalized path
     if "." not in normalized:
@@ -225,13 +242,19 @@ async def create_files_bulk(
 
     # Create all documents with normalized names
     created_ids = []
-    with transaction(project_db):
-        for normalized_name, content in normalized_files:
-            content_hash = compute_content_hash(content)
-            doc_id = create_document(
-                project_db, normalized_name, content, content_hash
-            )
-            created_ids.append(doc_id)
+    try:
+        with transaction(project_db):
+            for normalized_name, content in normalized_files:
+                content_hash = compute_content_hash(content)
+                doc_id = create_document(
+                    project_db, normalized_name, content, content_hash
+                )
+                created_ids.append(doc_id)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail="File already exists (concurrent creation)",
+        )
 
     # Return created documents
     responses = []

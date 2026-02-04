@@ -522,12 +522,12 @@ class TestBulkCreateIntegrityError:
     ):
         """Test POST /api/projects/{id}/files/bulk returns 409 on IntegrityError."""
         import sqlite3
-        from genglossary.db import document_repository
+        from genglossary.api.routers import files as files_router
+        from genglossary.db.document_repository import create_document as original_create
 
         project_id = test_project_setup["project_id"]
 
         # Mock create_document to raise IntegrityError (simulating race condition)
-        original_create = document_repository.create_document
         call_count = 0
 
         def mock_create(conn, name, content, hash):
@@ -537,7 +537,7 @@ class TestBulkCreateIntegrityError:
                 raise sqlite3.IntegrityError("UNIQUE constraint failed")
             return original_create(conn, name, content, hash)
 
-        monkeypatch.setattr(document_repository, "create_document", mock_create)
+        monkeypatch.setattr(files_router, "create_document", mock_create)
 
         payload = {
             "files": [
