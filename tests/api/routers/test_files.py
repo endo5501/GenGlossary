@@ -371,6 +371,185 @@ class TestWindowsDrivePathRejection:
         assert "absolute" in response.json()["detail"].lower()
 
 
+class TestEmptySegmentNormalization:
+    """Tests for empty segment normalization in file paths."""
+
+    def test_create_file_normalizes_empty_segments(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files normalizes empty segments."""
+        project_id = test_project_setup["project_id"]
+
+        # Path with empty segments should be normalized
+        payload = {"file_name": "a//b.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
+        assert response.json()["file_name"] == "a/b.md"
+
+    def test_create_file_normalizes_multiple_empty_segments(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test normalization of multiple consecutive empty segments."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "a///b////c.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
+        assert response.json()["file_name"] == "a/b/c.md"
+
+    def test_create_file_detects_duplicate_via_empty_segment_normalization(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that normalized paths detect duplicates with empty segments."""
+        project_id = test_project_setup["project_id"]
+
+        # Create a file
+        payload1 = {"file_name": "dir/file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload1)
+        assert response.status_code == 201
+
+        # Try to create same file with empty segments - should be duplicate
+        payload2 = {"file_name": "dir//file.md", "content": "other"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload2)
+        assert response.status_code == 409
+
+    def test_create_files_bulk_normalizes_empty_segments(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files/bulk normalizes empty segments."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "a//b.md", "content": "content1"},
+                {"file_name": "x///y.txt", "content": "content2"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data[0]["file_name"] == "a/b.md"
+        assert data[1]["file_name"] == "x/y.txt"
+
+
+class TestPathLengthLimits:
+    """Tests for path length limits."""
+
+    def test_create_file_rejects_segment_too_long(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files rejects segments over 255 bytes."""
+        project_id = test_project_setup["project_id"]
+
+        # Create a segment longer than 255 bytes
+        long_segment = "a" * 256
+        payload = {"file_name": f"{long_segment}.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "255" in response.json()["detail"] or "segment" in response.json()["detail"].lower()
+
+    def test_create_file_rejects_path_too_long(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files rejects paths over 1024 bytes."""
+        project_id = test_project_setup["project_id"]
+
+        # Create a path longer than 1024 bytes (using multiple segments)
+        segments = ["dir" + str(i) for i in range(200)]  # Each ~4-5 chars
+        long_path = "/".join(segments) + "/file.md"
+        assert len(long_path.encode("utf-8")) > 1024
+
+        payload = {"file_name": long_path, "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "1024" in response.json()["detail"] or "path" in response.json()["detail"].lower()
+
+    def test_create_file_accepts_max_segment_length(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files accepts exactly 255 byte segments."""
+        project_id = test_project_setup["project_id"]
+
+        # Create a segment of exactly 255 bytes (252 chars + ".md")
+        segment = "a" * 252
+        payload = {"file_name": f"{segment}.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
+
+    def test_create_file_rejects_unicode_segment_too_long(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that segment length is measured in bytes, not characters."""
+        project_id = test_project_setup["project_id"]
+
+        # Japanese characters are 3 bytes each in UTF-8
+        # 86 Japanese chars = 258 bytes > 255
+        long_segment = "あ" * 86
+        payload = {"file_name": f"{long_segment}.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_files_bulk_rejects_segment_too_long(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files/bulk rejects segments over 255 bytes."""
+        project_id = test_project_setup["project_id"]
+
+        long_segment = "a" * 256
+        payload = {
+            "files": [
+                {"file_name": "valid.md", "content": "content"},
+                {"file_name": f"{long_segment}.md", "content": "content"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 400
+
+
+class TestBulkCreateIntegrityError:
+    """Tests for bulk create IntegrityError handling."""
+
+    def test_create_files_bulk_returns_409_on_integrity_error(
+        self, test_project_setup, client: TestClient, monkeypatch
+    ):
+        """Test POST /api/projects/{id}/files/bulk returns 409 on IntegrityError."""
+        import sqlite3
+        from genglossary.db import document_repository
+
+        project_id = test_project_setup["project_id"]
+
+        # Mock create_document to raise IntegrityError (simulating race condition)
+        original_create = document_repository.create_document
+        call_count = 0
+
+        def mock_create(conn, name, content, hash):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:  # Fail on second file
+                raise sqlite3.IntegrityError("UNIQUE constraint failed")
+            return original_create(conn, name, content, hash)
+
+        monkeypatch.setattr(document_repository, "create_document", mock_create)
+
+        payload = {
+            "files": [
+                {"file_name": "file1.md", "content": "content1"},
+                {"file_name": "file2.md", "content": "content2"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 409
+
+
 class TestPathValidationEnhancement:
     """Tests for absolute path rejection and path normalization."""
 
