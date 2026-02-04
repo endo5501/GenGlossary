@@ -69,7 +69,7 @@ def generate_glossary(
     output_file: str,
     provider: str,
     model: str | None,
-    openai_base_url: str | None,
+    base_url: str | None,
     verbose: bool,
     db_path: str | None = None,
 ) -> None:
@@ -80,7 +80,7 @@ def generate_glossary(
         output_file: Output file path for the glossary.
         provider: LLM provider ("ollama" or "openai").
         model: Model name to use (None for provider default).
-        openai_base_url: Base URL for OpenAI-compatible API (optional).
+        base_url: Base URL for OpenAI-compatible API (optional).
         verbose: Whether to show verbose output.
         db_path: Path to SQLite database for persistence (optional).
     """
@@ -97,7 +97,7 @@ def generate_glossary(
     llm_client = create_llm_client(
         provider=provider,
         model=model,
-        openai_base_url=openai_base_url,
+        base_url=base_url,
         timeout=180.0,
     )
 
@@ -368,7 +368,7 @@ def main() -> None:
     help="使用するモデル名（省略時はプロバイダーごとのデフォルト値）",
 )
 @click.option(
-    "--openai-base-url",
+    "--base-url",
     default=None,
     help="OpenAI互換APIのベースURL（--llm-provider=openai時のみ有効）",
 )
@@ -394,7 +394,7 @@ def generate(
     output_file: Path,
     llm_provider: str,
     model: str | None,
-    openai_base_url: str | None,
+    base_url: str | None,
     db_path: Path | None,
     no_db: bool,
     verbose: bool
@@ -433,7 +433,7 @@ def generate(
                 str(output_file),
                 llm_provider,
                 model,
-                openai_base_url,
+                base_url,
                 verbose,
                 db_path=str(effective_db_path) if effective_db_path else None,
             )
@@ -622,7 +622,7 @@ def _run_term_extraction_analysis(
     help="使用するモデル名（省略時はプロバイダーごとのデフォルト値）",
 )
 @click.option(
-    "--openai-base-url",
+    "--base-url",
     default=None,
     help="OpenAI互換APIのベースURL（--llm-provider=openai時のみ有効）",
 )
@@ -637,7 +637,7 @@ def analyze_terms(
     input_dir: Path,
     llm_provider: str,
     model: str | None,
-    openai_base_url: str | None,
+    base_url: str | None,
     batch_size: int
 ) -> None:
     """用語抽出の中間結果を分析・表示します。
@@ -652,7 +652,7 @@ def analyze_terms(
         llm_client = create_llm_client(
             provider=llm_provider,
             model=model,
-            openai_base_url=openai_base_url,
+            base_url=base_url,
             timeout=180.0,
         )
 
