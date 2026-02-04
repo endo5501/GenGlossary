@@ -4,7 +4,7 @@ tags: [frontend, ux]
 description: "Terms画面でカテゴリを編集可能にする"
 created_at: "2026-02-02T23:00:44Z"
 started_at: 2026-02-03T22:59:20Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-04T12:54:37Z # Do not modify manually
 ---
 
 # Terms画面でカテゴリ編集機能を追加
