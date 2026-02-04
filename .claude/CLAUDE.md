@@ -4,10 +4,9 @@
 
 ## 必須ルール（MUST）
 
-1. **日本語で会話**: ユーザーとは常に日本語で会話（思考は英語）
-2. **TDD厳守**: テストファースト開発を必ず実施 → `/tdd-workflow` スキルを使用
-3. **Git管理**: チケットシステムと連携したワークフロー → `/git-workflow` スキルを使用
-4. **開発計画**: コード作成に取りかかる前に `/brainstorming` スキルで計画を明確にする
+1. **TDD厳守**: テストファースト開発を必ず実施 → `/tdd-workflow` スキルを使用
+2. **Git管理**: チケットシステムと連携したワークフロー → `/git-workflow` スキルを使用
+3. **開発計画**: コード作成に取りかかる前に `/brainstorming` スキルで計画を明確にする
 
 ## クイックスタート
 
@@ -43,3 +42,7 @@ bash scripts/ticket.sh close
 - コミットメッセージの書き方 → `/git-workflow` スキルを使用
 - LLMとの連携方法、プロンプト設計 → `/llm-integration` スキルを使用
 - コードスタイル、命名規則 → `/code-style` スキルを使用
+
+## Rules
+
+- Before starting work on a ticket, always read and confirm the ticket details with the user. Don't assume context carries over between sessions.
