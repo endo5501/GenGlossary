@@ -89,8 +89,9 @@ def _validate_file_name(file_name: str) -> str:
             detail=f"Path too long (max {MAX_PATH_BYTES} bytes)",
         )
 
-    # Check extension on normalized path
-    ext = ("." + normalized.rsplit(".", 1)[-1].lower()) if "." in normalized else ""
+    # Check extension on final segment (basename)
+    basename = normalized_segments[-1] if normalized_segments else ""
+    ext = ("." + basename.rsplit(".", 1)[-1].lower()) if "." in basename else ""
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
@@ -243,11 +244,14 @@ async def create_files_bulk(
                     project_db, normalized_name, content, content_hash
                 )
                 created_ids.append(doc_id)
-    except sqlite3.IntegrityError:
-        raise HTTPException(
-            status_code=409,
-            detail="File already exists (concurrent creation)",
-        )
+    except sqlite3.IntegrityError as e:
+        # Only map UNIQUE constraint violations to 409; re-raise others
+        if "UNIQUE constraint failed" in str(e):
+            raise HTTPException(
+                status_code=409,
+                detail="File already exists (concurrent creation)",
+            )
+        raise
 
     # Return created documents
     responses = []

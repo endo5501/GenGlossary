@@ -514,6 +514,36 @@ class TestPathLengthLimits:
         assert response.status_code == 400
 
 
+class TestExtensionValidationEdgeCases:
+    """Tests for extension validation edge cases."""
+
+    def test_create_file_validates_extension_from_basename(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that extension is validated from basename, not full path."""
+        project_id = test_project_setup["project_id"]
+
+        # Directory with dot should not affect extension validation
+        payload = {"file_name": "dir.with.dot/readme.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
+        assert response.json()["file_name"] == "dir.with.dot/readme.md"
+
+    def test_create_file_rejects_file_without_extension_in_dotted_dir(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that file without extension is rejected even in dotted directory."""
+        project_id = test_project_setup["project_id"]
+
+        # File without extension in directory with dots
+        payload = {"file_name": "dir.with.dot/readme", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "extension" in response.json()["detail"].lower()
+
+
 class TestBulkCreateIntegrityError:
     """Tests for bulk create IntegrityError handling."""
 
