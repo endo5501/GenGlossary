@@ -15,6 +15,7 @@ import {
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { OccurrenceList } from '../components/common/OccurrenceList'
+import { useRowSelection } from '../hooks/useRowSelection'
 
 interface RefinedPageProps {
   projectId: number
@@ -69,22 +70,7 @@ export function RefinedPage({ projectId }: RefinedPageProps) {
               key={entry.id}
               withBorder
               p="md"
-              onClick={() => setSelectedId(entry.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setSelectedId(entry.id)
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-selected={selectedId === entry.id}
-              style={{ cursor: 'pointer' }}
-              bg={
-                selectedId === entry.id
-                  ? 'var(--mantine-color-blue-light)'
-                  : undefined
-              }
+              {...useRowSelection(entry, selectedId, setSelectedId)}
             >
               <Text fw={600} mb="xs">
                 {entry.term_name}

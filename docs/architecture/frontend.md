@@ -30,6 +30,8 @@ frontend/src/
 ├── components/           # Reactコンポーネント
 ├── constants/            # 共通定数
 │   └── llm.ts            # LLM関連の定数（プロバイダー、デフォルトURL）
+├── hooks/                # カスタムフック
+│   └── useRowSelection.ts # 行選択ロジックのprops生成
 ├── store/                # Zustand 状態管理
 │   └── logStore.ts       # ログと進捗の状態管理
 └── routes/               # ルーティング設定
@@ -325,27 +327,51 @@ const [selectedId, setSelectedId] = useState<number | null>(null)
 const selectedEntry = entries?.find((e) => e.id === selectedId) ?? null
 ```
 
-**キーボードアクセシビリティ:**
+**useRowSelection フック:**
+
+行選択のロジック（onClick、onKeyDown、aria-selected、スタイル）を共通化するフック。
+
 ```typescript
-<Table.Tr
-  onClick={() => setSelectedId(entry.id)}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      setSelectedId(entry.id)
-    }
-  }}
-  tabIndex={0}
-  role="button"
-  aria-selected={selectedId === entry.id}
-  style={{ cursor: 'pointer' }}
->
+// hooks/useRowSelection.ts
+export function useRowSelection<T extends { id: number }>(
+  item: T,
+  selectedId: number | null,
+  onSelect: (id: number) => void
+) {
+  return {
+    onClick: () => onSelect(item.id),
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        onSelect(item.id)
+      }
+    },
+    tabIndex: 0,
+    'aria-selected': selectedId === item.id,
+    style: { cursor: 'pointer' },
+    bg: selectedId === item.id ? 'var(--mantine-color-blue-light)' : undefined,
+  }
+}
+```
+
+**使用例:**
+```typescript
+// ProvisionalPage, RefinedPage, IssuesPage で使用
+{entries?.map((entry) => (
+  <Table.Tr
+    key={entry.id}
+    {...useRowSelection(entry, selectedId, setSelectedId)}
+  >
+    ...
+  </Table.Tr>
+))}
 ```
 
 **設計ポイント:**
 - IDベースの選択により、データ更新時に自動的に最新の値が反映される
 - キーボード操作（Tab + Enter/Space）をサポート
-- ARIA属性でスクリーンリーダー対応
+- ARIA属性（`aria-selected`）でスクリーンリーダー対応
+- Mantine固有の`bg`プロパティで選択状態をスタイリング
 
 #### TermsPage のカテゴリ編集機能
 

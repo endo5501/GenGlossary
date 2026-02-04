@@ -20,6 +20,7 @@ import {
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { OccurrenceList } from '../components/common/OccurrenceList'
+import { useRowSelection } from '../hooks/useRowSelection'
 
 interface ProvisionalPageProps {
   projectId: number
@@ -92,22 +93,7 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
             {entries?.map((entry) => (
               <Table.Tr
                 key={entry.id}
-                onClick={() => setSelectedId(entry.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    setSelectedId(entry.id)
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-selected={selectedId === entry.id}
-                style={{ cursor: 'pointer' }}
-                bg={
-                  selectedId === entry.id
-                    ? 'var(--mantine-color-blue-light)'
-                    : undefined
-                }
+                {...useRowSelection(entry, selectedId, setSelectedId)}
               >
                 <Table.Td>{entry.term_name}</Table.Td>
                 <Table.Td>
