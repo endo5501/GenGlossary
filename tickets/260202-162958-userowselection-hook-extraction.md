@@ -3,7 +3,7 @@ priority: 1
 tags: [frontend, refactoring]
 description: "Extract common row selection logic into useRowSelection hook"
 created_at: "2026-02-02T16:29:58Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-04T14:14:06Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -15,10 +15,11 @@ Multiple pages have duplicated row selection logic (onClick, onKeyDown, aria-sel
 
 ## Affected Files
 
-- ProvisionalPage.tsx
-- RefinedPage.tsx
-- IssuesPage.tsx
-- FilesPage.tsx
+- ProvisionalPage.tsx (Table.Tr, lines 93-110)
+- RefinedPage.tsx (Paper, lines 68-87)
+- IssuesPage.tsx (Paper, lines 79-98)
+
+**Note:** FilesPage.tsx is excluded - it uses navigation instead of selection.
 
 ## Current Duplicated Pattern
 
@@ -71,7 +72,6 @@ export function useRowSelection<T extends { id: number }>(
 - [ ] Migrate ProvisionalPage to use hook
 - [ ] Migrate RefinedPage to use hook
 - [ ] Migrate IssuesPage to use hook
-- [ ] Migrate FilesPage to use hook
 - [ ] Commit
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
@@ -82,6 +82,20 @@ export function useRowSelection<T extends { id: number }>(
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
+
+## Design Decisions (Brainstorming 2026-02-04)
+
+1. **FilesPageは除外** - 選択ではなくナビゲーション動作のため対象外
+2. **Mantine固有の`bg`をそのまま返す** - プロジェクト全体がMantine使用のため
+3. **`frontend/src/hooks/` を新規作成** - 将来の拡張性を考慮
+
+## Test Plan
+
+- `onClick` が正しいIDで `onSelect` を呼ぶ
+- Enter/Spaceキーで `onSelect` が呼ばれる
+- 他のキーでは何も起きない
+- 選択状態で `aria-selected: true` と `bg` が設定される
+- 非選択状態で `aria-selected: false` と `bg: undefined`
 
 ## Notes
 
