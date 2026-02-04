@@ -90,13 +90,7 @@ def _validate_file_name(file_name: str) -> str:
         )
 
     # Check extension on normalized path
-    if "." not in normalized:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
-        )
-
-    ext = "." + normalized.rsplit(".", 1)[-1].lower()
+    ext = ("." + normalized.rsplit(".", 1)[-1].lower()) if "." in normalized else ""
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
@@ -226,8 +220,7 @@ async def create_files_bulk(
         normalized_files.append((normalized_name, file_req.content))
 
     # Check for duplicates in request (using normalized names)
-    normalized_names = [name for name, _ in normalized_files]
-    if len(normalized_names) != len(set(normalized_names)):
+    if len(normalized_files) != len(set(name for name, _ in normalized_files)):
         raise HTTPException(
             status_code=400, detail="Duplicate file names in request"
         )
