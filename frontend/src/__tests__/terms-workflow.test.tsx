@@ -1010,10 +1010,10 @@ describe('Category Editing', () => {
   })
 
   it('removes category when saved with empty value', async () => {
-    let savedCategory: string | null | undefined
+    let savedCategory: string | undefined
     server.use(
       http.patch(`${BASE_URL}/api/projects/:projectId/terms/:termId`, async ({ request }) => {
-        const body = await request.json() as { category?: string | null }
+        const body = await request.json() as { category?: string }
         savedCategory = body.category
         return HttpResponse.json({ id: 1, term_text: '量子コンピュータ', category: null })
       })
@@ -1040,7 +1040,7 @@ describe('Category Editing', () => {
     await user.click(within(detailPanel).getByRole('button', { name: /save/i }))
 
     await waitFor(() => {
-      expect(savedCategory).toBeNull()
+      expect(savedCategory).toBeUndefined()
     })
   })
 
