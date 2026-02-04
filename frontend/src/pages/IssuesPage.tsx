@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { useIssues, useReviewIssues, useCurrentRun } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { getIssueTypeColor } from '../utils/colors'
+import { useRowSelection } from '../hooks/useRowSelection'
 import type { IssueType } from '../api/types'
 
 interface IssuesPageProps {
@@ -80,22 +81,7 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
               key={issue.id}
               withBorder
               p="sm"
-              onClick={() => setSelectedId(issue.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setSelectedId(issue.id)
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-selected={selectedId === issue.id}
-              style={{ cursor: 'pointer' }}
-              bg={
-                selectedId === issue.id
-                  ? 'var(--mantine-color-blue-light)'
-                  : undefined
-              }
+              {...useRowSelection(issue, selectedId, setSelectedId)}
             >
               <Group justify="space-between" mb="xs">
                 <Group gap="xs">
