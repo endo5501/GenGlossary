@@ -109,7 +109,6 @@ describe('useRowSelection', () => {
       )
 
       expect(result.current.tabIndex).toBe(0)
-      expect(result.current.role).toBe('button')
       expect(result.current.style).toEqual({ cursor: 'pointer' })
     })
   })

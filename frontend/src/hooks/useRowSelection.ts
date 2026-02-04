@@ -12,7 +12,6 @@ export function useRowSelection<T extends { id: number }>(
       }
     },
     tabIndex: 0,
-    role: 'button' as const,
     'aria-selected': selectedId === item.id,
     style: { cursor: 'pointer' },
     bg: selectedId === item.id ? 'var(--mantine-color-blue-light)' : undefined,
