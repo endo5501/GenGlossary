@@ -86,26 +86,26 @@ tsc -b --noEmit 実行
 ## Tasks
 
 ### 実装タスク
-- [ ] `frontend/package.json` に `typecheck` スクリプト追加
-- [ ] Husky をインストール・初期化
-- [ ] `.husky/pre-commit` を編集
-- [ ] 動作確認（型エラーありでコミット拒否されることを確認）
+- [x] `frontend/package.json` に `typecheck` スクリプト追加
+- [x] Husky をインストール・初期化
+- [x] `.husky/pre-commit` を編集
+- [x] 動作確認（型エラーありでコミット拒否されることを確認）
 
 ### 完了条件
-- [ ] `pnpm run typecheck` が正常に動作する
-- [ ] 型エラーがあるとコミットが拒否される
-- [ ] 型エラーがないとコミットが成功する
+- [x] `pnpm run typecheck` が正常に動作する
+- [x] 型エラーがあるとコミットが拒否される
+- [x] 型エラーがないとコミットが成功する
 
 ### 品質タスク
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
