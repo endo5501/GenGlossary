@@ -256,7 +256,7 @@ const progressPercent = progress && progress.total > 0
 |---------------|------|
 | `HomePage` | プロジェクト一覧とサマリー表示 |
 | `FilesPage` | ファイル一覧と追加・削除 |
-| `TermsPage` | 抽出された用語一覧と詳細表示 |
+| `TermsPage` | 抽出された用語一覧と詳細表示、カテゴリ編集 |
 | `ProvisionalPage` | 暫定用語集の表示と編集 |
 | `IssuesPage` | 精査で見つかった問題一覧 |
 | `RefinedPage` | 最終用語集の表示とエクスポート |
@@ -346,6 +346,54 @@ const selectedEntry = entries?.find((e) => e.id === selectedId) ?? null
 - IDベースの選択により、データ更新時に自動的に最新の値が反映される
 - キーボード操作（Tab + Enter/Space）をサポート
 - ARIA属性でスクリーンリーダー対応
+
+#### TermsPage のカテゴリ編集機能
+
+詳細パネル内でカテゴリをインライン編集できる。
+
+**UI構成:**
+```
+[通常表示]
+  Category: [Badge: 技術用語] [✏️]
+
+     ↓ 編集アイコンクリック
+
+[編集モード]
+  Category: [TextInput____] [✓] [✗]
+```
+
+**実装:**
+```typescript
+// 編集状態の管理
+const [isEditingCategory, setIsEditingCategory] = useState(false)
+const [editingCategoryValue, setEditingCategoryValue] = useState('')
+
+// 選択変更時に編集状態をリセット（間違った用語のカテゴリ更新を防止）
+const handleSelectTerm = (termId: number) => {
+  if (termId !== selectedId) {
+    resetCategoryEdit()
+  }
+  setSelectedId(termId)
+}
+
+// 保存処理（空文字は null として送信しカテゴリ削除）
+const handleSaveCategory = () => {
+  if (!selectedTerm || updateTerm.isPending) return
+  const trimmedValue = editingCategoryValue.trim()
+  updateTerm.mutate({
+    termId: selectedTerm.id,
+    data: { category: trimmedValue || null },
+  })
+}
+```
+
+**機能:**
+- 編集アイコンクリックで編集モードに切り替え
+- Enter キーで保存、Escape キーでキャンセル
+- 空文字で保存するとカテゴリを削除（null に設定）
+- 別の用語を選択すると自動的に編集モードを終了
+- ダブルサブミット防止（`updateTerm.isPending` チェック）
+- アクセシビリティ: `aria-label` 属性を設定
 
 #### HomePage のユーティリティ関数
 
@@ -976,12 +1024,12 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `projects-page.test.tsx` | 16 | HomePage、FilesPage、ダイアログコンポーネント |
 | `components/dialogs/AddFileDialog.test.tsx` | 6 | AddFileDialogコンポーネント |
 | `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
-| `terms-workflow.test.tsx` | 43 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel |
+| `terms-workflow.test.tsx` | 58 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel、カテゴリ編集 |
 | `logStore.test.ts` | 20 | Zustand ログストアの状態管理、進捗追跡 |
 | `LogPanel.test.tsx` | 5 | LogPanel の進捗表示UI |
 | `useLogStream.test.ts` | 3 | useLogStream フックの runId=0 処理、onComplete コールバック |
 
-**合計**: 165 テスト
+**合計**: 229 テスト
 
 ### テスト実行
 

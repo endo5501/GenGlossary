@@ -898,6 +898,217 @@ describe('LogPanel with SSE', () => {
   })
 })
 
+describe('Category Editing', () => {
+  beforeEach(() => {
+    server.use(...allTestHandlers)
+  })
+
+  it('shows edit icon next to category in detail panel', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Select a term with category
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    // Should show edit icon for category
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    expect(within(detailPanel).getByRole('button', { name: /edit category/i })).toBeInTheDocument()
+  })
+
+  it('enters edit mode when edit icon is clicked', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    // Click edit icon
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
+
+    // Should show text input
+    expect(within(detailPanel).getByRole('textbox')).toBeInTheDocument()
+    expect(within(detailPanel).getByRole('textbox')).toHaveValue('技術用語')
+  })
+
+  it('saves category when save button is clicked', async () => {
+    let savedCategory: string | undefined
+    server.use(
+      http.patch(`${BASE_URL}/api/projects/:projectId/terms/:termId`, async ({ request }) => {
+        const body = await request.json() as { category?: string }
+        savedCategory = body.category
+        return HttpResponse.json({ id: 1, term_text: '量子コンピュータ', category: body.category })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
+
+    const input = within(detailPanel).getByRole('textbox')
+    await user.clear(input)
+    await user.type(input, '新しいカテゴリ')
+
+    await user.click(within(detailPanel).getByRole('button', { name: /save/i }))
+
+    await waitFor(() => {
+      expect(savedCategory).toBe('新しいカテゴリ')
+    })
+  })
+
+  it('cancels edit when cancel button is clicked', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
+
+    const input = within(detailPanel).getByRole('textbox')
+    await user.clear(input)
+    await user.type(input, '変更されたカテゴリ')
+
+    await user.click(within(detailPanel).getByRole('button', { name: /cancel/i }))
+
+    // Should exit edit mode and show original category
+    await waitFor(() => {
+      expect(within(detailPanel).queryByRole('textbox')).not.toBeInTheDocument()
+    })
+    expect(within(detailPanel).getByText('技術用語')).toBeInTheDocument()
+  })
+
+  it('removes category when saved with empty value', async () => {
+    let savedCategory: string | null | undefined
+    server.use(
+      http.patch(`${BASE_URL}/api/projects/:projectId/terms/:termId`, async ({ request }) => {
+        const body = await request.json() as { category?: string | null }
+        savedCategory = body.category
+        return HttpResponse.json({ id: 1, term_text: '量子コンピュータ', category: null })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
+
+    const input = within(detailPanel).getByRole('textbox')
+    await user.clear(input)
+
+    await user.click(within(detailPanel).getByRole('button', { name: /save/i }))
+
+    await waitFor(() => {
+      expect(savedCategory).toBeNull()
+    })
+  })
+
+  it('saves category when Enter key is pressed', async () => {
+    let savedCategory: string | undefined
+    server.use(
+      http.patch(`${BASE_URL}/api/projects/:projectId/terms/:termId`, async ({ request }) => {
+        const body = await request.json() as { category?: string }
+        savedCategory = body.category
+        return HttpResponse.json({ id: 1, term_text: '量子コンピュータ', category: body.category })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
+
+    const input = within(detailPanel).getByRole('textbox')
+    await user.clear(input)
+    await user.type(input, 'Enterで保存{Enter}')
+
+    await waitFor(() => {
+      expect(savedCategory).toBe('Enterで保存')
+    })
+  })
+
+  it('resets edit mode when selecting a different term', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Select first term and enter edit mode
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
+
+    // Verify we're in edit mode
+    expect(within(detailPanel).getByRole('textbox')).toBeInTheDocument()
+
+    // Select a different term
+    await user.click(screen.getByText('量子ビット'))
+
+    // Should exit edit mode (no textbox visible)
+    await waitFor(() => {
+      const updatedPanel = screen.getByTestId('term-detail-panel')
+      expect(within(updatedPanel).queryByRole('textbox')).not.toBeInTheDocument()
+    })
+  })
+})
+
 describe('Excluded Terms', () => {
   beforeEach(() => {
     server.use(...allTestHandlers)

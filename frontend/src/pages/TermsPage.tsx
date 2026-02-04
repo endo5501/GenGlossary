@@ -15,11 +15,12 @@ import {
   LoadingOverlay,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconPlus, IconRefresh, IconTrash, IconBan, IconList } from '@tabler/icons-react'
+import { IconPlus, IconRefresh, IconTrash, IconBan, IconList, IconPencil, IconCheck, IconX } from '@tabler/icons-react'
 import { useState } from 'react'
 import {
   useTerms,
   useCreateTerm,
+  useUpdateTerm,
   useDeleteTerm,
   useExtractTerms,
   useCurrentRun,
@@ -46,8 +47,11 @@ export function TermsPage({ projectId }: TermsPageProps) {
   const [newTermCategory, setNewTermCategory] = useState('')
   const [newExcludedTermText, setNewExcludedTermText] = useState('')
   const [activeTab, setActiveTab] = useState<string | null>('terms')
+  const [isEditingCategory, setIsEditingCategory] = useState(false)
+  const [editingCategoryValue, setEditingCategoryValue] = useState('')
 
   const createTerm = useCreateTerm(projectId)
+  const updateTerm = useUpdateTerm(projectId)
   const deleteTerm = useDeleteTerm(projectId)
   const extractTerms = useExtractTerms(projectId)
   const createExcludedTerm = useCreateExcludedTerm(projectId)
@@ -96,6 +100,41 @@ export function TermsPage({ projectId }: TermsPageProps) {
           setNewExcludedTermText('')
           closeExcludedModal()
         },
+      }
+    )
+  }
+
+  const handleStartEditCategory = () => {
+    setEditingCategoryValue(selectedTerm?.category ?? '')
+    setIsEditingCategory(true)
+  }
+
+  const resetCategoryEdit = () => {
+    setIsEditingCategory(false)
+    setEditingCategoryValue('')
+  }
+
+  const handleCancelEditCategory = () => {
+    resetCategoryEdit()
+  }
+
+  const handleSelectTerm = (termId: number) => {
+    if (termId !== selectedId) {
+      resetCategoryEdit()
+    }
+    setSelectedId(termId)
+  }
+
+  const handleSaveCategory = () => {
+    if (!selectedTerm || updateTerm.isPending) return
+    const trimmedValue = editingCategoryValue.trim()
+    updateTerm.mutate(
+      {
+        termId: selectedTerm.id,
+        data: { category: trimmedValue || null },
+      },
+      {
+        onSuccess: resetCategoryEdit,
       }
     )
   }
@@ -174,11 +213,11 @@ export function TermsPage({ projectId }: TermsPageProps) {
                 {terms?.map((term) => (
                   <Table.Tr
                     key={term.id}
-                    onClick={() => setSelectedId(term.id)}
+                    onClick={() => handleSelectTerm(term.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
-                        setSelectedId(term.id)
+                        handleSelectTerm(term.id)
                       }
                     }}
                     tabIndex={0}
@@ -250,10 +289,60 @@ export function TermsPage({ projectId }: TermsPageProps) {
                 </ActionIcon>
               </Group>
 
-              {selectedTerm.category && (
-                <Badge variant="light" mb="md">
-                  {selectedTerm.category}
-                </Badge>
+              {isEditingCategory ? (
+                <Group gap="xs" mb="md">
+                  <TextInput
+                    value={editingCategoryValue}
+                    onChange={(e) => setEditingCategoryValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSaveCategory()
+                      } else if (e.key === 'Escape') {
+                        handleCancelEditCategory()
+                      }
+                    }}
+                    placeholder="カテゴリを入力"
+                    aria-label="カテゴリ"
+                    size="sm"
+                    disabled={updateTerm.isPending}
+                  />
+                  <ActionIcon
+                    variant="subtle"
+                    color="green"
+                    onClick={handleSaveCategory}
+                    aria-label="Save"
+                    loading={updateTerm.isPending}
+                  >
+                    <IconCheck size={16} />
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    onClick={handleCancelEditCategory}
+                    aria-label="Cancel"
+                    disabled={updateTerm.isPending}
+                  >
+                    <IconX size={16} />
+                  </ActionIcon>
+                </Group>
+              ) : (
+                <Group gap="xs" mb="md">
+                  {selectedTerm.category ? (
+                    <Badge variant="light">{selectedTerm.category}</Badge>
+                  ) : (
+                    <Text c="dimmed" size="sm">カテゴリなし</Text>
+                  )}
+                  <Tooltip label="カテゴリを編集">
+                    <ActionIcon
+                      variant="subtle"
+                      color="blue"
+                      onClick={handleStartEditCategory}
+                      aria-label="Edit category"
+                    >
+                      <IconPencil size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
               )}
             </Paper>
           )}
