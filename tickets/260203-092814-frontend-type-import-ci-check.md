@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 1
 tags: [frontend, dx, ci]
 description: "フロントエンドのTypeScriptビルドエラーを事前に検出する仕組みを追加"
 created_at: "2026-02-03T09:28:14Z"

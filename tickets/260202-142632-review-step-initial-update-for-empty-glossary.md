@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [backend, edge-case]
 description: "Review step: emit initial step update for empty glossary"
 created_at: "2026-02-02T14:26:32Z"

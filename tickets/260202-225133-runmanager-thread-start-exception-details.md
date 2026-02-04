@@ -1,5 +1,5 @@
 ---
-priority: 9
+priority: 4
 tags: [improvement, backend, error-handling]
 description: "RunManager: capture original exception details in DB on thread start failure"
 created_at: "2026-02-02T22:51:33Z"

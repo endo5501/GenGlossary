@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [security, backend]
 description: "API path validation: Unicode normalization and edge cases"
 created_at: "2026-02-01T11:37:40Z"

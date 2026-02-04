@@ -1,5 +1,5 @@
 ---
-priority: 6
+priority: 1
 tags: [frontend, refactoring]
 description: "Extract common row selection logic into useRowSelection hook"
 created_at: "2026-02-02T16:29:58Z"

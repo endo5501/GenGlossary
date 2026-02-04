@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [bug, frontend, edge-case]
 description: "handleRunCompleteがSSEコンテキストからprojectIdを受け取るべき"
 created_at: "2026-02-03T22:27:52Z"

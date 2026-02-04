@@ -1,5 +1,5 @@
 ---
-priority: 8
+priority: 3
 tags: [refactoring, backend, threading]
 description: "RunManager: refactor cleanup logic into shared method"
 created_at: "2026-02-02T22:51:13Z"

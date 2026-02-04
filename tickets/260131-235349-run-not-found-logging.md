@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [backend, logging, improvement]
 description: "No-op logging masks 'run not found' case"
 created_at: "2026-01-31T23:53:49Z"

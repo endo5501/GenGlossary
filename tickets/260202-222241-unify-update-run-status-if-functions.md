@@ -1,5 +1,5 @@
 ---
-priority: 8
+priority: 3
 tags: [backend, db, refactoring]
 description: "Refactor: unify update_run_status_if_* functions with common helper"
 created_at: "2026-02-02T22:22:41Z"

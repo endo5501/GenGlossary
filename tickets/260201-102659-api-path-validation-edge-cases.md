@@ -1,5 +1,5 @@
 ---
-priority: 6
+priority: 1
 tags: [improvement, backend]
 description: "API path validation: handle edge cases (empty segments, length limits)"
 created_at: "2026-02-01T10:26:59Z"

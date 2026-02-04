@@ -1,5 +1,5 @@
 ---
-priority: 9
+priority: 3
 tags: [frontend, refactoring]
 description: "TermsPage: simplify category editing state management"
 created_at: "2026-02-03T23:08:15Z"

@@ -1,5 +1,5 @@
 ---
-priority: 7
+priority: 2
 tags: [performance, document-viewer]
 description: "Document Viewer performance optimization and error handling"
 created_at: "2026-02-01T12:03:25Z"

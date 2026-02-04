@@ -1,5 +1,5 @@
 ---
-priority: 5
+priority: 2
 tags: [enhancement, excluded-terms]
 description: "CLI: pass excluded_term_repo to TermExtractor for consistency"
 created_at: "2026-02-03T19:35:03Z"
