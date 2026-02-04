@@ -210,6 +210,16 @@ uv run genglossary generate --input ./target_docs --output ./output/glossary.md
 
 ## 開発
 
+### Git hooks のセットアップ
+
+コミット前に TypeScript の型チェックを自動実行するため、以下のコマンドで Git hooks を設定してください：
+
+```bash
+git config core.hooksPath .husky
+```
+
+これにより、コミット時に `pnpm run typecheck` が実行され、型エラーがあるとコミットがブロックされます。
+
 ### テストの実行
 
 ```bash

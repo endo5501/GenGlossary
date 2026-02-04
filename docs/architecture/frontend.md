@@ -1078,6 +1078,18 @@ pnpm test
 
 # リント
 pnpm lint
+
+# 型チェック
+pnpm typecheck
+```
+
+### Git Hooks
+
+プロジェクトには Husky による pre-commit フックが設定されています。コミット前に `pnpm run typecheck` が自動実行され、型エラーがあるとコミットがブロックされます。
+
+新規クローン後のセットアップ：
+```bash
+git config core.hooksPath .husky
 ```
 
 ## バックエンドとの連携

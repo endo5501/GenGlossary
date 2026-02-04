@@ -131,7 +131,7 @@ export function TermsPage({ projectId }: TermsPageProps) {
     updateTerm.mutate(
       {
         termId: selectedTerm.id,
-        data: { category: trimmedValue || null },
+        data: { category: trimmedValue || undefined },
       },
       {
         onSuccess: resetCategoryEdit,
