@@ -4,7 +4,7 @@ tags: [frontend, refactoring]
 description: "Rename useRowSelection to getRowSelectionProps"
 created_at: "2026-02-04T14:48:23Z"
 started_at: 2026-02-05T22:25:14Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T22:33:53Z # Do not modify manually
 ---
 
 # Rename useRowSelection to getRowSelectionProps
