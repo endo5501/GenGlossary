@@ -35,20 +35,20 @@ codex MCP レビューで指摘された追加のセキュリティ問題。2602
 
 ## Tasks
 
-- [ ] 制御文字のチェックを追加
-- [ ] 双方向上書き文字/ゼロ幅文字のチェックを追加
-- [ ] look-alike 文字リストを拡張
-- [ ] Unicode 空白文字の末尾チェックを追加
-- [ ] Windows 予約デバイス名をブロック
-- [ ] テスト追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] 制御文字のチェックを追加
+- [x] 双方向上書き文字/ゼロ幅文字のチェックを追加
+- [x] look-alike 文字リストを拡張
+- [x] Unicode 空白文字の末尾チェックを追加
+- [x] Windows 予約デバイス名をブロック
+- [x] テスト追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Design
