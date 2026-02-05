@@ -4,7 +4,7 @@ tags: [backend, refactoring]
 description: "Remove redundant status wrapper functions in RunManager"
 created_at: "2026-02-05T13:23:14Z"
 started_at: 2026-02-05T22:35:33Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T22:46:08Z # Do not modify manually
 ---
 
 # Remove redundant status wrapper functions in RunManager
