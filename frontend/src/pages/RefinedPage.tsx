@@ -15,7 +15,7 @@ import {
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { OccurrenceList } from '../components/common/OccurrenceList'
-import { useRowSelection } from '../hooks/useRowSelection'
+import { getRowSelectionProps } from '../utils/getRowSelectionProps'
 
 interface RefinedPageProps {
   projectId: number
@@ -70,7 +70,7 @@ export function RefinedPage({ projectId }: RefinedPageProps) {
               key={entry.id}
               withBorder
               p="md"
-              {...useRowSelection(entry, selectedId, setSelectedId)}
+              {...getRowSelectionProps(entry, selectedId, setSelectedId)}
             >
               <Text fw={600} mb="xs">
                 {entry.term_name}

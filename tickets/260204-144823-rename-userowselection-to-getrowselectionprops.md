@@ -3,8 +3,8 @@ priority: 3
 tags: [frontend, refactoring]
 description: "Rename useRowSelection to getRowSelectionProps"
 created_at: "2026-02-04T14:48:23Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-05T22:25:14Z # Do not modify manually
+closed_at: 2026-02-05T22:33:53Z # Do not modify manually
 ---
 
 # Rename useRowSelection to getRowSelectionProps
@@ -31,19 +31,19 @@ Identified during code-simplifier and codex MCP review of ticket 260202-162958-u
 
 ## Tasks
 
-- [ ] Rename function and file
-- [ ] Move to utils directory
-- [ ] Update test file
-- [ ] Update all imports
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Rename function and file
+- [x] Move to utils directory
+- [x] Update test file
+- [x] Update all imports
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes

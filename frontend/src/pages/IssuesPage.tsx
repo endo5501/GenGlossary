@@ -13,7 +13,7 @@ import { useState } from 'react'
 import { useIssues, useReviewIssues, useCurrentRun } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { getIssueTypeColor } from '../utils/colors'
-import { useRowSelection } from '../hooks/useRowSelection'
+import { getRowSelectionProps } from '../utils/getRowSelectionProps'
 import type { IssueType } from '../api/types'
 
 interface IssuesPageProps {
@@ -81,7 +81,7 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
               key={issue.id}
               withBorder
               p="sm"
-              {...useRowSelection(issue, selectedId, setSelectedId)}
+              {...getRowSelectionProps(issue, selectedId, setSelectedId)}
             >
               <Group justify="space-between" mb="xs">
                 <Group gap="xs">
