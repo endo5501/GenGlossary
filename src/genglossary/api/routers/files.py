@@ -33,7 +33,6 @@ MAX_CONTENT_BYTES = 3 * 1024 * 1024  # 3MB
 # Unicode look-alike characters that could be used to bypass path validation
 LOOKALIKE_SLASH = {"\u2215", "\uff0f", "\u2044", "\u29f8"}  # ∕ ／ ⁄ ⧸
 LOOKALIKE_DOT = {"\u2024", "\uff0e", "\u00b7", "\u3002", "\uff61"}  # ․ ． · 。 ｡
-LOOKALIKE_CHARS = LOOKALIKE_SLASH | LOOKALIKE_DOT
 
 # Control characters (C0: U+0000-U+001F, C1: U+007F-U+009F)
 CONTROL_CHARS = set(chr(c) for c in range(0x00, 0x20)) | set(chr(c) for c in range(0x7F, 0xA0))
@@ -53,8 +52,13 @@ BIDI_AND_ZERO_WIDTH = {
     "\ufeff",  # BYTE ORDER MARK / ZERO WIDTH NO-BREAK SPACE
 }
 
-# Unicode whitespace characters for trailing check
-UNICODE_WHITESPACE = {
+# Combined forbidden characters (single loop check)
+FORBIDDEN_CHARS = CONTROL_CHARS | BIDI_AND_ZERO_WIDTH | LOOKALIKE_SLASH | LOOKALIKE_DOT
+
+# Trailing forbidden characters (space, dot, Unicode whitespace)
+TRAILING_FORBIDDEN = (
+    " ",  # Regular space
+    ".",  # Dot
     "\u00a0",  # NO-BREAK SPACE
     "\u2000",  # EN QUAD
     "\u2001",  # EM QUAD
@@ -63,7 +67,7 @@ UNICODE_WHITESPACE = {
     "\u2009",  # THIN SPACE
     "\u200a",  # HAIR SPACE
     "\u3000",  # IDEOGRAPHIC SPACE
-}
+)
 
 # Windows reserved device names
 WINDOWS_RESERVED_NAMES = (
@@ -109,15 +113,8 @@ def _validate_file_name(file_name: str) -> str:
     # Apply NFC normalization first
     file_name = unicodedata.normalize("NFC", file_name)
 
-    # Reject control characters (security risk)
-    if any(char in CONTROL_CHARS for char in file_name):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File name contains disallowed Unicode characters",
-        )
-
-    # Reject bidi override and zero-width characters (filename spoofing)
-    if any(char in BIDI_AND_ZERO_WIDTH for char in file_name):
+    # Reject forbidden characters (control, bidi, zero-width, look-alike)
+    if any(char in FORBIDDEN_CHARS for char in file_name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File name contains disallowed Unicode characters",
@@ -135,13 +132,6 @@ def _validate_file_name(file_name: str) -> str:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File name must use forward slashes",
-        )
-
-    # Reject Unicode look-alike characters that could bypass validation
-    if any(char in LOOKALIKE_CHARS for char in file_name):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File name contains disallowed Unicode characters",
         )
 
     # Split into segments for validation and normalization
@@ -167,9 +157,7 @@ def _validate_file_name(file_name: str) -> str:
     # Validate all segments in a single pass
     for segment in normalized_segments:
         # Check trailing space, dot, or Unicode whitespace (Windows compatibility)
-        if segment.endswith((" ", ".")) or any(
-            segment.endswith(ws) for ws in UNICODE_WHITESPACE
-        ):
+        if segment.endswith(TRAILING_FORBIDDEN):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Path segments cannot have trailing spaces or dots",
