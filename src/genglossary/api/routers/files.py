@@ -28,11 +28,29 @@ router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 ALLOWED_EXTENSIONS = {".txt", ".md"}
 MAX_SEGMENT_BYTES = 255
 MAX_PATH_BYTES = 1024
+MAX_CONTENT_BYTES = 3 * 1024 * 1024  # 3MB
 
 # Unicode look-alike characters that could be used to bypass path validation
 LOOKALIKE_SLASH = {"\u2215", "\uff0f", "\u2044", "\u29f8"}  # ∕ ／ ⁄ ⧸
 LOOKALIKE_DOT = {"\u2024", "\uff0e", "\u00b7"}  # ․ ． ·
 LOOKALIKE_CHARS = LOOKALIKE_SLASH | LOOKALIKE_DOT
+
+
+def _validate_content_size(content: str) -> None:
+    """Validate content size is within limit.
+
+    Args:
+        content: File content to validate.
+
+    Raises:
+        HTTPException: If content exceeds size limit.
+    """
+    content_bytes = len(content.encode("utf-8"))
+    if content_bytes > MAX_CONTENT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Content too large ({content_bytes} bytes). Max: {MAX_CONTENT_BYTES} bytes (3MB)",
+        )
 
 
 def _validate_file_name(file_name: str) -> str:
@@ -201,6 +219,9 @@ async def create_file(
     # Validate and normalize file name
     normalized_file_name = _validate_file_name(request.file_name)
 
+    # Validate content size
+    _validate_content_size(request.content)
+
     # Compute hash
     content_hash = compute_content_hash(request.content)
 
@@ -251,6 +272,7 @@ async def create_files_bulk(
     normalized_files: list[tuple[str, str]] = []  # (normalized_name, content)
     for file_req in request.files:
         normalized_name = _validate_file_name(file_req.file_name)
+        _validate_content_size(file_req.content)
         normalized_files.append((normalized_name, file_req.content))
 
     # Check for duplicates in request (using normalized names)
