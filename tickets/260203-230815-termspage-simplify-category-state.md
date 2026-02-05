@@ -4,7 +4,7 @@ tags: [frontend, refactoring]
 description: "TermsPage: simplify category editing state management"
 created_at: "2026-02-03T23:08:15Z"
 started_at: 2026-02-05T22:18:54Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T22:23:21Z # Do not modify manually
 ---
 
 # TermsPage: カテゴリ編集の状態管理をシンプル化
