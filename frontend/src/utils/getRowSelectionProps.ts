@@ -1,4 +1,4 @@
-export function useRowSelection<T extends { id: number }>(
+export function getRowSelectionProps<T extends { id: number }>(
   item: T,
   selectedId: number | null,
   onSelect: (id: number) => void

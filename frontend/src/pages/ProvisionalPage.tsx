@@ -20,7 +20,7 @@ import {
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { OccurrenceList } from '../components/common/OccurrenceList'
-import { useRowSelection } from '../hooks/useRowSelection'
+import { getRowSelectionProps } from '../utils/getRowSelectionProps'
 
 interface ProvisionalPageProps {
   projectId: number
@@ -93,7 +93,7 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
             {entries?.map((entry) => (
               <Table.Tr
                 key={entry.id}
-                {...useRowSelection(entry, selectedId, setSelectedId)}
+                {...getRowSelectionProps(entry, selectedId, setSelectedId)}
               >
                 <Table.Td>{entry.term_name}</Table.Td>
                 <Table.Td>

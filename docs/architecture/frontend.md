@@ -31,7 +31,8 @@ frontend/src/
 ├── constants/            # 共通定数
 │   └── llm.ts            # LLM関連の定数（プロバイダー、デフォルトURL）
 ├── hooks/                # カスタムフック
-│   └── useRowSelection.ts # 行選択ロジックのprops生成
+├── utils/                # ユーティリティ関数
+│   └── getRowSelectionProps.ts # 行選択ロジックのprops生成
 ├── store/                # Zustand 状態管理
 │   └── logStore.ts       # ログと進捗の状態管理
 └── routes/               # ルーティング設定
@@ -330,13 +331,13 @@ const [selectedId, setSelectedId] = useState<number | null>(null)
 const selectedEntry = entries?.find((e) => e.id === selectedId) ?? null
 ```
 
-**useRowSelection フック:**
+**getRowSelectionProps ユーティリティ関数:**
 
-行選択のロジック（onClick、onKeyDown、aria-selected、スタイル）を共通化するフック。
+行選択のロジック（onClick、onKeyDown、aria-selected、スタイル）を共通化するユーティリティ関数。
 
 ```typescript
-// hooks/useRowSelection.ts
-export function useRowSelection<T extends { id: number }>(
+// utils/getRowSelectionProps.ts
+export function getRowSelectionProps<T extends { id: number }>(
   item: T,
   selectedId: number | null,
   onSelect: (id: number) => void
@@ -363,7 +364,7 @@ export function useRowSelection<T extends { id: number }>(
 {entries?.map((entry) => (
   <Table.Tr
     key={entry.id}
-    {...useRowSelection(entry, selectedId, setSelectedId)}
+    {...getRowSelectionProps(entry, selectedId, setSelectedId)}
   >
     ...
   </Table.Tr>
@@ -375,6 +376,7 @@ export function useRowSelection<T extends { id: number }>(
 - キーボード操作（Tab + Enter/Space）をサポート
 - ARIA属性（`aria-selected`）でスクリーンリーダー対応
 - Mantine固有の`bg`プロパティで選択状態をスタイリング
+- React hooksを使用していないため、hooks/ではなくutils/に配置
 
 #### TermsPage のカテゴリ編集機能
 
