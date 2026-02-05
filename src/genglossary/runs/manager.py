@@ -102,10 +102,6 @@ class RunManager:
             self._thread.daemon = True
             self._thread.start()
         except Exception:
-            # Cleanup on thread start failure
-            with self._cancel_events_lock:
-                self._cancel_events.pop(run_id, None)
-
             # Reset thread reference (it was never started)
             self._thread = None
 
@@ -128,10 +124,8 @@ class RunManager:
                     },
                 )
 
-            # Send completion signal and cleanup subscribers
-            self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
-            with self._subscribers_lock:
-                self._subscribers.pop(run_id, None)
+            # Cleanup run resources (cancel event, completion signal, subscribers)
+            self._cleanup_run_resources(run_id)
 
             raise
 
@@ -222,14 +216,8 @@ class RunManager:
                 },
             )
         finally:
-            # Cleanup cancel event for this run
-            with self._cancel_events_lock:
-                self._cancel_events.pop(run_id, None)
-            # Send completion signal to close SSE stream
-            self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
-            # Clear subscribers for this run to prevent memory leak
-            with self._subscribers_lock:
-                self._subscribers.pop(run_id, None)
+            # Cleanup run resources (cancel event, completion signal, subscribers)
+            self._cleanup_run_resources(run_id)
             # Close the connection when thread completes
             if conn is not None:
                 conn.close()
@@ -350,6 +338,28 @@ class RunManager:
             if run_id in self._subscribers:
                 for queue in self._subscribers[run_id]:
                     self._put_to_queue(queue, message)
+
+    def _cleanup_run_resources(self, run_id: int) -> None:
+        """Cleanup resources associated with a run.
+
+        This method consolidates the cleanup logic that was previously duplicated
+        in start_run exception handler and _execute_run finally block.
+
+        The cleanup includes:
+        1. Removing the cancel event
+        2. Broadcasting completion signal
+        3. Removing subscribers
+
+        This method is idempotent - safe to call multiple times.
+
+        Args:
+            run_id: Run ID to cleanup.
+        """
+        with self._cancel_events_lock:
+            self._cancel_events.pop(run_id, None)
+        self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
+        with self._subscribers_lock:
+            self._subscribers.pop(run_id, None)
 
     def _try_status_with_fallback(
         self,
