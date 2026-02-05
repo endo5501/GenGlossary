@@ -870,3 +870,83 @@ class TestPathValidationEnhancement:
 
         assert response.status_code == 400
         assert "duplicate" in response.json()["detail"].lower()
+
+
+class TestContentSizeLimit:
+    """Tests for content size limit (3MB)."""
+
+    def test_create_file_rejects_content_too_large(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files rejects content over 3MB."""
+        project_id = test_project_setup["project_id"]
+
+        # Create content larger than 3MB (3 * 1024 * 1024 = 3145728 bytes)
+        large_content = "a" * (3 * 1024 * 1024 + 1)
+        payload = {"file_name": "large.txt", "content": large_content}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "too large" in response.json()["detail"].lower()
+
+    def test_create_file_accepts_content_at_limit(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files accepts content exactly at 3MB."""
+        project_id = test_project_setup["project_id"]
+
+        # Create content of exactly 3MB
+        content_at_limit = "a" * (3 * 1024 * 1024)
+        payload = {"file_name": "at_limit.txt", "content": content_at_limit}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
+
+    def test_create_file_measures_size_in_bytes(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that content size is measured in bytes, not characters."""
+        project_id = test_project_setup["project_id"]
+
+        # Japanese characters are 3 bytes each in UTF-8
+        # 1048577 Japanese chars = 3145731 bytes > 3MB
+        large_unicode_content = "あ" * 1048577
+        payload = {"file_name": "unicode_large.txt", "content": large_unicode_content}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "too large" in response.json()["detail"].lower()
+
+    def test_create_files_bulk_rejects_content_too_large(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test POST /api/projects/{id}/files/bulk rejects content over 3MB."""
+        project_id = test_project_setup["project_id"]
+
+        large_content = "a" * (3 * 1024 * 1024 + 1)
+        payload = {
+            "files": [
+                {"file_name": "small.txt", "content": "small content"},
+                {"file_name": "large.txt", "content": large_content},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 400
+        assert "too large" in response.json()["detail"].lower()
+
+    def test_create_file_error_message_includes_size_info(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that error message includes actual and max size."""
+        project_id = test_project_setup["project_id"]
+
+        large_content = "a" * (3 * 1024 * 1024 + 100)
+        payload = {"file_name": "large.txt", "content": large_content}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        # Should include the actual size and max size
+        assert "3145828" in detail  # actual size
+        assert "3145728" in detail or "3MB" in detail  # max size
