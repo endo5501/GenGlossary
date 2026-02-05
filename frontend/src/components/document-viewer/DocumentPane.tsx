@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { Tabs, Text, Paper, ScrollArea, Loader, Center } from '@mantine/core'
-import { IconFile } from '@tabler/icons-react'
+import { Tabs, Text, Paper, ScrollArea, Loader, Center, Alert, Button, Stack } from '@mantine/core'
+import { IconFile, IconAlertCircle } from '@tabler/icons-react'
 import type { FileResponse } from '../../api/types'
 
 interface DocumentPaneProps {
@@ -9,6 +9,8 @@ interface DocumentPaneProps {
   onFileSelect: (fileId: number) => void
   content: string | null
   isLoading: boolean
+  error?: Error | null
+  onRetry?: () => void
   terms: string[]
   selectedTerm: string | null
   onTermClick: (term: string) => void
@@ -20,6 +22,8 @@ export function DocumentPane({
   onFileSelect,
   content,
   isLoading,
+  error,
+  onRetry,
   terms,
   selectedTerm,
   onTermClick,
@@ -102,6 +106,23 @@ export function DocumentPane({
           {isLoading ? (
             <Center h={200}>
               <Loader />
+            </Center>
+          ) : error ? (
+            <Center h={200}>
+              <Stack align="center" gap="md">
+                <Alert
+                  icon={<IconAlertCircle size={16} />}
+                  title="ファイルの読み込みに失敗しました"
+                  color="red"
+                >
+                  {error.message}
+                </Alert>
+                {onRetry && (
+                  <Button variant="outline" onClick={onRetry}>
+                    リトライ
+                  </Button>
+                )}
+              </Stack>
             </Center>
           ) : content ? (
             renderHighlightedContent(content)
