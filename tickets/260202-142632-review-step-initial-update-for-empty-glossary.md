@@ -4,7 +4,7 @@ tags: [backend, edge-case]
 description: "Review step: emit initial step update for empty glossary"
 created_at: "2026-02-02T14:26:32Z"
 started_at: 2026-02-05T14:14:14Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T14:25:08Z # Do not modify manually
 ---
 
 # Review step: emit initial step update for empty glossary
