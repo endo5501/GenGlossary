@@ -719,15 +719,24 @@ ALLOWED_EXTENSIONS = {".txt", ".md"}
 def _validate_file_name(file_name: str) -> str:
     """ファイル名を検証・正規化
 
+    セキュリティ:
+    - NFC正規化を適用（Unicode文字の一貫した表現）
+    - Unicode look-alike文字を拒否:
+      - スラッシュ類似: U+2215, U+FF0F, U+2044, U+29F8
+      - ドット類似: U+2024, U+FF0E, U+00B7
     - 絶対パス（/で始まる）を拒否
     - Windowsドライブパス（C:/path, D:/path）を拒否
-    - 相対パスを許可（例: 'chapter1/intro.md'）
     - パストラバーサル（..）を拒否
     - Windowsバックスラッシュを拒否（POSIX形式のみ）
-    - 拡張子チェック（.txt, .md のみ、basenameから判定）
-    - パス正規化: .セグメントと空セグメント除去
+    - 末尾スペース/ドットを拒否（各セグメント、Windows互換性）
+
+    正規化:
+    - .セグメントと空セグメント除去
       - 例: './a/./b.md' → 'a/b.md'
       - 例: 'a//b.md' → 'a/b.md'
+
+    バリデーション:
+    - 拡張子チェック（.txt, .md のみ、basenameから判定）
     - パス長制限:
       - 各セグメント: 最大255バイト
       - 全体パス: 最大1024バイト

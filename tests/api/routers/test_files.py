@@ -544,6 +544,198 @@ class TestExtensionValidationEdgeCases:
         assert "extension" in response.json()["detail"].lower()
 
 
+class TestUnicodeNormalization:
+    """Tests for Unicode normalization and look-alike character rejection."""
+
+    def test_create_file_applies_nfc_normalization(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that NFC normalization is applied to file names."""
+        project_id = test_project_setup["project_id"]
+
+        # NFD form: e + combining acute accent (é as two codepoints)
+        nfd_name = "caf\u0065\u0301.md"  # "café.md" in NFD
+        # NFC form: precomposed é (single codepoint)
+        nfc_name = "caf\u00e9.md"  # "café.md" in NFC
+
+        payload = {"file_name": nfd_name, "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
+        # Should be stored in NFC form
+        assert response.json()["file_name"] == nfc_name
+
+    def test_create_file_rejects_lookalike_slash_division(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that U+2215 DIVISION SLASH is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # U+2215 DIVISION SLASH (∕) looks like forward slash
+        payload = {"file_name": "path\u2215file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "unicode" in response.json()["detail"].lower() or "character" in response.json()["detail"].lower()
+
+    def test_create_file_rejects_lookalike_fullwidth_slash(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that U+FF0F FULLWIDTH SOLIDUS is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # U+FF0F FULLWIDTH SOLIDUS (／)
+        payload = {"file_name": "path\uff0ffile.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_file_rejects_lookalike_fraction_slash(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that U+2044 FRACTION SLASH is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # U+2044 FRACTION SLASH (⁄)
+        payload = {"file_name": "path\u2044file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_file_rejects_lookalike_big_solidus(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that U+29F8 BIG SOLIDUS is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # U+29F8 BIG SOLIDUS (⧸)
+        payload = {"file_name": "path\u29f8file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_file_rejects_lookalike_one_dot_leader(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that U+2024 ONE DOT LEADER is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # U+2024 ONE DOT LEADER (․) looks like period
+        payload = {"file_name": "file\u2024md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_file_rejects_lookalike_fullwidth_dot(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that U+FF0E FULLWIDTH FULL STOP is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # U+FF0E FULLWIDTH FULL STOP (．)
+        payload = {"file_name": "file\uff0emd", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_file_rejects_lookalike_middle_dot(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that U+00B7 MIDDLE DOT is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # U+00B7 MIDDLE DOT (·)
+        payload = {"file_name": "file\u00b7md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_file_rejects_trailing_space_in_segment(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that trailing space in path segment is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # Trailing space in directory name
+        payload = {"file_name": "dir /file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+        assert "trailing" in response.json()["detail"].lower() or "space" in response.json()["detail"].lower()
+
+    def test_create_file_rejects_trailing_dot_in_segment(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that trailing dot in path segment (not extension) is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # Trailing dot in directory name (Windows issue)
+        payload = {"file_name": "dir./file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_file_rejects_trailing_space_in_basename(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that trailing space in basename (after extension) is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # Filename ending with space (invalid on Windows)
+        # Note: "file .md" is valid because space is not at the end
+        payload = {"file_name": "file.md ", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_files_bulk_applies_nfc_normalization(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that bulk create applies NFC normalization."""
+        project_id = test_project_setup["project_id"]
+
+        nfd_name = "caf\u0065\u0301.md"
+        nfc_name = "caf\u00e9.md"
+
+        payload = {"files": [{"file_name": nfd_name, "content": "content"}]}
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 201
+        assert response.json()[0]["file_name"] == nfc_name
+
+    def test_create_files_bulk_rejects_lookalike_characters(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that bulk create rejects look-alike characters."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "valid.md", "content": "content"},
+                {"file_name": "path\u2215file.md", "content": "content"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 400
+
+    def test_create_files_bulk_rejects_trailing_space(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that bulk create rejects trailing space in segments."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "valid.md", "content": "content"},
+                {"file_name": "dir /file.md", "content": "content"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
+
+        assert response.status_code == 400
+
+
 class TestBulkCreateIntegrityError:
     """Tests for bulk create IntegrityError handling."""
 
