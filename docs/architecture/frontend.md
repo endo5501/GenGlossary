@@ -140,16 +140,19 @@ navbar={hasProject ? { width: 200, breakpoint: 'sm' } : undefined}
 
 SSEストリームの`complete`イベント発火時に、`handleRunComplete`コールバックですべてのデータリストを無効化します。これにより、Run完了後に最新のデータが自動的に表示されます。
 
-```typescript
-const handleRunComplete = useCallback(() => {
-  if (projectId === undefined) return
+`completedProjectId`はSSEコンテキスト（`useLogStream`）から渡されるため、ユーザーがRun中に別のプロジェクトに移動しても、正しいプロジェクトのキャッシュが無効化されます。
 
-  queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
-  queryClient.invalidateQueries({ queryKey: termKeys.list(projectId) })
-  queryClient.invalidateQueries({ queryKey: provisionalKeys.list(projectId) })
-  queryClient.invalidateQueries({ queryKey: issueKeys.list(projectId) })
-  queryClient.invalidateQueries({ queryKey: refinedKeys.list(projectId) })
-}, [queryClient, projectId])
+```typescript
+const handleRunComplete = useCallback(
+  (completedProjectId: number) => {
+    queryClient.invalidateQueries({ queryKey: runKeys.current(completedProjectId) })
+    queryClient.invalidateQueries({ queryKey: termKeys.list(completedProjectId) })
+    queryClient.invalidateQueries({ queryKey: provisionalKeys.list(completedProjectId) })
+    queryClient.invalidateQueries({ queryKey: issueKeys.list(completedProjectId) })
+    queryClient.invalidateQueries({ queryKey: refinedKeys.list(completedProjectId) })
+  },
+  [queryClient]
+)
 ```
 
 **無効化されるクエリ:**
@@ -824,7 +827,7 @@ SSE（Server-Sent Events）を使用したログストリーミングフック�
 
 ```typescript
 interface UseLogStreamOptions {
-  onComplete?: () => void  // ストリーム完了時のコールバック
+  onComplete?: (projectId: number) => void  // ストリーム完了時のコールバック（projectIdはSSEコンテキストから）
 }
 
 interface UseLogStreamResult {
@@ -1053,9 +1056,9 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `terms-workflow.test.tsx` | 58 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel、カテゴリ編集 |
 | `logStore.test.ts` | 20 | Zustand ログストアの状態管理、進捗追跡 |
 | `LogPanel.test.tsx` | 5 | LogPanel の進捗表示UI |
-| `useLogStream.test.ts` | 3 | useLogStream フックの runId=0 処理、onComplete コールバック |
+| `useLogStream.test.ts` | 7 | useLogStream フックの runId=0 処理、onComplete コールバック、projectId引数 |
 
-**合計**: 229 テスト
+**合計**: 233 テスト
 
 ### テスト実行
 
