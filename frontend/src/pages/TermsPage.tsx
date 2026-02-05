@@ -47,8 +47,8 @@ export function TermsPage({ projectId }: TermsPageProps) {
   const [newTermCategory, setNewTermCategory] = useState('')
   const [newExcludedTermText, setNewExcludedTermText] = useState('')
   const [activeTab, setActiveTab] = useState<string | null>('terms')
-  const [isEditingCategory, setIsEditingCategory] = useState(false)
-  const [editingCategoryValue, setEditingCategoryValue] = useState('')
+  const [editingCategoryValue, setEditingCategoryValue] = useState<string | null>(null)
+  const isEditingCategory = editingCategoryValue !== null
 
   const createTerm = useCreateTerm(projectId)
   const updateTerm = useUpdateTerm(projectId)
@@ -106,12 +106,10 @@ export function TermsPage({ projectId }: TermsPageProps) {
 
   const handleStartEditCategory = () => {
     setEditingCategoryValue(selectedTerm?.category ?? '')
-    setIsEditingCategory(true)
   }
 
   const resetCategoryEdit = () => {
-    setIsEditingCategory(false)
-    setEditingCategoryValue('')
+    setEditingCategoryValue(null)
   }
 
   const handleCancelEditCategory = () => {
@@ -126,7 +124,7 @@ export function TermsPage({ projectId }: TermsPageProps) {
   }
 
   const handleSaveCategory = () => {
-    if (!selectedTerm || updateTerm.isPending) return
+    if (!selectedTerm || updateTerm.isPending || editingCategoryValue === null) return
     const trimmedValue = editingCategoryValue.trim()
     updateTerm.mutate(
       {
