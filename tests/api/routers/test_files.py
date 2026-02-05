@@ -675,14 +675,15 @@ class TestUnicodeNormalization:
 
         assert response.status_code == 400
 
-    def test_create_file_rejects_trailing_space_in_filename(
+    def test_create_file_rejects_trailing_space_in_basename(
         self, test_project_setup, client: TestClient
     ):
-        """Test that trailing space in filename is rejected."""
+        """Test that trailing space in basename (after extension) is rejected."""
         project_id = test_project_setup["project_id"]
 
-        # Trailing space before extension
-        payload = {"file_name": "file .md", "content": "content"}
+        # Filename ending with space (invalid on Windows)
+        # Note: "file .md" is valid because space is not at the end
+        payload = {"file_name": "file.md ", "content": "content"}
         response = client.post(f"/api/projects/{project_id}/files", json=payload)
 
         assert response.status_code == 400

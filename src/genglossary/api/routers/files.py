@@ -2,6 +2,7 @@
 
 import re
 import sqlite3
+import unicodedata
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
@@ -28,13 +29,18 @@ ALLOWED_EXTENSIONS = {".txt", ".md"}
 MAX_SEGMENT_BYTES = 255
 MAX_PATH_BYTES = 1024
 
+# Unicode look-alike characters that could be used to bypass path validation
+LOOKALIKE_SLASH = {"\u2215", "\uff0f", "\u2044", "\u29f8"}  # ∕ ／ ⁄ ⧸
+LOOKALIKE_DOT = {"\u2024", "\uff0e", "\u00b7"}  # ․ ． ·
+LOOKALIKE_CHARS = LOOKALIKE_SLASH | LOOKALIKE_DOT
+
 
 def _validate_file_name(file_name: str) -> str:
     """Validate and normalize file name (relative path).
 
     Accepts relative paths with forward slashes (e.g., 'chapter1/intro.md').
     Rejects absolute paths, path traversal attempts (..), and Windows backslashes.
-    Normalizes paths by removing '.' segments.
+    Normalizes paths by removing '.' segments and applying NFC normalization.
 
     Args:
         file_name: File name or relative path to validate.
@@ -45,6 +51,9 @@ def _validate_file_name(file_name: str) -> str:
     Raises:
         HTTPException: If file name is invalid.
     """
+    # Apply NFC normalization first
+    file_name = unicodedata.normalize("NFC", file_name)
+
     # Reject absolute paths (Unix-style or Windows drive paths)
     if file_name.startswith("/") or re.match(r"^[A-Za-z]:", file_name):
         raise HTTPException(
@@ -58,6 +67,14 @@ def _validate_file_name(file_name: str) -> str:
             status_code=400,
             detail="File name must use forward slashes",
         )
+
+    # Reject Unicode look-alike characters that could bypass validation
+    for char in file_name:
+        if char in LOOKALIKE_CHARS:
+            raise HTTPException(
+                status_code=400,
+                detail="File name contains disallowed Unicode characters",
+            )
 
     # Split into segments for validation and normalization
     segments = file_name.split("/")
@@ -73,6 +90,14 @@ def _validate_file_name(file_name: str) -> str:
     # Normalize: remove '.' and empty segments
     normalized_segments = [s for s in segments if s and s != "."]
     normalized = "/".join(normalized_segments)
+
+    # Check for trailing space or dot in each segment (Windows compatibility)
+    for segment in normalized_segments:
+        if segment.endswith(" ") or segment.endswith("."):
+            raise HTTPException(
+                status_code=400,
+                detail="Path segments cannot have trailing spaces or dots",
+            )
 
     # Check segment length limits (255 bytes each)
     for segment in normalized_segments:
