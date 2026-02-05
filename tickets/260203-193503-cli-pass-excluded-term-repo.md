@@ -4,7 +4,7 @@ tags: [enhancement, excluded-terms]
 description: "CLI: pass excluded_term_repo to TermExtractor for consistency"
 created_at: "2026-02-03T19:35:03Z"
 started_at: 2026-02-05T14:27:10Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T14:45:01Z # Do not modify manually
 ---
 
 # CLI: pass excluded_term_repo to TermExtractor for consistency
