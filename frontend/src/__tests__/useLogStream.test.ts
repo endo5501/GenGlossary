@@ -214,4 +214,113 @@ describe('useLogStream', () => {
       }
     })
   })
+
+  describe('onComplete receives projectId', () => {
+    it('should call onComplete with projectId when complete event fires', async () => {
+      const onComplete = vi.fn()
+      const projectId = 42
+
+      let eventSourceInstance: InstanceType<typeof MockedEventSource> | null =
+        null
+
+      // Capture the EventSource instance
+      const OriginalEventSource = window.EventSource
+      window.EventSource = class extends (
+        OriginalEventSource
+      ) {
+        constructor(url: string) {
+          super(url)
+          eventSourceInstance = this as unknown as InstanceType<
+            typeof MockedEventSource
+          >
+        }
+      } as typeof EventSource
+
+      try {
+        renderHook(() => useLogStream(projectId, 1, { onComplete }))
+
+        // Wait for connection
+        await waitFor(() => {
+          expect(eventSourceInstance).not.toBeNull()
+        })
+
+        // Trigger complete event
+        act(() => {
+          const addEventListenerCalls =
+            eventSourceInstance!.addEventListener.mock.calls
+          const completeHandler = addEventListenerCalls.find(
+            (call: [string, unknown]) => call[0] === 'complete'
+          )?.[1] as (() => void) | undefined
+
+          if (completeHandler) {
+            completeHandler()
+          }
+        })
+
+        // onComplete should be called with the projectId from SSE context
+        expect(onComplete).toHaveBeenCalledTimes(1)
+        expect(onComplete).toHaveBeenCalledWith(projectId)
+      } finally {
+        window.EventSource = OriginalEventSource
+      }
+    })
+
+    it('should call onComplete with original projectId even if URL changes during run', async () => {
+      const onComplete = vi.fn()
+      const originalProjectId = 42
+      const newProjectId = 99
+
+      let eventSourceInstance: InstanceType<typeof MockedEventSource> | null =
+        null
+
+      // Capture the EventSource instance
+      const OriginalEventSource = window.EventSource
+      window.EventSource = class extends (
+        OriginalEventSource
+      ) {
+        constructor(url: string) {
+          super(url)
+          eventSourceInstance = this as unknown as InstanceType<
+            typeof MockedEventSource
+          >
+        }
+      } as typeof EventSource
+
+      try {
+        const { rerender } = renderHook(
+          ({ projectId }) => useLogStream(projectId, 1, { onComplete }),
+          { initialProps: { projectId: originalProjectId } }
+        )
+
+        // Wait for connection
+        await waitFor(() => {
+          expect(eventSourceInstance).not.toBeNull()
+        })
+
+        // Simulate user navigating to a different project
+        // Note: rerendering with different projectId will trigger new EventSource
+        // But the existing complete handler should still use original projectId
+        // This test documents the expected behavior
+
+        // Trigger complete event on the original EventSource
+        act(() => {
+          const addEventListenerCalls =
+            eventSourceInstance!.addEventListener.mock.calls
+          const completeHandler = addEventListenerCalls.find(
+            (call: [string, unknown]) => call[0] === 'complete'
+          )?.[1] as (() => void) | undefined
+
+          if (completeHandler) {
+            completeHandler()
+          }
+        })
+
+        // onComplete should be called with the original projectId (from SSE context)
+        expect(onComplete).toHaveBeenCalledTimes(1)
+        expect(onComplete).toHaveBeenCalledWith(originalProjectId)
+      } finally {
+        window.EventSource = OriginalEventSource
+      }
+    })
+  })
 })

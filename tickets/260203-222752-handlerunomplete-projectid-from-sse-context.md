@@ -3,8 +3,8 @@ priority: 2
 tags: [bug, frontend, edge-case]
 description: "handleRunCompleteがSSEコンテキストからprojectIdを受け取るべき"
 created_at: "2026-02-03T22:27:52Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-05T14:46:07Z # Do not modify manually
+closed_at: 2026-02-05T15:17:46Z # Do not modify manually
 ---
 
 # handleRunComplete should receive projectId from SSE context
@@ -40,19 +40,19 @@ const handleRunComplete = useCallback((completedProjectId: number) => {
 
 ## Tasks
 
-- [ ] `useLogStream`の`onComplete`コールバックに`projectId`を渡す
-- [ ] `LogPanel`の`onRunComplete`コールバックの型を更新
-- [ ] `AppShell`の`handleRunComplete`を更新して引数から`projectId`を受け取る
-- [ ] テストの追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `useLogStream`の`onComplete`コールバックに`projectId`を渡す
+- [x] `LogPanel`の`onRunComplete`コールバックの型を更新
+- [x] `AppShell`の`handleRunComplete`を更新して引数から`projectId`を受け取る
+- [x] テストの追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes

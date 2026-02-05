@@ -4,7 +4,7 @@ import { getBaseUrl } from '../client'
 import { useLogStore } from '../../store/logStore'
 
 interface UseLogStreamOptions {
-  onComplete?: () => void
+  onComplete?: (projectId: number) => void
 }
 
 interface UseLogStreamResult {
@@ -74,7 +74,7 @@ export function useLogStream(
 
     const handleComplete = () => {
       disconnect()
-      onCompleteRef.current?.()
+      onCompleteRef.current?.(projectId)
     }
 
     const handleError = () => {

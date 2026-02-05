@@ -17,7 +17,7 @@ import { levelColors } from '../../utils/colors'
 interface LogPanelProps {
   projectId?: number
   runId?: number
-  onRunComplete?: () => void
+  onRunComplete?: (projectId: number) => void
 }
 
 export function LogPanel({ projectId, runId, onRunComplete }: LogPanelProps) {

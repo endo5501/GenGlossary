@@ -30,15 +30,18 @@ export function AppShell() {
 
   // Invalidate caches when SSE stream completes (run finished)
   // All data lists are refreshed since run completion may affect any of them
-  const handleRunComplete = useCallback(() => {
-    if (projectId === undefined) return
-
-    queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
-    queryClient.invalidateQueries({ queryKey: termKeys.list(projectId) })
-    queryClient.invalidateQueries({ queryKey: provisionalKeys.list(projectId) })
-    queryClient.invalidateQueries({ queryKey: issueKeys.list(projectId) })
-    queryClient.invalidateQueries({ queryKey: refinedKeys.list(projectId) })
-  }, [queryClient, projectId])
+  // Uses completedProjectId from SSE context to avoid invalidating wrong cache
+  // when user navigates to different project during run
+  const handleRunComplete = useCallback(
+    (completedProjectId: number) => {
+      queryClient.invalidateQueries({ queryKey: runKeys.current(completedProjectId) })
+      queryClient.invalidateQueries({ queryKey: termKeys.list(completedProjectId) })
+      queryClient.invalidateQueries({ queryKey: provisionalKeys.list(completedProjectId) })
+      queryClient.invalidateQueries({ queryKey: issueKeys.list(completedProjectId) })
+      queryClient.invalidateQueries({ queryKey: refinedKeys.list(completedProjectId) })
+    },
+    [queryClient]
+  )
 
   const hasProject = projectId !== undefined
 
