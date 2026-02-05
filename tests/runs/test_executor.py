@@ -1161,6 +1161,110 @@ class TestPipelineExecutorProgressCallbackIntegration:
             assert logs[0]["progress_current"] == 3
             assert logs[0]["progress_total"] == 10
 
+    def test_review_emits_initial_step_update_before_processing(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """レビューステップ開始時に初期進捗更新（step='issues'）が送信される"""
+        logs: list[dict] = []
+        callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_prov.return_value = [
+                {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []},
+                {"term_name": "term2", "definition": "def2", "confidence": 0.9, "occurrences": []},
+            ]
+
+            # Track when batch_progress_callback is first called
+            callback_call_order: list[str] = []
+
+            def capture_review(*args, **kwargs):
+                callback_call_order.append("review_called")
+                return []
+
+            mock_reviewer_cls.return_value.review.side_effect = capture_review
+
+            executor.execute(project_db, "review", context)
+
+            # Find logs with step='issues' that were emitted BEFORE review was called
+            # The initial update should have current=0, total=term_count
+            initial_step_logs = [
+                log for log in logs
+                if log.get("step") == "issues" and log.get("progress_current") == 0
+            ]
+
+            assert len(initial_step_logs) >= 1, \
+                "Expected initial step update with step='issues' and progress_current=0"
+            assert initial_step_logs[0]["progress_total"] == 2, \
+                "Expected progress_total to equal term count (2)"
+
+    def test_review_emits_initial_step_update_for_empty_glossary(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        cancel_event: Event,
+    ) -> None:
+        """空の用語集でも初期進捗更新（step='issues'）が送信される"""
+        logs: list[dict] = []
+        callback = lambda msg: logs.append(msg)
+
+        context = ExecutionContext(
+            run_id=1,
+            log_callback=callback,
+            cancel_event=cancel_event,
+        )
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_provisional") as mock_list_prov, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            # Empty glossary - no terms
+            mock_list_prov.return_value = []
+
+            mock_reviewer_cls.return_value.review.return_value = []
+
+            # Even with empty glossary, we expect RuntimeError because
+            # _load_provisional_glossary raises when no terms found
+            # But we want to test the _do_review directly with empty Glossary
+            # So we need to patch _load_provisional_glossary to return empty Glossary
+
+        # Test _do_review directly with empty glossary
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer_cls:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_reviewer_cls.return_value.review.return_value = []
+
+            logs.clear()
+            empty_glossary = Glossary()
+
+            # Call _do_review directly with empty glossary
+            executor._do_review(project_db, context, empty_glossary)
+
+            # Should still emit initial step update even for empty glossary
+            initial_step_logs = [
+                log for log in logs
+                if log.get("step") == "issues" and log.get("progress_current") == 0
+            ]
+
+            assert len(initial_step_logs) >= 1, \
+                "Expected initial step update with step='issues' even for empty glossary"
+            assert initial_step_logs[0]["progress_total"] == 0, \
+                "Expected progress_total=0 for empty glossary"
+
 
 class TestPipelineExecutorLogCallbackExceptionHandling:
     """Tests for log callback exception handling."""

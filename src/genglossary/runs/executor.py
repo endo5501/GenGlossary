@@ -690,6 +690,11 @@ class PipelineExecutor:
 
         progress_cb = self._create_progress_callback(conn, context, "issues")
 
+        # Send initial step update before processing
+        # This ensures UI shows "Issues" step immediately, even if glossary is empty
+        term_count = len(glossary.terms)
+        progress_cb(0, term_count, "")
+
         def on_batch_progress(current: int, total: int) -> None:
             progress_cb(current, total, "")
 
