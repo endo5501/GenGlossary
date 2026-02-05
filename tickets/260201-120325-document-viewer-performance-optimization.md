@@ -20,7 +20,7 @@ Performance and robustness improvements for Document Viewer identified during Co
 - [x] Frontend: Add error UI for failed queries (files, terms, file detail) with retry option
 - [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Get developer approval before closing
 
 ## Notes
 
