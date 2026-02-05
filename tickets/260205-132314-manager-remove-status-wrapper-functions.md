@@ -3,7 +3,7 @@ priority: 3
 tags: [backend, refactoring]
 description: "Remove redundant status wrapper functions in RunManager"
 created_at: "2026-02-05T13:23:14Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-05T22:35:33Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -47,18 +47,20 @@ Remove wrapper functions and call `_try_update_status` directly from `_try_statu
 
 ## Tasks
 
-- [ ] Identify all usages of wrapper functions
-- [ ] Update callers to use `_try_update_status` directly
-- [ ] Remove wrapper functions
-- [ ] Update tests if necessary
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Identify all usages of wrapper functions
+- [x] Update callers to use `_try_update_status` directly
+- [x] Remove wrapper functions
+- [x] Update tests if necessary
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+  - Created ticket: 260205-224219-consolidate-runmanager-status-methods
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+  - Created ticket: 260205-224243-runmanager-status-persistence-reliability
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
