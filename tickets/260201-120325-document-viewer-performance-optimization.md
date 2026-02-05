@@ -15,11 +15,11 @@ Performance and robustness improvements for Document Viewer identified during Co
 
 ## Tasks
 
-- [ ] Backend: Add file size limit or pagination for large documents to prevent memory issues
-- [ ] Frontend: Optimize term highlighting regex for large term lists (precompute map/set, memoize)
-- [ ] Frontend: Add error UI for failed queries (files, terms, file detail) with retry option
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Backend: Add file size limit or pagination for large documents to prevent memory issues
+- [x] Frontend: Optimize term highlighting regex for large term lists (precompute map/set, memoize)
+- [x] Frontend: Add error UI for failed queries (files, terms, file detail) with retry option
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
