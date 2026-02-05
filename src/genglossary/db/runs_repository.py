@@ -2,10 +2,25 @@
 
 import sqlite3
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any
 
 VALID_STATUSES = {"pending", "running", "completed", "failed", "cancelled"}
 TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
+
+
+class RunUpdateResult(Enum):
+    """Result of update_run_status_if_active operation.
+
+    This enum distinguishes between different outcomes when updating run status:
+    - UPDATED: Run was successfully updated
+    - NOT_FOUND: Run does not exist
+    - ALREADY_TERMINAL: Run exists but is already in terminal state
+    """
+
+    UPDATED = "updated"
+    NOT_FOUND = "not_found"
+    ALREADY_TERMINAL = "terminal"
 
 
 def _validate_status(status: str, allowed: set[str] | None = None) -> None:
@@ -264,7 +279,7 @@ def update_run_status_if_active(
     status: str,
     error_message: str | None = None,
     finished_at: datetime | None = None,
-) -> int:
+) -> RunUpdateResult:
     """Update run status only if run is active (pending or running).
 
     This function atomically checks the run status before updating,
@@ -279,7 +294,10 @@ def update_run_status_if_active(
             If not provided, uses current UTC time.
 
     Returns:
-        Number of rows updated (0 if run was already in terminal state or not found).
+        RunUpdateResult indicating the outcome:
+        - UPDATED: Run was successfully updated
+        - NOT_FOUND: Run does not exist
+        - ALREADY_TERMINAL: Run exists but is already in terminal state
 
     Raises:
         ValueError: If status is not terminal, or finished_at is naive.
@@ -304,7 +322,13 @@ def update_run_status_if_active(
     rowcount = cursor.rowcount
     if rowcount > 0:
         conn.commit()  # Commit immediately for real-time UI updates
-    return rowcount
+        return RunUpdateResult.UPDATED
+
+    # No rows updated - check if run exists to distinguish cases
+    cursor.execute("SELECT id FROM runs WHERE id = ?", (run_id,))
+    if cursor.fetchone() is None:
+        return RunUpdateResult.NOT_FOUND
+    return RunUpdateResult.ALREADY_TERMINAL
 
 
 def update_run_status_if_running(
@@ -357,7 +381,7 @@ def update_run_status_if_running(
     return rowcount
 
 
-def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
+def cancel_run(conn: sqlite3.Connection, run_id: int) -> RunUpdateResult:
     """Cancel a run.
 
     Sets status to 'cancelled' and sets finished_at to now.
@@ -367,7 +391,7 @@ def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
         run_id: Run ID to cancel.
 
     Returns:
-        Number of rows updated (0 if run was already in terminal state or not found).
+        RunUpdateResult indicating the outcome.
     """
     return update_run_status_if_active(conn, run_id, "cancelled")
 
@@ -412,4 +436,5 @@ def fail_run_if_not_terminal(
         bool: True if the run was updated to failed, False if already
               in a terminal state or not found.
     """
-    return update_run_status_if_active(conn, run_id, "failed", error_message) > 0
+    result = update_run_status_if_active(conn, run_id, "failed", error_message)
+    return result == RunUpdateResult.UPDATED

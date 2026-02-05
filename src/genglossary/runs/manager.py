@@ -9,6 +9,7 @@ from threading import Event, Lock, Thread
 
 from genglossary.db.connection import database_connection, get_connection, transaction
 from genglossary.db.runs_repository import (
+    RunUpdateResult,
     create_run,
     get_active_run,
     get_current_or_latest_run,
@@ -444,7 +445,6 @@ class RunManager:
         run_id: int,
         status: str,
         error_message: str | None = None,
-        no_op_message: str = "run was already in terminal state",
     ) -> bool:
         """Try to update run status with error handling and logging.
 
@@ -456,7 +456,6 @@ class RunManager:
             run_id: Run ID to update.
             status: New status ('cancelled', 'completed', 'failed').
             error_message: Error message if status is 'failed' (optional).
-            no_op_message: Message to log when update is skipped (no-op).
 
         Returns:
             True if status was updated or already in terminal state (no fallback needed).
@@ -464,11 +463,15 @@ class RunManager:
         """
         try:
             with transaction(conn):
-                rows_updated = update_run_status_if_active(
+                result = update_run_status_if_active(
                     conn, run_id, status, error_message
                 )
-            if rows_updated == 0:
-                # Run was already in terminal state - this is a no-op, not a failure
+            if result != RunUpdateResult.UPDATED:
+                # Run was not updated - log appropriate message
+                if result == RunUpdateResult.NOT_FOUND:
+                    no_op_message = "run not found"
+                else:  # ALREADY_TERMINAL
+                    no_op_message = "run was already in terminal state"
                 self._broadcast_log(
                     run_id,
                     {
@@ -514,12 +517,7 @@ class RunManager:
             True if completed or no-op (no fallback needed).
             False if failed with exception (fallback needed).
         """
-        return self._try_update_status(
-            conn,
-            run_id,
-            "completed",
-            no_op_message="run was already cancelled or in terminal state",
-        )
+        return self._try_update_status(conn, run_id, "completed")
 
     def _try_failed_status(
         self,
