@@ -434,27 +434,6 @@ class RunManager:
         """
         ...
 
-    def _try_cancel_status(self, conn, run_id) -> bool:
-        """cancelled ステータス更新を試行
-
-        _try_update_status の薄いラッパー。
-        """
-        return self._try_update_status(conn, run_id, "cancelled")
-
-    def _try_complete_status(self, conn, run_id) -> bool:
-        """completed ステータス更新を試行
-
-        _try_update_status の薄いラッパー。
-        """
-        return self._try_update_status(conn, run_id, "completed", ...)
-
-    def _try_failed_status(self, conn, run_id, error_message) -> bool:
-        """failed ステータス更新を試行
-
-        _try_update_status の薄いラッパー。
-        """
-        return self._try_update_status(conn, run_id, "failed", error_message)
-
     def _update_failed_status(self, conn, run_id, error_message) -> None:
         """フォールバック接続付きでステータスを 'failed' に更新
 
@@ -1116,7 +1095,7 @@ get_run_manager(db_path) → RunManager
 - 各関数の status validation テスト
 - error_message 自動クリアテスト
 
-**tests/runs/test_manager.py (65 tests)**
+**tests/runs/test_manager.py (74 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - start_run synchronization（並行呼び出しの競合状態防止）
 - per-run cancellation（各runに個別のキャンセルイベント）
@@ -1153,4 +1132,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 212 tests** (Repository 87 + Manager 65 + Executor 50 + API 10)
+**合計: 221 tests** (Repository 87 + Manager 74 + Executor 50 + API 10)
