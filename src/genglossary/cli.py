@@ -190,7 +190,7 @@ def _generate_glossary_with_db(
             console.print(f"[dim]  → データベースに {len(documents)} 件のドキュメントを保存[/dim]")
 
     # 2. Extract terms
-    extractor = TermExtractor(llm_client=llm_client)
+    extractor = TermExtractor(llm_client=llm_client, excluded_term_repo=conn)
 
     # Extract terms with categories if DB is enabled
     return_categories = conn is not None
