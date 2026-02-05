@@ -127,6 +127,7 @@ class PipelineExecutor:
         self,
         provider: str = "ollama",
         model: str = "",
+        base_url: str | None = None,
         review_batch_size: int = GlossaryReviewer.DEFAULT_BATCH_SIZE,
     ):
         """Initialize the PipelineExecutor.
@@ -134,10 +135,11 @@ class PipelineExecutor:
         Args:
             provider: LLM provider name (default: 'ollama').
             model: LLM model name (default: '').
+            base_url: Base URL for the LLM API (optional).
             review_batch_size: Number of terms per batch for review step.
                 Defaults to GlossaryReviewer.DEFAULT_BATCH_SIZE (20).
         """
-        self._llm_client = create_llm_client(provider=provider, model=model)
+        self._llm_client = create_llm_client(provider=provider, model=model, base_url=base_url)
         self._review_batch_size = review_batch_size
 
     def close(self) -> None:

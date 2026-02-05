@@ -28,6 +28,7 @@ class OpenAICompatibleClient(BaseLLMClient):
         timeout: float = 60.0,
         max_retries: int = 3,
         api_version: str | None = None,
+        max_tokens: int = 4096,
     ):
         """Initialize OpenAICompatibleClient.
 
@@ -38,6 +39,8 @@ class OpenAICompatibleClient(BaseLLMClient):
             timeout: Request timeout in seconds.
             max_retries: Maximum number of retries for failed requests.
             api_version: Azure OpenAI API version (e.g., "2024-02-15-preview").
+            max_tokens: Maximum tokens in response. Some servers (like llama.cpp)
+                have low defaults that can truncate responses.
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -45,6 +48,7 @@ class OpenAICompatibleClient(BaseLLMClient):
         self.timeout = timeout
         self.max_retries = max_retries
         self.api_version = api_version
+        self.max_tokens = max_tokens
         self.client = httpx.Client(timeout=timeout)
 
     @property
@@ -82,6 +86,8 @@ class OpenAICompatibleClient(BaseLLMClient):
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "max_tokens": self.max_tokens,
         }
 
         response = self._request_with_retry(payload)
@@ -111,6 +117,8 @@ class OpenAICompatibleClient(BaseLLMClient):
             "model": self.model,
             "messages": [{"role": "user", "content": json_prompt}],
             "response_format": {"type": "json_object"},
+            "stream": False,
+            "max_tokens": self.max_tokens,
         }
 
         def _generate() -> str:

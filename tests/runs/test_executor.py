@@ -446,7 +446,10 @@ class TestPipelineExecutorConfiguration:
             executor.execute(project_db, "full", execution_context, doc_root="/test/path")
 
             # Verify LLM client was created with custom settings
-            mock_llm_factory.assert_called_once_with(provider="openai", model="gpt-4")
+            mock_llm_factory.assert_called_once()
+            call_kwargs = mock_llm_factory.call_args.kwargs
+            assert call_kwargs["provider"] == "openai"
+            assert call_kwargs["model"] == "gpt-4"
 
     def test_re_execution_clears_tables(
         self,
@@ -2686,3 +2689,32 @@ class TestDoExtractExcludedTermRepo:
                 call_kwargs = mock_extractor_class.call_args.kwargs
                 assert "excluded_term_repo" in call_kwargs
                 assert call_kwargs["excluded_term_repo"] is project_db
+
+
+class TestPipelineExecutorBaseUrl:
+    """Tests for base_url parameter propagation to LLM client."""
+
+    def test_executor_passes_base_url_to_create_llm_client(self) -> None:
+        """PipelineExecutorがbase_urlをcreate_llm_clientに渡すことを確認"""
+        custom_url = "http://192.168.1.100:11434"
+
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory:
+            mock_llm_factory.return_value = MagicMock()
+
+            PipelineExecutor(provider="ollama", model="test-model", base_url=custom_url)
+
+            mock_llm_factory.assert_called_once()
+            call_kwargs = mock_llm_factory.call_args.kwargs
+            assert call_kwargs.get("base_url") == custom_url
+
+    def test_executor_passes_none_base_url_when_not_provided(self) -> None:
+        """PipelineExecutorがbase_urlを指定しない場合、Noneが渡されることを確認"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory:
+            mock_llm_factory.return_value = MagicMock()
+
+            PipelineExecutor(provider="ollama", model="test-model")
+
+            mock_llm_factory.assert_called_once()
+            call_kwargs = mock_llm_factory.call_args.kwargs
+            # base_url should not be in kwargs or should be None
+            assert call_kwargs.get("base_url") is None

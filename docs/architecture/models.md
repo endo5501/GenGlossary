@@ -160,7 +160,7 @@ from genglossary.llm.openai_compatible_client import OpenAICompatibleClient
 def create_llm_client(
     provider: str,
     model: str | None = None,
-    openai_base_url: str | None = None,
+    base_url: str | None = None,
     timeout: float = 180.0,
 ) -> BaseLLMClient:
     """LLMクライアントを生成するファクトリ関数
@@ -171,7 +171,7 @@ def create_llm_client(
     Args:
         provider: "ollama" または "openai"
         model: モデル名（省略時はデフォルト値）
-        openai_base_url: OpenAI互換APIのベースURL
+        base_url: LLM APIのベースURL（両プロバイダに適用、省略時は環境設定値）
         timeout: タイムアウト秒数
 
     Returns:
