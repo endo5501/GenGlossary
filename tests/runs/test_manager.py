@@ -2106,3 +2106,226 @@ class TestRunManagerLogMessageDistinction:
         assert "already" in skipped_logs[0]["message"].lower()
         assert "terminal" in skipped_logs[0]["message"].lower()
         assert "not found" not in skipped_logs[0]["message"].lower()
+
+
+class TestCleanupRunResourcesWithDbStatus:
+    """Tests for _cleanup_run_resources with db_status parameter."""
+
+    def test_cleanup_includes_db_status_in_completion_signal(
+        self, manager: RunManager
+    ) -> None:
+        """完了シグナルにdb_statusが含まれる"""
+        run_id = 1
+        captured_messages: list[dict] = []
+
+        def capture_log(rid: int, message: dict) -> None:
+            captured_messages.append(message)
+
+        manager._broadcast_log = capture_log  # type: ignore
+
+        # Add a cancel event so cleanup has something to clean
+        with manager._cancel_events_lock:
+            manager._cancel_events[run_id] = Event()
+
+        manager._cleanup_run_resources(run_id, db_status="completed")
+
+        # Find completion signal
+        complete_msgs = [m for m in captured_messages if m.get("complete")]
+        assert len(complete_msgs) == 1
+        assert complete_msgs[0]["db_status"] == "completed"
+
+    def test_cleanup_includes_status_update_failed_flag(
+        self, manager: RunManager
+    ) -> None:
+        """ステータス更新失敗時にstatus_update_failedフラグが含まれる"""
+        run_id = 1
+        captured_messages: list[dict] = []
+
+        def capture_log(rid: int, message: dict) -> None:
+            captured_messages.append(message)
+
+        manager._broadcast_log = capture_log  # type: ignore
+
+        with manager._cancel_events_lock:
+            manager._cancel_events[run_id] = Event()
+
+        manager._cleanup_run_resources(
+            run_id, db_status="failed", status_update_failed=True
+        )
+
+        complete_msgs = [m for m in captured_messages if m.get("complete")]
+        assert len(complete_msgs) == 1
+        assert complete_msgs[0]["db_status"] == "failed"
+        assert complete_msgs[0]["status_update_failed"] is True
+
+    def test_cleanup_without_db_status_omits_field(
+        self, manager: RunManager
+    ) -> None:
+        """db_statusが指定されない場合はフィールドを含めない"""
+        run_id = 1
+        captured_messages: list[dict] = []
+
+        def capture_log(rid: int, message: dict) -> None:
+            captured_messages.append(message)
+
+        manager._broadcast_log = capture_log  # type: ignore
+
+        with manager._cancel_events_lock:
+            manager._cancel_events[run_id] = Event()
+
+        manager._cleanup_run_resources(run_id)
+
+        complete_msgs = [m for m in captured_messages if m.get("complete")]
+        assert len(complete_msgs) == 1
+        assert "db_status" not in complete_msgs[0]
+        assert "status_update_failed" not in complete_msgs[0]
+
+
+class TestTryStatusWithFallbackReturnValue:
+    """Tests for _try_status_with_fallback return value."""
+
+    def test_returns_true_on_primary_success(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """プライマリ接続での更新成功時にTrueを返す"""
+        run_id = create_run(project_db, scope="full")
+
+        def successful_updater(conn: sqlite3.Connection, rid: int) -> bool:
+            return True
+
+        result = manager._try_status_with_fallback(
+            project_db, run_id, successful_updater, "test_operation"
+        )
+        assert result is True
+
+    def test_returns_true_on_fallback_success(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """フォールバック接続での更新成功時にTrueを返す"""
+        run_id = create_run(project_db, scope="full")
+
+        def fallback_only_updater(conn: sqlite3.Connection, rid: int) -> bool:
+            # Return False on first call (primary), True on second (fallback)
+            if not hasattr(fallback_only_updater, "called"):
+                fallback_only_updater.called = True  # type: ignore
+                return False
+            return True
+
+        result = manager._try_status_with_fallback(
+            project_db, run_id, fallback_only_updater, "test_operation"
+        )
+        assert result is True
+
+    def test_returns_false_on_both_failure(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """両方の接続で失敗した場合にFalseを返す"""
+        run_id = create_run(project_db, scope="full")
+
+        def always_fail_updater(conn: sqlite3.Connection, rid: int) -> bool:
+            return False
+
+        # Capture log messages to suppress warnings
+        manager._broadcast_log = Mock()  # type: ignore
+
+        result = manager._try_status_with_fallback(
+            project_db, run_id, always_fail_updater, "test_operation"
+        )
+        assert result is False
+
+
+class TestFinalizeRunStatusReturnValue:
+    """Tests for _finalize_run_status return value."""
+
+    def test_returns_completed_status_on_success(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """パイプライン成功時に('completed', True)を返す"""
+        run_id = create_run(project_db, scope="full")
+
+        result = manager._finalize_run_status(
+            project_db, run_id, pipeline_error=None
+        )
+
+        assert result == ("completed", True)
+
+    def test_returns_cancelled_status_on_cancellation(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """キャンセル時に('cancelled', True)を返す"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        run_id = create_run(project_db, scope="full")
+
+        result = manager._finalize_run_status(
+            project_db, run_id, pipeline_error=PipelineCancelledException()
+        )
+
+        assert result == ("cancelled", True)
+
+    def test_returns_failed_status_on_error(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """エラー時に('failed', True)を返す"""
+        run_id = create_run(project_db, scope="full")
+
+        # Suppress logging and broadcast
+        manager._broadcast_log = Mock()  # type: ignore
+
+        result = manager._finalize_run_status(
+            project_db, run_id, pipeline_error=Exception("test error")
+        )
+
+        assert result == ("failed", True)
+
+    def test_returns_false_when_update_fails(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """DB更新失敗時に(status, False)を返す"""
+        run_id = create_run(project_db, scope="full")
+
+        # Mock _try_status_with_fallback to always fail
+        original_method = manager._try_status_with_fallback
+        manager._try_status_with_fallback = Mock(return_value=False)  # type: ignore
+
+        result = manager._finalize_run_status(
+            project_db, run_id, pipeline_error=None
+        )
+
+        assert result[0] == "completed"
+        assert result[1] is False
+
+        # Restore original method
+        manager._try_status_with_fallback = original_method  # type: ignore
+
+
+class TestUpdateFailedStatusReturnValue:
+    """Tests for _update_failed_status return value."""
+
+    def test_returns_true_on_success(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """更新成功時にTrueを返す"""
+        run_id = create_run(project_db, scope="full")
+
+        result = manager._update_failed_status(
+            project_db, run_id, "test error message"
+        )
+
+        assert result is True
+
+    def test_returns_false_on_failure(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """更新失敗時にFalseを返す"""
+        run_id = create_run(project_db, scope="full")
+
+        # Mock _try_status_with_fallback to fail
+        manager._try_status_with_fallback = Mock(return_value=False)  # type: ignore
+        manager._broadcast_log = Mock()  # type: ignore
+
+        result = manager._update_failed_status(
+            project_db, run_id, "test error message"
+        )
+
+        assert result is False
