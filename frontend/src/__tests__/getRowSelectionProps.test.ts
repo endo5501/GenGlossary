@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { getRowSelectionProps } from '../utils/getRowSelectionProps'
 
@@ -27,7 +28,7 @@ describe('getRowSelectionProps', () => {
       const event = {
         key: 'Enter',
         preventDefault: vi.fn(),
-      } as unknown as React.KeyboardEvent
+      } as unknown as KeyboardEvent
 
       props.onKeyDown(event)
 
@@ -41,7 +42,21 @@ describe('getRowSelectionProps', () => {
       const event = {
         key: ' ',
         preventDefault: vi.fn(),
-      } as unknown as React.KeyboardEvent
+      } as unknown as KeyboardEvent
+
+      props.onKeyDown(event)
+
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(mockOnSelect).toHaveBeenCalledWith(1)
+    })
+
+    it('should call onSelect when Spacebar key is pressed (legacy browsers)', () => {
+      const props = getRowSelectionProps(mockItem, null, mockOnSelect)
+
+      const event = {
+        key: 'Spacebar',
+        preventDefault: vi.fn(),
+      } as unknown as KeyboardEvent
 
       props.onKeyDown(event)
 
@@ -55,7 +70,7 @@ describe('getRowSelectionProps', () => {
       const event = {
         key: 'Escape',
         preventDefault: vi.fn(),
-      } as unknown as React.KeyboardEvent
+      } as unknown as KeyboardEvent
 
       props.onKeyDown(event)
 
