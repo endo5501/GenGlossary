@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Box, Title } from '@mantine/core'
+import { Box, Title, Alert, Button, Group } from '@mantine/core'
+import { IconAlertCircle } from '@tabler/icons-react'
 import { useFiles, useFileDetail } from '../api/hooks/useFiles'
 import { useRefined } from '../api/hooks/useRefined'
 import { useProvisional } from '../api/hooks/useProvisional'
@@ -16,13 +17,35 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
   const [selectedTerm, setSelectedTerm] = useState<string | null>(null)
 
   // Fetch data
-  const { data: files = [] } = useFiles(projectId)
-  const { data: fileDetail, isLoading: isFileLoading } = useFileDetail(
-    projectId,
-    selectedFileId ?? undefined
-  )
-  const { data: refinedTerms = [] } = useRefined(projectId)
-  const { data: provisionalTerms = [] } = useProvisional(projectId)
+  const {
+    data: files = [],
+    isError: isFilesError,
+    refetch: refetchFiles,
+  } = useFiles(projectId)
+  const {
+    data: fileDetail,
+    isLoading: isFileLoading,
+    isError: isFileDetailError,
+    error: fileDetailError,
+    refetch: refetchFileDetail,
+  } = useFileDetail(projectId, selectedFileId ?? undefined)
+  const {
+    data: refinedTerms = [],
+    isError: isRefinedError,
+    refetch: refetchRefined,
+  } = useRefined(projectId)
+  const {
+    data: provisionalTerms = [],
+    isError: isProvisionalError,
+    refetch: refetchProvisional,
+  } = useProvisional(projectId)
+
+  // Combined terms error
+  const isTermsError = isRefinedError || isProvisionalError
+  const handleRetryTerms = () => {
+    refetchRefined()
+    refetchProvisional()
+  }
 
   // Auto-select first file if none selected
   useEffect(() => {
@@ -59,6 +82,36 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
         Document Viewer
       </Title>
 
+      {isFilesError && (
+        <Alert
+          icon={<IconAlertCircle size={16} />}
+          title="ファイル一覧の取得に失敗しました"
+          color="red"
+          mb="md"
+        >
+          <Group>
+            <Button variant="outline" size="xs" onClick={() => refetchFiles()}>
+              リトライ
+            </Button>
+          </Group>
+        </Alert>
+      )}
+
+      {isTermsError && (
+        <Alert
+          icon={<IconAlertCircle size={16} />}
+          title="用語データの取得に失敗しました"
+          color="red"
+          mb="md"
+        >
+          <Group>
+            <Button variant="outline" size="xs" onClick={handleRetryTerms}>
+              リトライ
+            </Button>
+          </Group>
+        </Alert>
+      )}
+
       <Box
         style={{
           display: 'flex',
@@ -73,6 +126,8 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
             onFileSelect={setSelectedFileId}
             content={fileDetail?.content ?? null}
             isLoading={isFileLoading}
+            error={isFileDetailError ? (fileDetailError as Error) : null}
+            onRetry={() => refetchFileDetail()}
             terms={termTexts}
             selectedTerm={selectedTerm}
             onTermClick={setSelectedTerm}

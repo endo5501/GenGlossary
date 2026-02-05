@@ -1,5 +1,6 @@
-import { Tabs, Text, Paper, ScrollArea, Loader, Center } from '@mantine/core'
-import { IconFile } from '@tabler/icons-react'
+import { useMemo } from 'react'
+import { Tabs, Text, Paper, ScrollArea, Loader, Center, Alert, Button, Stack } from '@mantine/core'
+import { IconFile, IconAlertCircle } from '@tabler/icons-react'
 import type { FileResponse } from '../../api/types'
 
 interface DocumentPaneProps {
@@ -8,6 +9,8 @@ interface DocumentPaneProps {
   onFileSelect: (fileId: number) => void
   content: string | null
   isLoading: boolean
+  error?: Error | null
+  onRetry?: () => void
   terms: string[]
   selectedTerm: string | null
   onTermClick: (term: string) => void
@@ -19,32 +22,42 @@ export function DocumentPane({
   onFileSelect,
   content,
   isLoading,
+  error,
+  onRetry,
   terms,
   selectedTerm,
   onTermClick,
 }: DocumentPaneProps) {
-  const renderHighlightedContent = (text: string) => {
-    // Filter out empty/whitespace-only terms to avoid regex issues
+  // Memoize term set for O(1) lookup (normalized to lowercase)
+  const termSet = useMemo(
+    () => new Set(terms.map((t) => t.toLowerCase())),
+    [terms]
+  )
+
+  // Memoize regex pattern to avoid rebuilding on every render
+  const termPattern = useMemo(() => {
     const validTerms = terms.filter((t) => t.trim().length > 0)
+    if (validTerms.length === 0) return null
 
-    if (validTerms.length === 0) {
-      return <Text style={{ whiteSpace: 'pre-wrap' }}>{text}</Text>
-    }
-
-    // Escape special regex characters and sort by length (longest first)
     const escapedTerms = validTerms
       .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .sort((a, b) => b.length - a.length)
 
-    const pattern = new RegExp(`(${escapedTerms.join('|')})`, 'gi')
-    const parts = text.split(pattern)
+    return new RegExp(`(${escapedTerms.join('|')})`, 'gi')
+  }, [terms])
+
+  const renderHighlightedContent = (text: string) => {
+    if (!termPattern) {
+      return <Text style={{ whiteSpace: 'pre-wrap' }}>{text}</Text>
+    }
+
+    const parts = text.split(termPattern)
 
     return (
       <Text style={{ whiteSpace: 'pre-wrap' }}>
         {parts.map((part, index) => {
-          const isTermMatch = terms.some(
-            (t) => t.toLowerCase() === part.toLowerCase()
-          )
+          // O(1) lookup instead of O(n) linear search
+          const isTermMatch = termSet.has(part.toLowerCase())
           if (isTermMatch) {
             const isSelected =
               selectedTerm?.toLowerCase() === part.toLowerCase()
@@ -93,6 +106,23 @@ export function DocumentPane({
           {isLoading ? (
             <Center h={200}>
               <Loader />
+            </Center>
+          ) : error ? (
+            <Center h={200}>
+              <Stack align="center" gap="md">
+                <Alert
+                  icon={<IconAlertCircle size={16} />}
+                  title="ファイルの読み込みに失敗しました"
+                  color="red"
+                >
+                  {error.message}
+                </Alert>
+                {onRetry && (
+                  <Button variant="outline" onClick={onRetry}>
+                    リトライ
+                  </Button>
+                )}
+              </Stack>
             </Center>
           ) : content ? (
             renderHighlightedContent(content)

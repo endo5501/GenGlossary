@@ -233,3 +233,87 @@ describe('DocumentViewerPage - Term Highlighting Filter', () => {
     })
   })
 })
+
+describe('DocumentViewerPage - Error Handling', () => {
+  beforeEach(() => {
+    server.use(...handlers, runsHandler)
+  })
+
+  describe('when files API fails', () => {
+    beforeEach(() => {
+      server.use(
+        http.get(`${BASE_URL}/api/projects/:projectId/files`, () => {
+          return HttpResponse.json({ detail: 'Server error' }, { status: 500 })
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+          return HttpResponse.json([])
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+          return HttpResponse.json([])
+        })
+      )
+    })
+
+    it('displays error alert with retry button', async () => {
+      renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/ファイル一覧/)).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: /リトライ/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('when file detail API fails', () => {
+    beforeEach(() => {
+      server.use(
+        ...filesHandlers.slice(0, 1), // Only list files handler
+        http.get(`${BASE_URL}/api/projects/:projectId/files/:fileId`, () => {
+          return HttpResponse.json({ detail: 'File not found' }, { status: 404 })
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+          return HttpResponse.json([])
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+          return HttpResponse.json([])
+        })
+      )
+    })
+
+    it('displays error in document pane with retry button', async () => {
+      renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/ファイルの読み込み/)).toBeInTheDocument()
+      })
+
+      // Retry button should be in the document pane area
+      expect(screen.getByRole('button', { name: /リトライ/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('when terms API fails', () => {
+    beforeEach(() => {
+      server.use(
+        ...filesHandlers,
+        http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+          return HttpResponse.json({ detail: 'Server error' }, { status: 500 })
+        }),
+        http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+          return HttpResponse.json({ detail: 'Server error' }, { status: 500 })
+        })
+      )
+    })
+
+    it('displays error alert for terms with retry button', async () => {
+      renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/用語データ/)).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: /リトライ/i })).toBeInTheDocument()
+    })
+  })
+})
