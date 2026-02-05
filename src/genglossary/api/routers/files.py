@@ -57,24 +57,23 @@ def _validate_file_name(file_name: str) -> str:
     # Reject absolute paths (Unix-style or Windows drive paths)
     if file_name.startswith("/") or re.match(r"^[A-Za-z]:", file_name):
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Absolute paths not allowed",
         )
 
     # Reject Windows backslashes (POSIX format only)
     if "\\" in file_name:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="File name must use forward slashes",
         )
 
     # Reject Unicode look-alike characters that could bypass validation
-    for char in file_name:
-        if char in LOOKALIKE_CHARS:
-            raise HTTPException(
-                status_code=400,
-                detail="File name contains disallowed Unicode characters",
-            )
+    if any(char in LOOKALIKE_CHARS for char in file_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File name contains disallowed Unicode characters",
+        )
 
     # Split into segments for validation and normalization
     segments = file_name.split("/")
@@ -83,43 +82,52 @@ def _validate_file_name(file_name: str) -> str:
     # This allows filenames like "notes..md" but rejects "../secret.txt"
     if ".." in segments:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="File name cannot contain '..' path segments",
         )
 
     # Normalize: remove '.' and empty segments
     normalized_segments = [s for s in segments if s and s != "."]
-    normalized = "/".join(normalized_segments)
 
-    # Check for trailing space or dot in each segment (Windows compatibility)
+    if not normalized_segments:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File name cannot be empty after normalization",
+        )
+
+    # Validate all segments in a single pass
     for segment in normalized_segments:
-        if segment.endswith(" ") or segment.endswith("."):
+        # Check trailing space or dot (Windows compatibility)
+        if segment.endswith((" ", ".")):
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Path segments cannot have trailing spaces or dots",
             )
 
-    # Check segment length limits (255 bytes each)
-    for segment in normalized_segments:
+        # Check segment length limit (255 bytes each)
         if len(segment.encode("utf-8")) > MAX_SEGMENT_BYTES:
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Path segment too long (max {MAX_SEGMENT_BYTES} bytes)",
             )
+
+    # Build normalized path
+    normalized = "/".join(normalized_segments)
 
     # Check total path length limit (1024 bytes)
     if len(normalized.encode("utf-8")) > MAX_PATH_BYTES:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Path too long (max {MAX_PATH_BYTES} bytes)",
         )
 
     # Check extension on final segment (basename)
-    basename = normalized_segments[-1] if normalized_segments else ""
-    ext = ("." + basename.rsplit(".", 1)[-1].lower()) if "." in basename else ""
-    if ext not in ALLOWED_EXTENSIONS:
+    basename = normalized_segments[-1]
+    _, _, extension = basename.rpartition(".")
+
+    if not extension or f".{extension.lower()}" not in ALLOWED_EXTENSIONS:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid file extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
         )
 
