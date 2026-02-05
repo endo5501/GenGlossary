@@ -2116,12 +2116,6 @@ class TestCleanupRunResourcesWithDbStatus:
     ) -> None:
         """完了シグナルにdb_statusが含まれる"""
         run_id = 1
-        captured_messages: list[dict] = []
-
-        def capture_log(rid: int, message: dict) -> None:
-            captured_messages.append(message)
-
-        manager._broadcast_log = capture_log  # type: ignore
 
         # Add a cancel event so cleanup has something to clean
         with manager._cancel_events_lock:
@@ -2129,22 +2123,17 @@ class TestCleanupRunResourcesWithDbStatus:
 
         manager._cleanup_run_resources(run_id, db_status="completed")
 
-        # Find completion signal
-        complete_msgs = [m for m in captured_messages if m.get("complete")]
-        assert len(complete_msgs) == 1
-        assert complete_msgs[0]["db_status"] == "completed"
+        # Check stored completion signal
+        assert run_id in manager._completed_runs
+        completion_signal = manager._completed_runs[run_id]
+        assert completion_signal.get("complete") is True
+        assert completion_signal["db_status"] == "completed"
 
     def test_cleanup_includes_status_update_failed_flag(
         self, manager: RunManager
     ) -> None:
         """ステータス更新失敗時にstatus_update_failedフラグが含まれる"""
         run_id = 1
-        captured_messages: list[dict] = []
-
-        def capture_log(rid: int, message: dict) -> None:
-            captured_messages.append(message)
-
-        manager._broadcast_log = capture_log  # type: ignore
 
         with manager._cancel_events_lock:
             manager._cancel_events[run_id] = Event()
@@ -2153,32 +2142,27 @@ class TestCleanupRunResourcesWithDbStatus:
             run_id, db_status="failed", status_update_failed=True
         )
 
-        complete_msgs = [m for m in captured_messages if m.get("complete")]
-        assert len(complete_msgs) == 1
-        assert complete_msgs[0]["db_status"] == "failed"
-        assert complete_msgs[0]["status_update_failed"] is True
+        assert run_id in manager._completed_runs
+        completion_signal = manager._completed_runs[run_id]
+        assert completion_signal["db_status"] == "failed"
+        assert completion_signal["status_update_failed"] is True
 
     def test_cleanup_without_db_status_omits_field(
         self, manager: RunManager
     ) -> None:
         """db_statusが指定されない場合はフィールドを含めない"""
         run_id = 1
-        captured_messages: list[dict] = []
-
-        def capture_log(rid: int, message: dict) -> None:
-            captured_messages.append(message)
-
-        manager._broadcast_log = capture_log  # type: ignore
 
         with manager._cancel_events_lock:
             manager._cancel_events[run_id] = Event()
 
         manager._cleanup_run_resources(run_id)
 
-        complete_msgs = [m for m in captured_messages if m.get("complete")]
-        assert len(complete_msgs) == 1
-        assert "db_status" not in complete_msgs[0]
-        assert "status_update_failed" not in complete_msgs[0]
+        assert run_id in manager._completed_runs
+        completion_signal = manager._completed_runs[run_id]
+        assert completion_signal.get("complete") is True
+        assert "db_status" not in completion_signal
+        assert "status_update_failed" not in completion_signal
 
 
 class TestTryStatusWithFallbackReturnValue:
@@ -2331,73 +2315,36 @@ class TestUpdateFailedStatusReturnValue:
         assert result is False
 
 
-class TestCleanupRunResourcesRaceCondition:
-    """Tests for subscriber race condition in _cleanup_run_resources."""
+class TestSubscriberCompletedRunRegistration:
+    """Tests for subscriber registration on already completed runs."""
 
-    def test_subscriber_registered_between_broadcast_and_pop_receives_completion(
+    def test_subscriber_registered_after_cleanup_receives_completion_immediately(
         self, manager: RunManager
     ) -> None:
-        """broadcastとpopの間に登録されたsubscriberも完了シグナルを受け取る
-
-        This tests the race condition where:
-        1. _cleanup_run_resources calls _broadcast_log (completion signal sent)
-        2. New subscriber registers (between broadcast and pop)
-        3. _cleanup_run_resources pops subscribers (new subscriber removed without receiving signal)
-        """
-        import threading
+        """既に完了したrunに登録したsubscriberは即座に完了シグナルを受け取る"""
         from queue import Empty
 
         run_id = 1
-        received_messages: list[dict] = []
-        after_broadcast = threading.Event()
-        registration_done = threading.Event()
 
         # Set up cancel event
         with manager._cancel_events_lock:
             manager._cancel_events[run_id] = Event()
 
-        # We need to intercept after _broadcast_log but before _subscribers.pop
-        # Patch _broadcast_log to signal after completion
-        original_broadcast = manager._broadcast_log
-
-        def intercepting_broadcast(rid: int, message: dict) -> None:
-            original_broadcast(rid, message)
-            if message.get("complete"):
-                # Signal that broadcast is done, before pop happens
-                after_broadcast.set()
-                # Wait for registration
-                registration_done.wait(timeout=1.0)
-
-        manager._broadcast_log = intercepting_broadcast  # type: ignore
-
-        def register_after_broadcast() -> None:
-            # Wait for broadcast to complete
-            after_broadcast.wait(timeout=1.0)
-            # Register subscriber after broadcast but before pop
-            queue = manager.register_subscriber(run_id)
-            registration_done.set()
-            # Try to get message - this subscriber missed the broadcast
-            # but should still receive completion signal
-            try:
-                msg = queue.get(timeout=0.5)
-                received_messages.append(msg)
-            except Empty:
-                pass
-
-        # Start thread that will register after broadcast
-        register_thread = threading.Thread(target=register_after_broadcast)
-        register_thread.start()
-
-        # Run cleanup - this will broadcast, then wait, then pop
+        # Complete the run
         manager._cleanup_run_resources(run_id, db_status="completed")
 
-        register_thread.join(timeout=2.0)
+        # Register subscriber after run has completed
+        queue = manager.register_subscriber(run_id)
 
-        # Without fix: subscriber registered after broadcast but before pop
-        # will be removed without receiving completion signal
-        # With fix: subscriber should receive completion signal
-        assert len(received_messages) == 1, (
-            "Subscriber registered after broadcast but before pop should receive "
-            "completion signal. Race condition detected!"
+        # Subscriber should immediately receive completion signal
+        try:
+            msg = queue.get(timeout=0.5)
+        except Empty:
+            msg = None
+
+        assert msg is not None, (
+            "Subscriber registered after run completion should receive "
+            "completion signal immediately"
         )
-        assert received_messages[0].get("complete") is True
+        assert msg.get("complete") is True
+        assert msg.get("db_status") == "completed"

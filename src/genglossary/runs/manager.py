@@ -68,6 +68,9 @@ class RunManager:
         # Subscriber管理
         self._subscribers: dict[int, set[Queue]] = {}
         self._subscribers_lock = Lock()
+        # Track completed runs with their completion signals
+        # Protected by _subscribers_lock
+        self._completed_runs: dict[int, dict] = {}
 
     def start_run(self, scope: str, triggered_by: str = "api") -> int:
         """Start a new run in the background.
@@ -306,6 +309,9 @@ class RunManager:
     def register_subscriber(self, run_id: int) -> Queue:
         """SSEクライアント用のQueueを作成し登録する.
 
+        If the run has already completed, the completion signal is immediately
+        enqueued so the subscriber doesn't miss it.
+
         Args:
             run_id: Run ID.
 
@@ -314,9 +320,15 @@ class RunManager:
         """
         queue: Queue = Queue(maxsize=self.MAX_LOG_QUEUE_SIZE)
         with self._subscribers_lock:
-            if run_id not in self._subscribers:
-                self._subscribers[run_id] = set()
-            self._subscribers[run_id].add(queue)
+            # Check if run has already completed
+            if run_id in self._completed_runs:
+                # Immediately send completion signal
+                self._put_to_queue(queue, self._completed_runs[run_id])
+            else:
+                # Run still active, register for future messages
+                if run_id not in self._subscribers:
+                    self._subscribers[run_id] = set()
+                self._subscribers[run_id].add(queue)
         return queue
 
     def unregister_subscriber(self, run_id: int, queue: Queue) -> None:
@@ -381,6 +393,10 @@ class RunManager:
 
         This method is idempotent - safe to call multiple times.
 
+        Note: Broadcast and subscriber removal are done atomically under the same
+        lock to prevent race conditions where a subscriber registers after broadcast
+        but before removal, missing the completion signal.
+
         Args:
             run_id: Run ID to cleanup.
             db_status: Final DB status to include in completion signal.
@@ -395,9 +411,15 @@ class RunManager:
         if status_update_failed:
             completion_signal["status_update_failed"] = True
 
-        self._broadcast_log(run_id, completion_signal)
+        # Broadcast and remove subscribers atomically to prevent race condition
+        # Also store completion signal for late subscribers
         with self._subscribers_lock:
-            self._subscribers.pop(run_id, None)
+            if run_id in self._subscribers:
+                for queue in self._subscribers[run_id]:
+                    self._put_to_queue(queue, completion_signal)
+                del self._subscribers[run_id]
+            # Store completion signal for subscribers that register after cleanup
+            self._completed_runs[run_id] = completion_signal
 
     def _try_status_with_fallback(
         self,
