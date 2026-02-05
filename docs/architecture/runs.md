@@ -42,6 +42,25 @@ def _validate_status(status: str, allowed: set[str] | None = None) -> None:
     """
 ```
 
+### RunUpdateResult Enum
+
+```python
+class RunUpdateResult(Enum):
+    """Result of update_run_status_if_active operation.
+
+    This enum distinguishes between different outcomes when updating run status:
+    - UPDATED: Run was successfully updated
+    - NOT_FOUND: Run does not exist
+    - ALREADY_TERMINAL: Run exists but is already in terminal state
+    """
+
+    UPDATED = "updated"
+    NOT_FOUND = "not_found"
+    ALREADY_TERMINAL = "terminal"
+```
+
+この enum により、以前は 0 と 0 で区別できなかった「run が存在しない」と「run が既に terminal 状態」を明確に区別できます。
+
 ### CRUD Functions
 
 ```python
@@ -102,7 +121,7 @@ def update_run_status_if_active(
     status: str,
     error_message: str | None = None,
     finished_at: datetime | None = None
-) -> int:
+) -> RunUpdateResult:
     """アクティブな状態（pending/running）のRunのみステータスを更新
 
     終了状態（completed, cancelled, failed）のRunは更新しない。
@@ -118,7 +137,10 @@ def update_run_status_if_active(
                      timezone-aware datetime のみ受け付ける
 
     Returns:
-        更新された行数（0なら既に終了状態または存在しない）
+        RunUpdateResult indicating the outcome:
+        - UPDATED: Run was successfully updated
+        - NOT_FOUND: Run does not exist
+        - ALREADY_TERMINAL: Run exists but is already in terminal state
     """
     ...
 
@@ -146,14 +168,14 @@ def update_run_status_if_running(
     """
     ...
 
-def cancel_run(conn: sqlite3.Connection, run_id: int) -> int:
+def cancel_run(conn: sqlite3.Connection, run_id: int) -> RunUpdateResult:
     """Runをキャンセル（status='cancelled', finished_at設定）
 
     update_run_status_if_active の薄いラッパー。
     pending/running どちらからもキャンセル可能。
 
     Returns:
-        更新された行数（0なら既に終了状態または存在しない）
+        RunUpdateResult indicating the outcome.
     """
     return update_run_status_if_active(conn, run_id, "cancelled")
 
@@ -182,9 +204,10 @@ def fail_run_if_not_terminal(
     終了状態（completed, cancelled, failed）のrunは上書きしない。
 
     Returns:
-        bool: failedに更新できればTrue、既に終了状態ならFalse
+        bool: failedに更新できればTrue、既に終了状態または存在しなければFalse
     """
-    return update_run_status_if_active(conn, run_id, "failed", error_message) > 0
+    result = update_run_status_if_active(conn, run_id, "failed", error_message)
+    return result == RunUpdateResult.UPDATED
 ```
 
 ## manager.py (RunManager - スレッド管理)
@@ -389,23 +412,25 @@ class RunManager:
         ...
 
     def _try_update_status(
-        self, conn, run_id, status, error_message=None, no_op_message="..."
+        self, conn, run_id, status, error_message=None
     ) -> bool:
         """汎用ステータス更新メソッド（エラーハンドリング・ログ出力付き）
 
         update_run_status_if_active を使用し、共通のエラーハンドリングと
-        ログ出力パターンを提供。
+        ログ出力パターンを提供。RunUpdateResult を使用して、
+        「存在しない」と「既に終了状態」を区別したログメッセージを出力。
 
         Args:
             status: 新しいステータス（'cancelled', 'completed', 'failed'）
             error_message: failedステータスの場合のエラーメッセージ
-            no_op_message: 更新がスキップされた場合のログメッセージ
 
         Returns:
-            True: 成功またはno-op（既に終了状態、フォールバック不要）
+            True: 成功またはno-op（既に終了状態または存在しない、フォールバック不要）
             False: 失敗（フォールバック必要）
 
-        no-op時はinfoログ、失敗時はwarningログをブロードキャスト。
+        ログメッセージの区別:
+            - NOT_FOUND: "run not found"
+            - ALREADY_TERMINAL: "run was already in terminal state"
         """
         ...
 
