@@ -32,8 +32,55 @@ MAX_CONTENT_BYTES = 3 * 1024 * 1024  # 3MB
 
 # Unicode look-alike characters that could be used to bypass path validation
 LOOKALIKE_SLASH = {"\u2215", "\uff0f", "\u2044", "\u29f8"}  # ∕ ／ ⁄ ⧸
-LOOKALIKE_DOT = {"\u2024", "\uff0e", "\u00b7"}  # ․ ． ·
-LOOKALIKE_CHARS = LOOKALIKE_SLASH | LOOKALIKE_DOT
+LOOKALIKE_DOT = {"\u2024", "\uff0e", "\u00b7", "\u3002", "\uff61"}  # ․ ． · 。 ｡
+
+# Control characters (C0: U+0000-U+001F, C1: U+007F-U+009F)
+CONTROL_CHARS = set(chr(c) for c in range(0x00, 0x20)) | set(chr(c) for c in range(0x7F, 0xA0))
+
+# Bidi override and zero-width characters (filename spoofing)
+BIDI_AND_ZERO_WIDTH = {
+    "\u200b",  # ZERO WIDTH SPACE
+    "\u200c",  # ZERO WIDTH NON-JOINER
+    "\u200d",  # ZERO WIDTH JOINER
+    "\u200e",  # LEFT-TO-RIGHT MARK
+    "\u200f",  # RIGHT-TO-LEFT MARK
+    "\u202a",  # LEFT-TO-RIGHT EMBEDDING
+    "\u202b",  # RIGHT-TO-LEFT EMBEDDING
+    "\u202c",  # POP DIRECTIONAL FORMATTING
+    "\u202d",  # LEFT-TO-RIGHT OVERRIDE
+    "\u202e",  # RIGHT-TO-LEFT OVERRIDE
+    "\u2066",  # LEFT-TO-RIGHT ISOLATE
+    "\u2067",  # RIGHT-TO-LEFT ISOLATE
+    "\u2068",  # FIRST STRONG ISOLATE
+    "\u2069",  # POP DIRECTIONAL ISOLATE
+    "\u061c",  # ARABIC LETTER MARK
+    "\u2060",  # WORD JOINER
+    "\ufeff",  # BYTE ORDER MARK / ZERO WIDTH NO-BREAK SPACE
+}
+
+# Combined forbidden characters (single loop check)
+FORBIDDEN_CHARS = CONTROL_CHARS | BIDI_AND_ZERO_WIDTH | LOOKALIKE_SLASH | LOOKALIKE_DOT
+
+# Trailing forbidden characters (space, dot, Unicode whitespace)
+TRAILING_FORBIDDEN = (
+    " ",  # Regular space
+    ".",  # Dot
+    "\u00a0",  # NO-BREAK SPACE
+    "\u2000",  # EN QUAD
+    "\u2001",  # EM QUAD
+    "\u2002",  # EN SPACE
+    "\u2003",  # EM SPACE
+    "\u2009",  # THIN SPACE
+    "\u200a",  # HAIR SPACE
+    "\u3000",  # IDEOGRAPHIC SPACE
+)
+
+# Windows reserved device names
+WINDOWS_RESERVED_NAMES = (
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
 
 
 def _validate_content_size(content: str) -> None:
@@ -72,6 +119,13 @@ def _validate_file_name(file_name: str) -> str:
     # Apply NFC normalization first
     file_name = unicodedata.normalize("NFC", file_name)
 
+    # Reject forbidden characters (control, bidi, zero-width, look-alike)
+    if any(char in FORBIDDEN_CHARS for char in file_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File name contains disallowed Unicode characters",
+        )
+
     # Reject absolute paths (Unix-style or Windows drive paths)
     if file_name.startswith("/") or re.match(r"^[A-Za-z]:", file_name):
         raise HTTPException(
@@ -84,13 +138,6 @@ def _validate_file_name(file_name: str) -> str:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File name must use forward slashes",
-        )
-
-    # Reject Unicode look-alike characters that could bypass validation
-    if any(char in LOOKALIKE_CHARS for char in file_name):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File name contains disallowed Unicode characters",
         )
 
     # Split into segments for validation and normalization
@@ -115,8 +162,8 @@ def _validate_file_name(file_name: str) -> str:
 
     # Validate all segments in a single pass
     for segment in normalized_segments:
-        # Check trailing space or dot (Windows compatibility)
-        if segment.endswith((" ", ".")):
+        # Check trailing space, dot, or Unicode whitespace (Windows compatibility)
+        if segment.endswith(TRAILING_FORBIDDEN):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Path segments cannot have trailing spaces or dots",
@@ -147,6 +194,14 @@ def _validate_file_name(file_name: str) -> str:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid file extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
+        )
+
+    # Check Windows reserved device names (case-insensitive, basename only)
+    basename_without_ext = basename.rpartition(".")[0]
+    if basename_without_ext.upper() in WINDOWS_RESERVED_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File name contains disallowed Unicode characters",
         )
 
     return normalized
