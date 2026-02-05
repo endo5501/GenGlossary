@@ -3,7 +3,7 @@ priority: 3
 tags: [frontend, refactoring]
 description: "TermsPage: simplify category editing state management"
 created_at: "2026-02-03T23:08:15Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-05T22:18:54Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -31,11 +31,11 @@ const isEditingCategory = editingCategoryValue !== null
 
 ## Tasks
 
-- [ ] 2つの状態を1つに統合
-- [ ] リセットロジックの共通化（既に`resetCategoryEdit`として抽出済み）
-- [ ] Commit
-- [ ] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 2つの状態を1つに統合
+- [x] リセットロジックの共通化（既に`resetCategoryEdit`として抽出済み）
+- [x] Commit
+- [x] Run tests (`pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
