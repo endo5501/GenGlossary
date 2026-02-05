@@ -4,7 +4,7 @@ tags: [backend, logging, improvement]
 description: "No-op logging masks 'run not found' case"
 created_at: "2026-01-31T23:53:49Z"
 started_at: 2026-02-05T13:08:48Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T13:34:13Z # Do not modify manually
 ---
 
 # No-op logging masks 'run not found' case
