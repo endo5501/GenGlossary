@@ -3,8 +3,8 @@ priority: 3
 tags: [backend, db, refactoring]
 description: "Refactor: unify update_run_status_if_* functions with common helper"
 created_at: "2026-02-02T22:22:41Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-05T15:39:40Z # Do not modify manually
+closed_at: 2026-02-05T15:45:53Z # Do not modify manually
 ---
 
 # Refactor: unify update_run_status_if_* functions with common helper
@@ -58,19 +58,19 @@ def update_run_status_if_running(...) -> int:
 
 ## Tasks
 
-- [ ] `_update_run_status_if_in_states` 内部ヘルパー関数を実装
-- [ ] `update_run_status_if_active` をヘルパー関数を使うよう変更
-- [ ] `update_run_status_if_running` をヘルパー関数を使うよう変更
-- [ ] 既存テストが全てパスすることを確認
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `_update_run_status_if_in_states` 内部ヘルパー関数を実装
+- [x] `update_run_status_if_active` をヘルパー関数を使うよう変更
+- [x] `update_run_status_if_running` をヘルパー関数を使うよう変更
+- [x] 既存テストが全てパスすることを確認
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md (N/A - internal helper function)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 

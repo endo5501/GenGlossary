@@ -273,6 +273,73 @@ def update_run_progress(
     conn.commit()  # Commit immediately for real-time UI updates
 
 
+def _update_run_status_if_in_states(
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    allowed_states: tuple[str, ...],
+    error_message: str | None = None,
+    finished_at: datetime | None = None,
+    include_error_message: bool = False,
+) -> int:
+    """Update run status only if current status is in allowed_states.
+
+    Internal helper function to reduce duplication between
+    update_run_status_if_active and update_run_status_if_running.
+
+    Args:
+        conn: Project database connection.
+        run_id: Run ID to update.
+        status: New terminal status ('completed', 'cancelled', 'failed').
+        allowed_states: Tuple of status values that allow the update.
+        error_message: Error message if status is 'failed' (optional).
+        finished_at: Finished timestamp (optional, must be timezone-aware).
+            If not provided, uses current UTC time.
+        include_error_message: Whether to include error_message in UPDATE.
+
+    Returns:
+        Number of rows updated.
+
+    Raises:
+        ValueError: If status is not terminal, or finished_at is naive.
+    """
+    _validate_status(status, TERMINAL_STATUSES)
+
+    finished_at_str = _to_iso_string(finished_at, "finished_at")
+    if finished_at_str is None:
+        finished_at_str = _current_utc_iso()
+
+    cursor = conn.cursor()
+    state_placeholders = ", ".join("?" * len(allowed_states))
+
+    if include_error_message:
+        cursor.execute(
+            f"""
+            UPDATE runs
+            SET status = ?,
+                finished_at = ?,
+                error_message = ?
+            WHERE id = ? AND status IN ({state_placeholders})
+            """,
+            (status, finished_at_str, error_message, run_id, *allowed_states),
+        )
+    else:
+        cursor.execute(
+            f"""
+            UPDATE runs
+            SET status = ?,
+                finished_at = ?
+            WHERE id = ? AND status IN ({state_placeholders})
+            """,
+            (status, finished_at_str, run_id, *allowed_states),
+        )
+
+    rowcount = cursor.rowcount
+    if rowcount > 0:
+        conn.commit()  # Commit immediately for real-time UI updates
+    return rowcount
+
+
 def update_run_status_if_active(
     conn: sqlite3.Connection,
     run_id: int,
@@ -302,29 +369,21 @@ def update_run_status_if_active(
     Raises:
         ValueError: If status is not terminal, or finished_at is naive.
     """
-    _validate_status(status, TERMINAL_STATUSES)
-
-    finished_at_str = _to_iso_string(finished_at, "finished_at")
-    if finished_at_str is None:
-        finished_at_str = _current_utc_iso()
-
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE runs
-        SET status = ?,
-            finished_at = ?,
-            error_message = ?
-        WHERE id = ? AND status IN ('pending', 'running')
-        """,
-        (status, finished_at_str, error_message, run_id),
+    rowcount = _update_run_status_if_in_states(
+        conn,
+        run_id,
+        status,
+        ("pending", "running"),
+        error_message=error_message,
+        finished_at=finished_at,
+        include_error_message=True,
     )
-    rowcount = cursor.rowcount
+
     if rowcount > 0:
-        conn.commit()  # Commit immediately for real-time UI updates
         return RunUpdateResult.UPDATED
 
     # No rows updated - check if run exists to distinguish cases
+    cursor = conn.cursor()
     cursor.execute("SELECT id FROM runs WHERE id = ?", (run_id,))
     if cursor.fetchone() is None:
         return RunUpdateResult.NOT_FOUND
@@ -359,26 +418,14 @@ def update_run_status_if_running(
     Raises:
         ValueError: If status is not terminal, or finished_at is naive.
     """
-    _validate_status(status, TERMINAL_STATUSES)
-
-    finished_at_str = _to_iso_string(finished_at, "finished_at")
-    if finished_at_str is None:
-        finished_at_str = _current_utc_iso()
-
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE runs
-        SET status = ?,
-            finished_at = ?
-        WHERE id = ? AND status = 'running'
-        """,
-        (status, finished_at_str, run_id),
+    return _update_run_status_if_in_states(
+        conn,
+        run_id,
+        status,
+        ("running",),
+        finished_at=finished_at,
+        include_error_message=False,
     )
-    rowcount = cursor.rowcount
-    if rowcount > 0:
-        conn.commit()  # Commit immediately for real-time UI updates
-    return rowcount
 
 
 def cancel_run(conn: sqlite3.Connection, run_id: int) -> RunUpdateResult:
