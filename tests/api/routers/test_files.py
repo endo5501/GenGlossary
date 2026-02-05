@@ -1088,3 +1088,42 @@ class TestSecurityCharacterValidation:
         response = client.post(f"/api/projects/{project_id}/files", json=payload)
 
         assert response.status_code == 201
+
+    # Additional Bidi isolate and format character tests
+    def test_rejects_left_to_right_isolate(self, test_project_setup, client: TestClient):
+        """Test that U+2066 LEFT-TO-RIGHT ISOLATE is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\u2066name.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_pop_directional_isolate(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that U+2069 POP DIRECTIONAL ISOLATE is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\u2069name.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_arabic_letter_mark(self, test_project_setup, client: TestClient):
+        """Test that U+061C ARABIC LETTER MARK is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\u061cname.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_word_joiner(self, test_project_setup, client: TestClient):
+        """Test that U+2060 WORD JOINER is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\u2060name.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
