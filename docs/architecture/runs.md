@@ -254,6 +254,7 @@ class RunManager:
         self._cancel_events_lock = Lock()
         self._start_run_lock = Lock()  # Synchronize start_run calls
         self._log_queue: Queue = Queue()
+        self._completed_runs: dict[int, dict] = {}  # Track completed runs for late subscribers
 
     def start_run(self, scope: str) -> int:
         """バックグラウンドでRunを開始
@@ -317,9 +318,7 @@ class RunManager:
                 })
 
             # Send completion signal and cleanup subscribers
-            self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
-            with self._subscribers_lock:
-                self._subscribers.pop(run_id, None)
+            self._cleanup_run_resources(run_id, db_status="failed", status_update_failed=True)
 
             raise
 
@@ -380,11 +379,8 @@ class RunManager:
                 "message": ..., "traceback": error_traceback
             })
         finally:
-            # Cleanup cancel event for this run
-            with self._cancel_events_lock:
-                self._cancel_events.pop(run_id, None)
-            # 完了シグナルを送信
-            self._broadcast_log(run_id, {"run_id": run_id, "complete": True})
+            # Cleanup run resources (cancel event, completion signal, subscribers)
+            self._cleanup_run_resources(run_id, db_status=final_status, status_update_failed=status_update_failed)
             # スレッド終了時に接続を閉じる（接続があれば）
             if conn is not None:
                 conn.close()
@@ -434,7 +430,34 @@ class RunManager:
         """
         ...
 
-    def _update_failed_status(self, conn, run_id, error_message) -> None:
+    def _cleanup_run_resources(
+        self,
+        run_id: int,
+        db_status: str | None = None,
+        status_update_failed: bool = False,
+    ) -> None:
+        """Runのクリーンアップ処理を統合
+
+        1. cancel_event を削除
+        2. 完了シグナルをブロードキャスト（DB状態を含む）
+        3. subscribers を削除
+        4. 完了シグナルを _completed_runs に保存（遅延登録対応）
+
+        完了シグナルフォーマット:
+        - 成功時: {"run_id": 1, "complete": True, "db_status": "completed"}
+        - 失敗時: {"run_id": 1, "complete": True, "db_status": "failed", "status_update_failed": True}
+
+        Note:
+            ブロードキャストと subscriber 削除は同じロック内で実行され、
+            race condition（ブロードキャスト後に登録された subscriber が
+            完了シグナルを受け取れずに削除される問題）を防止します。
+
+            _completed_runs に保存することで、クリーンアップ後に登録した
+            subscriber も即座に完了シグナルを受け取れます。
+        """
+        ...
+
+    def _update_failed_status(self, conn, run_id, error_message) -> bool:
         """フォールバック接続付きでステータスを 'failed' に更新
 
         1. 既存の conn でステータス更新を試行
@@ -1095,7 +1118,7 @@ get_run_manager(db_path) → RunManager
 - 各関数の status validation テスト
 - error_message 自動クリアテスト
 
-**tests/runs/test_manager.py (74 tests)**
+**tests/runs/test_manager.py (87 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - start_run synchronization（並行呼び出しの競合状態防止）
 - per-run cancellation（各runに個別のキャンセルイベント）
@@ -1107,6 +1130,9 @@ get_run_manager(db_path) → RunManager
 - failed status guard（終了状態への上書き防止）
 - state consistency（DB状態とインメモリ状態の整合性）
   - thread start failure edge cases（finished_at設定、_thread リセット、完了シグナル送信、subscriber クリーンアップ、例外マスキング防止）
+- cleanup run resources（db_status, status_update_failed パラメータ）
+- subscriber late registration（完了後に登録したsubscriberへの完了シグナル送信）
+- status update return values（_try_status_with_fallback, _finalize_run_status, _update_failed_status）
 
 **tests/runs/test_executor.py (50 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
@@ -1132,4 +1158,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 221 tests** (Repository 87 + Manager 74 + Executor 50 + API 10)
+**合計: 234 tests** (Repository 87 + Manager 87 + Executor 50 + API 10)

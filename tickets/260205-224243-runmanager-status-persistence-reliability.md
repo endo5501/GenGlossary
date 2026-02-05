@@ -59,14 +59,14 @@ def _cleanup_run_resources(self, run_id):
 
 - [x] Analyze current failure modes and their impact
 - [x] Choose solution approach
-- [ ] Implement chosen solution
-- [ ] Replace `print` with structured logging
-- [ ] Add tests for failure scenarios
-- [ ] Commit
+- [x] Implement chosen solution
+- [x] Replace `print` with structured logging
+- [x] Add tests for failure scenarios
+- [x] Commit
 - [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
 - [ ] Update docs/architecture/*.md
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
