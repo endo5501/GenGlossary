@@ -4,7 +4,7 @@ tags: [backend, db, refactoring]
 description: "Refactor: unify update_run_status_if_* functions with common helper"
 created_at: "2026-02-02T22:22:41Z"
 started_at: 2026-02-05T15:39:40Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T15:45:53Z # Do not modify manually
 ---
 
 # Refactor: unify update_run_status_if_* functions with common helper
