@@ -4,7 +4,7 @@ tags: [bug, backend, llm]
 description: "Project llm_base_url is not passed to LLM client, causing OpenAI-compatible APIs (like llama.cpp) to fail"
 created_at: "2026-02-04T15:54:54Z"
 started_at: 2026-02-04T15:55:52Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T13:00:31Z # Do not modify manually
 ---
 
 # Bug: Project llm_base_url not passed to LLM client
