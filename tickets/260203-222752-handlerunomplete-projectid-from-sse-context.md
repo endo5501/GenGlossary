@@ -4,7 +4,7 @@ tags: [bug, frontend, edge-case]
 description: "handleRunCompleteがSSEコンテキストからprojectIdを受け取るべき"
 created_at: "2026-02-03T22:27:52Z"
 started_at: 2026-02-05T14:46:07Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T15:17:46Z # Do not modify manually
 ---
 
 # handleRunComplete should receive projectId from SSE context
