@@ -4,7 +4,7 @@ tags: [security, backend]
 description: "API path validation: Unicode normalization and edge cases"
 created_at: "2026-02-01T11:37:40Z"
 started_at: 2026-02-05T13:36:39Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T13:49:27Z # Do not modify manually
 ---
 
 # API path validation: Unicode normalization and edge cases
