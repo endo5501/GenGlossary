@@ -1949,3 +1949,67 @@ class TestRunManagerLlmBaseUrl:
             call_kwargs = mock_executor.call_args.kwargs
             # base_url should be None when llm_base_url is empty (fallback to config)
             assert call_kwargs.get("base_url") is None
+
+
+class TestRunManagerLogMessageDistinction:
+    """Tests for distinguishing log messages between 'not found' and 'already terminal'."""
+
+    def test_try_update_status_logs_not_found_for_nonexistent_run(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """存在しないrunを更新しようとした場合、'not found'をログ出力する"""
+        # Use non-existent run_id
+        nonexistent_run_id = 99999
+        log_messages: list[dict] = []
+
+        def capture_log(run_id: int, message: dict) -> None:
+            log_messages.append(message)
+
+        manager._broadcast_log = capture_log  # type: ignore
+
+        # Call _try_update_status directly with non-existent run
+        result = manager._try_update_status(project_db, nonexistent_run_id, "cancelled")
+
+        # Should return True (no fallback needed, even though run not found)
+        assert result is True
+
+        # Find the log message about skipped operation
+        skipped_logs = [m for m in log_messages if "skipped" in m.get("message", "").lower()]
+        assert len(skipped_logs) == 1
+        assert "not found" in skipped_logs[0]["message"].lower()
+        assert "terminal" not in skipped_logs[0]["message"].lower()
+
+    def test_try_update_status_logs_already_terminal_for_terminal_run(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """既にterminal状態のrunを更新しようとした場合、'already terminal'をログ出力する"""
+        from genglossary.db.runs_repository import update_run_status
+        from datetime import datetime, timezone
+
+        # Create a run and set it to completed (terminal state)
+        run_id = create_run(project_db, scope="full")
+        update_run_status(
+            project_db, run_id, "completed",
+            started_at=datetime.now(timezone.utc),
+            finished_at=datetime.now(timezone.utc)
+        )
+
+        log_messages: list[dict] = []
+
+        def capture_log(run_id: int, message: dict) -> None:
+            log_messages.append(message)
+
+        manager._broadcast_log = capture_log  # type: ignore
+
+        # Call _try_update_status directly with already terminal run
+        result = manager._try_update_status(project_db, run_id, "cancelled")
+
+        # Should return True (no fallback needed, already terminal)
+        assert result is True
+
+        # Find the log message about skipped operation
+        skipped_logs = [m for m in log_messages if "skipped" in m.get("message", "").lower()]
+        assert len(skipped_logs) == 1
+        assert "already" in skipped_logs[0]["message"].lower()
+        assert "terminal" in skipped_logs[0]["message"].lower()
+        assert "not found" not in skipped_logs[0]["message"].lower()
