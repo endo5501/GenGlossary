@@ -4,7 +4,7 @@ tags: [refactoring, backend, threading]
 description: "RunManager: refactor cleanup logic into shared method"
 created_at: "2026-02-02T22:51:13Z"
 started_at: 2026-02-05T15:47:15Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T22:16:36Z # Do not modify manually
 ---
 
 # RunManager: refactor cleanup logic into shared method
