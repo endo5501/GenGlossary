@@ -4,7 +4,7 @@ tags: [security, backend]
 description: "API path validation: block control characters, bidi overrides, and Windows reserved names"
 created_at: "2026-02-05T13:45:55Z"
 started_at: 2026-02-05T15:19:55Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-05T15:38:09Z # Do not modify manually
 ---
 
 # API path validation: block control characters and enhance security
