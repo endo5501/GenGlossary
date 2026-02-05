@@ -950,3 +950,141 @@ class TestContentSizeLimit:
         # Should include the actual size and max size
         assert "3145828" in detail  # actual size
         assert "3145728" in detail or "3MB" in detail  # max size
+
+
+class TestSecurityCharacterValidation:
+    """Tests for control characters, bidi overrides, and security validation."""
+
+    # Control character tests
+    def test_rejects_null_character(self, test_project_setup, client: TestClient):
+        """Test that NUL character (U+0000) is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\x00name.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_newline_in_filename(self, test_project_setup, client: TestClient):
+        """Test that newline character is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\nname.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_c1_control_character(self, test_project_setup, client: TestClient):
+        """Test that C1 control characters (U+0080-U+009F) are rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # U+0085 NEXT LINE (NEL)
+        payload = {"file_name": "file\x85name.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    # Bidi and zero-width character tests
+    def test_rejects_rtl_override(self, test_project_setup, client: TestClient):
+        """Test that U+202E RIGHT-TO-LEFT OVERRIDE is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\u202ename.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_zero_width_space(self, test_project_setup, client: TestClient):
+        """Test that U+200B ZERO WIDTH SPACE is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\u200bname.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_zero_width_joiner(self, test_project_setup, client: TestClient):
+        """Test that U+200D ZERO WIDTH JOINER is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\u200dname.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    # Look-alike character extension tests
+    def test_rejects_cjk_fullstop(self, test_project_setup, client: TestClient):
+        """Test that U+3002 IDEOGRAPHIC FULL STOP is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\u3002md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_halfwidth_fullstop(self, test_project_setup, client: TestClient):
+        """Test that U+FF61 HALFWIDTH IDEOGRAPHIC FULL STOP is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "file\uff61md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    # Unicode whitespace trailing tests
+    def test_rejects_trailing_nbsp(self, test_project_setup, client: TestClient):
+        """Test that trailing U+00A0 NO-BREAK SPACE is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "dir\u00a0/file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_trailing_ideographic_space(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that trailing U+3000 IDEOGRAPHIC SPACE is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "dir\u3000/file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    # Windows reserved name tests
+    def test_rejects_con_device_name(self, test_project_setup, client: TestClient):
+        """Test that CON device name is rejected as filename."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "CON.txt", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_rejects_com1_device_name(self, test_project_setup, client: TestClient):
+        """Test that COM1 device name is rejected as filename."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "com1.txt", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_allows_con_in_directory(self, test_project_setup, client: TestClient):
+        """Test that CON is allowed as directory name."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "CON/file.txt", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
+
+    def test_allows_con_as_substring(self, test_project_setup, client: TestClient):
+        """Test that CON as substring in filename is allowed."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": "CONTEXT.txt", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 201
