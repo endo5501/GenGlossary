@@ -545,14 +545,16 @@ def terms_regenerate(input: str, llm_provider: str, model: str | None, db_path: 
 
     console.print(f"[dim]{len(documents)} 件のドキュメントを読み込みました[/dim]")
 
-    # Extract terms with categories
-    extractor = TermExtractor(llm_client=llm_client)
-    console.print("[dim]用語を抽出中（カテゴリ付き）...[/dim]")
-    classified_terms = extractor.extract_terms(documents, return_categories=True)
-    console.print(f"[dim]{len(classified_terms)} 個の用語を抽出しました（カテゴリ付き）[/dim]")
-
-    # Save to database with categories
+    # Extract terms and save to database
+    # Open connection early to pass excluded_term_repo to TermExtractor
     with _db_operation(db_path) as conn:
+        # Extract terms with categories
+        extractor = TermExtractor(llm_client=llm_client, excluded_term_repo=conn)
+        console.print("[dim]用語を抽出中（カテゴリ付き）...[/dim]")
+        classified_terms = extractor.extract_terms(documents, return_categories=True)
+        console.print(f"[dim]{len(classified_terms)} 個の用語を抽出しました（カテゴリ付き）[/dim]")
+
+        # Save to database with categories
         with transaction(conn):
             delete_all_terms(conn)
             # Type is list[ClassifiedTerm] when return_categories=True
