@@ -207,6 +207,9 @@ class RunManager:
             # Connection errors or other errors outside pipeline execution
             error_message = str(e)
             error_traceback = traceback.format_exc()
+            # Log to console for debugging
+            print(f"[ERROR] Run {run_id} failed (outside pipeline): {error_message}")
+            print(f"[ERROR] Traceback:\n{error_traceback}")
             self._update_failed_status(conn, run_id, error_message)
             self._broadcast_log(
                 run_id,
@@ -415,6 +418,9 @@ class RunManager:
             # Pipeline failed - update to failed status
             error_message = str(pipeline_error)
             error_traceback = pipeline_traceback or traceback.format_exc()
+            # Log to console for debugging
+            print(f"[ERROR] Run {run_id} failed: {error_message}")
+            print(f"[ERROR] Traceback:\n{error_traceback}")
             self._update_failed_status(conn, run_id, error_message)
             self._broadcast_log(
                 run_id,

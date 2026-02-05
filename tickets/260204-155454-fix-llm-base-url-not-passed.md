@@ -44,21 +44,22 @@ Web UIでプロジェクトのLLM Settings画面から設定した`Base URL`が�
 
 ## Tasks
 
-- [ ] `RunManager.__init__`に`llm_base_url`パラメータを追加
-- [ ] `dependencies.py`の`_create_and_register_manager`で`llm_base_url`を渡す
-- [ ] `_settings_match`関数で`llm_base_url`の比較を追加
-- [ ] `PipelineExecutor.__init__`に`base_url`パラメータを追加
-- [ ] `PipelineExecutor`の`create_llm_client`呼び出しで`openai_base_url`を渡す
-- [ ] テストを追加・更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `RunManager.__init__`に`llm_base_url`パラメータを追加
+- [x] `dependencies.py`の`_create_and_register_manager`で`llm_base_url`を渡す
+- [x] `_settings_match`関数で`llm_base_url`の比較を追加
+- [x] `PipelineExecutor.__init__`に`base_url`パラメータを追加
+- [x] `PipelineExecutor`の`create_llm_client`呼び出しで`openai_base_url`を渡す
+- [x] テストを追加・更新
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+  - Codex found CLI issue with openai_base_url → Fixed in commit 0a5b300
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
@@ -74,9 +75,16 @@ OPENAI_BASE_URL=http://127.0.0.1:8080/v1 uv run uvicorn genglossary.api.app:app 
 ### Affected Files
 
 - `src/genglossary/llm/factory.py` - `openai_base_url`を`base_url`にリネーム、Ollamaにも適用
+- `src/genglossary/llm/openai_compatible_client.py` - `stream: false`と`max_tokens`を追加（llama.cpp対応）
 - `src/genglossary/runs/executor.py` - `base_url`パラメータを追加
-- `src/genglossary/runs/manager.py` - `llm_base_url`パラメータを追加
+- `src/genglossary/runs/manager.py` - `llm_base_url`パラメータを追加、コンソールエラーログを追加
 - `src/genglossary/api/dependencies.py` - `llm_base_url`を渡す、`_settings_match`を更新
+
+### Additional Fixes
+
+llama.cppのllama-server使用時にJSONレスポンスが途中で切れる問題を修正：
+- `OpenAICompatibleClient`に`stream: false`を明示的に追加
+- `max_tokens: 4096`をデフォルトで追加（llama-serverのデフォルト制限を回避）
 
 ### Design
 
