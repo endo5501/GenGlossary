@@ -1951,6 +1951,99 @@ class TestRunManagerLlmBaseUrl:
             assert call_kwargs.get("base_url") is None
 
 
+class TestRunManagerCleanupRunResources:
+    """Tests for _cleanup_run_resources method.
+
+    This method consolidates the cleanup logic that was previously duplicated
+    in start_run exception handler and _execute_run finally block.
+    """
+
+    def test_cleanup_run_resources_removes_cancel_event(
+        self, manager: RunManager
+    ) -> None:
+        """_cleanup_run_resourcesがcancel_eventをクリーンアップする"""
+        run_id = 1
+        # Setup: add a cancel event
+        cancel_event = Event()
+        with manager._cancel_events_lock:
+            manager._cancel_events[run_id] = cancel_event
+
+        # Execute cleanup
+        manager._cleanup_run_resources(run_id)
+
+        # Verify cancel event was removed
+        with manager._cancel_events_lock:
+            assert run_id not in manager._cancel_events
+
+    def test_cleanup_run_resources_broadcasts_completion_signal(
+        self, manager: RunManager
+    ) -> None:
+        """_cleanup_run_resourcesが完了シグナルをブロードキャストする"""
+        run_id = 1
+        # Setup: register a subscriber
+        queue = manager.register_subscriber(run_id)
+
+        # Execute cleanup
+        manager._cleanup_run_resources(run_id)
+
+        # Verify completion signal was sent
+        completion_signal_found = False
+        while not queue.empty():
+            msg = queue.get_nowait()
+            if msg.get("complete") and msg.get("run_id") == run_id:
+                completion_signal_found = True
+                break
+
+        assert completion_signal_found, (
+            "Completion signal should be broadcast by _cleanup_run_resources"
+        )
+
+    def test_cleanup_run_resources_removes_subscribers(
+        self, manager: RunManager
+    ) -> None:
+        """_cleanup_run_resourcesがsubscribersをクリーンアップする"""
+        run_id = 1
+        # Setup: register a subscriber
+        queue = manager.register_subscriber(run_id)
+
+        # Execute cleanup
+        manager._cleanup_run_resources(run_id)
+
+        # Verify subscribers were removed
+        with manager._subscribers_lock:
+            assert run_id not in manager._subscribers
+
+    def test_cleanup_run_resources_is_idempotent(
+        self, manager: RunManager
+    ) -> None:
+        """_cleanup_run_resourcesは冪等である（複数回呼び出しても安全）"""
+        run_id = 1
+        # Setup: add cancel event and subscriber
+        cancel_event = Event()
+        with manager._cancel_events_lock:
+            manager._cancel_events[run_id] = cancel_event
+        queue = manager.register_subscriber(run_id)
+
+        # Execute cleanup twice
+        manager._cleanup_run_resources(run_id)
+        manager._cleanup_run_resources(run_id)  # Should not raise
+
+        # Verify cleanup was done
+        with manager._cancel_events_lock:
+            assert run_id not in manager._cancel_events
+        with manager._subscribers_lock:
+            assert run_id not in manager._subscribers
+
+    def test_cleanup_run_resources_handles_missing_resources(
+        self, manager: RunManager
+    ) -> None:
+        """_cleanup_run_resourcesは存在しないリソースでも安全"""
+        run_id = 999  # Non-existent run_id
+
+        # Should not raise
+        manager._cleanup_run_resources(run_id)
+
+
 class TestRunManagerLogMessageDistinction:
     """Tests for distinguishing log messages between 'not found' and 'already terminal'."""
 
