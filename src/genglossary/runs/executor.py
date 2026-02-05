@@ -692,8 +692,14 @@ class PipelineExecutor:
 
         # Send initial step update before processing
         # This ensures UI shows "Issues" step immediately, even if glossary is empty
+        # Use batch count (same as GlossaryReviewer) for consistent progress semantics
         term_count = len(glossary.terms)
-        progress_cb(0, term_count, "")
+        total_batches = (
+            (term_count + self._review_batch_size - 1) // self._review_batch_size
+            if term_count > 0
+            else 0
+        )
+        progress_cb(0, total_batches, "")
 
         def on_batch_progress(current: int, total: int) -> None:
             progress_cb(current, total, "")

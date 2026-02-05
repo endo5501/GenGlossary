@@ -1199,7 +1199,8 @@ class TestPipelineExecutorProgressCallbackIntegration:
             executor.execute(project_db, "review", context)
 
             # Find logs with step='issues' that were emitted BEFORE review was called
-            # The initial update should have current=0, total=term_count
+            # The initial update should have current=0, total=batch_count
+            # With 2 terms and default batch_size=20, batch_count=1
             initial_step_logs = [
                 log for log in logs
                 if log.get("step") == "issues" and log.get("progress_current") == 0
@@ -1207,8 +1208,8 @@ class TestPipelineExecutorProgressCallbackIntegration:
 
             assert len(initial_step_logs) >= 1, \
                 "Expected initial step update with step='issues' and progress_current=0"
-            assert initial_step_logs[0]["progress_total"] == 2, \
-                "Expected progress_total to equal term count (2)"
+            assert initial_step_logs[0]["progress_total"] == 1, \
+                "Expected progress_total to equal batch count (1 batch for 2 terms)"
 
     def test_review_emits_initial_step_update_for_empty_glossary(
         self,
