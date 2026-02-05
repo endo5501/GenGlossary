@@ -422,7 +422,10 @@ class RunManager:
             if isinstance(pipeline_error, PipelineCancelledException):
                 # Cancelled during execution - try to update status with fallback
                 self._try_status_with_fallback(
-                    conn, run_id, self._try_cancel_status, "cancelled"
+                    conn,
+                    run_id,
+                    lambda c, rid: self._try_update_status(c, rid, "cancelled"),
+                    "cancelled",
                 )
                 return
 
@@ -446,7 +449,10 @@ class RunManager:
 
         # Pipeline succeeded - completed
         self._try_status_with_fallback(
-            conn, run_id, self._try_complete_status, "completed"
+            conn,
+            run_id,
+            lambda c, rid: self._try_update_status(c, rid, "completed"),
+            "completed",
         )
 
     def _try_update_status(
@@ -503,46 +509,6 @@ class RunManager:
             )
             return False
 
-    def _try_cancel_status(
-        self,
-        conn: sqlite3.Connection,
-        run_id: int,
-    ) -> bool:
-        """Try to update run status to cancelled.
-
-        Returns:
-            True if cancelled or already in terminal state (no fallback needed).
-            False if failed with exception (fallback needed).
-        """
-        return self._try_update_status(conn, run_id, "cancelled")
-
-    def _try_complete_status(
-        self,
-        conn: sqlite3.Connection,
-        run_id: int,
-    ) -> bool:
-        """Try to update run status to completed.
-
-        Returns:
-            True if completed or no-op (no fallback needed).
-            False if failed with exception (fallback needed).
-        """
-        return self._try_update_status(conn, run_id, "completed")
-
-    def _try_failed_status(
-        self,
-        conn: sqlite3.Connection,
-        run_id: int,
-        error_message: str,
-    ) -> bool:
-        """Try to update run status to failed.
-
-        Returns:
-            True if failed or already in terminal state (no fallback needed).
-            False if failed with exception (fallback needed).
-        """
-        return self._try_update_status(conn, run_id, "failed", error_message)
-
     def _update_failed_status(
         self,
         conn: sqlite3.Connection | None,
@@ -562,6 +528,6 @@ class RunManager:
         self._try_status_with_fallback(
             conn,
             run_id,
-            lambda c, rid: self._try_failed_status(c, rid, error_message),
+            lambda c, rid: self._try_update_status(c, rid, "failed", error_message),
             "failed",
         )
