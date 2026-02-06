@@ -4,7 +4,7 @@ tags: [backend, bug-prevention]
 description: "Improve RunManager status persistence reliability"
 created_at: "2026-02-05T22:42:43Z"
 started_at: 2026-02-05T22:48:27Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-06T11:09:03Z # Do not modify manually
 ---
 
 # Improve RunManager status persistence reliability
