@@ -3,8 +3,8 @@ priority: 2
 tags: [backend, bug-prevention]
 description: "Improve RunManager status persistence reliability"
 created_at: "2026-02-05T22:42:43Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-05T22:48:27Z # Do not modify manually
+closed_at: 2026-02-06T11:09:03Z # Do not modify manually
 ---
 
 # Improve RunManager status persistence reliability
@@ -57,20 +57,42 @@ def _cleanup_run_resources(self, run_id):
 
 ## Tasks
 
-- [ ] Analyze current failure modes and their impact
-- [ ] Choose solution approach
-- [ ] Implement chosen solution
-- [ ] Replace `print` with structured logging
-- [ ] Add tests for failure scenarios
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Analyze current failure modes and their impact
+- [x] Choose solution approach
+- [x] Implement chosen solution
+- [x] Replace `print` with structured logging
+- [x] Add tests for failure scenarios
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## Design (Approved)
+
+### Approach
+- **Option A + C の組み合わせ**: ログ出力の充実 + 完了シグナルへのDB状態追加
+- リトライ機構は現時点では不要
+
+### Changes
+
+| 項目 | 変更 |
+|-----|------|
+| ロギング導入 | `logging.getLogger(__name__)` を追加、`print`文を`logger.error(..., exc_info=True)`に置換 |
+| `_cleanup_run_resources` | `db_status`, `status_update_failed` パラメータを追加 |
+| `_try_status_with_fallback` | 戻り値`bool`を追加（成功/失敗を返す） |
+| `_finalize_run_status` | 戻り値`tuple[str, bool]`を追加（ステータスと成功フラグ） |
+| `_update_failed_status` | 戻り値`bool`を追加 |
+| `_execute_run` | 最終ステータスを追跡し`_cleanup_run_resources`に渡す |
+| `start_run` | 例外時に`db_status="failed"`を渡す |
+
+### Completion Signal Format
+- 成功時: `{"run_id": 1, "complete": True, "db_status": "completed"}`
+- DB更新失敗時: `{"run_id": 1, "complete": True, "db_status": "failed", "status_update_failed": True}`
 
 ## Notes
 
