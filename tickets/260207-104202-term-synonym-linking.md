@@ -179,28 +179,28 @@ def _find_term_occurrences(self, term, documents, synonyms=None):
 
 ## Tasks
 
-- [ ] DB: `term_synonym_groups` / `term_synonym_members` テーブルのスキーマ追加
-- [ ] Model: `SynonymGroup` / `SynonymMember` Pydanticモデルの作成
-- [ ] Repository: `synonym_repository.py` のCRUD関数実装（グループ作成・削除、メンバー追加・削除・代表変更）
-- [ ] Repository: 用語テキストから所属グループと同義語一覧を取得するクエリ
-- [ ] API: 同義語グループエンドポイント（GET/POST/DELETE/PATCH）の実装
-- [ ] Frontend: `useSynonymGroups` フックの作成
-- [ ] Frontend: Terms画面の詳細パネルに同義語管理UI追加
-- [ ] Pipeline/Generator: `_find_term_occurrences()` を同義語対応に拡張（出現箇所統合）
-- [ ] Pipeline/Generator: `_build_definition_prompt()` に同義語情報を含める
-- [ ] Pipeline/Reviewer: レビュープロンプトに同義語情報を付加
-- [ ] Pipeline/Refiner: 改善プロンプトに同義語の出現コンテキストも参照可能にする
-- [ ] Pipeline/Executor: パイプライン実行時に同義語グループをDBから読み込み各ステップに渡す
-- [ ] Output: MarkdownWriterで代表用語に別名を記載
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] DB: `term_synonym_groups` / `term_synonym_members` テーブルのスキーマ追加
+- [x] Model: `SynonymGroup` / `SynonymMember` Pydanticモデルの作成
+- [x] Repository: `synonym_repository.py` のCRUD関数実装（グループ作成・削除、メンバー追加・削除・代表変更）
+- [x] Repository: 用語テキストから所属グループと同義語一覧を取得するクエリ
+- [x] API: 同義語グループエンドポイント（GET/POST/DELETE/PATCH）の実装
+- [x] Frontend: `useSynonymGroups` フックの作成
+- [x] Frontend: Terms画面の詳細パネルに同義語管理UI追加
+- [x] Pipeline/Generator: `_find_term_occurrences()` を同義語対応に拡張（出現箇所統合）
+- [x] Pipeline/Generator: `_build_definition_prompt()` に同義語情報を含める
+- [x] Pipeline/Reviewer: レビュープロンプトに同義語情報を付加
+- [x] Pipeline/Refiner: 改善プロンプトに同義語の出現コンテキストも参照可能にする
+- [x] Pipeline/Executor: パイプライン実行時に同義語グループをDBから読み込み各ステップに渡す
+- [x] Output: MarkdownWriterで代表用語に別名を記載
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Design
