@@ -12,6 +12,7 @@ from pydantic import BaseModel, confloat
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
+from genglossary.models.synonym import SynonymGroup
 from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
 from genglossary.types import ProgressCallback, TermProgressCallback
 from genglossary.utils.callback import safe_callback
@@ -76,6 +77,7 @@ Output:
         term_progress_callback: TermProgressCallback | None = None,
         cancel_event: Event | None = None,
         user_notes_map: dict[str, str] | None = None,
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> Glossary:
         """Generate a provisional glossary.
 
@@ -109,6 +111,10 @@ Output:
         if not filtered_terms:
             return glossary
 
+        # Build synonym lookup maps
+        synonym_map = self._build_synonym_map(synonym_groups)
+        non_primary_terms = self._build_non_primary_set(synonym_groups)
+
         total_terms = len(filtered_terms)
         for idx, term_item in enumerate(filtered_terms, start=1):
             # Check for cancellation before processing each term
@@ -118,16 +124,23 @@ Output:
             # Extract term name (support both str and ClassifiedTerm)
             term_name = term_item if isinstance(term_item, str) else term_item.term
 
+            # Skip non-primary synonym members
+            if term_name in non_primary_terms:
+                continue
+
             try:
-                # Find occurrences
-                occurrences = self._find_term_occurrences(term_name, documents)
+                # Find occurrences (including synonym occurrences)
+                synonyms = synonym_map.get(term_name)
+                occurrences = self._find_term_occurrences(
+                    term_name, documents, synonyms=synonyms
+                )
 
                 # Get user notes for this term
                 notes = (user_notes_map or {}).get(term_name, "")
 
                 # Generate definition using LLM
                 definition, confidence = self._generate_definition(
-                    term_name, occurrences, notes
+                    term_name, occurrences, notes, synonyms=synonyms
                 )
 
                 # Create Term object
@@ -235,26 +248,39 @@ Output:
         )
 
     def _find_term_occurrences(
-        self, term: str, documents: list[Document]
+        self,
+        term: str,
+        documents: list[Document],
+        synonyms: list[str] | None = None,
     ) -> list[TermOccurrence]:
-        """Find all occurrences of a term in the documents.
+        """Find all occurrences of a term (and its synonyms) in the documents.
 
         Uses regex with word boundaries for precise matching.
 
         Args:
             term: The term to search for.
             documents: List of documents to search in.
+            synonyms: Optional list of synonym terms to also search for.
 
         Returns:
             List of TermOccurrence objects.
         """
-        pattern = self._build_search_pattern(term)
+        search_terms = [term] + (synonyms or [])
+        patterns = [self._build_search_pattern(t) for t in search_terms]
         occurrences: list[TermOccurrence] = []
+        seen_locations: set[tuple[str, int]] = set()
 
         for doc in documents:
             for line_num, line in enumerate(doc.lines, start=1):
-                if pattern.search(line):
-                    occurrences.append(self._create_occurrence(doc, line_num))
+                for pattern in patterns:
+                    if pattern.search(line):
+                        location = (doc.file_path, line_num)
+                        if location not in seen_locations:
+                            seen_locations.add(location)
+                            occurrences.append(
+                                self._create_occurrence(doc, line_num)
+                            )
+                        break  # One match per line is enough
 
         return occurrences
 
@@ -281,7 +307,11 @@ Output:
         return f"<context>\n{lines}\n</context>"
 
     def _build_definition_prompt(
-        self, term: str, context_text: str, user_notes: str = ""
+        self,
+        term: str,
+        context_text: str,
+        user_notes: str = "",
+        synonyms: list[str] | None = None,
     ) -> str:
         """Build the prompt for definition generation.
 
@@ -289,6 +319,7 @@ Output:
             term: The term to define.
             context_text: Formatted context text from occurrences.
             user_notes: Optional user-provided supplementary notes.
+            synonyms: Optional list of synonym terms.
 
         Returns:
             Complete prompt for LLM.
@@ -302,6 +333,10 @@ Output:
 ユーザー補足情報:
 {wrapped_notes}
 """
+
+        synonym_section = ""
+        if synonyms:
+            synonym_section = f"\n同義語: {', '.join(synonyms)}\n"
 
         return f"""あなたは用語集を作成するアシスタントです。
 与えられた用語について、出現箇所のコンテキストから文脈固有の意味を1-2文で説明してください。
@@ -320,14 +355,18 @@ Output:
 ## 今回の用語:
 
 用語: {wrapped_term}
-出現箇所とコンテキスト:
+{synonym_section}出現箇所とコンテキスト:
 {context_text}
 {user_notes_section}
 信頼度の基準: 明確=0.8+, 推測可能=0.5-0.7, 不明確=0.0-0.4
 JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-1.0}}"""
 
     def _generate_definition(
-        self, term: str, occurrences: list[TermOccurrence], user_notes: str = ""
+        self,
+        term: str,
+        occurrences: list[TermOccurrence],
+        user_notes: str = "",
+        synonyms: list[str] | None = None,
     ) -> tuple[str, float]:
         """Generate a definition for a term using LLM.
 
@@ -335,15 +374,64 @@ JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-
             term: The term to define.
             occurrences: List of occurrences with context.
             user_notes: Optional user-provided supplementary notes.
+            synonyms: Optional list of synonym terms.
 
         Returns:
             Tuple of (definition, confidence).
         """
         context_text = self._build_context_text(occurrences)
-        prompt = self._build_definition_prompt(term, context_text, user_notes)
+        prompt = self._build_definition_prompt(
+            term, context_text, user_notes, synonyms=synonyms
+        )
 
         response = self.llm_client.generate_structured(
             prompt, DefinitionResponse
         )
 
         return response.definition, response.confidence
+
+    @staticmethod
+    def _build_synonym_map(
+        synonym_groups: list[SynonymGroup] | None,
+    ) -> dict[str, list[str]]:
+        """Build a mapping from primary term to its synonym texts.
+
+        Args:
+            synonym_groups: List of synonym groups.
+
+        Returns:
+            dict mapping primary_term_text to list of other member texts.
+        """
+        if not synonym_groups:
+            return {}
+        result: dict[str, list[str]] = {}
+        for group in synonym_groups:
+            others = [
+                m.term_text
+                for m in group.members
+                if m.term_text != group.primary_term_text
+            ]
+            if others:
+                result[group.primary_term_text] = others
+        return result
+
+    @staticmethod
+    def _build_non_primary_set(
+        synonym_groups: list[SynonymGroup] | None,
+    ) -> set[str]:
+        """Build a set of non-primary synonym member texts.
+
+        Args:
+            synonym_groups: List of synonym groups.
+
+        Returns:
+            Set of term texts that are non-primary members.
+        """
+        if not synonym_groups:
+            return set()
+        non_primary: set[str] = set()
+        for group in synonym_groups:
+            for member in group.members:
+                if member.term_text != group.primary_term_text:
+                    non_primary.add(member.term_text)
+        return non_primary
