@@ -1,6 +1,5 @@
 """Files API endpoints."""
 
-import re
 import sqlite3
 import unicodedata
 
@@ -129,8 +128,8 @@ def _validate_file_name(file_name: str) -> str:
             detail="File name contains disallowed Unicode characters",
         )
 
-    # Reject absolute paths (Unix-style or Windows drive paths)
-    if file_name.startswith("/") or re.match(r"^[A-Za-z]:", file_name):
+    # Reject absolute paths (Unix-style; Windows drive paths blocked by FORBIDDEN_CHARS)
+    if file_name.startswith("/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Absolute paths not allowed",
@@ -204,7 +203,7 @@ def _validate_file_name(file_name: str) -> str:
     if basename_without_ext.upper() in WINDOWS_RESERVED_NAMES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File name contains disallowed Unicode characters",
+            detail="File name is a reserved Windows device name",
         )
 
     return normalized
