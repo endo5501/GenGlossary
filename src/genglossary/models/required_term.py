@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
+from genglossary.models.term_validator import validate_term_text
+
 
 class RequiredTerm(BaseModel):
     """Represents a required term that must always appear in the glossary.
@@ -27,19 +29,5 @@ class RequiredTerm(BaseModel):
 
     @field_validator("term_text")
     @classmethod
-    def validate_term_text(cls, v: str) -> str:
-        """Validate and normalize the term text.
-
-        Args:
-            v: The term text to validate.
-
-        Returns:
-            The validated and stripped term text.
-
-        Raises:
-            ValueError: If the term text is empty or contains only whitespace.
-        """
-        stripped = v.strip()
-        if not stripped:
-            raise ValueError("Term text cannot be empty")
-        return stripped
+    def validate_term_text_field(cls, v: str) -> str:
+        return validate_term_text(v)
