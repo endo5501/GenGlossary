@@ -15,7 +15,7 @@ import {
   LoadingOverlay,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconPlus, IconRefresh, IconTrash, IconBan, IconList, IconPencil, IconCheck, IconX } from '@tabler/icons-react'
+import { IconPlus, IconRefresh, IconTrash, IconBan, IconList, IconPencil, IconCheck, IconX, IconStar } from '@tabler/icons-react'
 import { useState } from 'react'
 import {
   useTerms,
@@ -27,6 +27,9 @@ import {
   useExcludedTerms,
   useCreateExcludedTerm,
   useDeleteExcludedTerm,
+  useRequiredTerms,
+  useCreateRequiredTerm,
+  useDeleteRequiredTerm,
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 
@@ -37,15 +40,19 @@ interface TermsPageProps {
 export function TermsPage({ projectId }: TermsPageProps) {
   const { data: terms, isLoading } = useTerms(projectId)
   const { data: excludedTerms, isLoading: isLoadingExcluded } = useExcludedTerms(projectId)
+  const { data: requiredTerms, isLoading: isLoadingRequired } = useRequiredTerms(projectId)
   const { data: currentRun } = useCurrentRun(projectId)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const selectedTerm = terms?.find((t) => t.id === selectedId) ?? null
   const [opened, { open, close }] = useDisclosure(false)
   const [excludedModalOpened, { open: openExcludedModal, close: closeExcludedModal }] =
     useDisclosure(false)
+  const [requiredModalOpened, { open: openRequiredModal, close: closeRequiredModal }] =
+    useDisclosure(false)
   const [newTermText, setNewTermText] = useState('')
   const [newTermCategory, setNewTermCategory] = useState('')
   const [newExcludedTermText, setNewExcludedTermText] = useState('')
+  const [newRequiredTermText, setNewRequiredTermText] = useState('')
   const [activeTab, setActiveTab] = useState<string | null>('terms')
   const [editingCategoryValue, setEditingCategoryValue] = useState<string | null>(null)
   const isEditingCategory = editingCategoryValue !== null
@@ -56,6 +63,8 @@ export function TermsPage({ projectId }: TermsPageProps) {
   const extractTerms = useExtractTerms(projectId)
   const createExcludedTerm = useCreateExcludedTerm(projectId)
   const deleteExcludedTerm = useDeleteExcludedTerm(projectId)
+  const createRequiredTerm = useCreateRequiredTerm(projectId)
+  const deleteRequiredTerm = useDeleteRequiredTerm(projectId)
 
   const isRunning = currentRun?.status === 'running'
 
@@ -99,6 +108,23 @@ export function TermsPage({ projectId }: TermsPageProps) {
         onSuccess: () => {
           setNewExcludedTermText('')
           closeExcludedModal()
+        },
+      }
+    )
+  }
+
+  const handleDeleteRequiredTerm = (termId: number) => {
+    deleteRequiredTerm.mutate(termId)
+  }
+
+  const handleAddRequiredTerm = () => {
+    if (!newRequiredTermText.trim()) return
+    createRequiredTerm.mutate(
+      { term_text: newRequiredTermText.trim() },
+      {
+        onSuccess: () => {
+          setNewRequiredTermText('')
+          closeRequiredModal()
         },
       }
     )
@@ -168,15 +194,38 @@ export function TermsPage({ projectId }: TermsPageProps) {
     </Button>
   )
 
-  const actionBar = activeTab === 'terms' ? termsActionBar : excludedActionBar
+  const requiredActionBar = (
+    <Button
+      leftSection={<IconPlus size={16} />}
+      onClick={openRequiredModal}
+      aria-label="Add required term"
+    >
+      Add
+    </Button>
+  )
+
+  const actionBar =
+    activeTab === 'terms'
+      ? termsActionBar
+      : activeTab === 'excluded'
+        ? excludedActionBar
+        : requiredActionBar
 
   const isTermsEmpty = !terms || terms.length === 0
   const isExcludedEmpty = !excludedTerms || excludedTerms.length === 0
-  const isEmpty = activeTab === 'terms' ? isTermsEmpty : isExcludedEmpty
+  const isRequiredEmpty = !requiredTerms || requiredTerms.length === 0
+  const isEmpty =
+    activeTab === 'terms'
+      ? isTermsEmpty
+      : activeTab === 'excluded'
+        ? isExcludedEmpty
+        : isRequiredEmpty
   const emptyMessage =
     activeTab === 'terms'
       ? 'No terms found. Extract terms from documents or add manually.'
-      : 'No excluded terms. Add terms to exclude them from extraction.'
+      : activeTab === 'excluded'
+        ? 'No excluded terms. Add terms to exclude them from extraction.'
+        : 'No required terms. Add terms to always include them in extraction.'
 
   return (
     <PageContainer
@@ -185,7 +234,13 @@ export function TermsPage({ projectId }: TermsPageProps) {
       emptyMessage={emptyMessage}
       actionBar={actionBar}
       loadingTestId="terms-loading"
-      emptyTestId={activeTab === 'terms' ? 'terms-empty' : 'excluded-terms-empty'}
+      emptyTestId={
+        activeTab === 'terms'
+          ? 'terms-empty'
+          : activeTab === 'excluded'
+            ? 'excluded-terms-empty'
+            : 'required-terms-empty'
+      }
     >
       <Tabs value={activeTab} onChange={setActiveTab}>
         <Tabs.List mb="md">
@@ -194,6 +249,9 @@ export function TermsPage({ projectId }: TermsPageProps) {
           </Tabs.Tab>
           <Tabs.Tab value="excluded" leftSection={<IconBan size={16} />}>
             除外用語
+          </Tabs.Tab>
+          <Tabs.Tab value="required" leftSection={<IconStar size={16} />}>
+            必須用語
           </Tabs.Tab>
         </Tabs.List>
 
@@ -391,6 +449,46 @@ export function TermsPage({ projectId }: TermsPageProps) {
             </Table>
           </Box>
         </Tabs.Panel>
+
+        <Tabs.Panel value="required">
+          <Box style={{ flex: 1, position: 'relative' }}>
+            <LoadingOverlay visible={isLoadingRequired} />
+            <Table highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Term</Table.Th>
+                  <Table.Th>Created At</Table.Th>
+                  <Table.Th w={80}>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {requiredTerms?.map((term) => (
+                  <Table.Tr key={term.id}>
+                    <Table.Td>{term.term_text}</Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed">
+                        {new Date(term.created_at).toLocaleDateString('ja-JP')}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Tooltip label="必須リストから削除">
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          onClick={() => handleDeleteRequiredTerm(term.id)}
+                          aria-label="Remove from required"
+                          loading={deleteRequiredTerm.isPending}
+                        >
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Box>
+        </Tabs.Panel>
       </Tabs>
 
       <Modal opened={opened} onClose={close} title="Add Term">
@@ -433,6 +531,26 @@ export function TermsPage({ projectId }: TermsPageProps) {
               キャンセル
             </Button>
             <Button onClick={handleAddExcludedTerm} loading={createExcludedTerm.isPending}>
+              追加
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={requiredModalOpened} onClose={closeRequiredModal} title="必須用語を追加">
+        <Stack>
+          <TextInput
+            label="用語"
+            placeholder="必須にする用語を入力"
+            value={newRequiredTermText}
+            onChange={(e) => setNewRequiredTermText(e.target.value)}
+            required
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={closeRequiredModal}>
+              キャンセル
+            </Button>
+            <Button onClick={handleAddRequiredTerm} loading={createRequiredTerm.isPending}>
               追加
             </Button>
           </Group>

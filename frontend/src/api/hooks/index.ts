@@ -36,6 +36,13 @@ export {
 } from './useExcludedTerms'
 
 export {
+  useRequiredTerms,
+  useCreateRequiredTerm,
+  useDeleteRequiredTerm,
+  requiredTermKeys,
+} from './useRequiredTerms'
+
+export {
   useProvisional,
   useProvisionalEntry,
   useUpdateProvisional,
