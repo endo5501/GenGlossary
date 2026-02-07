@@ -31,37 +31,35 @@ def db_with_schema(in_memory_db: sqlite3.Connection) -> sqlite3.Connection:
 class TestCreateDocument:
     """Test create_document function."""
 
-    def test_create_document_returns_document_id(
+    def test_create_document_returns_row(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that create_document returns a document ID."""
-        doc_id = create_document(
+        """Test that create_document returns a sqlite3.Row with all fields."""
+        row = create_document(
             db_with_schema,
             file_name="doc.txt",
             content="Hello World",
             content_hash="abc123",
         )
 
-        assert isinstance(doc_id, int)
-        assert doc_id > 0
+        assert isinstance(row, sqlite3.Row)
+        assert row["id"] > 0
+        assert row["file_name"] == "doc.txt"
+        assert row["content"] == "Hello World"
+        assert row["content_hash"] == "abc123"
 
     def test_create_document_stores_data(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_document stores data correctly."""
         test_content = "# Test Document\n\nThis is content."
-        doc_id = create_document(
+        row = create_document(
             db_with_schema,
             file_name="doc.txt",
             content=test_content,
             content_hash="abc123",
         )
 
-        cursor = db_with_schema.cursor()
-        cursor.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
-        row = cursor.fetchone()
-
-        assert row is not None
         assert row["file_name"] == "doc.txt"
         assert row["content"] == test_content
         assert row["content_hash"] == "abc123"
