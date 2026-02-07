@@ -122,7 +122,13 @@ async def update_existing_term(
     """
     try:
         with transaction(project_db):
-            update_term(project_db, term_id, request.term_text, request.category)
+            update_term(
+                project_db,
+                term_id,
+                request.term_text,
+                request.category,
+                user_notes=request.user_notes,
+            )
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
 
