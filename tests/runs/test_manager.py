@@ -818,22 +818,19 @@ class TestRunManagerConnectionErrorHandling:
                     "Error log should be broadcast even when all status updates fail"
                 )
 
-    def test_warning_log_broadcast_when_status_update_fails(
+    def test_warning_log_broadcast_when_all_status_updates_fail(
         self, manager: RunManager
     ) -> None:
-        """ステータス更新が失敗した場合、warningログがブロードキャストされる"""
+        """全てのステータス更新が失敗した場合、warningログがブロードキャストされる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             mock_executor.return_value.execute.side_effect = RuntimeError("Test error")
 
-            # Make primary connection fail, fallback succeeds for update_run_status_if_active
+            # Make all update_run_status_if_active calls fail with exception
+            # This causes both primary and fallback attempts to fail
             with patch(
-                "genglossary.runs.manager.update_run_status_if_active"
-            ) as mock_update:
-                mock_update.side_effect = [
-                    sqlite3.OperationalError("database is locked"),  # first failed
-                    1,  # fallback succeeds (1 row updated)
-                ]
-
+                "genglossary.runs.manager.update_run_status_if_active",
+                side_effect=sqlite3.OperationalError("database is locked"),
+            ):
                 # Subscribe to logs before starting run
                 queue = manager.register_subscriber(run_id=1)
 
@@ -848,12 +845,12 @@ class TestRunManagerConnectionErrorHandling:
                 while not queue.empty():
                     log = queue.get_nowait()
                     if log is not None and log.get("level") == "warning":
-                        warning_log_found = True
-                        assert "Failed to update run status" in log.get("message", "")
-                        break
+                        if "Failed to update" in log.get("message", ""):
+                            warning_log_found = True
+                            break
 
                 assert warning_log_found, (
-                    "Warning log should be broadcast when status update fails"
+                    "Warning log should be broadcast when all status updates fail"
                 )
 
     def test_completion_signal_sent_even_when_fallback_connection_fails(
@@ -1153,8 +1150,10 @@ class TestRunManagerStatusUpdateFallbackLogic:
     def test_complete_status_no_op_does_not_trigger_fallback(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """update_run_status_if_activeが0を返した場合（no-op）、
+        """update_run_status_if_activeがALREADY_TERMINALを返した場合（no-op）、
         フォールバックは試行されない"""
+        from genglossary.db.runs_repository import RunUpdateResult
+
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             mock_executor.return_value.execute.return_value = None
 
@@ -1163,8 +1162,8 @@ class TestRunManagerStatusUpdateFallbackLogic:
 
             def counting_update(conn, run_id, status, error_message=None):
                 call_count["value"] += 1
-                # Always return 0 to simulate no-op (already cancelled)
-                return 0
+                # Return ALREADY_TERMINAL to simulate no-op (already cancelled)
+                return RunUpdateResult.ALREADY_TERMINAL
 
             with patch(
                 "genglossary.runs.manager.update_run_status_if_active",
@@ -1227,7 +1226,8 @@ class TestRunManagerStatusUpdateFallbackLogic:
     def test_cancel_status_no_op_logged_and_no_fallback(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """update_run_status_if_activeが0を返した場合（no-op）、ログに記録されフォールバックは試行されない"""
+        """update_run_status_if_activeがALREADY_TERMINALを返した場合（no-op）、ログに記録されフォールバックは試行されない"""
+        from genglossary.db.runs_repository import RunUpdateResult
         from genglossary.runs.executor import PipelineCancelledException
 
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
@@ -1246,9 +1246,9 @@ class TestRunManagerStatusUpdateFallbackLogic:
             def counting_update(conn, run_id, status, error_message=None):
                 if status == "cancelled":
                     call_count["value"] += 1
-                    # Always return 0 rows updated (no-op - already terminal)
-                    return 0
-                return 1  # For other status updates (like 'running'), return success
+                    # Return ALREADY_TERMINAL to simulate no-op (already terminal)
+                    return RunUpdateResult.ALREADY_TERMINAL
+                return RunUpdateResult.UPDATED  # For other status updates
 
             with patch(
                 "genglossary.runs.manager.update_run_status_if_active",
@@ -1796,10 +1796,12 @@ class TestRunManagerStatusMisclassification:
 
             # All update_run_status_if_active calls for 'cancelled' fail
             def failing_update(conn, run_id, status, error_message=None):
+                from genglossary.db.runs_repository import RunUpdateResult
+
                 if status == "cancelled":
                     raise sqlite3.OperationalError("database is locked")
                 # Allow other status updates
-                return 1
+                return RunUpdateResult.UPDATED
 
             with patch(
                 "genglossary.runs.manager.update_run_status_if_active",
@@ -2165,8 +2167,8 @@ class TestCleanupRunResourcesWithDbStatus:
         assert "status_update_failed" not in completion_signal
 
 
-class TestTryStatusWithFallbackReturnValue:
-    """Tests for _try_status_with_fallback return value."""
+class TestTryUpdateStatusFallback:
+    """Tests for _try_update_status fallback behavior."""
 
     def test_returns_true_on_primary_success(
         self, manager: RunManager, project_db: sqlite3.Connection
@@ -2174,47 +2176,68 @@ class TestTryStatusWithFallbackReturnValue:
         """プライマリ接続での更新成功時にTrueを返す"""
         run_id = create_run(project_db, scope="full")
 
-        def successful_updater(conn: sqlite3.Connection, rid: int) -> bool:
-            return True
-
-        result = manager._try_status_with_fallback(
-            project_db, run_id, successful_updater, "test_operation"
-        )
+        result = manager._try_update_status(project_db, run_id, "cancelled")
         assert result is True
 
-    def test_returns_true_on_fallback_success(
+    def test_falls_back_to_new_connection_on_primary_exception(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """フォールバック接続での更新成功時にTrueを返す"""
+        """プライマリ接続で例外が発生した場合、フォールバック接続で再試行する"""
         run_id = create_run(project_db, scope="full")
+        project_db.commit()  # Commit so fallback connection can see the run
 
-        def fallback_only_updater(conn: sqlite3.Connection, rid: int) -> bool:
-            # Return False on first call (primary), True on second (fallback)
-            if not hasattr(fallback_only_updater, "called"):
-                fallback_only_updater.called = True  # type: ignore
-                return False
-            return True
+        call_count = {"value": 0}
+        original_update = __import__(
+            "genglossary.db.runs_repository", fromlist=["update_run_status_if_active"]
+        ).update_run_status_if_active
 
-        result = manager._try_status_with_fallback(
-            project_db, run_id, fallback_only_updater, "test_operation"
-        )
+        def failing_then_succeeding(conn, rid, status, error_message=None):
+            call_count["value"] += 1
+            if call_count["value"] == 1:
+                raise sqlite3.OperationalError("database is locked")
+            return original_update(conn, rid, status, error_message)
+
+        with patch(
+            "genglossary.runs.manager.update_run_status_if_active",
+            side_effect=failing_then_succeeding,
+        ):
+            result = manager._try_update_status(project_db, run_id, "cancelled")
+
+        assert result is True
+        assert call_count["value"] == 2
+
+    def test_conn_none_uses_fallback_directly(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """conn=Noneの場合、直接フォールバック接続を使用する"""
+        run_id = create_run(project_db, scope="full")
+        project_db.commit()  # Commit so fallback connection can see the run
+
+        result = manager._try_update_status(None, run_id, "cancelled")
         assert result is True
 
-    def test_returns_false_on_both_failure(
+        # Verify the status was actually updated
+        run = get_run(project_db, run_id)
+        assert run is not None
+        assert run["status"] == "cancelled"
+
+    def test_returns_false_when_both_connections_fail(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
         """両方の接続で失敗した場合にFalseを返す"""
         run_id = create_run(project_db, scope="full")
 
-        def always_fail_updater(conn: sqlite3.Connection, rid: int) -> bool:
-            return False
-
-        # Capture log messages to suppress warnings
         manager._broadcast_log = Mock()  # type: ignore
 
-        result = manager._try_status_with_fallback(
-            project_db, run_id, always_fail_updater, "test_operation"
-        )
+        with patch(
+            "genglossary.runs.manager.update_run_status_if_active",
+            side_effect=sqlite3.OperationalError("database is locked"),
+        ), patch(
+            "genglossary.runs.manager.database_connection",
+            side_effect=sqlite3.OperationalError("cannot open database"),
+        ):
+            result = manager._try_update_status(project_db, run_id, "cancelled")
+
         assert result is False
 
 
@@ -2268,9 +2291,9 @@ class TestFinalizeRunStatusReturnValue:
         """DB更新失敗時に(status, False)を返す"""
         run_id = create_run(project_db, scope="full")
 
-        # Mock _try_status_with_fallback to always fail
-        original_method = manager._try_status_with_fallback
-        manager._try_status_with_fallback = Mock(return_value=False)  # type: ignore
+        # Mock _try_update_status to always fail
+        original_method = manager._try_update_status
+        manager._try_update_status = Mock(return_value=False)  # type: ignore
 
         result = manager._finalize_run_status(
             project_db, run_id, pipeline_error=None
@@ -2280,39 +2303,9 @@ class TestFinalizeRunStatusReturnValue:
         assert result[1] is False
 
         # Restore original method
-        manager._try_status_with_fallback = original_method  # type: ignore
+        manager._try_update_status = original_method  # type: ignore
 
 
-class TestUpdateFailedStatusReturnValue:
-    """Tests for _update_failed_status return value."""
-
-    def test_returns_true_on_success(
-        self, manager: RunManager, project_db: sqlite3.Connection
-    ) -> None:
-        """更新成功時にTrueを返す"""
-        run_id = create_run(project_db, scope="full")
-
-        result = manager._update_failed_status(
-            project_db, run_id, "test error message"
-        )
-
-        assert result is True
-
-    def test_returns_false_on_failure(
-        self, manager: RunManager, project_db: sqlite3.Connection
-    ) -> None:
-        """更新失敗時にFalseを返す"""
-        run_id = create_run(project_db, scope="full")
-
-        # Mock _try_status_with_fallback to fail
-        manager._try_status_with_fallback = Mock(return_value=False)  # type: ignore
-        manager._broadcast_log = Mock()  # type: ignore
-
-        result = manager._update_failed_status(
-            project_db, run_id, "test error message"
-        )
-
-        assert result is False
 
 
 class TestSubscriberCompletedRunRegistration:

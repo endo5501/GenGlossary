@@ -422,21 +422,44 @@ class RunManager:
         ...
 
     def _try_update_status(
-        self, conn, run_id, status, error_message=None
+        self,
+        conn: sqlite3.Connection | None,
+        run_id: int,
+        status: str,
+        error_message: str | None = None,
     ) -> bool:
-        """汎用ステータス更新メソッド（エラーハンドリング・ログ出力付き）
+        """フォールバック接続付きステータス更新メソッド
 
-        update_run_status_if_active を使用し、共通のエラーハンドリングと
-        ログ出力パターンを提供。RunUpdateResult を使用して、
-        「存在しない」と「既に終了状態」を区別したログメッセージを出力。
+        update_run_status_if_active を使用し、プライマリ接続で失敗した場合は
+        新しいフォールバック接続で再試行。conn=None の場合は直接フォールバック。
+
+        以前の _try_status_with_fallback と _update_failed_status を統合。
+        lambda式によるコールバックパターンを排除し、直接呼び出しに簡素化。
 
         Args:
+            conn: プライマリDB接続（None可、例外時はフォールバック）
             status: 新しいステータス（'cancelled', 'completed', 'failed'）
             error_message: failedステータスの場合のエラーメッセージ
 
         Returns:
-            True: 成功またはno-op（既に終了状態または存在しない、フォールバック不要）
-            False: 失敗（フォールバック必要）
+            True: 成功、no-op（既に終了状態）、または存在しない場合
+            False: プライマリとフォールバック両方が例外で失敗した場合
+
+        フォールバックの流れ:
+            1. conn が有効 → プライマリ接続で試行
+            2. プライマリで例外 → フォールバック接続で再試行
+            3. conn が None → 直接フォールバック接続を使用
+            4. フォールバックも例外 → warning ログを出力し False を返す
+        """
+        ...
+
+    def _log_update_result(
+        self, run_id: int, status: str, result: RunUpdateResult
+    ) -> None:
+        """ステータス更新結果がno-opの場合にログを出力
+
+        RunUpdateResult を使用して、「存在しない」と「既に終了状態」を
+        区別したログメッセージを出力。
 
         ログメッセージの区別:
             - NOT_FOUND: "run not found"
@@ -471,24 +494,6 @@ class RunManager:
         """
         ...
 
-    def _update_failed_status(self, conn, run_id, error_message) -> bool:
-        """フォールバック接続付きでステータスを 'failed' に更新
-
-        1. 既存の conn でステータス更新を試行
-        2. 失敗した場合、新しい接続を作成してフォールバック
-        3. フォールバックも失敗した場合、warningログを出力
-
-        Note:
-            両方の接続が失敗しても、エラーログのブロードキャストは保証される。
-        """
-        if conn is not None and self._try_update_status(conn, run_id, error_message):
-            return
-
-        try:
-            with database_connection(self.db_path) as fallback_conn:
-                self._try_update_status(fallback_conn, run_id, error_message)
-        except Exception as e:
-            self._broadcast_log(run_id, {"level": "warning", "message": f"Failed to create fallback connection: {e}"})
 ```
 
 ## タイムスタンプ形式
