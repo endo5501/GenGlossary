@@ -14,6 +14,7 @@ import {
   useCurrentRun,
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
+import { SplitLayout } from '../components/common/SplitLayout'
 import { OccurrenceList } from '../components/common/OccurrenceList'
 import { getRowSelectionProps } from '../utils/getRowSelectionProps'
 
@@ -63,43 +64,46 @@ export function RefinedPage({ projectId }: RefinedPageProps) {
       loadingTestId="refined-loading"
       emptyTestId="refined-empty"
     >
-      <Box style={{ flex: 1 }}>
-        <Stack gap="sm">
-          {entries?.map((entry) => (
-            <Paper
-              key={entry.id}
-              withBorder
-              p="md"
-              {...getRowSelectionProps(entry, selectedId, setSelectedId)}
-            >
-              <Text fw={600} mb="xs">
-                {entry.term_name}
-              </Text>
-              <Text size="sm" lineClamp={2}>
-                {entry.definition}
-              </Text>
-            </Paper>
-          ))}
-        </Stack>
-      </Box>
+      <SplitLayout
+        list={
+          <Box style={{ flex: 1 }}>
+            <Stack gap="sm">
+              {entries?.map((entry) => (
+                <Paper
+                  key={entry.id}
+                  withBorder
+                  p="md"
+                  {...getRowSelectionProps(entry, selectedId, setSelectedId)}
+                >
+                  <Text fw={600} mb="xs">
+                    {entry.term_name}
+                  </Text>
+                  <Text size="sm" lineClamp={2}>
+                    {entry.definition}
+                  </Text>
+                </Paper>
+              ))}
+            </Stack>
+          </Box>
+        }
+        detail={selectedEntry ? (
+          <Paper data-testid="refined-detail-panel" withBorder p="md">
+            <Text fw={600} size="lg" mb="md">
+              {selectedEntry.term_name}
+            </Text>
 
-      {selectedEntry && (
-        <Paper data-testid="refined-detail-panel" withBorder p="md">
-          <Text fw={600} size="lg" mb="md">
-            {selectedEntry.term_name}
-          </Text>
+            <Text fw={500} mb="xs">
+              Definition
+            </Text>
+            <Text mb="md">{selectedEntry.definition}</Text>
 
-          <Text fw={500} mb="xs">
-            Definition
-          </Text>
-          <Text mb="md">{selectedEntry.definition}</Text>
-
-          <Text fw={500} mb="xs">
-            Occurrences ({selectedEntry.occurrences.length})
-          </Text>
-          <OccurrenceList occurrences={selectedEntry.occurrences} />
-        </Paper>
-      )}
+            <Text fw={500} mb="xs">
+              Occurrences ({selectedEntry.occurrences.length})
+            </Text>
+            <OccurrenceList occurrences={selectedEntry.occurrences} />
+          </Paper>
+        ) : null}
+      />
     </PageContainer>
   )
 }

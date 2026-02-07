@@ -12,6 +12,7 @@ import { IconRefresh } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useIssues, useReviewIssues, useCurrentRun } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
+import { SplitLayout } from '../components/common/SplitLayout'
 import { getIssueTypeColor } from '../utils/colors'
 import { getRowSelectionProps } from '../utils/getRowSelectionProps'
 import type { IssueType } from '../api/types'
@@ -74,51 +75,54 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
       loadingTestId="issues-loading"
       emptyTestId="issues-empty"
     >
-      <Box style={{ flex: 1 }}>
-        <Stack gap="sm">
-          {issues?.map((issue) => (
-            <Paper
-              key={issue.id}
-              withBorder
-              p="sm"
-              {...getRowSelectionProps(issue, selectedId, setSelectedId)}
+      <SplitLayout
+        list={
+          <Box style={{ flex: 1 }}>
+            <Stack gap="sm">
+              {issues?.map((issue) => (
+                <Paper
+                  key={issue.id}
+                  withBorder
+                  p="sm"
+                  {...getRowSelectionProps(issue, selectedId, setSelectedId)}
+                >
+                  <Group justify="space-between" mb="xs">
+                    <Group gap="xs">
+                      <Text fw={500}>{issue.term_name}</Text>
+                      <Badge
+                        color={getIssueTypeColor(issue.issue_type)}
+                        variant="light"
+                      >
+                        {issue.issue_type}
+                      </Badge>
+                    </Group>
+                  </Group>
+                  <Text size="sm">{issue.description}</Text>
+                </Paper>
+              ))}
+            </Stack>
+          </Box>
+        }
+        detail={selectedIssue ? (
+          <Paper data-testid="issue-detail-panel" withBorder p="md">
+            <Text fw={600} size="lg" mb="md">
+              {selectedIssue.term_name}
+            </Text>
+            <Badge
+              color={getIssueTypeColor(selectedIssue.issue_type)}
+              size="lg"
+              mb="md"
             >
-              <Group justify="space-between" mb="xs">
-                <Group gap="xs">
-                  <Text fw={500}>{issue.term_name}</Text>
-                  <Badge
-                    color={getIssueTypeColor(issue.issue_type)}
-                    variant="light"
-                  >
-                    {issue.issue_type}
-                  </Badge>
-                </Group>
-              </Group>
-              <Text size="sm">{issue.description}</Text>
-            </Paper>
-          ))}
-        </Stack>
-      </Box>
+              {selectedIssue.issue_type}
+            </Badge>
 
-      {selectedIssue && (
-        <Paper data-testid="issue-detail-panel" withBorder p="md">
-          <Text fw={600} size="lg" mb="md">
-            {selectedIssue.term_name}
-          </Text>
-          <Badge
-            color={getIssueTypeColor(selectedIssue.issue_type)}
-            size="lg"
-            mb="md"
-          >
-            {selectedIssue.issue_type}
-          </Badge>
-
-          <Text fw={500} mb="xs">
-            Description
-          </Text>
-          <Text>{selectedIssue.description}</Text>
-        </Paper>
-      )}
+            <Text fw={500} mb="xs">
+              Description
+            </Text>
+            <Text>{selectedIssue.description}</Text>
+          </Paper>
+        ) : null}
+      />
     </PageContainer>
   )
 }
