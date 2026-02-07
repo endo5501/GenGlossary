@@ -4,7 +4,7 @@ tags: [backend, refactoring, api-design]
 description: "Unify return types for status update functions in runs_repository"
 created_at: "2026-02-05T13:23:15Z"
 started_at: 2026-02-07T03:10:29Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T03:31:28Z # Do not modify manually
 ---
 
 # Unify return types for status update functions in runs_repository
