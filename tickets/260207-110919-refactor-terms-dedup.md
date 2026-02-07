@@ -4,7 +4,7 @@ tags: [refactor, backend, frontend]
 description: "Reduce ~70% code duplication between excluded terms and required terms implementations"
 created_at: "2026-02-07T11:09:19Z"
 started_at: 2026-02-07T11:13:01Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T12:02:37Z # Do not modify manually
 ---
 
 # 除外用語/必須用語のコード重複削減リファクタリング
