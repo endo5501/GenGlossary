@@ -279,6 +279,148 @@ class TestRequiredTermsOverrideExcluded:
             assert "量子コンピュータ" in result
 
 
+class TestRequiredTermsGuaranteedInOutput:
+    """Test that required terms are ALWAYS in the final output, even if LLM omits them."""
+
+    def test_required_term_included_when_llm_omits_from_classification(
+        self,
+        mock_llm_client: MagicMock,
+        sample_document: Document,
+        db_connection: sqlite3.Connection,
+    ) -> None:
+        """Test that required terms appear in output even when LLM omits them entirely."""
+        add_required_term(db_connection, "量子コンピュータ", "manual")
+
+        # LLM classification response does NOT include 量子コンピュータ at all
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(
+                llm_client=mock_llm_client,
+                required_term_repo=db_connection,
+            )
+            result = extractor.extract_terms([sample_document])
+
+            # Required term MUST be in the final result regardless of LLM response
+            assert "量子コンピュータ" in result
+            assert "東京" in result
+
+    def test_multiple_required_terms_included_when_llm_omits_all(
+        self,
+        mock_llm_client: MagicMock,
+        sample_document: Document,
+        db_connection: sqlite3.Connection,
+    ) -> None:
+        """Test that multiple required terms appear even when LLM omits all of them."""
+        add_required_term(db_connection, "量子コンピュータ", "manual")
+        add_required_term(db_connection, "量子ビット", "manual")
+
+        # LLM returns only one non-required term, omitting all required terms
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(
+                llm_client=mock_llm_client,
+                required_term_repo=db_connection,
+            )
+            result = extractor.extract_terms([sample_document])
+
+            assert "量子コンピュータ" in result
+            assert "量子ビット" in result
+            assert "東京" in result
+
+    def test_required_term_not_duplicated_when_llm_includes_it(
+        self,
+        mock_llm_client: MagicMock,
+        sample_document: Document,
+        db_connection: sqlite3.Connection,
+    ) -> None:
+        """Test that required term is not duplicated when LLM also returns it."""
+        add_required_term(db_connection, "量子コンピュータ", "manual")
+
+        # LLM classification DOES include the required term
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+                {"term": "量子コンピュータ", "category": "technical_term"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京", "量子コンピュータ"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(
+                llm_client=mock_llm_client,
+                required_term_repo=db_connection,
+            )
+            result = extractor.extract_terms([sample_document])
+
+            assert "量子コンピュータ" in result
+            assert result.count("量子コンピュータ") == 1
+
+
+class TestAnalyzeExtractionWithRequiredTerms:
+    """Test that analyze_extraction also merges required terms."""
+
+    def test_analyze_extraction_merges_required_terms(
+        self,
+        mock_llm_client: MagicMock,
+        sample_document: Document,
+        db_connection: sqlite3.Connection,
+    ) -> None:
+        """Test that analyze_extraction includes required terms in candidates and approved."""
+        add_required_term(db_connection, "量子コンピュータ", "manual")
+
+        # LLM omits the required term from classification
+        mock_llm_client.generate_structured.return_value = BatchTermClassificationResponse(
+            classifications=[
+                {"term": "東京", "category": "place_name"},
+            ]
+        )
+
+        with patch(
+            "genglossary.term_extractor.MorphologicalAnalyzer"
+        ) as mock_analyzer_class:
+            mock_analyzer = MagicMock()
+            mock_analyzer.extract_proper_nouns.return_value = ["東京"]
+            mock_analyzer_class.return_value = mock_analyzer
+
+            extractor = TermExtractor(
+                llm_client=mock_llm_client,
+                required_term_repo=db_connection,
+            )
+            analysis = extractor.analyze_extraction([sample_document])
+
+            # Required term should be in the approved list
+            assert "量子コンピュータ" in analysis.llm_approved
+            # Required term should be in candidates (merged before classification)
+            assert "量子コンピュータ" in analysis.sudachi_candidates
+
+
 class TestRequiredTermsWithNoRepo:
     """Test that TermExtractor works when required_term_repo is None."""
 
