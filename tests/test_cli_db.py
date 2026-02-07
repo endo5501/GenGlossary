@@ -79,6 +79,7 @@ class TestDbInit:
             "schema_version",
             "terms_excluded",
             "terms_extracted",
+            "terms_required",
         ]
         assert tables == expected_tables
 

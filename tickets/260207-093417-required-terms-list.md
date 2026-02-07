@@ -3,8 +3,8 @@ priority: 1
 tags: [feature, frontend, backend, terms]
 description: "Add required terms list feature to Terms page - ensures specified terms always appear in glossary"
 created_at: "2026-02-07T09:34:17Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-07T10:46:15Z # Do not modify manually
+closed_at: 2026-02-07T11:11:33Z # Do not modify manually
 ---
 
 # 追加必須用語一覧（Required Terms List）
@@ -64,23 +64,23 @@ Terms画面のタブに「必須用語」タブを追加（除外用語タブと
 
 ## Tasks
 
-- [ ] DB: `terms_required` テーブルのスキーマ追加
-- [ ] Model: `RequiredTerm` Pydanticモデルの作成
-- [ ] Repository: `required_term_repository.py` のCRUD関数実装
-- [ ] API: 必須用語エンドポイント（GET/POST/DELETE）の実装
-- [ ] Frontend: `useRequiredTerms` フックの作成
-- [ ] Frontend: Terms画面に「必須用語」タブの追加（一覧表示・追加・削除）
-- [ ] TermExtractor: 必須用語のマージロジック追加（候補リストへの強制追加）
-- [ ] TermExtractor: LLM分類結果から必須用語を除外しないガードの追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] DB: `terms_required` テーブルのスキーマ追加
+- [x] Model: `RequiredTerm` Pydanticモデルの作成
+- [x] Repository: `required_term_repository.py` のCRUD関数実装
+- [x] API: 必須用語エンドポイント（GET/POST/DELETE）の実装
+- [x] Frontend: `useRequiredTerms` フックの作成
+- [x] Frontend: Terms画面に「必須用語」タブの追加（一覧表示・追加・削除）
+- [x] TermExtractor: 必須用語のマージロジック追加（候補リストへの強制追加）
+- [x] TermExtractor: LLM分類結果から必須用語を除外しないガードの追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md (N/A - docs/architecture/ does not exist)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes

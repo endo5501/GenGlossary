@@ -108,6 +108,23 @@ export interface ExcludedTermCreateRequest {
   term_text: string
 }
 
+// Required term types
+export interface RequiredTermResponse {
+  id: number
+  term_text: string
+  source: 'manual'
+  created_at: string
+}
+
+export interface RequiredTermListResponse {
+  items: RequiredTermResponse[]
+  total: number
+}
+
+export interface RequiredTermCreateRequest {
+  term_text: string
+}
+
 // Provisional update request
 export interface ProvisionalUpdateRequest {
   definition?: string

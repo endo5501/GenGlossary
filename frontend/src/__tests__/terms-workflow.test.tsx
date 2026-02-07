@@ -154,6 +154,22 @@ const mockExcludedTerms = [
   },
 ]
 
+// Mock data for required terms
+const mockRequiredTerms = [
+  {
+    id: 1,
+    term_text: '量子もつれ',
+    source: 'manual' as const,
+    created_at: '2024-01-15T10:00:00Z',
+  },
+  {
+    id: 2,
+    term_text: 'エンタングルメント',
+    source: 'manual' as const,
+    created_at: '2024-01-15T10:01:00Z',
+  },
+]
+
 // Test wrapper with providers
 // Create a simple wrapper that provides all necessary contexts without RouterProvider
 // Since the pages themselves don't use useNavigate, we don't need RouterProvider for them
@@ -317,6 +333,25 @@ const excludedTermsHandlers = [
   }),
 ]
 
+// Required terms API handlers
+const requiredTermsHandlers = [
+  http.get(`${BASE_URL}/api/projects/:projectId/required-terms`, () => {
+    return HttpResponse.json({ items: mockRequiredTerms, total: mockRequiredTerms.length })
+  }),
+  http.post(`${BASE_URL}/api/projects/:projectId/required-terms`, async ({ request }) => {
+    const body = await request.json() as { term_text: string }
+    return HttpResponse.json({
+      id: mockRequiredTerms.length + 1,
+      term_text: body.term_text,
+      source: 'manual',
+      created_at: new Date().toISOString(),
+    }, { status: 201 })
+  }),
+  http.delete(`${BASE_URL}/api/projects/:projectId/required-terms/:termId`, () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+]
+
 // All test handlers
 const allTestHandlers = [
   ...handlers,
@@ -326,6 +361,7 @@ const allTestHandlers = [
   ...refinedHandlers,
   ...runsHandlers,
   ...excludedTermsHandlers,
+  ...requiredTermsHandlers,
 ]
 
 describe('TermsPage', () => {
@@ -1253,5 +1289,90 @@ describe('Excluded Terms', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
     expect(screen.getByText('除外用語を追加')).toBeInTheDocument()
+  })
+})
+
+describe('Required Terms', () => {
+  beforeEach(() => {
+    server.use(...allTestHandlers)
+  })
+
+  it('displays required terms tab', async () => {
+    renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('tab', { name: /必須用語/i })).toBeInTheDocument()
+  })
+
+  it('switches to required terms tab and displays required terms', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /必須用語/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('量子もつれ')).toBeInTheDocument()
+    })
+    expect(screen.getByText('エンタングルメント')).toBeInTheDocument()
+  })
+
+  it('can delete required term', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /必須用語/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('量子もつれ')).toBeInTheDocument()
+    })
+
+    const deleteButtons = screen.getAllByRole('button', { name: /remove from required/i })
+    await user.click(deleteButtons[0])
+  })
+
+  it('has add required term button in required tab', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /必須用語/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('量子もつれ')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: /add required term/i })).toBeInTheDocument()
+  })
+
+  it('opens add required term modal when clicking add button', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /必須用語/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('量子もつれ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /add required term/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    expect(screen.getByText('必須用語を追加')).toBeInTheDocument()
   })
 })

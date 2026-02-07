@@ -2,6 +2,7 @@
 
 from genglossary.api.routers.excluded_terms import router as excluded_terms_router
 from genglossary.api.routers.files import router as files_router
+from genglossary.api.routers.required_terms import router as required_terms_router
 from genglossary.api.routers.health import router as health_router
 from genglossary.api.routers.issues import router as issues_router
 from genglossary.api.routers.ollama import router as ollama_router
@@ -13,6 +14,7 @@ from genglossary.api.routers.terms import router as terms_router
 
 __all__ = [
     "excluded_terms_router",
+    "required_terms_router",
     "files_router",
     "health_router",
     "issues_router",
