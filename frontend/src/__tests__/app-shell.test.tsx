@@ -156,6 +156,22 @@ describe('AppShell', () => {
     })
   })
 
+  describe('GlobalTopBar scope labels', () => {
+    it('should show "Generate → Refine" instead of "Full Pipeline" for full scope', async () => {
+      await renderGlobalTopBar({ projectId: 1 })
+
+      // Open the scope selector dropdown
+      const scopeSelector = screen.getByTestId('scope-selector')
+      const input = scopeSelector.querySelector('input')!
+      await userEvent.setup().click(input)
+
+      // Should show "Generate → Refine" label
+      expect(screen.getByText('Generate → Refine')).toBeInTheDocument()
+      // Should NOT show "Full Pipeline"
+      expect(screen.queryByText('Full Pipeline')).not.toBeInTheDocument()
+    })
+  })
+
   describe('GlobalTopBar button states (with projectId)', () => {
     it('should disable Run button when status is running', async () => {
       await renderGlobalTopBar({ projectId: 1, status: 'running' })
