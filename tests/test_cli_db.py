@@ -77,6 +77,8 @@ class TestDbInit:
             "metadata",
             "runs",
             "schema_version",
+            "term_synonym_groups",
+            "term_synonym_members",
             "terms_excluded",
             "terms_extracted",
             "terms_required",
