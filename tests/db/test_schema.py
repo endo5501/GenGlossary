@@ -34,6 +34,7 @@ class TestSchemaInitialization:
             "schema_version",
             "terms_excluded",
             "terms_extracted",
+            "terms_required",
         ]
         assert tables == expected_tables
 
@@ -42,7 +43,7 @@ class TestSchemaInitialization:
         initialize_db(in_memory_db)
 
         version = get_schema_version(in_memory_db)
-        assert version == 5  # v5: terms_excluded table added
+        assert version == 6  # v6: terms_required table added
 
     def test_initialize_db_is_idempotent(self, in_memory_db: sqlite3.Connection) -> None:
         """Test that initialize_db can be called multiple times safely."""
@@ -69,6 +70,7 @@ class TestSchemaInitialization:
             "schema_version",
             "terms_excluded",
             "terms_extracted",
+            "terms_required",
         ]
         assert tables == expected_tables
 
