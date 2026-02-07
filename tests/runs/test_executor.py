@@ -2850,18 +2850,12 @@ class TestExtractPreservesUserNotes:
                 ("test.md", "GPは医師です。量子ビットは基本単位。", "hash123"),
             )
 
-        # Mock LLM to return same terms
-        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory:
-            mock_llm_client = MagicMock()
-            mock_llm_factory.return_value = mock_llm_client
-
-            # Mock extractor to return terms including GP
-            mock_llm_client.generate_structured.return_value = MagicMock(
-                terms=[
-                    ClassifiedTerm(term="GP", category=TermCategory.TECHNICAL_TERM),
-                    ClassifiedTerm(term="新用語", category=TermCategory.TECHNICAL_TERM),
-                ]
-            )
+        # Mock TermExtractor to return terms including GP
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor:
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="GP", category=TermCategory.TECHNICAL_TERM),
+                ClassifiedTerm(term="新用語", category=TermCategory.TECHNICAL_TERM),
+            ]
 
             executor.execute(project_db, "extract", execution_context)
 

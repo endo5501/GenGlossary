@@ -23,7 +23,13 @@ from genglossary.db.provisional_repository import (
 )
 from genglossary.db.refined_repository import create_refined_terms_batch, delete_all_refined
 from genglossary.db.runs_repository import update_run_progress
-from genglossary.db.term_repository import create_terms_batch, delete_all_terms, list_all_terms
+from genglossary.db.term_repository import (
+    backup_user_notes,
+    create_terms_batch,
+    delete_all_terms,
+    list_all_terms,
+    restore_user_notes,
+)
 from genglossary.document_loader import DocumentLoader
 from genglossary.glossary_generator import GlossaryGenerator
 from genglossary.glossary_refiner import GlossaryRefiner
@@ -325,6 +331,11 @@ class PipelineExecutor:
 
         self._check_cancellation(context)  # Raises if cancelled
 
+        # Backup user_notes before clearing terms (extract scope only)
+        user_notes_backup: dict[str, str] = {}
+        if scope_enum == PipelineScope.EXTRACT:
+            user_notes_backup = backup_user_notes(conn)
+
         # Clear tables before execution
         self._clear_tables_for_scope(conn, scope_enum)
 
@@ -343,6 +354,12 @@ class PipelineExecutor:
             raise ValueError(f"Unknown scope: {scope_enum}")
 
         handler(conn, context, doc_root)
+
+        # Restore user_notes after extract
+        if user_notes_backup:
+            with transaction(conn):
+                restore_user_notes(conn, user_notes_backup)
+
         self._log(context, "info", "Pipeline execution completed")
 
     def _load_documents(
@@ -458,14 +475,24 @@ class PipelineExecutor:
             raise RuntimeError("Cannot execute full pipeline without extracted terms")
         extracted_terms = [row["term_text"] for row in term_rows]
 
+        # Build user_notes_map from DB
+        user_notes_map: dict[str, str] = {}
+        for row in term_rows:
+            try:
+                notes = row["user_notes"]
+            except (KeyError, IndexError):
+                notes = ""
+            if notes:
+                user_notes_map[row["term_text"]] = notes
+
         # Step 3: Generate glossary
-        glossary = self._do_generate(conn, context, documents, extracted_terms)
+        glossary = self._do_generate(conn, context, documents, extracted_terms, user_notes_map)
 
         # Step 4: Review glossary
-        issues = self._do_review(conn, context, glossary)
+        issues = self._do_review(conn, context, glossary, user_notes_map)
 
         # Step 5: Refine glossary
-        self._do_refine(conn, context, glossary, issues, documents)
+        self._do_refine(conn, context, glossary, issues, documents, user_notes_map)
 
     @_cancellable
     def _execute_extract(
@@ -638,6 +665,7 @@ class PipelineExecutor:
         context: ExecutionContext,
         documents: list[Document],
         extracted_terms: list[str] | list[ClassifiedTerm],
+        user_notes_map: dict[str, str] | None = None,
     ) -> Glossary:
         """Execute glossary generation and save to DB.
 
@@ -663,6 +691,7 @@ class PipelineExecutor:
                 extracted_terms, documents,
                 term_progress_callback=progress_cb,
                 cancel_event=context.cancel_event,
+                user_notes_map=user_notes_map,
             )
         except Exception as e:
             self._log(context, "error", f"Generation failed: {e}")
@@ -680,6 +709,7 @@ class PipelineExecutor:
         conn: sqlite3.Connection,
         context: ExecutionContext,
         glossary: Glossary,
+        user_notes_map: dict[str, str] | None = None,
     ) -> list:
         """Execute glossary review and save issues to DB.
 
@@ -722,6 +752,7 @@ class PipelineExecutor:
                 glossary,
                 cancel_event=context.cancel_event,
                 batch_progress_callback=on_batch_progress,
+                user_notes_map=user_notes_map,
             )
         except Exception as e:
             self._log(context, "error", f"Review failed: {e}")
@@ -750,6 +781,7 @@ class PipelineExecutor:
         glossary: Glossary,
         issues: list,
         documents: list[Document],
+        user_notes_map: dict[str, str] | None = None,
     ) -> Glossary:
         """Execute glossary refinement and save to DB.
 
@@ -777,6 +809,7 @@ class PipelineExecutor:
                     glossary, issues, documents,
                     term_progress_callback=progress_cb,
                     cancel_event=context.cancel_event,
+                    user_notes_map=user_notes_map,
                 )
             except Exception as e:
                 self._log(context, "error", f"Refinement failed: {e}")
