@@ -14,6 +14,7 @@ from genglossary.db.excluded_term_repository import (
     bulk_add_excluded_terms,
     get_excluded_term_texts,
 )
+from genglossary.db.required_term_repository import get_required_term_texts
 from genglossary.utils.callback import safe_callback
 from genglossary.utils.prompt_escape import wrap_user_data
 
@@ -111,6 +112,7 @@ class TermExtractor:
         self,
         llm_client: BaseLLMClient,
         excluded_term_repo: sqlite3.Connection | None = None,
+        required_term_repo: sqlite3.Connection | None = None,
     ) -> None:
         """Initialize the TermExtractor.
 
@@ -119,10 +121,14 @@ class TermExtractor:
             excluded_term_repo: Optional database connection for excluded terms.
                 If provided, excluded terms will be filtered before LLM classification,
                 and terms classified as common_noun will be automatically added.
+            required_term_repo: Optional database connection for required terms.
+                If provided, required terms will be merged into candidates and
+                protected from common_noun exclusion.
         """
         self.llm_client = llm_client
         self._morphological_analyzer = MorphologicalAnalyzer()
         self._excluded_term_repo = excluded_term_repo
+        self._required_term_repo = required_term_repo
 
     def _filter_empty_documents(self, documents: list[Document]) -> list[Document]:
         """Filter out empty or whitespace-only documents.
@@ -135,8 +141,20 @@ class TermExtractor:
         """
         return [doc for doc in documents if doc.content and doc.content.strip()]
 
+    def _get_required_term_texts(self) -> set[str]:
+        """Get the set of required term texts.
+
+        Returns:
+            Set of required term texts, or empty set if no repo is provided.
+        """
+        if not self._required_term_repo:
+            return set()
+        return get_required_term_texts(self._required_term_repo)
+
     def _filter_excluded_terms(self, candidates: list[str]) -> list[str]:
         """Filter out terms that are in the exclusion list.
+
+        Required terms are not filtered even if they appear in the exclusion list.
 
         Args:
             candidates: List of candidate terms from morphological analysis.
@@ -148,12 +166,37 @@ class TermExtractor:
             return candidates
 
         excluded = get_excluded_term_texts(self._excluded_term_repo)
-        return [c for c in candidates if c not in excluded]
+        required = self._get_required_term_texts()
+        return [c for c in candidates if c not in excluded or c in required]
+
+    def _merge_required_terms(self, candidates: list[str]) -> list[str]:
+        """Merge required terms into the candidate list.
+
+        Required terms that are not already in the candidate list are appended.
+
+        Args:
+            candidates: List of candidate terms.
+
+        Returns:
+            List of candidates with required terms merged.
+        """
+        required = self._get_required_term_texts()
+        if not required:
+            return candidates
+
+        existing = set(candidates)
+        merged = list(candidates)
+        for term in sorted(required):  # Sort for deterministic order
+            if term not in existing:
+                merged.append(term)
+        return merged
 
     def _add_common_nouns_to_exclusion(
         self, classification: "TermClassificationResponse"
     ) -> None:
         """Add common_noun terms to the exclusion list.
+
+        Required terms are excluded from auto-exclusion even if classified as common_noun.
 
         Args:
             classification: Classification results from LLM.
@@ -165,7 +208,12 @@ class TermExtractor:
             TermCategory.COMMON_NOUN.value, []
         )
         if common_nouns:
-            bulk_add_excluded_terms(self._excluded_term_repo, common_nouns, "auto")
+            required = self._get_required_term_texts()
+            filtered_common_nouns = [t for t in common_nouns if t not in required]
+            if filtered_common_nouns:
+                bulk_add_excluded_terms(
+                    self._excluded_term_repo, filtered_common_nouns, "auto"
+                )
 
     def _combine_document_content(self, documents: list[Document]) -> str:
         """Combine document content for use in prompts.
@@ -235,10 +283,13 @@ class TermExtractor:
 
         # Step 2: Filter out excluded terms (if repo is provided)
         candidates = self._filter_excluded_terms(candidates)
+
+        # Step 3: Merge required terms (if repo is provided)
+        candidates = self._merge_required_terms(candidates)
         if not candidates:
             return []
 
-        # Step 3: Classify terms (Phase 1 of LLM processing)
+        # Step 4: Classify terms (Phase 1 of LLM processing)
         classification = self._classify_terms(
             candidates,
             non_empty_docs,
@@ -246,10 +297,10 @@ class TermExtractor:
             progress_callback=progress_callback,
         )
 
-        # Step 4: Add common_noun terms to exclusion list (if repo is provided)
+        # Step 5: Add common_noun terms to exclusion list (if repo is provided)
         self._add_common_nouns_to_exclusion(classification)
 
-        # Step 5: Return based on return_categories flag
+        # Step 6: Return based on return_categories flag
         if return_categories:
             # Return all categories as ClassifiedTerm objects
             return self._get_classified_terms(classification)
@@ -727,6 +778,7 @@ JSON形式で回答してください:
         """Select terms from classification results, excluding common nouns.
 
         Automatically approves all terms that are not classified as common nouns.
+        Required terms are always included, even if classified as common_noun.
         No additional LLM call is needed - classification determines approval.
 
         Args:
@@ -734,13 +786,18 @@ JSON形式で回答してください:
             documents: List of documents for context (unused, kept for compatibility).
 
         Returns:
-            List of approved terms (all non-common-noun terms).
+            List of approved terms (all non-common-noun terms + required terms).
         """
+        required = self._get_required_term_texts()
+
         # Collect all non-common-noun terms - they are automatically approved
         approved: list[str] = []
         for category, terms in classification.classified_terms.items():
             if category != TermCategory.COMMON_NOUN.value:
                 approved.extend(terms)
+            else:
+                # Include required terms even from common_noun category
+                approved.extend(t for t in terms if t in required)
 
         return self._process_terms(approved)
 
