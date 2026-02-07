@@ -338,20 +338,16 @@ class TestWindowsDrivePathRejection:
         assert response.status_code == 400
         assert "absolute" in response.json()["detail"].lower()
 
-    def test_create_file_allows_colon_not_at_start(
+    def test_create_file_rejects_colon_anywhere(
         self, test_project_setup, client: TestClient
     ):
-        """Test that colons not in drive position are allowed."""
+        """Test that colons are rejected in any position (Windows-invalid)."""
         project_id = test_project_setup["project_id"]
 
-        # Colon in filename (not drive pattern) should be allowed
-        # Note: This may not be valid on all filesystems, but the validation
-        # only targets drive letters at the start
         payload = {"file_name": "notes/2025-01-01: Meeting.md", "content": "content"}
         response = client.post(f"/api/projects/{project_id}/files", json=payload)
 
-        # This should pass validation (colon is not at position 1)
-        assert response.status_code == 201
+        assert response.status_code == 400
 
     def test_create_files_bulk_rejects_windows_drive_path(
         self, test_project_setup, client: TestClient
@@ -1125,5 +1121,81 @@ class TestSecurityCharacterValidation:
 
         payload = {"file_name": "file\u2060name.md", "content": "content"}
         response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+
+class TestWindowsInvalidCharacters:
+    """Tests for Windows-invalid character blocking (:, <, >, \", |, ?, *)."""
+
+    @pytest.mark.parametrize(
+        "char,desc",
+        [
+            ("<", "less-than"),
+            (">", "greater-than"),
+            ('"', "double-quote"),
+            ("|", "pipe"),
+            ("?", "question-mark"),
+            ("*", "asterisk"),
+            (":", "colon"),
+        ],
+    )
+    def test_rejects_windows_invalid_char_in_filename(
+        self, test_project_setup, client: TestClient, char: str, desc: str
+    ):
+        """Test that Windows-invalid characters are rejected in filenames."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": f"file{char}name.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400, f"Expected 400 for {desc} ({char!r})"
+
+    @pytest.mark.parametrize(
+        "char,desc",
+        [
+            ("<", "less-than"),
+            (">", "greater-than"),
+            ('"', "double-quote"),
+            ("|", "pipe"),
+            ("?", "question-mark"),
+            ("*", "asterisk"),
+            (":", "colon"),
+        ],
+    )
+    def test_rejects_windows_invalid_char_in_directory(
+        self, test_project_setup, client: TestClient, char: str, desc: str
+    ):
+        """Test that Windows-invalid characters are rejected in directory names."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {"file_name": f"dir{char}name/file.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400, f"Expected 400 for {desc} ({char!r})"
+
+    def test_rejects_ads_pattern(self, test_project_setup, client: TestClient):
+        """Test that NTFS Alternate Data Stream pattern is rejected."""
+        project_id = test_project_setup["project_id"]
+
+        # ADS pattern: file.txt:stream - blocked because colon is forbidden
+        payload = {"file_name": "file.txt:hidden.md", "content": "content"}
+        response = client.post(f"/api/projects/{project_id}/files", json=payload)
+
+        assert response.status_code == 400
+
+    def test_bulk_rejects_windows_invalid_chars(
+        self, test_project_setup, client: TestClient
+    ):
+        """Test that bulk create rejects Windows-invalid characters."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "valid.md", "content": "content"},
+                {"file_name": "file<name.md", "content": "content"},
+            ]
+        }
+        response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
 
         assert response.status_code == 400
