@@ -54,16 +54,19 @@ export const mockTerms: TermResponse[] = [
     id: 1,
     term_text: '量子コンピュータ',
     category: '技術用語',
+    user_notes: '',
   },
   {
     id: 2,
     term_text: '量子ビット',
     category: '技術用語',
+    user_notes: '',
   },
   {
     id: 3,
     term_text: '重ね合わせ',
     category: null,
+    user_notes: '',
   },
 ]
 
@@ -312,6 +315,7 @@ export const handlers = [
       id: mockTerms.length + 1,
       term_text: body.term_text,
       category: body.category ?? null,
+      user_notes: '',
     }
     return HttpResponse.json(newTerm, { status: 201 })
   }),

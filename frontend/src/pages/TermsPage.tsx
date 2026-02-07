@@ -8,6 +8,7 @@ import {
   Paper,
   Stack,
   TextInput,
+  Textarea,
   Modal,
   ActionIcon,
   Tabs,
@@ -15,7 +16,7 @@ import {
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconPlus, IconRefresh, IconTrash, IconBan, IconList, IconPencil, IconCheck, IconX, IconStar } from '@tabler/icons-react'
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   useTerms,
   useCreateTerm,
@@ -56,6 +57,17 @@ export function TermsPage({ projectId }: TermsPageProps) {
   const [activeTab, setActiveTab] = useState<string | null>('terms')
   const [editingCategoryValue, setEditingCategoryValue] = useState<string | null>(null)
   const isEditingCategory = editingCategoryValue !== null
+  const [userNotesValue, setUserNotesValue] = useState('')
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
 
   const createTerm = useCreateTerm(projectId)
   const updateTerm = useUpdateTerm(projectId)
@@ -135,7 +147,26 @@ export function TermsPage({ projectId }: TermsPageProps) {
       resetCategoryEdit()
     }
     setSelectedId(termId)
+    const term = terms?.find((t) => t.id === termId)
+    setUserNotesValue(term?.user_notes ?? '')
   }
+
+  const handleUserNotesChange = useCallback((value: string) => {
+    setUserNotesValue(value)
+
+    // Debounce save (500ms)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      if (selectedTerm) {
+        updateTerm.mutate({
+          termId: selectedTerm.id,
+          data: { user_notes: value },
+        })
+      }
+    }, 500)
+  }, [selectedTerm, updateTerm])
 
   const handleSaveCategory = () => {
     if (!selectedTerm || updateTerm.isPending || editingCategoryValue === null) return
@@ -415,6 +446,15 @@ export function TermsPage({ projectId }: TermsPageProps) {
                   </Tooltip>
                 </Group>
               )}
+
+              <Textarea
+                label="補足情報"
+                placeholder="この用語に関する補足情報を入力（用語集生成時にLLMへ提供されます）"
+                value={userNotesValue}
+                onChange={(e) => handleUserNotesChange(e.target.value)}
+                minRows={3}
+                autosize
+              />
             </Paper>
           ) : null}
         />
