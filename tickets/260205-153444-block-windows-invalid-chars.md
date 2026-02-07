@@ -4,7 +4,7 @@ tags: [security, backend]
 description: "Block Windows-invalid characters in file paths"
 created_at: "2026-02-05T15:34:44Z"
 started_at: 2026-02-07T06:23:13Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T09:23:45Z # Do not modify manually
 ---
 
 # Block Windows-invalid characters in file paths
