@@ -1,6 +1,7 @@
 """Tests for Files API endpoints."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -1197,3 +1198,78 @@ class TestWindowsInvalidCharacters:
         response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
 
         assert response.status_code == 400
+
+
+class TestCreateFilesBulkAutoExtract:
+    """Tests for auto-extract trigger on bulk file creation."""
+
+    def test_create_files_bulk_triggers_extract(
+        self, test_project_setup, client: TestClient
+    ):
+        """ファイル追加成功後にExtractが自動的に開始される"""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "file1.txt", "content": "Content 1"},
+            ]
+        }
+
+        with patch("genglossary.api.routers.files.get_run_manager") as mock_get_manager:
+            mock_manager = MagicMock()
+            mock_manager.start_run.return_value = 42  # run_id
+            mock_get_manager.return_value = mock_manager
+
+            response = client.post(
+                f"/api/projects/{project_id}/files/bulk", json=payload
+            )
+
+        assert response.status_code == 201
+        data = response.json()
+
+        # Response should include extract_started flag
+        assert data["extract_started"] is True
+        assert data["extract_skipped_reason"] is None
+
+        # Files should be in the response
+        assert len(data["files"]) == 1
+        assert data["files"][0]["file_name"] == "file1.txt"
+
+        # RunManager.start_run should have been called with extract scope
+        mock_manager.start_run.assert_called_once_with(
+            scope="extract", triggered_by="auto"
+        )
+
+    def test_create_files_bulk_skips_extract_when_run_active(
+        self, test_project_setup, client: TestClient
+    ):
+        """既にRunが実行中の場合、ファイル保存は成功しExtractはスキップされる"""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "file1.txt", "content": "Content 1"},
+            ]
+        }
+
+        with patch("genglossary.api.routers.files.get_run_manager") as mock_get_manager:
+            mock_manager = MagicMock()
+            mock_manager.start_run.side_effect = RuntimeError(
+                "Run already running: 10"
+            )
+            mock_get_manager.return_value = mock_manager
+
+            response = client.post(
+                f"/api/projects/{project_id}/files/bulk", json=payload
+            )
+
+        assert response.status_code == 201
+        data = response.json()
+
+        # Extract should be skipped but files saved
+        assert data["extract_started"] is False
+        assert "already running" in data["extract_skipped_reason"]
+
+        # Files should still be created
+        assert len(data["files"]) == 1
+        assert data["files"][0]["file_name"] == "file1.txt"
