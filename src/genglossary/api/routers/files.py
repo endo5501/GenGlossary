@@ -5,14 +5,16 @@ import unicodedata
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
-from genglossary.api.dependencies import get_project_db
+from genglossary.api.dependencies import get_project_db, get_run_manager
 from genglossary.db.connection import transaction
 from genglossary.api.schemas.file_schemas import (
     FileCreateBulkRequest,
+    FileCreateBulkResponse,
     FileCreateRequest,
     FileDetailResponse,
     FileResponse,
 )
+from genglossary.runs.manager import RunManager
 from genglossary.db.document_repository import (
     create_document,
     delete_document,
@@ -301,25 +303,28 @@ async def create_file(
 
 
 @router.post(
-    "/bulk", response_model=list[FileResponse], status_code=status.HTTP_201_CREATED
+    "/bulk", response_model=FileCreateBulkResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_files_bulk(
     project_id: int = Path(..., description="Project ID"),
     request: FileCreateBulkRequest = Body(...),
     project_db: sqlite3.Connection = Depends(get_project_db),
-) -> list[FileResponse]:
-    """Add multiple document files to the project.
+    manager: RunManager = Depends(get_run_manager),
+) -> FileCreateBulkResponse:
+    """Add multiple document files to the project and auto-trigger extract.
 
     This is an atomic operation - if any file fails validation or already exists,
-    none of the files will be created.
+    none of the files will be created. After successful creation, an extract run
+    is automatically triggered.
 
     Args:
         project_id: Project ID (path parameter).
         request: Bulk file creation request with list of files.
         project_db: Project database connection.
+        manager: Run manager for auto-triggering extract.
 
     Returns:
-        list[FileResponse]: List of created documents.
+        FileCreateBulkResponse: Created documents with extract status.
 
     Raises:
         HTTPException: 400 if any file name or extension is invalid.
@@ -365,14 +370,27 @@ async def create_files_bulk(
             )
         raise
 
-    # Return created documents
-    responses = []
+    # Build file responses
+    file_responses = []
     for doc_id in created_ids:
         row = get_document(project_db, doc_id)
         assert row is not None
-        responses.append(FileResponse.from_db_row(row))
+        file_responses.append(FileResponse.from_db_row(row))
 
-    return responses
+    # Auto-trigger extract run
+    extract_started = False
+    extract_skipped_reason: str | None = None
+    try:
+        manager.start_run(scope="extract", triggered_by="auto")
+        extract_started = True
+    except RuntimeError as e:
+        extract_skipped_reason = str(e)
+
+    return FileCreateBulkResponse(
+        files=file_responses,
+        extract_started=extract_started,
+        extract_skipped_reason=extract_skipped_reason,
+    )
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
