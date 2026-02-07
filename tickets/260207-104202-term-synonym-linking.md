@@ -3,8 +3,8 @@ priority: 3
 tags: [feature, frontend, backend, pipeline, llm]
 description: "Add synonym linking between terms to aggregate context and improve glossary accuracy"
 created_at: "2026-02-07T10:42:02Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-07T15:14:19Z # Do not modify manually
+closed_at: 2026-02-07T15:48:45Z # Do not modify manually
 ---
 
 # 用語の同義語リンク（Synonym Linking）機能
@@ -179,29 +179,117 @@ def _find_term_occurrences(self, term, documents, synonyms=None):
 
 ## Tasks
 
-- [ ] DB: `term_synonym_groups` / `term_synonym_members` テーブルのスキーマ追加
-- [ ] Model: `SynonymGroup` / `SynonymMember` Pydanticモデルの作成
-- [ ] Repository: `synonym_repository.py` のCRUD関数実装（グループ作成・削除、メンバー追加・削除・代表変更）
-- [ ] Repository: 用語テキストから所属グループと同義語一覧を取得するクエリ
-- [ ] API: 同義語グループエンドポイント（GET/POST/DELETE/PATCH）の実装
-- [ ] Frontend: `useSynonymGroups` フックの作成
-- [ ] Frontend: Terms画面の詳細パネルに同義語管理UI追加
-- [ ] Pipeline/Generator: `_find_term_occurrences()` を同義語対応に拡張（出現箇所統合）
-- [ ] Pipeline/Generator: `_build_definition_prompt()` に同義語情報を含める
-- [ ] Pipeline/Reviewer: レビュープロンプトに同義語情報を付加
-- [ ] Pipeline/Refiner: 改善プロンプトに同義語の出現コンテキストも参照可能にする
-- [ ] Pipeline/Executor: パイプライン実行時に同義語グループをDBから読み込み各ステップに渡す
-- [ ] Output: MarkdownWriterで代表用語に別名を記載
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] DB: `term_synonym_groups` / `term_synonym_members` テーブルのスキーマ追加
+- [x] Model: `SynonymGroup` / `SynonymMember` Pydanticモデルの作成
+- [x] Repository: `synonym_repository.py` のCRUD関数実装（グループ作成・削除、メンバー追加・削除・代表変更）
+- [x] Repository: 用語テキストから所属グループと同義語一覧を取得するクエリ
+- [x] API: 同義語グループエンドポイント（GET/POST/DELETE/PATCH）の実装
+- [x] Frontend: `useSynonymGroups` フックの作成
+- [x] Frontend: Terms画面の詳細パネルに同義語管理UI追加
+- [x] Pipeline/Generator: `_find_term_occurrences()` を同義語対応に拡張（出現箇所統合）
+- [x] Pipeline/Generator: `_build_definition_prompt()` に同義語情報を含める
+- [x] Pipeline/Reviewer: レビュープロンプトに同義語情報を付加
+- [x] Pipeline/Refiner: 改善プロンプトに同義語の出現コンテキストも参照可能にする
+- [x] Pipeline/Executor: パイプライン実行時に同義語グループをDBから読み込み各ステップに渡す
+- [x] Output: MarkdownWriterで代表用語に別名を記載
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
+
+## Design
+
+### 実装方針
+- ボトムアップで実装: DB → Model → Repository → API → Frontend → Pipeline
+- TDDで各レイヤーのテストを先に書く
+
+### 1. データベースとモデル
+
+**DBスキーマ（v7 → v8）**
+
+`schema.py` の `initialize_db()` に2テーブルを追加。マイグレーション関数 `_migrate_v7_to_v8()` で既存DBに対応。
+
+```sql
+CREATE TABLE IF NOT EXISTS term_synonym_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    primary_term_text TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS term_synonym_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL REFERENCES term_synonym_groups(id) ON DELETE CASCADE,
+    term_text TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+**Pydanticモデル（`models/synonym.py`）**
+
+- `SynonymMember(id, group_id, term_text)`
+- `SynonymGroup(id, primary_term_text, members: list[SynonymMember])`
+
+**リポジトリ（`db/synonym_repository.py`）**
+
+- `create_group(conn, primary_term_text, member_texts) -> int`
+- `delete_group(conn, group_id)`
+- `add_member(conn, group_id, term_text)`
+- `remove_member(conn, member_id)`
+- `update_primary_term(conn, group_id, new_primary_text)`
+- `list_groups(conn) -> list[SynonymGroup]`
+- `get_synonyms_for_term(conn, term_text) -> list[str]`
+
+### 2. API エンドポイント
+
+**ルーター（`api/routers/synonym_groups.py`）**
+
+```
+GET    /api/projects/{pid}/synonym-groups                — 全グループ一覧
+POST   /api/projects/{pid}/synonym-groups                — グループ作成
+DELETE /api/projects/{pid}/synonym-groups/{gid}           — グループ削除
+PATCH  /api/projects/{pid}/synonym-groups/{gid}           — 代表用語変更
+POST   /api/projects/{pid}/synonym-groups/{gid}/members   — メンバー追加
+DELETE /api/projects/{pid}/synonym-groups/{gid}/members/{mid} — メンバー削除
+```
+
+**APIスキーマ（`api/schemas/synonym_group_schemas.py`）**
+
+- `SynonymGroupResponse(id, primary_term_text, members[])`
+- `SynonymGroupCreateRequest(primary_term_text, member_texts[])`
+- `SynonymGroupUpdateRequest(primary_term_text)`
+- `SynonymMemberCreateRequest(term_text)`
+
+### 3. フロントエンド
+
+- `api/types.ts` に `SynonymGroupResponse`, `SynonymMemberResponse` 型追加
+- `api/hooks/useSynonymGroups.ts` フック作成（CRUD操作）
+- `components/common/SynonymGroupPanel.tsx` コンポーネント作成
+- `TermsPage.tsx` の詳細パネルに `SynonymGroupPanel` を統合
+
+### 4. パイプライン統合
+
+**GlossaryGenerator:**
+- `_find_term_occurrences()` に `synonyms` 引数追加、同義語でも検索し出現箇所を統合
+- `_build_definition_prompt()` に同義語情報を追記
+- `generate()` に `synonym_groups` 引数追加、代表用語のみ用語集に掲載
+
+**GlossaryReviewer:**
+- `review()` に `synonym_groups` 引数追加、同義語間の一貫性チェック
+
+**GlossaryRefiner:**
+- `refine()` に `synonym_groups` 引数追加、同義語の出現コンテキスト参照
+
+**PipelineExecutor:**
+- 実行開始時にDBから同義語グループを一括読み込み、各ステップに渡す
+
+**MarkdownWriter:**
+- `write()` に `synonym_groups` 引数追加、代表用語に `**別名**` を追記
 
 ## Notes
 

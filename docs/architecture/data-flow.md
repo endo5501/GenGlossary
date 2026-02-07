@@ -170,6 +170,40 @@ Extract時のuser_notes保持:
 - `full`スコープ: `_execute_full` → `_build_user_notes_map` → `_do_generate`/`_do_review`/`_do_refine`
 - 個別スコープ: `_execute_generate`/`_execute_review`/`_execute_refine` でもそれぞれ `_build_user_notes_map` を呼び出し
 
+## 同義語グループのフロー
+
+```
+ユーザー → Terms画面で同義語グループを作成/管理
+                ↓
+        synonym-groups API → DB: term_synonym_groups / term_synonym_members
+                ↓
+    ┌───────────────────────────────────────────┐
+    │ Pipeline実行時:                           │
+    │   _load_synonym_groups(conn)              │
+    │   → list[SynonymGroup]をDBから一括読込   │
+    ├───────────────────────────────────────────┤
+    │ Generate:                                 │
+    │   - 非primary用語をスキップ              │
+    │   - primary用語の出現箇所に同義語の       │
+    │     出現箇所も統合                        │
+    │   - プロンプトに「同義語」情報を付加      │
+    ├───────────────────────────────────────────┤
+    │ Review:                                   │
+    │   - 用語リストに同義語情報を付記          │
+    ├───────────────────────────────────────────┤
+    │ Refine:                                   │
+    │   - 改善プロンプトに同義語情報を付加      │
+    ├───────────────────────────────────────────┤
+    │ MarkdownWriter:                           │
+    │   - 代表用語に **別名** セクションを追加  │
+    └───────────────────────────────────────────┘
+```
+
+**synonym_groupsのスコープ:**
+- `terms_extracted`テーブルとは独立（Extractで消えない）
+- Pipeline実行時にDBから読み込み、各ステップに渡される
+- 用語集には代表用語のみ掲載（メンバー分だけ項目は増えない）
+
 ## Extract の実行タイミング
 
 用語抽出（Extract）は Full Pipeline（`scope="full"`）から除外されており、以下のタイミングで実行されます:

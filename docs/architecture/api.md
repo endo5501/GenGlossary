@@ -1089,6 +1089,14 @@ async def list_terms(
 - `PATCH /api/projects/{project_id}` - プロジェクト設定更新
 - `DELETE /api/projects/{project_id}` - プロジェクト削除
 
+**Synonym Groups API (同義語グループ管理) - 6エンドポイント (v8):**
+- `GET /api/projects/{project_id}/synonym-groups` - 同義語グループ一覧取得
+- `POST /api/projects/{project_id}/synonym-groups` - グループ作成（代表用語 + メンバー）
+- `DELETE /api/projects/{project_id}/synonym-groups/{group_id}` - グループ削除
+- `PATCH /api/projects/{project_id}/synonym-groups/{group_id}` - 代表用語変更
+- `POST /api/projects/{project_id}/synonym-groups/{group_id}/members` - メンバー追加
+- `DELETE /api/projects/{project_id}/synonym-groups/{group_id}/members/{member_id}` - メンバー削除
+
 **Runs API (パイプライン実行管理) - 6エンドポイント:**
 - `POST /api/projects/{project_id}/runs` - Run開始
 - `DELETE /api/projects/{project_id}/runs/{run_id}` - Run キャンセル
@@ -1100,7 +1108,7 @@ async def list_terms(
 **Ollama API (Ollamaサーバー連携) - 1エンドポイント:**
 - `GET /api/ollama/models` - 利用可能なモデル一覧を取得（`base_url` クエリパラメータでサーバー指定可能）
 
-**合計: 45エンドポイント** (システム4 + Projects API 6 + Ollama API 1 + Excluded Terms API 3 + Required Terms API 3 + データAPI 28)
+**合計: 51エンドポイント** (システム4 + Projects API 6 + Ollama API 1 + Excluded Terms API 3 + Required Terms API 3 + Synonym Groups API 6 + データAPI 28)
 
 ## API実装のポイント
 

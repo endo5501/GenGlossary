@@ -9,6 +9,7 @@ from pydantic import BaseModel, ValidationError
 
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.glossary import Glossary, GlossaryIssue, IssueType
+from genglossary.models.synonym import SynonymGroup
 from genglossary.utils.prompt_escape import wrap_user_data
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ class GlossaryReviewer:
         cancel_event: Event | None = None,
         batch_progress_callback: Callable[[int, int], None] | None = None,
         user_notes_map: dict[str, str] | None = None,
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> list[GlossaryIssue] | None:
         """Review the glossary and identify issues.
 
@@ -108,7 +110,10 @@ class GlossaryReviewer:
 
             # Review this batch (skip on error, continue with next batch)
             try:
-                issues = self._review_batch(glossary, batch_terms, user_notes_map)
+                issues = self._review_batch(
+                    glossary, batch_terms, user_notes_map,
+                    synonym_groups=synonym_groups,
+                )
                 all_issues.extend(issues)
             except Exception as e:
                 failed_batches.append(batch_idx + 1)
@@ -134,6 +139,7 @@ class GlossaryReviewer:
         glossary: Glossary,
         term_names: list[str],
         user_notes_map: dict[str, str] | None = None,
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> list[GlossaryIssue]:
         """Review a batch of terms.
 
@@ -141,11 +147,15 @@ class GlossaryReviewer:
             glossary: The full glossary (for term lookup).
             term_names: List of term names to review in this batch.
             user_notes_map: Optional mapping of term_text to user notes.
+            synonym_groups: Optional list of synonym groups.
 
         Returns:
             List of issues found in this batch.
         """
-        prompt = self._create_review_prompt(glossary, term_names, user_notes_map=user_notes_map)
+        prompt = self._create_review_prompt(
+            glossary, term_names, user_notes_map=user_notes_map,
+            synonym_groups=synonym_groups,
+        )
         response = self.llm_client.generate_structured(prompt, ReviewResponse)
         return self._parse_issues(response.issues)
 
@@ -154,6 +164,7 @@ class GlossaryReviewer:
         glossary: Glossary,
         term_names: list[str] | None = None,
         user_notes_map: dict[str, str] | None = None,
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> str:
         """Create the prompt for glossary review.
 
@@ -168,6 +179,18 @@ class GlossaryReviewer:
         """
         notes_map = user_notes_map or {}
 
+        # Build synonym lookup: term_name -> list of synonym texts
+        synonym_lookup: dict[str, list[str]] = {}
+        if synonym_groups:
+            for group in synonym_groups:
+                others = [
+                    m.term_text
+                    for m in group.members
+                    if m.term_text != group.primary_term_text
+                ]
+                if others:
+                    synonym_lookup[group.primary_term_text] = others
+
         # Build term list with definitions and confidence
         target_terms = term_names if term_names is not None else glossary.all_term_names
         term_lines: list[str] = []
@@ -176,6 +199,10 @@ class GlossaryReviewer:
             if term is not None:
                 confidence_pct = int(term.confidence * 100)
                 line = f"- {term.name}: {term.definition} (信頼度: {confidence_pct}%)"
+                # Add synonym info
+                synonyms = synonym_lookup.get(term_name)
+                if synonyms:
+                    line += f"\n  同義語: {', '.join(synonyms)}"
                 notes = notes_map.get(term_name, "")
                 if notes:
                     wrapped_notes = wrap_user_data(notes, "user_note")

@@ -72,4 +72,14 @@ export {
   runKeys,
 } from './useRuns'
 
+export {
+  useSynonymGroups,
+  useCreateSynonymGroup,
+  useDeleteSynonymGroup,
+  useUpdateSynonymGroup,
+  useAddSynonymMember,
+  useRemoveSynonymMember,
+  synonymGroupKeys,
+} from './useSynonymGroups'
+
 export { useLogStream } from './useLogStream'

@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -83,6 +83,21 @@ CREATE TABLE IF NOT EXISTS terms_required (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Synonym groups (v8: link related terms)
+CREATE TABLE IF NOT EXISTS term_synonym_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    primary_term_text TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Synonym group members (v8: each term belongs to at most one group)
+CREATE TABLE IF NOT EXISTS term_synonym_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL REFERENCES term_synonym_groups(id) ON DELETE CASCADE,
+    term_text TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Run history
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,6 +133,7 @@ def initialize_db(conn: sqlite3.Connection) -> None:
     _ensure_metadata_input_path(conn)
     _migrate_documents_table_v4(conn)
     _migrate_terms_user_notes_v7(conn)
+    _migrate_synonym_tables_v8(conn)
 
     # Set schema version if not already set (INSERT OR IGNORE handles race conditions)
     cursor = conn.cursor()
@@ -198,6 +214,34 @@ def _migrate_terms_user_notes_v7(conn: sqlite3.Connection) -> None:
     if "user_notes" not in columns:
         cursor.execute(
             "ALTER TABLE terms_extracted ADD COLUMN user_notes TEXT NOT NULL DEFAULT ''"
+        )
+
+
+def _migrate_synonym_tables_v8(conn: sqlite3.Connection) -> None:
+    """Migrate to v8: add synonym group tables if they don't exist."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='term_synonym_groups'"
+    )
+    if cursor.fetchone() is None:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS term_synonym_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                primary_term_text TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS term_synonym_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL REFERENCES term_synonym_groups(id) ON DELETE CASCADE,
+                term_text TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
         )
 
 

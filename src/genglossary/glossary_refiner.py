@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary, GlossaryIssue
+from genglossary.models.synonym import SynonymGroup
 from genglossary.models.term import Term
 from genglossary.types import ProgressCallback, TermProgressCallback
 from genglossary.utils.callback import safe_callback
@@ -49,6 +50,7 @@ class GlossaryRefiner:
         term_progress_callback: TermProgressCallback | None = None,
         cancel_event: Event | None = None,
         user_notes_map: dict[str, str] | None = None,
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> Glossary:
         """Refine the glossary based on identified issues.
 
@@ -117,7 +119,10 @@ class GlossaryRefiner:
                     continue
 
                 notes = (user_notes_map or {}).get(issue.term_name, "")
-                refined_term = self._resolve_issue(term, issue, context_index, notes)
+                refined_term = self._resolve_issue(
+                    term, issue, context_index, notes,
+                    synonym_groups=synonym_groups,
+                )
                 refined_glossary.terms[issue.term_name] = refined_term
                 resolved_count += 1
             except Exception as e:
@@ -173,6 +178,7 @@ class GlossaryRefiner:
         issue: GlossaryIssue,
         context_index: dict[str, list[str]],
         user_notes: str = "",
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> Term:
         """Resolve a single issue for a term.
 
@@ -181,11 +187,15 @@ class GlossaryRefiner:
             issue: The issue to resolve.
             context_index: Pre-built index of term contexts.
             user_notes: Optional user-provided supplementary notes.
+            synonym_groups: Optional list of synonym groups.
 
         Returns:
             A refined Term object.
         """
-        prompt = self._create_refinement_prompt(term, issue, context_index, user_notes)
+        prompt = self._create_refinement_prompt(
+            term, issue, context_index, user_notes,
+            synonym_groups=synonym_groups,
+        )
         response = self.llm_client.generate_structured(prompt, RefinementResponse)
 
         return Term(
@@ -201,6 +211,7 @@ class GlossaryRefiner:
         issue: GlossaryIssue,
         context_index: dict[str, list[str]],
         user_notes: str = "",
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> str:
         """Create the prompt for term refinement.
 
@@ -215,8 +226,22 @@ class GlossaryRefiner:
         """
         additional_context = self._extract_context(term.name, context_index)
 
+        # Build synonym info
+        synonym_line = ""
+        if synonym_groups:
+            for group in synonym_groups:
+                if group.primary_term_text == term.name:
+                    others = [
+                        m.term_text
+                        for m in group.members
+                        if m.term_text != group.primary_term_text
+                    ]
+                    if others:
+                        synonym_line = f"\n同義語: {', '.join(others)}"
+                    break
+
         # Build the refinement data section
-        refinement_data = f"""用語: {term.name}
+        refinement_data = f"""用語: {term.name}{synonym_line}
 現在の定義: {term.definition}
 問題点: {issue.description}
 問題タイプ: {issue.issue_type}"""

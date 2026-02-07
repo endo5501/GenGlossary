@@ -23,6 +23,7 @@ from genglossary.db.provisional_repository import (
 )
 from genglossary.db.refined_repository import create_refined_terms_batch, delete_all_refined
 from genglossary.db.runs_repository import update_run_progress
+from genglossary.db.synonym_repository import list_groups as list_synonym_groups
 from genglossary.db.term_repository import (
     backup_user_notes,
     create_terms_batch,
@@ -37,6 +38,7 @@ from genglossary.glossary_reviewer import GlossaryReviewer
 from genglossary.llm.factory import create_llm_client
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary, GlossaryIssue
+from genglossary.models.synonym import SynonymGroup
 from genglossary.models.term import ClassifiedTerm, Term, TermOccurrence
 from genglossary.term_extractor import TermExtractor
 from genglossary.utils.hash import compute_content_hash
@@ -478,14 +480,26 @@ class PipelineExecutor:
         # Build user_notes_map from DB
         user_notes_map = self._build_user_notes_map(term_rows)
 
+        # Load synonym groups
+        synonym_groups = self._load_synonym_groups(conn, context)
+
         # Step 3: Generate glossary
-        glossary = self._do_generate(conn, context, documents, extracted_terms, user_notes_map)
+        glossary = self._do_generate(
+            conn, context, documents, extracted_terms, user_notes_map,
+            synonym_groups=synonym_groups,
+        )
 
         # Step 4: Review glossary
-        issues = self._do_review(conn, context, glossary, user_notes_map)
+        issues = self._do_review(
+            conn, context, glossary, user_notes_map,
+            synonym_groups=synonym_groups,
+        )
 
         # Step 5: Refine glossary
-        self._do_refine(conn, context, glossary, issues, documents, user_notes_map)
+        self._do_refine(
+            conn, context, glossary, issues, documents, user_notes_map,
+            synonym_groups=synonym_groups,
+        )
 
     @_cancellable
     def _execute_extract(
@@ -539,7 +553,13 @@ class PipelineExecutor:
         # Build user_notes_map from DB
         user_notes_map = self._build_user_notes_map(term_rows)
 
-        self._do_generate(conn, context, documents, extracted_terms, user_notes_map)
+        # Load synonym groups
+        synonym_groups = self._load_synonym_groups(conn, context)
+
+        self._do_generate(
+            conn, context, documents, extracted_terms, user_notes_map,
+            synonym_groups=synonym_groups,
+        )
 
     @_cancellable
     def _execute_review(
@@ -565,7 +585,13 @@ class PipelineExecutor:
         term_rows = list_all_terms(conn)
         user_notes_map = self._build_user_notes_map(term_rows)
 
-        self._do_review(conn, context, glossary, user_notes_map)
+        # Load synonym groups
+        synonym_groups = self._load_synonym_groups(conn, context)
+
+        self._do_review(
+            conn, context, glossary, user_notes_map,
+            synonym_groups=synonym_groups,
+        )
 
     @_cancellable
     def _execute_refine(
@@ -605,7 +631,30 @@ class PipelineExecutor:
         term_rows = list_all_terms(conn)
         user_notes_map = self._build_user_notes_map(term_rows)
 
-        self._do_refine(conn, context, glossary, issues, documents, user_notes_map)
+        # Load synonym groups
+        synonym_groups = self._load_synonym_groups(conn, context)
+
+        self._do_refine(
+            conn, context, glossary, issues, documents, user_notes_map,
+            synonym_groups=synonym_groups,
+        )
+
+    def _load_synonym_groups(
+        self, conn: sqlite3.Connection, context: ExecutionContext
+    ) -> list[SynonymGroup]:
+        """Load synonym groups from database.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging.
+
+        Returns:
+            list[SynonymGroup]: Loaded synonym groups (may be empty).
+        """
+        groups = list_synonym_groups(conn)
+        if groups:
+            self._log(context, "info", f"Loaded {len(groups)} synonym groups")
+        return groups
 
     @staticmethod
     def _build_user_notes_map(term_rows: list[sqlite3.Row]) -> dict[str, str]:
@@ -691,6 +740,7 @@ class PipelineExecutor:
         documents: list[Document],
         extracted_terms: list[str] | list[ClassifiedTerm],
         user_notes_map: dict[str, str] | None = None,
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> Glossary:
         """Execute glossary generation and save to DB.
 
@@ -699,6 +749,8 @@ class PipelineExecutor:
             context: Execution context for logging and cancellation.
             documents: Source documents.
             extracted_terms: Terms to generate definitions for.
+            user_notes_map: Optional mapping of term_text to user_notes.
+            synonym_groups: Optional list of synonym groups.
 
         Returns:
             Glossary: Generated provisional glossary.
@@ -717,6 +769,7 @@ class PipelineExecutor:
                 term_progress_callback=progress_cb,
                 cancel_event=context.cancel_event,
                 user_notes_map=user_notes_map,
+                synonym_groups=synonym_groups,
             )
         except Exception as e:
             self._log(context, "error", f"Generation failed: {e}")
@@ -735,6 +788,7 @@ class PipelineExecutor:
         context: ExecutionContext,
         glossary: Glossary,
         user_notes_map: dict[str, str] | None = None,
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> list:
         """Execute glossary review and save issues to DB.
 
@@ -742,6 +796,8 @@ class PipelineExecutor:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
             glossary: Provisional glossary to review.
+            user_notes_map: Optional mapping of term_text to user_notes.
+            synonym_groups: Optional list of synonym groups.
 
         Returns:
             list[GlossaryIssue]: Found issues.
@@ -778,6 +834,7 @@ class PipelineExecutor:
                 cancel_event=context.cancel_event,
                 batch_progress_callback=on_batch_progress,
                 user_notes_map=user_notes_map,
+                synonym_groups=synonym_groups,
             )
         except Exception as e:
             self._log(context, "error", f"Review failed: {e}")
@@ -807,6 +864,7 @@ class PipelineExecutor:
         issues: list,
         documents: list[Document],
         user_notes_map: dict[str, str] | None = None,
+        synonym_groups: list[SynonymGroup] | None = None,
     ) -> Glossary:
         """Execute glossary refinement and save to DB.
 
@@ -816,6 +874,8 @@ class PipelineExecutor:
             glossary: Provisional glossary to refine.
             issues: Issues to address.
             documents: Source documents.
+            user_notes_map: Optional mapping of term_text to user_notes.
+            synonym_groups: Optional list of synonym groups.
 
         Returns:
             Glossary: Refined glossary.
@@ -835,6 +895,7 @@ class PipelineExecutor:
                     term_progress_callback=progress_cb,
                     cancel_event=context.cancel_event,
                     user_notes_map=user_notes_map,
+                    synonym_groups=synonym_groups,
                 )
             except Exception as e:
                 self._log(context, "error", f"Refinement failed: {e}")

@@ -32,6 +32,8 @@ class TestSchemaInitialization:
             "metadata",
             "runs",
             "schema_version",
+            "term_synonym_groups",
+            "term_synonym_members",
             "terms_excluded",
             "terms_extracted",
             "terms_required",
@@ -43,7 +45,7 @@ class TestSchemaInitialization:
         initialize_db(in_memory_db)
 
         version = get_schema_version(in_memory_db)
-        assert version == 7  # v7: user_notes column added to terms_extracted
+        assert version == 8  # v8: synonym group tables added
 
     def test_initialize_db_is_idempotent(self, in_memory_db: sqlite3.Connection) -> None:
         """Test that initialize_db can be called multiple times safely."""
@@ -68,6 +70,8 @@ class TestSchemaInitialization:
             "metadata",
             "runs",
             "schema_version",
+            "term_synonym_groups",
+            "term_synonym_members",
             "terms_excluded",
             "terms_extracted",
             "terms_required",

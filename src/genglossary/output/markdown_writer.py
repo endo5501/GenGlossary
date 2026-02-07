@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from genglossary.models.glossary import Glossary
+from genglossary.models.synonym import SynonymGroup
 from genglossary.models.term import Term, TermOccurrence
 
 
@@ -16,12 +17,18 @@ class MarkdownWriter:
     - Occurrence references with file paths and line numbers
     """
 
-    def write(self, glossary: Glossary, output_path: str) -> None:
+    def write(
+        self,
+        glossary: Glossary,
+        output_path: str,
+        synonym_groups: list[SynonymGroup] | None = None,
+    ) -> None:
         """Write glossary to a Markdown file.
 
         Args:
             glossary: The Glossary object to write.
             output_path: Path to the output Markdown file.
+            synonym_groups: Optional list of synonym groups for alias display.
         """
         output_file = Path(output_path)
 
@@ -29,16 +36,21 @@ class MarkdownWriter:
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Generate markdown content
-        content = self._generate_markdown(glossary)
+        content = self._generate_markdown(glossary, synonym_groups=synonym_groups)
 
         # Write to file
         output_file.write_text(content, encoding="utf-8")
 
-    def _generate_markdown(self, glossary: Glossary) -> str:
+    def _generate_markdown(
+        self,
+        glossary: Glossary,
+        synonym_groups: list[SynonymGroup] | None = None,
+    ) -> str:
         """Generate complete Markdown content.
 
         Args:
             glossary: The Glossary object to format.
+            synonym_groups: Optional list of synonym groups for alias display.
 
         Returns:
             Complete Markdown content as string.
@@ -55,7 +67,7 @@ class MarkdownWriter:
         sorted_terms = sorted(glossary.terms.values(), key=lambda t: t.name)
 
         for term in sorted_terms:
-            sections.append(self._format_term(term))
+            sections.append(self._format_term(term, synonym_groups=synonym_groups))
             sections.append("---\n")
 
         return "\n".join(sections)
@@ -96,11 +108,16 @@ class MarkdownWriter:
 
         return "\n".join(lines) + "\n"
 
-    def _format_term(self, term: Term) -> str:
+    def _format_term(
+        self,
+        term: Term,
+        synonym_groups: list[SynonymGroup] | None = None,
+    ) -> str:
         """Format a single term entry.
 
         Args:
             term: The Term object to format.
+            synonym_groups: Optional list of synonym groups for alias display.
 
         Returns:
             Formatted term entry as string.
@@ -109,6 +126,19 @@ class MarkdownWriter:
 
         # Term heading
         lines.append(f"### {term.name}\n")
+
+        # Aliases from synonym groups
+        if synonym_groups:
+            for group in synonym_groups:
+                if group.primary_term_text == term.name:
+                    aliases = [
+                        m.term_text
+                        for m in group.members
+                        if m.term_text != group.primary_term_text
+                    ]
+                    if aliases:
+                        lines.append(f"**別名**: {'、'.join(aliases)}\n")
+                    break
 
         # Definition
         if term.definition:
