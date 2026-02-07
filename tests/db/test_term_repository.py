@@ -6,12 +6,14 @@ import pytest
 
 from genglossary.db.schema import initialize_db
 from genglossary.db.term_repository import (
+    backup_user_notes,
     create_term,
     create_terms_batch,
     delete_all_terms,
     delete_term,
     get_term,
     list_all_terms,
+    restore_user_notes,
     update_term,
 )
 
@@ -389,3 +391,148 @@ class TestCreateTermsBatch:
 
         with pytest.raises(sqlite3.IntegrityError):
             create_terms_batch(db_with_schema, terms)
+
+
+class TestUserNotes:
+    """Test user_notes field in term operations."""
+
+    def test_get_term_returns_user_notes(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that get_term returns user_notes field."""
+        term_id = create_term(db_with_schema, "GP", "abbreviation")
+
+        term = get_term(db_with_schema, term_id)
+        assert term is not None
+        assert term["user_notes"] == ""
+
+    def test_list_all_terms_returns_user_notes(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that list_all_terms includes user_notes."""
+        create_term(db_with_schema, "GP", "abbreviation")
+
+        terms = list_all_terms(db_with_schema)
+        assert len(terms) == 1
+        assert terms[0]["user_notes"] == ""
+
+    def test_update_term_updates_user_notes(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that update_term can update user_notes."""
+        term_id = create_term(db_with_schema, "GP", "abbreviation")
+
+        update_term(
+            db_with_schema,
+            term_id=term_id,
+            term_text="GP",
+            category="abbreviation",
+            user_notes="General Practitioner（一般開業医）の略称",
+        )
+
+        term = get_term(db_with_schema, term_id)
+        assert term is not None
+        assert term["user_notes"] == "General Practitioner（一般開業医）の略称"
+
+    def test_update_term_preserves_user_notes_when_not_provided(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that update_term preserves user_notes when not explicitly provided."""
+        term_id = create_term(db_with_schema, "GP", "abbreviation")
+
+        # Set user_notes first
+        update_term(
+            db_with_schema,
+            term_id=term_id,
+            term_text="GP",
+            category="abbreviation",
+            user_notes="General Practitioner",
+        )
+
+        # Update without providing user_notes
+        update_term(
+            db_with_schema,
+            term_id=term_id,
+            term_text="GP",
+            category="medical",
+        )
+
+        term = get_term(db_with_schema, term_id)
+        assert term is not None
+        assert term["user_notes"] == "General Practitioner"
+
+
+class TestBackupRestoreUserNotes:
+    """Test backup_user_notes and restore_user_notes functions."""
+
+    def test_backup_user_notes_returns_empty_dict_when_no_notes(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that backup returns empty dict when no user_notes are set."""
+        create_term(db_with_schema, "量子コンピュータ", "technical")
+        create_term(db_with_schema, "量子ビット", "technical")
+
+        notes_map = backup_user_notes(db_with_schema)
+        assert notes_map == {}
+
+    def test_backup_user_notes_returns_only_non_empty_notes(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that backup returns only terms with non-empty user_notes."""
+        term1_id = create_term(db_with_schema, "GP", "abbreviation")
+        create_term(db_with_schema, "量子ビット", "technical")
+
+        update_term(
+            db_with_schema,
+            term_id=term1_id,
+            term_text="GP",
+            category="abbreviation",
+            user_notes="General Practitioner",
+        )
+
+        notes_map = backup_user_notes(db_with_schema)
+        assert notes_map == {"GP": "General Practitioner"}
+
+    def test_restore_user_notes_restores_notes_by_term_text(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that restore_user_notes restores notes after re-extract."""
+        # Setup: create terms with notes
+        term_id = create_term(db_with_schema, "GP", "abbreviation")
+        update_term(
+            db_with_schema,
+            term_id=term_id,
+            term_text="GP",
+            category="abbreviation",
+            user_notes="General Practitioner",
+        )
+
+        # Backup
+        notes_map = backup_user_notes(db_with_schema)
+
+        # Simulate re-extract
+        delete_all_terms(db_with_schema)
+        create_terms_batch(db_with_schema, [("GP", "medical"), ("新用語", "technical")])
+
+        # Restore
+        restore_user_notes(db_with_schema, notes_map)
+
+        terms = list_all_terms(db_with_schema)
+        term_map = {t["term_text"]: t["user_notes"] for t in terms}
+        assert term_map["GP"] == "General Practitioner"
+        assert term_map["新用語"] == ""
+
+    def test_restore_user_notes_ignores_missing_terms(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that restore ignores notes for terms that no longer exist."""
+        notes_map = {"削除された用語": "この用語のメモ"}
+
+        create_terms_batch(db_with_schema, [("GP", "abbreviation")])
+
+        # Should not raise
+        restore_user_notes(db_with_schema, notes_map)
+
+        terms = list_all_terms(db_with_schema)
+        assert len(terms) == 1
+        assert terms[0]["user_notes"] == ""
