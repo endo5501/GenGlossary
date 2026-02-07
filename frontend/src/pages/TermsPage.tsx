@@ -12,7 +12,6 @@ import {
   ActionIcon,
   Tabs,
   Tooltip,
-  LoadingOverlay,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconPlus, IconRefresh, IconTrash, IconBan, IconList, IconPencil, IconCheck, IconX, IconStar } from '@tabler/icons-react'
@@ -32,6 +31,8 @@ import {
   useDeleteRequiredTerm,
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
+import { AddTermModal } from '../components/common/AddTermModal'
+import { TermListTable } from '../components/common/TermListTable'
 
 interface TermsPageProps {
   projectId: number
@@ -51,8 +52,6 @@ export function TermsPage({ projectId }: TermsPageProps) {
     useDisclosure(false)
   const [newTermText, setNewTermText] = useState('')
   const [newTermCategory, setNewTermCategory] = useState('')
-  const [newExcludedTermText, setNewExcludedTermText] = useState('')
-  const [newRequiredTermText, setNewRequiredTermText] = useState('')
   const [activeTab, setActiveTab] = useState<string | null>('terms')
   const [editingCategoryValue, setEditingCategoryValue] = useState<string | null>(null)
   const isEditingCategory = editingCategoryValue !== null
@@ -100,16 +99,10 @@ export function TermsPage({ projectId }: TermsPageProps) {
     deleteExcludedTerm.mutate(termId)
   }
 
-  const handleAddExcludedTerm = () => {
-    if (!newExcludedTermText.trim()) return
+  const handleAddExcludedTerm = (termText: string) => {
     createExcludedTerm.mutate(
-      { term_text: newExcludedTermText.trim() },
-      {
-        onSuccess: () => {
-          setNewExcludedTermText('')
-          closeExcludedModal()
-        },
-      }
+      { term_text: termText },
+      { onSuccess: closeExcludedModal }
     )
   }
 
@@ -117,16 +110,10 @@ export function TermsPage({ projectId }: TermsPageProps) {
     deleteRequiredTerm.mutate(termId)
   }
 
-  const handleAddRequiredTerm = () => {
-    if (!newRequiredTermText.trim()) return
+  const handleAddRequiredTerm = (termText: string) => {
     createRequiredTerm.mutate(
-      { term_text: newRequiredTermText.trim() },
-      {
-        onSuccess: () => {
-          setNewRequiredTermText('')
-          closeRequiredModal()
-        },
-      }
+      { term_text: termText },
+      { onSuccess: closeRequiredModal }
     )
   }
 
@@ -405,89 +392,27 @@ export function TermsPage({ projectId }: TermsPageProps) {
         </Tabs.Panel>
 
         <Tabs.Panel value="excluded">
-          <Box style={{ flex: 1, position: 'relative' }}>
-            <LoadingOverlay visible={isLoadingExcluded} />
-            <Table highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Term</Table.Th>
-                  <Table.Th>Source</Table.Th>
-                  <Table.Th>Created At</Table.Th>
-                  <Table.Th w={80}>Actions</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {excludedTerms?.map((term) => (
-                  <Table.Tr key={term.id}>
-                    <Table.Td>{term.term_text}</Table.Td>
-                    <Table.Td>
-                      <Badge variant="light" color={term.source === 'auto' ? 'blue' : 'green'}>
-                        {term.source === 'auto' ? '自動' : '手動'}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm" c="dimmed">
-                        {new Date(term.created_at).toLocaleDateString('ja-JP')}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Tooltip label="除外リストから削除">
-                        <ActionIcon
-                          variant="subtle"
-                          color="red"
-                          onClick={() => handleDeleteExcludedTerm(term.id)}
-                          aria-label="Remove from excluded"
-                          loading={deleteExcludedTerm.isPending}
-                        >
-                          <IconTrash size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Box>
+          <TermListTable
+            terms={excludedTerms}
+            onDelete={handleDeleteExcludedTerm}
+            isLoading={isLoadingExcluded}
+            isDeletePending={deleteExcludedTerm.isPending}
+            showSourceColumn={true}
+            deleteTooltip="除外リストから削除"
+            deleteAriaLabel="Remove from excluded"
+          />
         </Tabs.Panel>
 
         <Tabs.Panel value="required">
-          <Box style={{ flex: 1, position: 'relative' }}>
-            <LoadingOverlay visible={isLoadingRequired} />
-            <Table highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Term</Table.Th>
-                  <Table.Th>Created At</Table.Th>
-                  <Table.Th w={80}>Actions</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {requiredTerms?.map((term) => (
-                  <Table.Tr key={term.id}>
-                    <Table.Td>{term.term_text}</Table.Td>
-                    <Table.Td>
-                      <Text size="sm" c="dimmed">
-                        {new Date(term.created_at).toLocaleDateString('ja-JP')}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Tooltip label="必須リストから削除">
-                        <ActionIcon
-                          variant="subtle"
-                          color="red"
-                          onClick={() => handleDeleteRequiredTerm(term.id)}
-                          aria-label="Remove from required"
-                          loading={deleteRequiredTerm.isPending}
-                        >
-                          <IconTrash size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Box>
+          <TermListTable
+            terms={requiredTerms}
+            onDelete={handleDeleteRequiredTerm}
+            isLoading={isLoadingRequired}
+            isDeletePending={deleteRequiredTerm.isPending}
+            showSourceColumn={false}
+            deleteTooltip="必須リストから削除"
+            deleteAriaLabel="Remove from required"
+          />
         </Tabs.Panel>
       </Tabs>
 
@@ -517,45 +442,23 @@ export function TermsPage({ projectId }: TermsPageProps) {
         </Stack>
       </Modal>
 
-      <Modal opened={excludedModalOpened} onClose={closeExcludedModal} title="除外用語を追加">
-        <Stack>
-          <TextInput
-            label="用語"
-            placeholder="除外する用語を入力"
-            value={newExcludedTermText}
-            onChange={(e) => setNewExcludedTermText(e.target.value)}
-            required
-          />
-          <Group justify="flex-end">
-            <Button variant="subtle" onClick={closeExcludedModal}>
-              キャンセル
-            </Button>
-            <Button onClick={handleAddExcludedTerm} loading={createExcludedTerm.isPending}>
-              追加
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      <AddTermModal
+        opened={excludedModalOpened}
+        onClose={closeExcludedModal}
+        onSubmit={handleAddExcludedTerm}
+        title="除外用語を追加"
+        placeholder="除外する用語を入力"
+        isLoading={createExcludedTerm.isPending}
+      />
 
-      <Modal opened={requiredModalOpened} onClose={closeRequiredModal} title="必須用語を追加">
-        <Stack>
-          <TextInput
-            label="用語"
-            placeholder="必須にする用語を入力"
-            value={newRequiredTermText}
-            onChange={(e) => setNewRequiredTermText(e.target.value)}
-            required
-          />
-          <Group justify="flex-end">
-            <Button variant="subtle" onClick={closeRequiredModal}>
-              キャンセル
-            </Button>
-            <Button onClick={handleAddRequiredTerm} loading={createRequiredTerm.isPending}>
-              追加
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      <AddTermModal
+        opened={requiredModalOpened}
+        onClose={closeRequiredModal}
+        onSubmit={handleAddRequiredTerm}
+        title="必須用語を追加"
+        placeholder="必須にする用語を入力"
+        isLoading={createRequiredTerm.isPending}
+      />
     </PageContainer>
   )
 }
