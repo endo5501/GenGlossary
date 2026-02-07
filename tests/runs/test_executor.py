@@ -110,34 +110,30 @@ class TestPipelineExecutorFull:
             with pytest.raises(RuntimeError, match="Cannot execute pipeline without documents"):
                 executor.execute(project_db, "full", execution_context, doc_root=".")
 
-    def test_full_scope_executes_all_steps(
+    def test_full_scope_executes_generate_review_refine(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         execution_context: ExecutionContext,
     ) -> None:
-        """full scopeは全ステップを実行する（CLIモード）"""
+        """full scopeはextractをスキップしgenerate→review→refineを実行する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
              patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
-             patch("genglossary.runs.executor.delete_all_documents") as mock_delete_docs:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock document loading
-            mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="/test/path/test.txt", content="test content")
-            ]
-
-            # Mock term extraction
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-                ClassifiedTerm(term="term2", category=TermCategory.TECHNICAL_TERM),
+            # Mock DB data (documents and terms already exist)
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
+            mock_list_terms.return_value = [
+                {"term_text": "term1"},
+                {"term_text": "term2"},
             ]
 
             # Mock glossary generation
@@ -160,12 +156,12 @@ class TestPipelineExecutorFull:
             # Mock review
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
+            # Execute full pipeline (GUI mode)
+            executor.execute(project_db, "full", execution_context)
 
-            # Verify all components were called
-            mock_loader.return_value.load_directory.assert_called_once_with("/test/path")
-            mock_extractor.return_value.extract_terms.assert_called_once()
+            # TermExtractor should NOT be called (extract skipped)
+            mock_extractor.return_value.extract_terms.assert_not_called()
+            # Generate, Review should be called
             mock_generator.return_value.generate.assert_called_once()
             mock_reviewer.return_value.review.assert_called_once()
 
@@ -195,6 +191,112 @@ class TestPipelineExecutorFull:
 
             # DocumentLoader should not be called when cancelled
             mock_loader.return_value.load_directory.assert_not_called()
+
+
+    def test_full_scope_skips_extract_and_loads_terms_from_db(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """full scopeはextractをスキップし、DBから既存の用語を読み込んでgenerate以降を実行する"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB data (documents and terms already exist)
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
+            mock_list_terms.return_value = [
+                {"term_text": "term1"},
+                {"term_text": "term2"},
+            ]
+
+            # Mock glossary generation
+            mock_glossary = Glossary(terms={
+                "term1": Term(
+                    name="term1",
+                    definition="test definition",
+                    confidence=0.9,
+                    occurrences=[
+                        TermOccurrence(
+                            document_path="test.txt",
+                            line_number=1,
+                            context="test context"
+                        )
+                    ]
+                )
+            })
+            mock_generator.return_value.generate.return_value = mock_glossary
+
+            # Mock review
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute full pipeline (GUI mode)
+            executor.execute(project_db, "full", execution_context)
+
+            # TermExtractor should NOT be called (extract skipped)
+            mock_extractor.return_value.extract_terms.assert_not_called()
+
+            # Generator should be called with terms loaded from DB
+            mock_generator.return_value.generate.assert_called_once()
+            mock_reviewer.return_value.review.assert_called_once()
+
+    def test_full_scope_raises_error_when_no_terms_in_db(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """full scope: DBに用語が存在しない場合はRuntimeErrorを発生させる"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB: documents exist but no terms
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
+            mock_list_terms.return_value = []
+
+            with pytest.raises(RuntimeError, match="Cannot execute full pipeline without extracted terms"):
+                executor.execute(project_db, "full", execution_context)
+
+    def test_full_scope_does_not_clear_terms_table(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """full scopeはterms_extractedテーブルをクリアしない（extractスキップのため）"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
+             patch("genglossary.runs.executor.delete_all_terms") as mock_delete_terms:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
+            mock_glossary = Glossary(terms={})
+            mock_generator.return_value.generate.return_value = mock_glossary
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(project_db, "full", execution_context)
+
+            # delete_all_terms should NOT be called for full scope
+            mock_delete_terms.assert_not_called()
 
 
 class TestPipelineExecutorGenerate:
@@ -298,26 +400,23 @@ class TestPipelineExecutorProgress:
     ) -> None:
         """進捗がlog_callbackに送信される"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.delete_all_documents"):
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock components
-            mock_loader.return_value.load_directory.return_value = [MagicMock(file_path="/test/path/test.txt", content="test")]
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
-            ]
+            # Mock DB data
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
+            # Execute (GUI mode)
+            executor.execute(project_db, "full", execution_context)
 
             # Check that log messages were captured
             logs = log_callback.logs  # type: ignore
@@ -347,29 +446,24 @@ class TestPipelineExecutorLogCallback:
         )
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.delete_all_documents"):
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock components
-            mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="/test/path/test.txt", content="test")
-            ]
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
-            ]
+            # Mock DB data
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
             executor = PipelineExecutor()
-            # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", context, doc_root="/test/path")
+            # Execute (GUI mode)
+            executor.execute(project_db, "full", context)
 
             assert len(logs) > 0
             assert all(log.get("run_id") == 1 for log in logs)
@@ -388,20 +482,22 @@ class TestPipelineExecutorConfiguration:
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
+            # Mock empty DB (force filesystem loading)
+            mock_list_docs.return_value = []
+            mock_list_terms.return_value = [{"term_text": "term1"}]
+
             # Mock components
             mock_loader.return_value.load_directory.return_value = [
                 MagicMock(file_path="/custom/path/test.txt", content="test")
-            ]
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
             ]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
@@ -419,11 +515,10 @@ class TestPipelineExecutorConfiguration:
     ) -> None:
         """executorがllm_provider/llm_modelを使用することを確認"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.delete_all_documents"):
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
@@ -432,18 +527,14 @@ class TestPipelineExecutorConfiguration:
             # Create executor with custom provider and model
             executor = PipelineExecutor(provider="openai", model="gpt-4")
 
-            # Mock components
-            mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="/test/path/test.txt", content="test")
-            ]
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
-            ]
+            # Mock DB data
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
+            # Execute (GUI mode)
+            executor.execute(project_db, "full", execution_context)
 
             # Verify LLM client was created with custom settings
             mock_llm_factory.assert_called_once()
@@ -456,52 +547,46 @@ class TestPipelineExecutorConfiguration:
         project_db: sqlite3.Connection,
         execution_context: ExecutionContext,
     ) -> None:
-        """再実行時にテーブルがクリアされることを確認"""
+        """再実行時にテーブルがクリアされることを確認（full scopeではtermsはクリアしない）"""
         executor = PipelineExecutor(provider="ollama")
 
         # Create mock clear functions
-        mock_delete_terms = MagicMock()
         mock_delete_prov = MagicMock()
         mock_delete_issues = MagicMock()
         mock_delete_refined = MagicMock()
 
         # Patch _SCOPE_CLEAR_FUNCTIONS to use our mocks (using Enum keys)
+        # Full scope does NOT clear terms (extract is excluded)
         from genglossary.runs.executor import PipelineScope
         mock_scope_clear_functions = {
-            PipelineScope.FULL: [mock_delete_terms, mock_delete_prov, mock_delete_issues, mock_delete_refined],
-            PipelineScope.EXTRACT: [mock_delete_terms],
+            PipelineScope.FULL: [mock_delete_prov, mock_delete_issues, mock_delete_refined],
+            PipelineScope.EXTRACT: [MagicMock()],
             PipelineScope.GENERATE: [mock_delete_prov],
             PipelineScope.REVIEW: [mock_delete_issues],
             PipelineScope.REFINE: [mock_delete_refined],
         }
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
              patch("genglossary.runs.executor._SCOPE_CLEAR_FUNCTIONS", mock_scope_clear_functions), \
-             patch("genglossary.runs.executor.delete_all_documents"):
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock components
-            mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="/test/path/test.txt", content="test")
-            ]
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
-            ]
+            # Mock DB data
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            # Execute with full scope (CLI mode with explicit doc_root)
-            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
+            # Execute with full scope (GUI mode)
+            executor.execute(project_db, "full", execution_context)
 
-            # Verify tables were cleared before execution (documents are NOT cleared in _clear_tables_for_scope)
-            mock_delete_terms.assert_called_once()
+            # Verify tables were cleared (terms NOT cleared for full scope)
             mock_delete_prov.assert_called_once()
             mock_delete_issues.assert_called_once()
             mock_delete_refined.assert_called_once()
@@ -530,10 +615,10 @@ class TestPipelineExecutorDBFirstApproach:
         """
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
@@ -543,11 +628,7 @@ class TestPipelineExecutorDBFirstApproach:
             mock_list_docs.return_value = [
                 {"file_name": "uploaded.txt", "content": "uploaded content from GUI"}
             ]
-
-            # Mock term extraction
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-            ]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # Mock glossary generation
             mock_glossary = Glossary(terms={
@@ -577,14 +658,6 @@ class TestPipelineExecutorDBFirstApproach:
             # DocumentLoader.load_directory should NOT be called (DB has documents)
             mock_loader.return_value.load_directory.assert_not_called()
 
-            # TermExtractor should be called with DB documents
-            mock_extractor.return_value.extract_terms.assert_called_once()
-            call_args = mock_extractor.return_value.extract_terms.call_args
-            documents_arg = call_args[0][0]
-            assert len(documents_arg) == 1
-            assert documents_arg[0].file_path == "uploaded.txt"
-            assert documents_arg[0].content == "uploaded content from GUI"
-
     def test_cli_mode_uses_filesystem_when_db_is_empty(
         self,
         executor: PipelineExecutor,
@@ -594,10 +667,10 @@ class TestPipelineExecutorDBFirstApproach:
         """CLIモード: DBが空でdoc_rootにファイルがある場合はファイルシステムを使用"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
              patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
              patch("genglossary.runs.executor.delete_all_documents") as mock_delete_docs:
 
             # Mock LLM client
@@ -606,16 +679,13 @@ class TestPipelineExecutorDBFirstApproach:
 
             # Mock empty DB
             mock_list_docs.return_value = []
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # Mock filesystem loading
             mock_loader.return_value.load_directory.return_value = [
                 MagicMock(file_path="/custom/cli/path/cli_file.txt", content="cli content")
             ]
 
-            # Mock term extraction
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-            ]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
@@ -671,24 +741,20 @@ class TestPipelineExecutorDBFirstApproach:
         """DBにドキュメントがある場合はファイルシステムをチェックしない（DB優先）"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock DB with documents
+            # Mock DB with documents and terms
             mock_list_docs.return_value = [
                 {"file_name": "db_file.txt", "content": "db content"}
             ]
-
-            # Mock term extraction
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-            ]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
@@ -1342,41 +1408,22 @@ class TestPipelineExecutorDBDocumentsLegacy:
         """doc_root="." (GUI mode) の場合、DBのドキュメントを使用する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             # Mock LLM client
             mock_llm_client = MagicMock()
             mock_llm_factory.return_value = mock_llm_client
 
-            # Mock DB documents (simulating GUI-uploaded files)
+            # Mock DB documents and terms
             mock_list_docs.return_value = [
                 {"file_name": "uploaded.txt", "content": "uploaded content"}
             ]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
-            # Mock term extraction
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-            ]
-
-            # Mock glossary generation
-            mock_glossary = Glossary(terms={
-                "term1": Term(
-                    name="term1",
-                    definition="test definition",
-                    confidence=0.9,
-                    occurrences=[
-                        TermOccurrence(
-                            document_path="uploaded.txt",
-                            line_number=1,
-                            context="uploaded content"
-                        )
-                    ]
-                )
-            })
-            mock_generator.return_value.generate.return_value = mock_glossary
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
             # Execute full scope with default doc_root="." (GUI mode)
@@ -1384,14 +1431,6 @@ class TestPipelineExecutorDBDocumentsLegacy:
 
             # DocumentLoader.load_directory should NOT be called (DB documents used in GUI mode)
             mock_loader.return_value.load_directory.assert_not_called()
-
-            # TermExtractor should be called with DB documents
-            mock_extractor.return_value.extract_terms.assert_called_once()
-            call_args = mock_extractor.return_value.extract_terms.call_args
-            documents_arg = call_args[0][0]
-            assert len(documents_arg) == 1
-            assert documents_arg[0].file_path == "uploaded.txt"
-            assert documents_arg[0].content == "uploaded content"
 
     def test_full_scope_uses_filesystem_when_doc_root_is_explicit(
         self,
@@ -1402,9 +1441,9 @@ class TestPipelineExecutorDBDocumentsLegacy:
         """doc_root が明示的に指定された場合（CLIモード）、ファイルシステムから読み込みDBを上書き"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
              patch("genglossary.runs.executor.delete_all_documents") as mock_delete_docs:
 
             # Mock LLM client
@@ -1416,10 +1455,7 @@ class TestPipelineExecutorDBDocumentsLegacy:
                 MagicMock(file_path="/custom/path/cli_file.txt", content="cli content")
             ]
 
-            # Mock term extraction
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-            ]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
@@ -1491,7 +1527,7 @@ class TestPipelineExecutorBugFixes:
             assert terms_data[0][1] == "definition1"
             assert terms_data[0][2] == 0.9
 
-    def test_duplicate_terms_from_llm_do_not_crash_pipeline(
+    def test_duplicate_terms_from_llm_do_not_crash_extract_scope(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
@@ -1507,8 +1543,6 @@ class TestPipelineExecutorBugFixes:
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
-             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
              patch("genglossary.runs.executor.delete_all_documents"):
 
             mock_llm_factory.return_value = MagicMock()
@@ -1523,11 +1557,8 @@ class TestPipelineExecutorBugFixes:
                 ClassifiedTerm(term="unique_term", category=TermCategory.TECHNICAL_TERM),
             ]
 
-            mock_generator.return_value.generate.return_value = Glossary(terms={})
-            mock_reviewer.return_value.review.return_value = []
-
-            # Should NOT raise IntegrityError
-            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
+            # Should NOT raise IntegrityError (using extract scope directly)
+            executor.execute(project_db, "extract", execution_context, doc_root="/test/path")
 
             # Verify only unique terms were saved (no crash)
             from genglossary.db.term_repository import list_all_terms
@@ -1553,24 +1584,21 @@ class TestPipelineExecutorBugFixes:
         """
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             mock_llm_factory.return_value = MagicMock()
 
             # DB is empty (CLI mode)
             mock_list_docs.return_value = []
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # Multiple files with same basename from different directories
             mock_loader.return_value.load_directory.return_value = [
                 MagicMock(file_path="/test/path/docs/README.md", content="docs readme content"),
                 MagicMock(file_path="/test/path/examples/README.md", content="examples readme content"),
-            ]
-
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
             ]
 
             mock_generator.return_value.generate.return_value = Glossary(terms={})
@@ -1789,18 +1817,16 @@ class TestCancellationCheckBeforeRefinedSave:
 class TestDuplicateFilteringBeforeGenerate:
     """Tests for duplicate filtering before passing terms to generator."""
 
-    def test_generator_receives_unique_terms_only(
+    def test_extract_saves_unique_terms_only(
         self,
         executor: PipelineExecutor,
         project_db: sqlite3.Connection,
         execution_context: ExecutionContext,
     ) -> None:
-        """GlossaryGenerator に渡される用語リストが重複除去されていることを確認"""
+        """extract scopeで重複用語がユニークに保存されることを確認"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
              patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
-             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
              patch("genglossary.runs.executor.delete_all_documents"):
 
             mock_llm_factory.return_value = MagicMock()
@@ -1815,21 +1841,17 @@ class TestDuplicateFilteringBeforeGenerate:
                 ClassifiedTerm(term="unique_term", category=TermCategory.TECHNICAL_TERM),
             ]
 
-            mock_generator.return_value.generate.return_value = Glossary(terms={})
-            mock_reviewer.return_value.review.return_value = []
+            executor.execute(project_db, "extract", execution_context, doc_root="/test/path")
 
-            executor.execute(project_db, "full", execution_context, doc_root="/test/path")
-
-            # Verify generator.generate was called with unique terms only
-            mock_generator.return_value.generate.assert_called_once()
-            call_args = mock_generator.return_value.generate.call_args
-            terms_arg = call_args[0][0]  # First positional argument is terms
+            # Verify only unique terms were saved in DB
+            from genglossary.db.term_repository import list_all_terms
+            terms = list_all_terms(project_db)
+            term_texts = [row["term_text"] for row in terms]
 
             # Should have 2 unique terms, not 3
-            assert len(terms_arg) == 2
-            term_names = [t.term if hasattr(t, 'term') else t for t in terms_arg]
-            assert "duplicate_term" in term_names
-            assert "unique_term" in term_names
+            assert len(term_texts) == 2
+            assert "duplicate_term" in term_texts
+            assert "unique_term" in term_texts
 
 
 class TestExecutionContext:
@@ -1911,23 +1933,18 @@ class TestPipelineExecutorWithContext:
         )
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.delete_all_documents"):
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             mock_llm_factory.return_value = MagicMock()
-            mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="/test/path/test.txt", content="test")
-            ]
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
-            ]
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
-            executor.execute(project_db, "full", context, doc_root="/test/path")
+            executor.execute(project_db, "full", context)
 
         # All logs should have run_id=99
         assert len(logs) > 0
@@ -2010,23 +2027,18 @@ class TestPipelineExecutorThreadSafety:
             conn = get_connection(db_path)
             try:
                 with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-                     patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-                     patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
                      patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
                      patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-                     patch("genglossary.runs.executor.delete_all_documents"):
+                     patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+                     patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
                     mock_llm_factory.return_value = MagicMock()
-                    mock_loader.return_value.load_directory.return_value = [
-                        MagicMock(file_path="/test/path/test.txt", content="test")
-                    ]
-                    mock_extractor.return_value.extract_terms.return_value = [
-                        ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
-                    ]
+                    mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+                    mock_list_terms.return_value = [{"term_text": "term1"}]
                     mock_generator.return_value.generate.return_value = Glossary(terms={})
                     mock_reviewer.return_value.review.return_value = []
 
-                    executor.execute(conn, "full", context, doc_root="/test/path")
+                    executor.execute(conn, "full", context)
             finally:
                 conn.close()
 
@@ -2094,27 +2106,22 @@ class TestCancellableDecorator:
     ) -> None:
         """キャンセルされていない場合、デコレータは実行を許可する"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.delete_all_documents"):
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             mock_llm_factory.return_value = MagicMock()
-            mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="/test/path/test.txt", content="test")
-            ]
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
-            ]
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
             # Should execute normally (no exception)
-            executor._execute_full(project_db, execution_context, doc_root="/test/path")
+            executor._execute_full(project_db, execution_context)
 
-            # DocumentLoader should be called
-            mock_loader.return_value.load_directory.assert_called_once()
+            # list_all_documents should be called (DB loading)
+            mock_list_docs.assert_called()
 
     def test_cancellable_decorator_finds_context_in_positional_args(
         self,
@@ -2170,15 +2177,16 @@ class TestDocumentFilePathStorage:
         """
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             mock_llm_factory.return_value = MagicMock()
 
             # DB is empty (CLI mode)
             mock_list_docs.return_value = []
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # DocumentLoader returns absolute paths (simulating real behavior)
             mock_loader.return_value.load_directory.return_value = [
@@ -2192,9 +2200,6 @@ class TestDocumentFilePathStorage:
                 ),
             ]
 
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-            ]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
@@ -2227,13 +2232,14 @@ class TestDocumentFilePathStorage:
         """相対パスがディレクトリ構造を保持する（同名ファイル衝突回避）"""
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             mock_llm_factory.return_value = MagicMock()
             mock_list_docs.return_value = []
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # Same basename in different directories (absolute paths)
             mock_loader.return_value.load_directory.return_value = [
@@ -2247,9 +2253,6 @@ class TestDocumentFilePathStorage:
                 ),
             ]
 
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-            ]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
@@ -2314,13 +2317,14 @@ class TestDocumentFilePathStorage:
         """
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
              patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
              patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
-             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             mock_llm_factory.return_value = MagicMock()
             mock_list_docs.return_value = []
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             # Absolute paths (could have Windows-style separators internally)
             mock_loader.return_value.load_directory.return_value = [
@@ -2330,9 +2334,6 @@ class TestDocumentFilePathStorage:
                 ),
             ]
 
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM),
-            ]
             mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
@@ -2573,33 +2574,19 @@ class TestExecuteCompletionBehavior:
         )
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader, \
-             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
              patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
-             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer:
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
 
             mock_llm_factory.return_value = MagicMock()
-            mock_loader.return_value.load_directory.return_value = [
-                MagicMock(file_path="/test/doc.txt", content="test")
-            ]
-            mock_extractor.return_value.extract_terms.return_value = [
-                ClassifiedTerm(term="term1", category=TermCategory.TECHNICAL_TERM)
-            ]
-            mock_glossary = Glossary(terms={
-                "term1": Term(
-                    name="term1",
-                    definition="test",
-                    confidence=0.9,
-                    occurrences=[TermOccurrence(
-                        document_path="doc.txt", line_number=1, context="test"
-                    )]
-                )
-            })
-            mock_generator.return_value.generate.return_value = mock_glossary
+            mock_list_docs.return_value = [{"file_name": "doc.txt", "content": "test"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
+            mock_generator.return_value.generate.return_value = Glossary(terms={})
             mock_reviewer.return_value.review.return_value = []
 
             # Should complete without raising any exception
-            executor.execute(project_db, "full", context, doc_root="/test")
+            executor.execute(project_db, "full", context)
 
     def test_execute_raises_exception_when_cancelled_before_start(
         self,
@@ -2640,15 +2627,17 @@ class TestExecuteCompletionBehavior:
 
         def set_cancel_and_return_docs(*_args, **_kwargs):
             cancel_event.set()
-            return [MagicMock(file_path="/test/doc.txt", content="test")]
+            return [{"file_name": "doc.txt", "content": "test"}]
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
             mock_llm_factory.return_value = MagicMock()
-            mock_loader.return_value.load_directory.side_effect = set_cancel_and_return_docs
+            mock_list_docs.side_effect = set_cancel_and_return_docs
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             with pytest.raises(PipelineCancelledException):
-                executor.execute(project_db, "full", context, doc_root="/test")
+                executor.execute(project_db, "full", context)
 
 
 class TestPipelineCancelledException:
@@ -2706,15 +2695,17 @@ class TestPipelineCancelledException:
 
         def set_cancel_and_return_docs(*_args, **_kwargs):
             cancel_event.set()
-            return [MagicMock(file_path="/test/doc.txt", content="test")]
+            return [{"file_name": "doc.txt", "content": "test"}]
 
         with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
-             patch("genglossary.runs.executor.DocumentLoader") as mock_loader:
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
             mock_llm_factory.return_value = MagicMock()
-            mock_loader.return_value.load_directory.side_effect = set_cancel_and_return_docs
+            mock_list_docs.side_effect = set_cancel_and_return_docs
+            mock_list_terms.return_value = [{"term_text": "term1"}]
 
             with pytest.raises(PipelineCancelledException):
-                executor.execute(project_db, "full", context, doc_root="/test")
+                executor.execute(project_db, "full", context)
 
     def test_check_cancellation_raises_exception(
         self,

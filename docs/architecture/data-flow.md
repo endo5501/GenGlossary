@@ -135,3 +135,23 @@
 **後方互換性:**
 - DBなしモード: `return_categories=False` で既存動作を維持
 - 既存の `list[str]` を期待するコードはそのまま動作
+
+## Extract の実行タイミング
+
+用語抽出（Extract）は Full Pipeline（`scope="full"`）から除外されており、以下のタイミングで実行されます:
+
+1. **ファイル追加時の自動実行**: `POST /api/projects/{id}/files/bulk` でファイル保存成功後に自動的に Extract が開始される（`triggered_by="auto"`）
+2. **手動実行**: Terms 画面の Extract ボタン、または `scope="extract"` での Run 実行
+
+Full Pipeline（`scope="full"`）は `generate → review → refine` のみを実行し、DB に既存の用語が存在していることを前提とします。用語が 0 件の場合はエラーになります。
+
+```
+ファイル追加フロー:
+ファイル追加 → DBに保存 → Extract自動開始（バックグラウンド）
+                              ↓ 既にRunが実行中の場合はスキップ
+                              → extract_skipped_reason をレスポンスで通知
+
+Full Pipeline実行フロー（scope="full"）:
+DBから用語読み込み → generate → review → refine
+（extractはスキップ）
+```

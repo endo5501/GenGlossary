@@ -2,10 +2,14 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
+import { Notifications } from '@mantine/notifications'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { server } from '../../setup'
 import { handlers } from '../../../mocks/handlers'
+import { http, HttpResponse } from 'msw'
 import { AddFileDialog } from '../../../components/dialogs/AddFileDialog'
+
+const BASE_URL = 'http://localhost:8000'
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -18,7 +22,10 @@ function renderWithProviders(ui: React.ReactElement) {
     user: userEvent.setup(),
     ...render(
       <QueryClientProvider client={queryClient}>
-        <MantineProvider>{ui}</MantineProvider>
+        <MantineProvider>
+          <Notifications />
+          {ui}
+        </MantineProvider>
       </QueryClientProvider>
     ),
   }
@@ -139,5 +146,97 @@ describe('AddFileDialog', () => {
     renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
 
     expect(screen.getByText(/only .txt and .md files are allowed/i)).toBeInTheDocument()
+  })
+
+  it('shows extract started notification after successful upload', async () => {
+    server.use(
+      http.post(`${BASE_URL}/api/projects/:projectId/files/bulk`, () => {
+        return HttpResponse.json(
+          {
+            files: [{ id: 1, file_name: 'test.txt', content_hash: 'hash1' }],
+            extract_started: true,
+            extract_skipped_reason: null,
+          },
+          { status: 201 }
+        )
+      })
+    )
+
+    const onClose = vi.fn()
+    renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
+
+    // Simulate file drop
+    const dropzone = screen.getByText(/drag files here or click to select/i).closest('div')!
+    const file = createMockFile('test.txt', 'Test content')
+    const dataTransfer = {
+      files: [file],
+      items: [{ kind: 'file', type: 'text/plain', getAsFile: () => file }],
+      types: ['Files'],
+    }
+    await waitFor(async () => {
+      const dropEvent = new Event('drop', { bubbles: true })
+      Object.assign(dropEvent, { dataTransfer })
+      dropzone.dispatchEvent(dropEvent)
+    })
+
+    // Wait for file to appear
+    await waitFor(() => {
+      expect(screen.getByText('test.txt')).toBeInTheDocument()
+    }, { timeout: 2000 })
+
+    // Click Add button
+    const addButton = screen.getByRole('button', { name: /add \(1\)/i })
+    await userEvent.setup().click(addButton)
+
+    // Should show extract started notification
+    await waitFor(() => {
+      expect(screen.getByText(/extract started/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+  })
+
+  it('shows extract skipped notification when run already active', async () => {
+    server.use(
+      http.post(`${BASE_URL}/api/projects/:projectId/files/bulk`, () => {
+        return HttpResponse.json(
+          {
+            files: [{ id: 1, file_name: 'test.txt', content_hash: 'hash1' }],
+            extract_started: false,
+            extract_skipped_reason: 'Run already running: 10',
+          },
+          { status: 201 }
+        )
+      })
+    )
+
+    const onClose = vi.fn()
+    renderWithProviders(<AddFileDialog projectId={1} opened={true} onClose={onClose} />)
+
+    // Simulate file drop
+    const dropzone = screen.getByText(/drag files here or click to select/i).closest('div')!
+    const file = createMockFile('test.txt', 'Test content')
+    const dataTransfer = {
+      files: [file],
+      items: [{ kind: 'file', type: 'text/plain', getAsFile: () => file }],
+      types: ['Files'],
+    }
+    await waitFor(async () => {
+      const dropEvent = new Event('drop', { bubbles: true })
+      Object.assign(dropEvent, { dataTransfer })
+      dropzone.dispatchEvent(dropEvent)
+    })
+
+    // Wait for file to appear
+    await waitFor(() => {
+      expect(screen.getByText('test.txt')).toBeInTheDocument()
+    }, { timeout: 2000 })
+
+    // Click Add button
+    const addButton = screen.getByRole('button', { name: /add \(1\)/i })
+    await userEvent.setup().click(addButton)
+
+    // Should show extract skipped notification
+    await waitFor(() => {
+      expect(screen.getByText(/extract skipped/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
   })
 })

@@ -59,6 +59,12 @@ export interface FileCreateBulkRequest {
   files: FileCreateRequest[]
 }
 
+export interface FileCreateBulkResponse {
+  files: FileResponse[]
+  extract_started: boolean
+  extract_skipped_reason: string | null
+}
+
 // Term types
 export interface TermResponse {
   id: number

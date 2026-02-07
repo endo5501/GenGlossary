@@ -283,7 +283,10 @@ export const handlers = [
       file_name: f.file_name,
       content_hash: 'new_hash_' + Date.now() + idx,
     }))
-    return HttpResponse.json(newFiles, { status: 201 })
+    return HttpResponse.json(
+      { files: newFiles, extract_started: true, extract_skipped_reason: null },
+      { status: 201 }
+    )
   }),
 
   http.delete(`${BASE_URL}/api/projects/:projectId/files/:fileId`, () => {

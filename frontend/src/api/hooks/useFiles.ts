@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
-import type { FileResponse, FileDetailResponse, FileCreateRequest, FileCreateBulkRequest } from '../types'
+import type { FileResponse, FileDetailResponse, FileCreateRequest, FileCreateBulkRequest, FileCreateBulkResponse } from '../types'
 import { projectKeys } from './useProjects'
+import { runKeys } from './useRuns'
 
 // Query keys
 export const fileKeys = {
@@ -22,7 +23,7 @@ const fileApi = {
   create: (projectId: number, data: FileCreateRequest) =>
     apiClient.post<FileResponse>(`/api/projects/${projectId}/files`, data),
   createBulk: (projectId: number, data: FileCreateBulkRequest) =>
-    apiClient.post<FileResponse[]>(`/api/projects/${projectId}/files/bulk`, data),
+    apiClient.post<FileCreateBulkResponse>(`/api/projects/${projectId}/files/bulk`, data),
   delete: (projectId: number, fileId: number) =>
     apiClient.delete<void>(`/api/projects/${projectId}/files/${fileId}`),
 }
@@ -67,6 +68,7 @@ export function useCreateFilesBulk(projectId: number) {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+      queryClient.invalidateQueries({ queryKey: runKeys.current(projectId) })
     },
   })
 }

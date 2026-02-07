@@ -82,6 +82,16 @@ class FileCreateBulkRequest(BaseModel):
     )
 
 
+class FileCreateBulkResponse(BaseModel):
+    """Response schema for bulk file creation with auto-extract status."""
+
+    files: list[FileResponse] = Field(..., description="List of created files")
+    extract_started: bool = Field(..., description="Whether extract was auto-started")
+    extract_skipped_reason: str | None = Field(
+        None, description="Reason extract was skipped (e.g., run already active)"
+    )
+
+
 class DiffScanResponse(BaseModel):
     """Response schema for diff scan operation.
 

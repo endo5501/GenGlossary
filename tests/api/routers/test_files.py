@@ -1,6 +1,7 @@
 """Tests for Files API endpoints."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -219,9 +220,9 @@ def test_create_files_bulk_adds_multiple_documents(test_project_setup, client: T
 
     assert response.status_code == 201
     data = response.json()
-    assert len(data) == 2
-    assert data[0]["file_name"] == "file1.txt"
-    assert data[1]["file_name"] == "file2.md"
+    assert len(data["files"]) == 2
+    assert data["files"][0]["file_name"] == "file1.txt"
+    assert data["files"][1]["file_name"] == "file2.md"
 
 
 def test_create_files_bulk_returns_400_for_invalid_extension(
@@ -425,8 +426,8 @@ class TestEmptySegmentNormalization:
 
         assert response.status_code == 201
         data = response.json()
-        assert data[0]["file_name"] == "a/b.md"
-        assert data[1]["file_name"] == "x/y.txt"
+        assert data["files"][0]["file_name"] == "a/b.md"
+        assert data["files"][1]["file_name"] == "x/y.txt"
 
 
 class TestPathLengthLimits:
@@ -695,7 +696,7 @@ class TestUnicodeNormalization:
         response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
 
         assert response.status_code == 201
-        assert response.json()[0]["file_name"] == nfc_name
+        assert response.json()["files"][0]["file_name"] == nfc_name
 
     def test_create_files_bulk_rejects_lookalike_characters(
         self, test_project_setup, client: TestClient
@@ -844,8 +845,8 @@ class TestPathValidationEnhancement:
 
         assert response.status_code == 201
         data = response.json()
-        assert data[0]["file_name"] == "file1.md"
-        assert data[1]["file_name"] == "dir/file2.md"
+        assert data["files"][0]["file_name"] == "file1.md"
+        assert data["files"][1]["file_name"] == "dir/file2.md"
 
     def test_create_files_bulk_detects_duplicate_via_normalization(
         self, test_project_setup, client: TestClient
@@ -1197,3 +1198,124 @@ class TestWindowsInvalidCharacters:
         response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
 
         assert response.status_code == 400
+
+
+class TestCreateFilesBulkAutoExtract:
+    """Tests for auto-extract trigger on bulk file creation."""
+
+    def test_create_files_bulk_triggers_extract(
+        self, test_project_setup, client: TestClient
+    ):
+        """ファイル追加成功後にExtractが自動的に開始される"""
+        from genglossary.api.dependencies import get_run_manager
+
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "file1.txt", "content": "Content 1"},
+            ]
+        }
+
+        mock_manager = MagicMock()
+        mock_manager.start_run.return_value = 42  # run_id
+
+        client.app.dependency_overrides[get_run_manager] = lambda: mock_manager
+        try:
+            response = client.post(
+                f"/api/projects/{project_id}/files/bulk", json=payload
+            )
+        finally:
+            client.app.dependency_overrides.pop(get_run_manager, None)
+
+        assert response.status_code == 201
+        data = response.json()
+
+        # Response should include extract_started flag
+        assert data["extract_started"] is True
+        assert data["extract_skipped_reason"] is None
+
+        # Files should be in the response
+        assert len(data["files"]) == 1
+        assert data["files"][0]["file_name"] == "file1.txt"
+
+        # RunManager.start_run should have been called with extract scope
+        mock_manager.start_run.assert_called_once_with(
+            scope="extract", triggered_by="auto"
+        )
+
+    def test_create_files_bulk_skips_extract_when_run_active(
+        self, test_project_setup, client: TestClient
+    ):
+        """既にRunが実行中の場合、ファイル保存は成功しExtractはスキップされる"""
+        from genglossary.api.dependencies import get_run_manager
+
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "file1.txt", "content": "Content 1"},
+            ]
+        }
+
+        mock_manager = MagicMock()
+        mock_manager.start_run.side_effect = RuntimeError(
+            "Run already running: 10"
+        )
+
+        client.app.dependency_overrides[get_run_manager] = lambda: mock_manager
+        try:
+            response = client.post(
+                f"/api/projects/{project_id}/files/bulk", json=payload
+            )
+        finally:
+            client.app.dependency_overrides.pop(get_run_manager, None)
+
+        assert response.status_code == 201
+        data = response.json()
+
+        # Extract should be skipped but files saved
+        assert data["extract_started"] is False
+        assert "already running" in data["extract_skipped_reason"]
+
+        # Files should still be created
+        assert len(data["files"]) == 1
+        assert data["files"][0]["file_name"] == "file1.txt"
+
+    def test_create_files_bulk_handles_unexpected_extract_error(
+        self, test_project_setup, client: TestClient
+    ):
+        """start_runが予期しない例外を投げてもファイル保存は成功しextract_startedはfalseになる"""
+        from genglossary.api.dependencies import get_run_manager
+
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "file1.txt", "content": "Content 1"},
+            ]
+        }
+
+        mock_manager = MagicMock()
+        mock_manager.start_run.side_effect = Exception(
+            "Unexpected DB connection failure"
+        )
+
+        client.app.dependency_overrides[get_run_manager] = lambda: mock_manager
+        try:
+            response = client.post(
+                f"/api/projects/{project_id}/files/bulk", json=payload
+            )
+        finally:
+            client.app.dependency_overrides.pop(get_run_manager, None)
+
+        assert response.status_code == 201
+        data = response.json()
+
+        # Extract should be skipped due to unexpected error
+        assert data["extract_started"] is False
+        assert data["extract_skipped_reason"] is not None
+
+        # Files should still be created
+        assert len(data["files"]) == 1
+        assert data["files"][0]["file_name"] == "file1.txt"

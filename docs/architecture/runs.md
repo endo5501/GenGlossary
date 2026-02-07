@@ -270,8 +270,12 @@ class RunManager:
         self._log_queue: Queue = Queue()
         self._completed_runs: dict[int, dict] = {}  # Track completed runs for late subscribers
 
-    def start_run(self, scope: str) -> int:
+    def start_run(self, scope: str, triggered_by: str = "api") -> int:
         """バックグラウンドでRunを開始
+
+        Args:
+            scope: 実行スコープ（"full", "extract", "generate", "review", "refine"）
+            triggered_by: トリガー元（"api", "manual", "auto"）
 
         Returns:
             作成されたRunのID
@@ -572,7 +576,7 @@ def _current_utc_iso() -> str:
 ```python
 class PipelineScope(Enum):
     """パイプライン実行スコープの列挙型"""
-    FULL = "full"        # 全ステップ実行
+    FULL = "full"        # generate → review → refine（extractを除く）
     EXTRACT = "extract"  # 用語抽出のみ
     GENERATE = "generate" # 用語集生成のみ
     REVIEW = "review"    # レビューのみ
@@ -916,11 +920,19 @@ if not issues:
 
 | Scope | 実行ステップ | 用途 |
 |-------|------------|------|
-| `full` | 1→2→3→4→5 | 全パイプライン実行（ドキュメント読み込みから） |
-| `extract` | 2 | 用語抽出のみ |
+| `full` | 1→3→4→5 | generate → review → refine（extractを除く、用語はDB既存前提） |
+| `extract` | 2 | 用語抽出のみ（ファイル追加時に自動実行、または手動実行） |
 | `generate` | 3 | 用語集生成のみ |
 | `review` | 4 | レビューのみ |
 | `refine` | 5 | 改善のみ |
+
+**`full` スコープの変更点:**
+- extractステップは `full` スコープから除外されています
+- `full` 実行時はDBに既に用語が存在していることが前提です
+- 用語が0件の場合は `RuntimeError("Cannot execute full pipeline without extracted terms")` が発生します
+- extractは以下のタイミングで実行されます:
+  - ファイル追加時の自動実行（`triggered_by="auto"`）
+  - Terms画面からの手動実行（`scope="extract"`）
 
 **重複用語の処理:**
 - 用語抽出ステップ（ステップ2）で LLM が同じ用語を複数回返した場合、重複はスキップされ、ユニークな用語のみが DB に保存されます
@@ -968,6 +980,7 @@ if not issues:
   - DBの環境間移動時の互換性を向上（ポータビリティ）
 
 - `full` / `extract` / `refine`: `_load_documents()` を使用してドキュメントを読み込む
+- `full`: DBから既存の用語を読み込む（extractはスキップ）。用語が0件の場合はエラー
 - GUIからのファイル追加: HTML5 File APIでブラウザから読み取り、APIを通じてDBに保存
 
 **DB-firstアプローチの理由:**

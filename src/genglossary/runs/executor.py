@@ -52,7 +52,7 @@ class PipelineScope(Enum):
 
 # Map of scope to clear functions for table cleanup
 _SCOPE_CLEAR_FUNCTIONS: dict[PipelineScope, list[Callable[[sqlite3.Connection], None]]] = {
-    PipelineScope.FULL: [delete_all_terms, delete_all_provisional, delete_all_issues, delete_all_refined],
+    PipelineScope.FULL: [delete_all_provisional, delete_all_issues, delete_all_refined],
     PipelineScope.EXTRACT: [delete_all_terms],
     PipelineScope.GENERATE: [delete_all_provisional],
     PipelineScope.REVIEW: [delete_all_issues],
@@ -432,7 +432,10 @@ class PipelineExecutor:
         context: ExecutionContext,
         doc_root: str = ".",
     ) -> None:
-        """Execute full pipeline (extract → generate → review → refine).
+        """Execute full pipeline (generate → review → refine).
+
+        Extract is excluded from the full pipeline. Terms must already exist
+        in the database (via prior extract run or auto-extract on file add).
 
         Args:
             conn: Project database connection.
@@ -441,16 +444,22 @@ class PipelineExecutor:
 
         Raises:
             PipelineCancelledException: If execution is cancelled.
+            RuntimeError: If no terms found in database.
         """
         # Step 1: Load documents
         documents = self._load_documents(conn, context, doc_root)
         self._log(context, "info", f"Loaded {len(documents)} documents")
 
-        # Step 2: Extract terms
-        unique_terms = self._do_extract(conn, context, documents)
+        # Step 2: Load existing terms from DB (extract is skipped)
+        self._log(context, "info", "Loading terms from database...")
+        term_rows = list_all_terms(conn)
+        if not term_rows:
+            self._log(context, "error", "No terms found in database")
+            raise RuntimeError("Cannot execute full pipeline without extracted terms")
+        extracted_terms = [row["term_text"] for row in term_rows]
 
         # Step 3: Generate glossary
-        glossary = self._do_generate(conn, context, documents, unique_terms)
+        glossary = self._do_generate(conn, context, documents, extracted_terms)
 
         # Step 4: Review glossary
         issues = self._do_review(conn, context, glossary)
