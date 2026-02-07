@@ -17,6 +17,7 @@ from genglossary.api.routers import (
     projects_router,
     provisional_router,
     refined_router,
+    required_terms_router,
     runs_router,
     terms_router,
 )
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(projects_router)
     app.include_router(terms_router)
     app.include_router(excluded_terms_router)
+    app.include_router(required_terms_router)
     app.include_router(provisional_router)
     app.include_router(issues_router)
     app.include_router(refined_router)
