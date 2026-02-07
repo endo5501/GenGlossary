@@ -32,7 +32,7 @@ interface AddFileDialogProps {
 }
 
 const ALLOWED_EXTENSIONS = ['.txt', '.md']
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_FILE_SIZE = 3 * 1024 * 1024 // 3MB
 
 export function AddFileDialog({ projectId, opened, onClose }: AddFileDialogProps) {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([])
@@ -165,7 +165,7 @@ export function AddFileDialog({ projectId, opened, onClose }: AddFileDialogProps
                 Drag files here or click to select
               </Text>
               <Text size="sm" c="dimmed" inline mt={7}>
-                Only .txt and .md files are allowed (max 5MB each)
+                Only .txt and .md files are allowed (max 3MB each)
               </Text>
             </div>
           </Group>
