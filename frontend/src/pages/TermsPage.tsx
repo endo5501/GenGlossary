@@ -219,200 +219,202 @@ export function TermsPage({ projectId }: TermsPageProps) {
   const isEmpty = !currentTab.data || currentTab.data.length === 0
 
   return (
-    <PageContainer
-      isLoading={currentTab.isTabLoading}
-      isEmpty={isEmpty}
-      emptyMessage={currentTab.emptyMessage}
-      actionBar={currentTab.actionBar}
-      loadingTestId="terms-loading"
-      emptyTestId={currentTab.emptyTestId}
-    >
-      <Tabs value={activeTab} onChange={setActiveTab}>
-        <Tabs.List mb="md">
-          <Tabs.Tab value="terms" leftSection={<IconList size={16} />}>
-            用語一覧
-          </Tabs.Tab>
-          <Tabs.Tab value="excluded" leftSection={<IconBan size={16} />}>
-            除外用語
-          </Tabs.Tab>
-          <Tabs.Tab value="required" leftSection={<IconStar size={16} />}>
-            必須用語
-          </Tabs.Tab>
-        </Tabs.List>
+    <>
+      <PageContainer
+        isLoading={currentTab.isTabLoading}
+        isEmpty={isEmpty}
+        emptyMessage={currentTab.emptyMessage}
+        actionBar={currentTab.actionBar}
+        loadingTestId="terms-loading"
+        emptyTestId={currentTab.emptyTestId}
+      >
+        <Tabs value={activeTab} onChange={setActiveTab}>
+          <Tabs.List mb="md">
+            <Tabs.Tab value="terms" leftSection={<IconList size={16} />}>
+              用語一覧
+            </Tabs.Tab>
+            <Tabs.Tab value="excluded" leftSection={<IconBan size={16} />}>
+              除外用語
+            </Tabs.Tab>
+            <Tabs.Tab value="required" leftSection={<IconStar size={16} />}>
+              必須用語
+            </Tabs.Tab>
+          </Tabs.List>
 
-        <Tabs.Panel value="terms">
-          <Box style={{ flex: 1 }}>
-            <Table highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Term</Table.Th>
-                  <Table.Th>Category</Table.Th>
-                  <Table.Th w={100}>Actions</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {terms?.map((term) => (
-                  <Table.Tr
-                    key={term.id}
-                    onClick={() => handleSelectTerm(term.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        handleSelectTerm(term.id)
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-selected={selectedId === term.id}
-                    style={{ cursor: 'pointer' }}
-                    bg={selectedId === term.id ? 'var(--mantine-color-blue-light)' : undefined}
-                  >
-                    <Table.Td>{term.term_text}</Table.Td>
-                    <Table.Td>
-                      {term.category ? (
-                        <Badge variant="light">{term.category}</Badge>
-                      ) : (
-                        <Text c="dimmed" size="sm">
-                          -
-                        </Text>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap="xs">
-                        <Tooltip label="除外に追加">
-                          <ActionIcon
-                            variant="subtle"
-                            color="orange"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleAddToExcluded(term.term_text)
-                            }}
-                            aria-label="Add to excluded"
-                            loading={createExcludedTerm.isPending}
-                          >
-                            <IconBan size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="削除">
-                          <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteTerm(term.id)
-                            }}
-                            aria-label="Delete term"
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
-                    </Table.Td>
+          <Tabs.Panel value="terms">
+            <Box style={{ flex: 1 }}>
+              <Table highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Term</Table.Th>
+                    <Table.Th>Category</Table.Th>
+                    <Table.Th w={100}>Actions</Table.Th>
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Box>
+                </Table.Thead>
+                <Table.Tbody>
+                  {terms?.map((term) => (
+                    <Table.Tr
+                      key={term.id}
+                      onClick={() => handleSelectTerm(term.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleSelectTerm(term.id)
+                        }
+                      }}
+                      tabIndex={0}
+                      role="button"
+                      aria-selected={selectedId === term.id}
+                      style={{ cursor: 'pointer' }}
+                      bg={selectedId === term.id ? 'var(--mantine-color-blue-light)' : undefined}
+                    >
+                      <Table.Td>{term.term_text}</Table.Td>
+                      <Table.Td>
+                        {term.category ? (
+                          <Badge variant="light">{term.category}</Badge>
+                        ) : (
+                          <Text c="dimmed" size="sm">
+                            -
+                          </Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs">
+                          <Tooltip label="除外に追加">
+                            <ActionIcon
+                              variant="subtle"
+                              color="orange"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleAddToExcluded(term.term_text)
+                              }}
+                              aria-label="Add to excluded"
+                              loading={createExcludedTerm.isPending}
+                            >
+                              <IconBan size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="削除">
+                            <ActionIcon
+                              variant="subtle"
+                              color="red"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeleteTerm(term.id)
+                              }}
+                              aria-label="Delete term"
+                            >
+                              <IconTrash size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Box>
 
-          {selectedTerm && (
-            <Paper data-testid="term-detail-panel" withBorder p="md" mt="md">
-              <Group justify="space-between" mb="md">
-                <Text fw={600} size="lg">
-                  {selectedTerm.term_text}
-                </Text>
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  onClick={() => handleDeleteTerm(selectedTerm.id)}
-                  aria-label="Delete term"
-                >
-                  <IconTrash size={16} />
-                </ActionIcon>
-              </Group>
-
-              {isEditingCategory ? (
-                <Group gap="xs" mb="md">
-                  <TextInput
-                    value={editingCategoryValue}
-                    onChange={(e) => setEditingCategoryValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleSaveCategory()
-                      } else if (e.key === 'Escape') {
-                        handleCancelEditCategory()
-                      }
-                    }}
-                    placeholder="カテゴリを入力"
-                    aria-label="カテゴリ"
-                    size="sm"
-                    disabled={updateTerm.isPending}
-                  />
+            {selectedTerm && (
+              <Paper data-testid="term-detail-panel" withBorder p="md" mt="md">
+                <Group justify="space-between" mb="md">
+                  <Text fw={600} size="lg">
+                    {selectedTerm.term_text}
+                  </Text>
                   <ActionIcon
                     variant="subtle"
-                    color="green"
-                    onClick={handleSaveCategory}
-                    aria-label="Save"
-                    loading={updateTerm.isPending}
+                    color="red"
+                    onClick={() => handleDeleteTerm(selectedTerm.id)}
+                    aria-label="Delete term"
                   >
-                    <IconCheck size={16} />
-                  </ActionIcon>
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    onClick={handleCancelEditCategory}
-                    aria-label="Cancel"
-                    disabled={updateTerm.isPending}
-                  >
-                    <IconX size={16} />
+                    <IconTrash size={16} />
                   </ActionIcon>
                 </Group>
-              ) : (
-                <Group gap="xs" mb="md">
-                  {selectedTerm.category ? (
-                    <Badge variant="light">{selectedTerm.category}</Badge>
-                  ) : (
-                    <Text c="dimmed" size="sm">カテゴリなし</Text>
-                  )}
-                  <Tooltip label="カテゴリを編集">
+
+                {isEditingCategory ? (
+                  <Group gap="xs" mb="md">
+                    <TextInput
+                      value={editingCategoryValue}
+                      onChange={(e) => setEditingCategoryValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveCategory()
+                        } else if (e.key === 'Escape') {
+                          handleCancelEditCategory()
+                        }
+                      }}
+                      placeholder="カテゴリを入力"
+                      aria-label="カテゴリ"
+                      size="sm"
+                      disabled={updateTerm.isPending}
+                    />
                     <ActionIcon
                       variant="subtle"
-                      color="blue"
-                      onClick={handleStartEditCategory}
-                      aria-label="Edit category"
+                      color="green"
+                      onClick={handleSaveCategory}
+                      aria-label="Save"
+                      loading={updateTerm.isPending}
                     >
-                      <IconPencil size={16} />
+                      <IconCheck size={16} />
                     </ActionIcon>
-                  </Tooltip>
-                </Group>
-              )}
-            </Paper>
-          )}
-        </Tabs.Panel>
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      onClick={handleCancelEditCategory}
+                      aria-label="Cancel"
+                      disabled={updateTerm.isPending}
+                    >
+                      <IconX size={16} />
+                    </ActionIcon>
+                  </Group>
+                ) : (
+                  <Group gap="xs" mb="md">
+                    {selectedTerm.category ? (
+                      <Badge variant="light">{selectedTerm.category}</Badge>
+                    ) : (
+                      <Text c="dimmed" size="sm">カテゴリなし</Text>
+                    )}
+                    <Tooltip label="カテゴリを編集">
+                      <ActionIcon
+                        variant="subtle"
+                        color="blue"
+                        onClick={handleStartEditCategory}
+                        aria-label="Edit category"
+                      >
+                        <IconPencil size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                )}
+              </Paper>
+            )}
+          </Tabs.Panel>
 
-        <Tabs.Panel value="excluded">
-          <TermListTable
-            terms={excludedTerms}
-            onDelete={handleDeleteExcludedTerm}
-            isLoading={isLoadingExcluded}
-            isDeletePending={deleteExcludedTerm.isPending}
-            showSourceColumn={true}
-            deleteTooltip="除外リストから削除"
-            deleteAriaLabel="Remove from excluded"
-          />
-        </Tabs.Panel>
+          <Tabs.Panel value="excluded">
+            <TermListTable
+              terms={excludedTerms}
+              onDelete={handleDeleteExcludedTerm}
+              isLoading={isLoadingExcluded}
+              isDeletePending={deleteExcludedTerm.isPending}
+              showSourceColumn={true}
+              deleteTooltip="除外リストから削除"
+              deleteAriaLabel="Remove from excluded"
+            />
+          </Tabs.Panel>
 
-        <Tabs.Panel value="required">
-          <TermListTable
-            terms={requiredTerms}
-            onDelete={handleDeleteRequiredTerm}
-            isLoading={isLoadingRequired}
-            isDeletePending={deleteRequiredTerm.isPending}
-            showSourceColumn={false}
-            deleteTooltip="必須リストから削除"
-            deleteAriaLabel="Remove from required"
-          />
-        </Tabs.Panel>
-      </Tabs>
+          <Tabs.Panel value="required">
+            <TermListTable
+              terms={requiredTerms}
+              onDelete={handleDeleteRequiredTerm}
+              isLoading={isLoadingRequired}
+              isDeletePending={deleteRequiredTerm.isPending}
+              showSourceColumn={false}
+              deleteTooltip="必須リストから削除"
+              deleteAriaLabel="Remove from required"
+            />
+          </Tabs.Panel>
+        </Tabs>
+      </PageContainer>
 
       <Modal opened={opened} onClose={close} title="Add Term">
         <Stack>
@@ -457,6 +459,6 @@ export function TermsPage({ projectId }: TermsPageProps) {
         placeholder="必須にする用語を入力"
         isLoading={createRequiredTerm.isPending}
       />
-    </PageContainer>
+    </>
   )
 }
