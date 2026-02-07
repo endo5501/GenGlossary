@@ -197,6 +197,112 @@ class TestPipelineExecutorFull:
             mock_loader.return_value.load_directory.assert_not_called()
 
 
+    def test_full_scope_skips_extract_and_loads_terms_from_db(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """full scopeはextractをスキップし、DBから既存の用語を読み込んでgenerate以降を実行する"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB data (documents and terms already exist)
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
+            mock_list_terms.return_value = [
+                {"term_text": "term1"},
+                {"term_text": "term2"},
+            ]
+
+            # Mock glossary generation
+            mock_glossary = Glossary(terms={
+                "term1": Term(
+                    name="term1",
+                    definition="test definition",
+                    confidence=0.9,
+                    occurrences=[
+                        TermOccurrence(
+                            document_path="test.txt",
+                            line_number=1,
+                            context="test context"
+                        )
+                    ]
+                )
+            })
+            mock_generator.return_value.generate.return_value = mock_glossary
+
+            # Mock review
+            mock_reviewer.return_value.review.return_value = []
+
+            # Execute full pipeline (GUI mode)
+            executor.execute(project_db, "full", execution_context)
+
+            # TermExtractor should NOT be called (extract skipped)
+            mock_extractor.return_value.extract_terms.assert_not_called()
+
+            # Generator should be called with terms loaded from DB
+            mock_generator.return_value.generate.assert_called_once()
+            mock_reviewer.return_value.review.assert_called_once()
+
+    def test_full_scope_raises_error_when_no_terms_in_db(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """full scope: DBに用語が存在しない場合はRuntimeErrorを発生させる"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms:
+
+            # Mock LLM client
+            mock_llm_client = MagicMock()
+            mock_llm_factory.return_value = mock_llm_client
+
+            # Mock DB: documents exist but no terms
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
+            mock_list_terms.return_value = []
+
+            with pytest.raises(RuntimeError, match="Cannot execute full pipeline without extracted terms"):
+                executor.execute(project_db, "full", execution_context)
+
+    def test_full_scope_does_not_clear_terms_table(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """full scopeはterms_extractedテーブルをクリアしない（extractスキップのため）"""
+        with patch("genglossary.runs.executor.create_llm_client") as mock_llm_factory, \
+             patch("genglossary.runs.executor.list_all_documents") as mock_list_docs, \
+             patch("genglossary.runs.executor.list_all_terms") as mock_list_terms, \
+             patch("genglossary.runs.executor.GlossaryGenerator") as mock_generator, \
+             patch("genglossary.runs.executor.GlossaryReviewer") as mock_reviewer, \
+             patch("genglossary.runs.executor.GlossaryRefiner") as mock_refiner, \
+             patch("genglossary.runs.executor.delete_all_terms") as mock_delete_terms:
+
+            mock_llm_factory.return_value = MagicMock()
+            mock_list_docs.return_value = [{"file_name": "test.txt", "content": "test content"}]
+            mock_list_terms.return_value = [{"term_text": "term1"}]
+            mock_glossary = Glossary(terms={})
+            mock_generator.return_value.generate.return_value = mock_glossary
+            mock_reviewer.return_value.review.return_value = []
+
+            executor.execute(project_db, "full", execution_context)
+
+            # delete_all_terms should NOT be called for full scope
+            mock_delete_terms.assert_not_called()
+
+
 class TestPipelineExecutorGenerate:
     """Tests for generate scope execution."""
 
