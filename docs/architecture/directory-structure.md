@@ -177,6 +177,9 @@ frontend/
 │   ├── components/          # Reactコンポーネント
 │   │   ├── common/
 │   │   │   ├── PagePlaceholder.tsx  # 未実装ページ用
+│   │   │   ├── PageContainer.tsx    # ページ共通コンテナ (loading/error/empty)
+│   │   │   ├── SplitLayout.tsx      # リスト・詳細の左右分割レイアウト
+│   │   │   ├── OccurrenceList.tsx   # 用語出現箇所リスト
 │   │   │   ├── AddTermModal.tsx     # 用語追加モーダル (除外/必須共通)
 │   │   │   └── TermListTable.tsx    # 用語一覧テーブル (除外/必須共通)
 │   │   └── layout/
