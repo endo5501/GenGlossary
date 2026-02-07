@@ -50,21 +50,21 @@ excluded terms と required terms の実装間に約70%のコード重複があ�
 
 ## Tasks
 
-- [ ] バックエンド: 共通バリデータの抽出 (models/term_validator.py)
-- [ ] バックエンド: ジェネリックリポジトリ関数の抽出 (db/term_repository.py)
-- [ ] バックエンド: APIスキーマの共通化 (schemas/term_schemas.py)
-- [ ] フロントエンド: 共通フック (api/hooks/useTermsCrud.ts)
-- [ ] フロントエンド: 共通 AddTermModal コンポーネント
-- [ ] フロントエンド: 共通 TermListTable コンポーネント
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] バックエンド: 共通バリデータの抽出 (models/term_validator.py)
+- [x] バックエンド: ジェネリックリポジトリ関数の抽出 (db/term_repository.py)
+- [x] バックエンド: APIスキーマの共通化 (schemas/term_schemas.py)
+- [x] フロントエンド: 共通フック (api/hooks/useTermsCrud.ts)
+- [x] フロントエンド: 共通 AddTermModal コンポーネント
+- [x] フロントエンド: 共通 TermListTable コンポーネント
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
