@@ -408,6 +408,15 @@ class FileCreateRequest(BaseModel):
 class FileCreateBulkRequest(BaseModel):
     """Request schema for bulk file creation."""
     files: list[FileCreateRequest] = Field(..., description="List of files to create")
+
+
+class FileCreateBulkResponse(BaseModel):
+    """Response schema for bulk file creation with auto-extract status."""
+    files: list[FileResponse] = Field(..., description="List of created files")
+    extract_started: bool = Field(..., description="Whether extract was auto-started")
+    extract_skipped_reason: str | None = Field(
+        None, description="Reason extract was skipped (e.g., run already active)"
+    )
 ```
 
 **スキーマ設計のポイント:**
@@ -840,13 +849,18 @@ async def create_file(
     doc_id = create_document(project_db, normalized_file_name, request.content, content_hash)
     ...
 
-@router.post("/bulk", response_model=list[FileResponse], status_code=201)
+@router.post("/bulk", response_model=FileCreateBulkResponse, status_code=201)
 async def create_files_bulk(
     request: FileCreateBulkRequest = Body(...),
     project_db: sqlite3.Connection = Depends(get_project_db),
-) -> list[FileResponse]:
-    """複数ファイルを一括追加（バリデーション後、全ファイルを作成）"""
-    # 全ファイル名のバリデーション・正規化 → 正規化済みパスで重複チェック → 既存ファイルチェック → 一括作成
+    manager: RunManager = Depends(get_run_manager),
+) -> FileCreateBulkResponse:
+    """複数ファイルを一括追加し、Extract を自動実行
+
+    全ファイルのバリデーション・正規化 → 重複チェック → 一括作成 → Extract自動開始。
+    ファイル保存はトランザクション内で原子的に実行。
+    Extract開始は保存成功後に実行され、失敗してもファイル保存結果は返却される。
+    """
     ...
 ```
 
@@ -1048,7 +1062,7 @@ async def list_terms(
 - `GET /api/projects/{project_id}/files` - ファイル一覧取得
 - `GET /api/projects/{project_id}/files/{file_id}` - ファイル詳細取得
 - `POST /api/projects/{project_id}/files` - ファイル追加（file_name + content）
-- `POST /api/projects/{project_id}/files/bulk` - 複数ファイル一括追加
+- `POST /api/projects/{project_id}/files/bulk` - 複数ファイル一括追加（Extract自動実行付き）
 - `DELETE /api/projects/{project_id}/files/{file_id}` - ファイル削除
 
 **Projects API (プロジェクト管理) - 6エンドポイント:**
