@@ -1,5 +1,5 @@
 ---
-priority: 3
+priority: 1
 tags: [refactor, backend, frontend]
 description: "Reduce ~70% code duplication between excluded terms and required terms implementations"
 created_at: "2026-02-07T11:09:19Z"
