@@ -4,7 +4,7 @@ tags: [improvement, frontend, ux]
 description: "Split list and detail panel into side-by-side layout to eliminate scrolling"
 created_at: "2026-02-07T10:08:53Z"
 started_at: 2026-02-07T12:04:00Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T12:26:21Z # Do not modify manually
 ---
 
 # 詳細パネルのレイアウト改善（リスト・詳細の分割表示）
