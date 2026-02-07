@@ -14,7 +14,7 @@ interface GlobalTopBarProps {
 }
 
 const scopeOptions = [
-  { value: 'full', label: 'Full Pipeline' },
+  { value: 'full', label: 'Generate → Refine' },
   { value: 'extract', label: 'Extract Only' },
   { value: 'generate', label: 'Generate Only' },
   { value: 'review', label: 'Review Only' },
