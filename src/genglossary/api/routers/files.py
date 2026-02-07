@@ -58,8 +58,11 @@ BIDI_AND_ZERO_WIDTH = {
     "\ufeff",  # BYTE ORDER MARK / ZERO WIDTH NO-BREAK SPACE
 }
 
+# Windows/NTFS invalid characters (also blocks ADS via colon)
+WINDOWS_INVALID_CHARS = {":", "<", ">", '"', "|", "?", "*"}
+
 # Combined forbidden characters (single loop check)
-FORBIDDEN_CHARS = CONTROL_CHARS | BIDI_AND_ZERO_WIDTH | LOOKALIKE_SLASH | LOOKALIKE_DOT
+FORBIDDEN_CHARS = CONTROL_CHARS | BIDI_AND_ZERO_WIDTH | LOOKALIKE_SLASH | LOOKALIKE_DOT | WINDOWS_INVALID_CHARS
 
 # Trailing forbidden characters (space, dot, Unicode whitespace)
 TRAILING_FORBIDDEN = (

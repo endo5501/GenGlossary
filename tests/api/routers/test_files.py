@@ -318,12 +318,11 @@ class TestWindowsDrivePathRejection:
         """Test POST /api/projects/{id}/files rejects Windows drive paths."""
         project_id = test_project_setup["project_id"]
 
-        # Windows drive path should be rejected
+        # Windows drive path should be rejected (colon is now a forbidden char)
         payload = {"file_name": "C:/Windows/system32/file.md", "content": "content"}
         response = client.post(f"/api/projects/{project_id}/files", json=payload)
 
         assert response.status_code == 400
-        assert "absolute" in response.json()["detail"].lower()
 
     def test_create_file_rejects_lowercase_drive_letter(
         self, test_project_setup, client: TestClient
@@ -331,12 +330,11 @@ class TestWindowsDrivePathRejection:
         """Test POST /api/projects/{id}/files rejects lowercase drive letters."""
         project_id = test_project_setup["project_id"]
 
-        # Lowercase drive letter should also be rejected
+        # Lowercase drive letter should also be rejected (colon is now a forbidden char)
         payload = {"file_name": "d:/path/to/file.txt", "content": "content"}
         response = client.post(f"/api/projects/{project_id}/files", json=payload)
 
         assert response.status_code == 400
-        assert "absolute" in response.json()["detail"].lower()
 
     def test_create_file_rejects_colon_anywhere(
         self, test_project_setup, client: TestClient
@@ -355,6 +353,7 @@ class TestWindowsDrivePathRejection:
         """Test POST /api/projects/{id}/files/bulk rejects Windows drive paths."""
         project_id = test_project_setup["project_id"]
 
+        # Colon in drive path is now caught by forbidden chars check
         payload = {
             "files": [
                 {"file_name": "valid.md", "content": "content"},
@@ -364,7 +363,6 @@ class TestWindowsDrivePathRejection:
         response = client.post(f"/api/projects/{project_id}/files/bulk", json=payload)
 
         assert response.status_code == 400
-        assert "absolute" in response.json()["detail"].lower()
 
 
 class TestEmptySegmentNormalization:
