@@ -363,6 +363,7 @@ class GlossaryGenerator:
         progress_callback: ProgressCallback | None = None,
         skip_common_nouns: bool = True,
         term_progress_callback: TermProgressCallback | None = None,
+        user_notes_map: dict[str, str] | None = None,
     ) -> Glossary:
         """用語集を生成
 
@@ -372,6 +373,7 @@ class GlossaryGenerator:
             progress_callback: 進捗コールバック（オプション）
             skip_common_nouns: ClassifiedTerm使用時にcommon_nounをスキップ
             term_progress_callback: 用語ごとの進捗コールバック
+            user_notes_map: ユーザー補足情報マップ（{term_text: notes}）
 
         Returns:
             生成された用語集
@@ -398,8 +400,16 @@ class GlossaryReviewer:
     def __init__(self, llm_client: BaseLLMClient):
         self.llm_client = llm_client
 
-    def review(self, glossary: Glossary) -> list[GlossaryIssue]:
-        """用語集を精査し、問題点を列挙"""
+    def review(
+        self,
+        glossary: Glossary,
+        user_notes_map: dict[str, str] | None = None,
+    ) -> list[GlossaryIssue]:
+        """用語集を精査し、問題点を列挙
+
+        Args:
+            user_notes_map: ユーザー補足情報マップ（{term_text: notes}）
+        """
         ...
 ```
 
@@ -411,8 +421,18 @@ class GlossaryRefiner:
     def __init__(self, llm_client: BaseLLMClient):
         self.llm_client = llm_client
 
-    def refine(self, glossary: Glossary, issues: list[GlossaryIssue], document: Document) -> Glossary:
-        """問題点に基づいて用語集を改善"""
+    def refine(
+        self,
+        glossary: Glossary,
+        issues: list[GlossaryIssue],
+        document: Document,
+        user_notes_map: dict[str, str] | None = None,
+    ) -> Glossary:
+        """問題点に基づいて用語集を改善
+
+        Args:
+            user_notes_map: ユーザー補足情報マップ（{term_text: notes}）
+        """
         ...
 ```
 

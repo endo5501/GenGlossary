@@ -136,6 +136,40 @@
 - DBなしモード: `return_categories=False` で既存動作を維持
 - 既存の `list[str]` を期待するコードはそのまま動作
 
+## ユーザー補足情報（user_notes）のフロー
+
+```
+ユーザー → Terms画面で user_notes 入力（auto-save, debounce 500ms）
+                ↓
+        PATCH /api/projects/{id}/terms/{term_id}
+                ↓
+        terms_extracted.user_notes に保存
+                ↓
+    ┌───────────────────────────────────────────┐
+    │ Generate:                                 │
+    │   _build_user_notes_map(term_rows)        │
+    │   → プロンプトに「ユーザー補足情報」注入  │
+    │   → wrap_user_data()でインジェクション防止 │
+    ├───────────────────────────────────────────┤
+    │ Review:                                   │
+    │   provisional glossary + user_notes_map   │
+    │   → プロンプトに補足情報を付記            │
+    ├───────────────────────────────────────────┤
+    │ Refine:                                   │
+    │   issues + glossary + user_notes_map      │
+    │   → 改善時に補足情報を根拠として活用      │
+    └───────────────────────────────────────────┘
+
+Extract時のuser_notes保持:
+    backup_user_notes(conn) → {term_text: user_notes}
+    Extract実行（terms_extracted クリア＆再作成）
+    restore_user_notes(conn, backup) → term_textでマッチして復元
+```
+
+**user_notes_mapの流れ:**
+- `full`スコープ: `_execute_full` → `_build_user_notes_map` → `_do_generate`/`_do_review`/`_do_refine`
+- 個別スコープ: `_execute_generate`/`_execute_review`/`_execute_refine` でもそれぞれ `_build_user_notes_map` を呼び出し
+
 ## Extract の実行タイミング
 
 用語抽出（Extract）は Full Pipeline（`scope="full"`）から除外されており、以下のタイミングで実行されます:

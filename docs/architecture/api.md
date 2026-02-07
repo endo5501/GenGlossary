@@ -102,6 +102,7 @@ class TermResponse(BaseModel):
     id: int = Field(..., description="Term ID")
     term_text: str = Field(..., description="Term text")
     category: str | None = Field(None, description="Term category")
+    user_notes: str = Field("", description="User-provided supplementary notes")
 
     @classmethod
     def from_db_row(cls, row: Any) -> "TermResponse":
@@ -110,6 +111,7 @@ class TermResponse(BaseModel):
             id=row["id"],
             term_text=row["term_text"],
             category=row["category"],
+            user_notes=row["user_notes"],
         )
 
     @classmethod
@@ -119,14 +121,21 @@ class TermResponse(BaseModel):
 
 
 class TermMutationRequest(BaseModel):
-    """Request schema for creating or updating a term."""
+    """Request schema for creating a term."""
     term_text: str = Field(..., description="Term text")
     category: str | None = Field(None, description="Term category")
 
-
-# Aliases for clarity
 TermCreateRequest = TermMutationRequest
-TermUpdateRequest = TermMutationRequest
+
+
+class TermUpdateRequest(BaseModel):
+    """Request schema for partially updating a term.
+
+    All fields are optional. Only provided fields will be updated.
+    """
+    term_text: str | None = Field(None, description="Term text")
+    category: str | None = Field(None, description="Term category")
+    user_notes: str | None = Field(None, description="User-provided supplementary notes")
 ```
 
 ### provisional_schemas.py / refined_schemas.py
@@ -422,7 +431,7 @@ class FileCreateBulkResponse(BaseModel):
 **スキーマ設計のポイント:**
 - `from_db_row()` / `from_db_rows()` クラスメソッドでDB行からモデルへの変換を統一
 - `GlossaryTermResponse` を基底クラスとしてProvisionalとRefinedで共有
-- `TermMutationRequest` をCreateとUpdateで共有（DRY原則）
+- `TermCreateRequest` はCreateで使用、`TermUpdateRequest` は全フィールドオプショナルで真のPATCH semantics
 - `Field()` でOpenAPIドキュメントに説明を追加
 
 ## routers/ (APIエンドポイント)
@@ -593,11 +602,18 @@ async def update_term_endpoint(
     request: TermUpdateRequest = Body(...),
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> TermResponse:
-    """用語を更新"""
-    update_term(project_db, term_id, request.term_text, request.category)
-    row = get_term(project_db, term_id)
-    assert row is not None
-    return TermResponse.from_db_row(row)
+    """用語を部分更新（PATCH semantics）
+
+    未指定のフィールドは既存値を保持。
+    user_notesのみの更新も可能（term_text, categoryは省略可）。
+    """
+    existing = get_term(project_db, term_id)
+    if existing is None:
+        raise HTTPException(status_code=404)
+    term_text = request.term_text if request.term_text is not None else existing["term_text"]
+    category = request.category if request.category is not None else existing["category"]
+    update_term(project_db, term_id, term_text, category, user_notes=request.user_notes)
+    ...
 
 @router.delete("/{term_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_term_endpoint(
