@@ -1,5 +1,6 @@
 """Files API endpoints."""
 
+import logging
 import sqlite3
 import unicodedata
 
@@ -23,6 +24,8 @@ from genglossary.db.document_repository import (
     list_all_documents,
 )
 from genglossary.utils.hash import compute_content_hash
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
@@ -384,7 +387,8 @@ async def create_files_bulk(
         manager.start_run(scope="extract", triggered_by="auto")
         extract_started = True
     except Exception as e:
-        extract_skipped_reason = str(e)
+        logger.warning("Auto-extract skipped: %s", e)
+        extract_skipped_reason = "抽出処理をスキップしました"
 
     return FileCreateBulkResponse(
         files=file_responses,
