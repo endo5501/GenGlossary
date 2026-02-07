@@ -119,7 +119,7 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
             </Table>
           </Box>
         }
-        detail={selectedEntry ? (
+        detail={selectedEntry && (
           <Paper data-testid="provisional-detail-editor" withBorder p="md">
             <Group justify="space-between" mb="md">
               <Text fw={600} size="lg">
@@ -166,7 +166,7 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
               </Box>
             </Stack>
           </Paper>
-        ) : null}
+        )}
       />
     </PageContainer>
   )

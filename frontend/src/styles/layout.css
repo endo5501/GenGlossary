@@ -33,16 +33,18 @@
   min-height: 0;
 }
 
-.split-layout-list {
-  flex: 1;
+.split-layout-list,
+.split-layout-detail {
   overflow-y: auto;
   min-height: 0;
 }
 
+.split-layout-list {
+  flex: 1;
+}
+
 .split-layout-detail {
   flex: 0 0 40%;
-  overflow-y: auto;
-  min-height: 0;
 }
 
 @media (max-width: 768px) {

@@ -103,7 +103,7 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
             </Stack>
           </Box>
         }
-        detail={selectedIssue ? (
+        detail={selectedIssue && (
           <Paper data-testid="issue-detail-panel" withBorder p="md">
             <Text fw={600} size="lg" mb="md">
               {selectedIssue.term_name}
@@ -121,7 +121,7 @@ export function IssuesPage({ projectId }: IssuesPageProps) {
             </Text>
             <Text>{selectedIssue.description}</Text>
           </Paper>
-        ) : null}
+        )}
       />
     </PageContainer>
   )

@@ -86,7 +86,7 @@ export function RefinedPage({ projectId }: RefinedPageProps) {
             </Stack>
           </Box>
         }
-        detail={selectedEntry ? (
+        detail={selectedEntry && (
           <Paper data-testid="refined-detail-panel" withBorder p="md">
             <Text fw={600} size="lg" mb="md">
               {selectedEntry.term_name}
@@ -102,7 +102,7 @@ export function RefinedPage({ projectId }: RefinedPageProps) {
             </Text>
             <OccurrenceList occurrences={selectedEntry.occurrences} />
           </Paper>
-        ) : null}
+        )}
       />
     </PageContainer>
   )
