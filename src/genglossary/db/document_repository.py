@@ -2,14 +2,13 @@
 
 import sqlite3
 from collections.abc import Sequence
-from typing import cast
 
 from genglossary.db.db_helpers import batch_insert
 
 
 def create_document(
     conn: sqlite3.Connection, file_name: str, content: str, content_hash: str
-) -> int:
+) -> sqlite3.Row:
     """Create a new document record.
 
     Args:
@@ -19,7 +18,7 @@ def create_document(
         content_hash: Hash of the document content (for change detection).
 
     Returns:
-        int: The ID of the created document.
+        sqlite3.Row: The created document row.
 
     Raises:
         sqlite3.IntegrityError: If file_name already exists.
@@ -29,11 +28,13 @@ def create_document(
         """
         INSERT INTO documents (file_name, content, content_hash)
         VALUES (?, ?, ?)
+        RETURNING *
         """,
         (file_name, content, content_hash),
     )
-    # lastrowid is guaranteed to be non-None after INSERT
-    return cast(int, cursor.lastrowid)
+    row = cursor.fetchone()
+    assert row is not None
+    return row
 
 
 def get_document(conn: sqlite3.Connection, document_id: int) -> sqlite3.Row | None:

@@ -31,37 +31,35 @@ def db_with_schema(in_memory_db: sqlite3.Connection) -> sqlite3.Connection:
 class TestCreateDocument:
     """Test create_document function."""
 
-    def test_create_document_returns_document_id(
+    def test_create_document_returns_row(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Test that create_document returns a document ID."""
-        doc_id = create_document(
+        """Test that create_document returns a sqlite3.Row with all fields."""
+        row = create_document(
             db_with_schema,
             file_name="doc.txt",
             content="Hello World",
             content_hash="abc123",
         )
 
-        assert isinstance(doc_id, int)
-        assert doc_id > 0
+        assert isinstance(row, sqlite3.Row)
+        assert row["id"] > 0
+        assert row["file_name"] == "doc.txt"
+        assert row["content"] == "Hello World"
+        assert row["content_hash"] == "abc123"
 
     def test_create_document_stores_data(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that create_document stores data correctly."""
         test_content = "# Test Document\n\nThis is content."
-        doc_id = create_document(
+        row = create_document(
             db_with_schema,
             file_name="doc.txt",
             content=test_content,
             content_hash="abc123",
         )
 
-        cursor = db_with_schema.cursor()
-        cursor.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
-        row = cursor.fetchone()
-
-        assert row is not None
         assert row["file_name"] == "doc.txt"
         assert row["content"] == test_content
         assert row["content_hash"] == "abc123"
@@ -96,17 +94,17 @@ class TestGetDocument:
     ) -> None:
         """Test that get_document returns document data."""
         test_content = "Test content"
-        doc_id = create_document(
+        created = create_document(
             db_with_schema,
             file_name="doc.txt",
             content=test_content,
             content_hash="abc123",
         )
 
-        doc = get_document(db_with_schema, doc_id)
+        doc = get_document(db_with_schema, created["id"])
 
         assert doc is not None
-        assert doc["id"] == doc_id
+        assert doc["id"] == created["id"]
         assert doc["file_name"] == "doc.txt"
         assert doc["content"] == test_content
         assert doc["content_hash"] == "abc123"
@@ -135,13 +133,13 @@ class TestListAllDocuments:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that list_all_documents returns all documents."""
-        doc_id1 = create_document(
+        created1 = create_document(
             db_with_schema,
             file_name="doc1.txt",
             content="Content 1",
             content_hash="abc123",
         )
-        doc_id2 = create_document(
+        created2 = create_document(
             db_with_schema,
             file_name="doc2.txt",
             content="Content 2",
@@ -151,8 +149,8 @@ class TestListAllDocuments:
         docs = list_all_documents(db_with_schema)
 
         assert len(docs) == 2
-        assert docs[0]["id"] == doc_id1
-        assert docs[1]["id"] == doc_id2
+        assert docs[0]["id"] == created1["id"]
+        assert docs[1]["id"] == created2["id"]
 
     def test_list_all_documents_ordered_by_id(
         self, db_with_schema: sqlite3.Connection
@@ -184,7 +182,7 @@ class TestGetDocumentByName:
     ) -> None:
         """Test that get_document_by_name returns the correct document."""
         test_content = "Test content"
-        doc_id = create_document(
+        created = create_document(
             db_with_schema,
             file_name="doc.txt",
             content=test_content,
@@ -194,7 +192,7 @@ class TestGetDocumentByName:
         doc = get_document_by_name(db_with_schema, "doc.txt")
 
         assert doc is not None
-        assert doc["id"] == doc_id
+        assert doc["id"] == created["id"]
         assert doc["file_name"] == "doc.txt"
         assert doc["content"] == test_content
 

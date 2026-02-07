@@ -3,8 +3,8 @@ priority: 1
 tags: [improvement, backend, frontend]
 description: "Code review findings from extract pipeline restructuring"
 created_at: "2026-02-07T13:25:48Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-07T13:38:28Z # Do not modify manually
+closed_at: 2026-02-07T13:58:27Z # Do not modify manually
 ---
 
 # Extract Pipeline リストラクチャリング コードレビュー指摘事項
@@ -57,21 +57,53 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] エラーメッセージのサニタイズ
-- [ ] scopeOptions の重複排除
-- [ ] ファイルサイズ上限の統一
-- [ ] N+1クエリの改善
-- [ ] fullスコープのドキュメント・API整合性確認
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] エラーメッセージのサニタイズ
+- [x] scopeOptions の重複排除
+- [x] ファイルサイズ上限の統一
+- [x] N+1クエリの改善
+- [x] fullスコープのドキュメント・API整合性確認（既にドキュメント更新済み）
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md（既に正確に記述済み、追加変更不要）
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
+
+## 設計
+
+### 1. エラーメッセージのサニタイズ
+- **方針**: 固定メッセージに置換
+- `src/genglossary/api/routers/files.py`: `str(e)` → ユーザー向け固定メッセージ（「抽出処理をスキップしました」）
+- 生の例外は `logger.warning()` でログに記録
+- フロントエンド側の変更は不要（表示されるメッセージが安全になるため）
+
+### 2. N+1クエリの改善
+- **方針**: `create_document` が row を返すように変更
+- DB層の `create_document` の戻り値を `doc_id` → `Row` に変更
+- `create_files_bulk` のループ内 `get_document()` 呼び出しを削除し、`create_document` の戻り値を直接使用
+
+### 3. ファイルサイズ上限の統一
+- **方針**: フロントエンドを3MBに統一
+- `AddFileDialog.tsx` の `MAX_FILE_SIZE` を `5MB` → `3MB` に変更
+
+### 4. scopeOptions の重複排除
+- **方針**: `scopeOptions` から動的生成
+- `isRunScope` の値リストを `scopeOptions.map(opt => opt.value)` から生成
+
+### 5. fullスコープのドキュメント更新
+- **方針**: ドキュメント更新のみ（API名変更なし）
+- `full` スコープが「generate → review → refine」（extractを含まない）ことを明記
+
+### 実行順
+1. エラーメッセージのサニタイズ（TDD）
+2. N+1クエリの改善（TDD）
+3. ファイルサイズ上限の統一
+4. scopeOptions の重複排除
+5. fullスコープのドキュメント更新
 
 ## Notes
 

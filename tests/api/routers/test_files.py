@@ -65,8 +65,8 @@ def test_list_files_returns_all_documents(test_project_setup, client: TestClient
     # Add some documents
     conn = get_connection(project_db_path)
     with transaction(conn):
-        doc1_id = create_document(conn, "doc1.txt", "Content 1", "hash1")
-        doc2_id = create_document(conn, "doc2.md", "Content 2", "hash2")
+        created1 = create_document(conn, "doc1.txt", "Content 1", "hash1")
+        created2 = create_document(conn, "doc2.md", "Content 2", "hash2")
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/files")
@@ -74,10 +74,10 @@ def test_list_files_returns_all_documents(test_project_setup, client: TestClient
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
-    assert data[0]["id"] == doc1_id
+    assert data[0]["id"] == created1["id"]
     assert data[0]["file_name"] == "doc1.txt"
     assert data[0]["content_hash"] == "hash1"
-    assert data[1]["id"] == doc2_id
+    assert data[1]["id"] == created2["id"]
     assert data[1]["file_name"] == "doc2.md"
 
 
@@ -88,7 +88,8 @@ def test_get_file_by_id_returns_document_with_content(test_project_setup, client
 
     conn = get_connection(project_db_path)
     with transaction(conn):
-        doc_id = create_document(conn, "test.txt", "Test content for viewer", "test_hash")
+        created = create_document(conn, "test.txt", "Test content for viewer", "test_hash")
+    doc_id = created["id"]
     conn.close()
 
     response = client.get(f"/api/projects/{project_id}/files/{doc_id}")
@@ -276,7 +277,8 @@ def test_delete_file_removes_document(test_project_setup, client: TestClient):
 
     conn = get_connection(project_db_path)
     with transaction(conn):
-        doc_id = create_document(conn, "delete_me.txt", "To be deleted", "hash")
+        created = create_document(conn, "delete_me.txt", "To be deleted", "hash")
+    doc_id = created["id"]
     conn.close()
 
     response = client.delete(f"/api/projects/{project_id}/files/{doc_id}")
@@ -1276,7 +1278,9 @@ class TestCreateFilesBulkAutoExtract:
 
         # Extract should be skipped but files saved
         assert data["extract_started"] is False
-        assert "already running" in data["extract_skipped_reason"]
+        # Sanitized message: no raw exception details exposed
+        assert data["extract_skipped_reason"] is not None
+        assert "Run already running: 10" not in data["extract_skipped_reason"]
 
         # Files should still be created
         assert len(data["files"]) == 1
@@ -1312,9 +1316,11 @@ class TestCreateFilesBulkAutoExtract:
         assert response.status_code == 201
         data = response.json()
 
-        # Extract should be skipped due to unexpected error
+        # Extract should be skipped with sanitized message
         assert data["extract_started"] is False
         assert data["extract_skipped_reason"] is not None
+        # Raw exception message must not leak to client
+        assert "Unexpected DB connection failure" not in data["extract_skipped_reason"]
 
         # Files should still be created
         assert len(data["files"]) == 1
