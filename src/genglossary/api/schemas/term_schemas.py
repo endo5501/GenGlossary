@@ -55,8 +55,11 @@ TermCreateRequest = TermMutationRequest
 
 
 class TermUpdateRequest(BaseModel):
-    """Request schema for updating a term."""
+    """Request schema for partially updating a term.
 
-    term_text: str = Field(..., description="Term text")
+    All fields are optional. Only provided fields will be updated.
+    """
+
+    term_text: str | None = Field(None, description="Term text")
     category: str | None = Field(None, description="Term category")
     user_notes: str | None = Field(None, description="User-provided supplementary notes")

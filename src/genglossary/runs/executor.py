@@ -476,14 +476,7 @@ class PipelineExecutor:
         extracted_terms = [row["term_text"] for row in term_rows]
 
         # Build user_notes_map from DB
-        user_notes_map: dict[str, str] = {}
-        for row in term_rows:
-            try:
-                notes = row["user_notes"]
-            except (KeyError, IndexError):
-                notes = ""
-            if notes:
-                user_notes_map[row["term_text"]] = notes
+        user_notes_map = self._build_user_notes_map(term_rows)
 
         # Step 3: Generate glossary
         glossary = self._do_generate(conn, context, documents, extracted_terms, user_notes_map)
@@ -543,7 +536,10 @@ class PipelineExecutor:
             raise RuntimeError("Cannot execute generate without extracted terms")
         extracted_terms = [row["term_text"] for row in term_rows]
 
-        self._do_generate(conn, context, documents, extracted_terms)
+        # Build user_notes_map from DB
+        user_notes_map = self._build_user_notes_map(term_rows)
+
+        self._do_generate(conn, context, documents, extracted_terms, user_notes_map)
 
     @_cancellable
     def _execute_review(
@@ -564,7 +560,12 @@ class PipelineExecutor:
             RuntimeError: If no provisional glossary found in database.
         """
         glossary = self._load_provisional_glossary(conn, context, "review")
-        self._do_review(conn, context, glossary)
+
+        # Build user_notes_map from DB
+        term_rows = list_all_terms(conn)
+        user_notes_map = self._build_user_notes_map(term_rows)
+
+        self._do_review(conn, context, glossary, user_notes_map)
 
     @_cancellable
     def _execute_refine(
@@ -600,7 +601,31 @@ class PipelineExecutor:
         ]
         self._log(context, "info", f"Loaded {len(issues)} issues")
 
-        self._do_refine(conn, context, glossary, issues, documents)
+        # Build user_notes_map from DB
+        term_rows = list_all_terms(conn)
+        user_notes_map = self._build_user_notes_map(term_rows)
+
+        self._do_refine(conn, context, glossary, issues, documents, user_notes_map)
+
+    @staticmethod
+    def _build_user_notes_map(term_rows: list[sqlite3.Row]) -> dict[str, str]:
+        """Build user_notes_map from term database rows.
+
+        Args:
+            term_rows: List of term rows from the database.
+
+        Returns:
+            dict[str, str]: Mapping of term_text to user_notes for non-empty notes.
+        """
+        user_notes_map: dict[str, str] = {}
+        for row in term_rows:
+            try:
+                notes = row["user_notes"]
+            except KeyError:
+                notes = ""
+            if notes:
+                user_notes_map[row["term_text"]] = notes
+        return user_notes_map
 
     def _do_extract(
         self,
