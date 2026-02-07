@@ -4,7 +4,7 @@ tags: [feature, pipeline, frontend, backend]
 description: "Restructure extract pipeline: auto-extract on file add, remove extract from Run"
 created_at: "2026-02-07T09:55:32Z"
 started_at: 2026-02-07T12:28:28Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T13:36:46Z # Do not modify manually
 ---
 
 # ファイル追加と解析処理の操作体系見直し
