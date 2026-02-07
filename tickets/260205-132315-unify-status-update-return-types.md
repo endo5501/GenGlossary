@@ -3,7 +3,7 @@ priority: 3
 tags: [backend, refactoring, api-design]
 description: "Unify return types for status update functions in runs_repository"
 created_at: "2026-02-05T13:23:15Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-07T03:10:29Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -49,20 +49,44 @@ Standardize all conditional status update functions to return `RunUpdateResult`:
 
 ## Tasks
 
-- [ ] Update `update_run_status_if_running` to return `RunUpdateResult`
-- [ ] Update `complete_run_if_not_cancelled` to return `RunUpdateResult`
-- [ ] Update `fail_run_if_not_terminal` to return `RunUpdateResult`
-- [ ] Update all callers in manager.py
-- [ ] Update tests
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Update `update_run_status_if_running` to return `RunUpdateResult`
+- [x] Update `complete_run_if_not_cancelled` to return `RunUpdateResult`
+- [x] Update `fail_run_if_not_terminal` to return `RunUpdateResult`
+- [x] Update all callers in manager.py (no changes needed - uses update_run_status_if_active directly)
+- [x] Update tests
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## Design (brainstorming result)
+
+### runs_repository.py changes
+
+1. **`_update_run_status_if_in_states`** (internal helper)
+   - Return type: `int` → `RunUpdateResult`
+   - If rowcount > 0: return `UPDATED`
+   - If rowcount == 0: check existence → `NOT_FOUND` or `ALREADY_TERMINAL`
+   - Consolidate existence-check logic currently in `update_run_status_if_active`
+
+2. **`update_run_status_if_active`** → pass through `_update_run_status_if_in_states` result directly (remove duplicate existence check)
+
+3. **`update_run_status_if_running`** → return type `int` → `RunUpdateResult`
+
+4. **`complete_run_if_not_cancelled`** → return type `bool` → `RunUpdateResult`
+
+5. **`fail_run_if_not_terminal`** → return type `bool` → `RunUpdateResult`
+
+### Caller changes
+
+- manager.py production code: **No changes needed** (uses `update_run_status_if_active` directly)
+- test_manager.py: Update `complete_run_if_not_cancelled` usage (L1342, L1365)
+- test_runs_repository.py: Update all test assertions for changed return types
 
 ## Notes
 
