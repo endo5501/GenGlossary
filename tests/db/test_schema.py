@@ -43,7 +43,7 @@ class TestSchemaInitialization:
         initialize_db(in_memory_db)
 
         version = get_schema_version(in_memory_db)
-        assert version == 6  # v6: terms_required table added
+        assert version == 7  # v7: user_notes column added to terms_extracted
 
     def test_initialize_db_is_idempotent(self, in_memory_db: sqlite3.Connection) -> None:
         """Test that initialize_db can be called multiple times safely."""
@@ -219,8 +219,42 @@ class TestTermsExtractedTable:
         assert "id" in columns
         assert "term_text" in columns
         assert "category" in columns
+        assert "user_notes" in columns  # v7: user_notes column added
         assert "created_at" in columns
         assert "run_id" not in columns  # v2: run_id should be removed
+
+    def test_terms_extracted_user_notes_default_empty(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that user_notes has default value of empty string."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        cursor.execute(
+            "INSERT INTO terms_extracted (term_text, category) VALUES (?, ?)",
+            ("量子コンピュータ", "技術用語"),
+        )
+        cursor.execute("SELECT user_notes FROM terms_extracted WHERE id = 1")
+        user_notes = cursor.fetchone()[0]
+
+        assert user_notes == ""
+
+    def test_terms_extracted_user_notes_stores_text(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """Test that user_notes can store supplementary text."""
+        initialize_db(in_memory_db)
+
+        cursor = in_memory_db.cursor()
+        note = "GPはGeneral Practitioner（一般開業医）の略称"
+        cursor.execute(
+            "INSERT INTO terms_extracted (term_text, category, user_notes) VALUES (?, ?, ?)",
+            ("GP", "略称", note),
+        )
+        cursor.execute("SELECT user_notes FROM terms_extracted WHERE term_text = ?", ("GP",))
+        stored_note = cursor.fetchone()[0]
+
+        assert stored_note == note
 
     def test_terms_extracted_unique_constraint(
         self, in_memory_db: sqlite3.Connection
@@ -509,3 +543,45 @@ class TestGlossaryRefinedTable:
         created_at = cursor.fetchone()[0]
 
         assert created_at is not None
+
+
+class TestMigrateTermsUserNotesV7:
+    """Test v7 migration: add user_notes column to terms_extracted."""
+
+    def test_migrate_adds_user_notes_column(self, in_memory_db: sqlite3.Connection) -> None:
+        """Test that migration adds user_notes to existing terms_extracted table."""
+        # Create v6 schema (without user_notes)
+        in_memory_db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS terms_extracted (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                term_text TEXT NOT NULL UNIQUE,
+                category TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            """
+        )
+        # Insert existing term without user_notes
+        in_memory_db.execute(
+            "INSERT INTO terms_extracted (term_text, category) VALUES (?, ?)",
+            ("量子コンピュータ", "技術用語"),
+        )
+        in_memory_db.commit()
+
+        # Run initialize_db which should migrate
+        initialize_db(in_memory_db)
+
+        # Verify user_notes column exists
+        cursor = in_memory_db.cursor()
+        cursor.execute("PRAGMA table_info(terms_extracted)")
+        columns = {row[1] for row in cursor.fetchall()}
+        assert "user_notes" in columns
+
+        # Verify existing data is preserved with empty default
+        cursor.execute("SELECT user_notes FROM terms_extracted WHERE term_text = ?", ("量子コンピュータ",))
+        user_notes = cursor.fetchone()[0]
+        assert user_notes == ""
