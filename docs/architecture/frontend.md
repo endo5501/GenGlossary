@@ -64,6 +64,17 @@ import './styles/layout.css'  // 共通レイアウトスタイル
 .page-layout { height: 100%; display: flex; flex-direction: column; }
 .scrollable-content { flex: 1; overflow-y: auto; min-height: 0; }
 .action-bar { flex-shrink: 0; border-bottom: 1px solid var(--mantine-color-gray-3); }
+
+/* リストと詳細パネルの左右分割レイアウト */
+.split-layout { display: flex; gap: var(--mantine-spacing-md); height: 100%; min-height: 0; }
+.split-layout-list, .split-layout-detail { overflow-y: auto; min-height: 0; }
+.split-layout-list { flex: 1; }
+.split-layout-detail { flex: 0 0 40%; }
+
+@media (max-width: 768px) {
+  .split-layout { flex-direction: column; }
+  .split-layout-detail { flex: none; }
+}
 ```
 
 **CSS変数の使用:**
@@ -632,6 +643,7 @@ interface LlmSettingsFormProps {
 |---------------|------|
 | `PagePlaceholder` | 未実装ページ用のプレースホルダー。タイトルを表示 |
 | `PageContainer` | ページ共通のローディング、エラー、空状態を処理するコンテナ |
+| `SplitLayout` | リストと詳細パネルの左右分割レイアウト |
 | `OccurrenceList` | 用語の出現箇所リストを表示 |
 | `AddTermModal` | 用語追加モーダル（除外用語/必須用語で共通） |
 | `TermListTable` | 用語一覧テーブル（除外用語/必須用語で共通） |
@@ -744,6 +756,45 @@ CSS クラス（`styles/layout.css`）を使用してレイアウトを管理し
   )}
 >
   <Table>...</Table>
+</PageContainer>
+```
+
+#### SplitLayout
+
+リストと詳細パネルを左右に分割表示するレイアウトコンポーネント。`PageContainer` の `children` として使用します。
+
+```typescript
+interface SplitLayoutProps {
+  list: ReactNode           // 左側: リスト部分
+  detail: ReactNode | null  // 右側: 詳細パネル (nullで非表示)
+}
+```
+
+**動作:**
+- `detail` が `null` → リストが全幅を使用
+- `detail` が存在 → リスト60%:詳細40% の分割表示
+- 各パネルは独立してスクロール可能
+- 768px以下では縦並びにフォールバック
+
+**レイアウト構造:**
+
+```
+┌──────────────────┬───────────────────┐
+│ list             │ detail            │
+│ (.split-layout-  │ (.split-layout-   │
+│  list, 60%)      │  detail, 40%)     │
+│ 独立スクロール   │ 独立スクロール    │
+└──────────────────┴───────────────────┘
+```
+
+**使用ページ:** TermsPage, ProvisionalPage, RefinedPage, IssuesPage
+
+```tsx
+<PageContainer actionBar={...}>
+  <SplitLayout
+    list={<Table>...</Table>}
+    detail={selectedItem && <DetailPanel item={selectedItem} />}
+  />
 </PageContainer>
 ```
 

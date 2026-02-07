@@ -3,8 +3,8 @@ priority: 1
 tags: [improvement, frontend, ux]
 description: "Split list and detail panel into side-by-side layout to eliminate scrolling"
 created_at: "2026-02-07T10:08:53Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-07T12:04:00Z # Do not modify manually
+closed_at: 2026-02-07T12:26:21Z # Do not modify manually
 ---
 
 # 詳細パネルのレイアウト改善（リスト・詳細の分割表示）
@@ -62,65 +62,116 @@ closed_at: null   # Do not modify manually
 | Refined | `RefinedPage.tsx` | `refined-detail-panel` (行86-102) |
 | Issues | `IssuesPage.tsx` | 詳細パネル (行103-121) |
 
-## 実装方針
+## 設計（確定）
 
-### レイアウト構造の変更
+### アプローチ: 新規 SplitLayout コンポーネント
 
-現在の `.scrollable-content` 内の縦並びレイアウトを、左右分割レイアウトに変更する。
+`PageContainer` は変更せず、新規 `SplitLayout` コンポーネントを `children` として使う。
 
-**方針案: CSS Flexbox / Grid による左右分割**
-
-```
-.scrollable-content
-  ├── .list-panel     (左: スクロール可、flex: 1)
-  └── .detail-panel   (右: 固定幅 or flex比率、独立スクロール)
-```
-
-- リスト部分は独立してスクロール可能
-- 詳細パネルは選択時に右側に表示（未選択時はリストが全幅）
-- 詳細パネルも内容が長い場合は独立してスクロール可能
-
-### 共通コンポーネント化の検討
-
-4ページすべてで同じパターンのため、共通の `SplitLayout` コンポーネント（またはPageContainerの拡張）を作成することを検討する。
+### SplitLayout コンポーネント仕様
 
 ```tsx
-// 案: SplitLayoutコンポーネント
-<SplitLayout
-  list={<Table>...</Table>}
-  detail={selectedItem && <DetailPanel>...</DetailPanel>}
-/>
+// frontend/src/components/common/SplitLayout.tsx
+
+interface SplitLayoutProps {
+  list: React.ReactNode           // 左側: リスト部分
+  detail: React.ReactNode | null  // 右側: 詳細パネル (nullで非表示)
+}
 ```
 
-### レスポンシブ対応
+**動作:**
+- `detail` が `null` → リストが全幅（100%）を使用
+- `detail` が存在 → 左60%:右40%の分割レイアウト
+- 左右それぞれ独立してスクロール可能（`overflow-y: auto`）
+- レスポンシブ: 768px以下では縦並びにフォールバック
 
-- 画面幅が狭い場合は現在の縦並びレイアウトにフォールバック
-- ブレークポイントの目安: 768px 以下で縦並び
+### CSS（layout.css に追加）
+
+```css
+.split-layout {
+  display: flex;
+  gap: var(--mantine-spacing-md);
+  height: 100%;
+  min-height: 0;
+}
+
+.split-layout-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.split-layout-detail {
+  flex: 0 0 40%;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .split-layout {
+    flex-direction: column;
+  }
+  .split-layout-detail {
+    flex: none;
+  }
+}
+```
+
+### 各ページへの適用パターン
+
+```tsx
+// Before:
+<PageContainer actionBar={...}>
+  <ListComponent />
+  {selectedItem && <DetailPanel />}
+</PageContainer>
+
+// After:
+<PageContainer actionBar={...}>
+  <SplitLayout
+    list={<ListComponent />}
+    detail={selectedItem ? <DetailPanel /> : null}
+  />
+</PageContainer>
+```
+
+- **TermsPage**: list=Tabs全体, detail=選択用語の詳細パネル
+- **ProvisionalPage**: list=テーブル, detail=編集パネル
+- **RefinedPage**: list=Paperカード Stack, detail=詳細表示
+- **IssuesPage**: list=フィルタ付きカード Stack, detail=issue詳細
+
+各ページの内部ロジック（state, hooks, handlers）は変更なし。
+
+### テスト方針
+
+- SplitLayout のユニットテスト（detail null/非null の表示切替）
+- 既存テストは data-testid が維持されるため通るはず
 
 ## Tasks
 
-- [ ] 共通 `SplitLayout` コンポーネント（またはPageContainer拡張）の設計・実装
-- [ ] レイアウトCSS（左右分割、独立スクロール）の追加
-- [ ] TermsPage: リストと詳細パネルを分割レイアウトに移行
-- [ ] ProvisionalPage: リストと詳細パネルを分割レイアウトに移行
-- [ ] RefinedPage: リストと詳細パネルを分割レイアウトに移行
-- [ ] IssuesPage: リストと詳細パネルを分割レイアウトに移行
-- [ ] レスポンシブ対応（狭い画面幅での縦並びフォールバック）
-- [ ] テスト: 各ページの選択・詳細表示の動作確認
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 共通 `SplitLayout` コンポーネント（またはPageContainer拡張）の設計・実装
+- [x] レイアウトCSS（左右分割、独立スクロール）の追加
+- [x] TermsPage: リストと詳細パネルを分割レイアウトに移行
+- [x] ProvisionalPage: リストと詳細パネルを分割レイアウトに移行
+- [x] RefinedPage: リストと詳細パネルを分割レイアウトに移行
+- [x] IssuesPage: リストと詳細パネルを分割レイアウトに移行
+- [x] レスポンシブ対応（狭い画面幅での縦並びフォールバック）
+- [x] テスト: 各ページの選択・詳細表示の動作確認
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
 
-- Mantine UIの `Grid` や `SimpleGrid` コンポーネントの利用も検討可能
-- 詳細パネルの幅比率は brainstorming 時に決定（リスト60%:詳細40% 程度が目安）
+- 幅比率: リスト60%:詳細40%（brainstorming で決定）
+- 未選択時: 詳細パネル非表示、リスト全幅
 - 既存のテスト（`data-testid` による詳細パネルの検証）が壊れないように注意
 - `getRowSelectionProps` ユーティリティはそのまま利用可能
+- `PageContainer` は変更しない

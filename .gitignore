@@ -13,6 +13,9 @@ wheels/
 .venv
 logs/
 
+# Node modules
+node_modules/
+
 # Game data and saves
 data/
 saves/

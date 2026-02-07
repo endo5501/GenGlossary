@@ -19,6 +19,7 @@ import {
   useCurrentRun,
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
+import { SplitLayout } from '../components/common/SplitLayout'
 import { OccurrenceList } from '../components/common/OccurrenceList'
 import { getRowSelectionProps } from '../utils/getRowSelectionProps'
 
@@ -80,90 +81,93 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
       loadingTestId="provisional-loading"
       emptyTestId="provisional-empty"
     >
-      <Box style={{ flex: 1 }}>
-        <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Term</Table.Th>
-              <Table.Th>Definition</Table.Th>
-              <Table.Th>Confidence</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {entries?.map((entry) => (
-              <Table.Tr
-                key={entry.id}
-                {...getRowSelectionProps(entry, selectedId, setSelectedId)}
-              >
-                <Table.Td>{entry.term_name}</Table.Td>
-                <Table.Td>
-                  <Text lineClamp={2}>{entry.definition}</Text>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap="xs">
-                    <Progress
-                      value={entry.confidence * 100}
-                      size="sm"
-                      w={60}
-                      color={getConfidenceColor(entry.confidence)}
-                    />
-                    <Text size="sm">{Math.round(entry.confidence * 100)}%</Text>
-                  </Group>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Box>
-
-      {selectedEntry && (
-        <Paper data-testid="provisional-detail-editor" withBorder p="md">
-          <Group justify="space-between" mb="md">
-            <Text fw={600} size="lg">
-              {selectedEntry.term_name}
-            </Text>
-            <Button
-              leftSection={<IconDeviceFloppy size={16} />}
-              onClick={handleSave}
-              loading={updateProvisional.isPending}
-              disabled={isRunning}
-            >
-              Save
-            </Button>
-          </Group>
-
-          <Stack gap="md">
-            <Textarea
-              label="Definition"
-              value={editDefinition}
-              onChange={(e) => setEditDefinition(e.target.value)}
-              minRows={3}
-              disabled={isRunning}
-            />
-
-            <Box>
-              <Text size="sm" fw={500} mb="xs">
-                Confidence: {Math.round(editConfidence * 100)}%
+      <SplitLayout
+        list={
+          <Box style={{ flex: 1 }}>
+            <Table highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Term</Table.Th>
+                  <Table.Th>Definition</Table.Th>
+                  <Table.Th>Confidence</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {entries?.map((entry) => (
+                  <Table.Tr
+                    key={entry.id}
+                    {...getRowSelectionProps(entry, selectedId, setSelectedId)}
+                  >
+                    <Table.Td>{entry.term_name}</Table.Td>
+                    <Table.Td>
+                      <Text lineClamp={2}>{entry.definition}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs">
+                        <Progress
+                          value={entry.confidence * 100}
+                          size="sm"
+                          w={60}
+                          color={getConfidenceColor(entry.confidence)}
+                        />
+                        <Text size="sm">{Math.round(entry.confidence * 100)}%</Text>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Box>
+        }
+        detail={selectedEntry && (
+          <Paper data-testid="provisional-detail-editor" withBorder p="md">
+            <Group justify="space-between" mb="md">
+              <Text fw={600} size="lg">
+                {selectedEntry.term_name}
               </Text>
-              <Slider
-                value={editConfidence * 100}
-                onChange={(val) => setEditConfidence(val / 100)}
-                min={0}
-                max={100}
-                step={1}
+              <Button
+                leftSection={<IconDeviceFloppy size={16} />}
+                onClick={handleSave}
+                loading={updateProvisional.isPending}
+                disabled={isRunning}
+              >
+                Save
+              </Button>
+            </Group>
+
+            <Stack gap="md">
+              <Textarea
+                label="Definition"
+                value={editDefinition}
+                onChange={(e) => setEditDefinition(e.target.value)}
+                minRows={3}
                 disabled={isRunning}
               />
-            </Box>
 
-            <Box>
-              <Text fw={500} mb="xs">
-                Occurrences ({selectedEntry.occurrences.length})
-              </Text>
-              <OccurrenceList occurrences={selectedEntry.occurrences} />
-            </Box>
-          </Stack>
-        </Paper>
-      )}
+              <Box>
+                <Text size="sm" fw={500} mb="xs">
+                  Confidence: {Math.round(editConfidence * 100)}%
+                </Text>
+                <Slider
+                  value={editConfidence * 100}
+                  onChange={(val) => setEditConfidence(val / 100)}
+                  min={0}
+                  max={100}
+                  step={1}
+                  disabled={isRunning}
+                />
+              </Box>
+
+              <Box>
+                <Text fw={500} mb="xs">
+                  Occurrences ({selectedEntry.occurrences.length})
+                </Text>
+                <OccurrenceList occurrences={selectedEntry.occurrences} />
+              </Box>
+            </Stack>
+          </Paper>
+        )}
+      />
     </PageContainer>
   )
 }
