@@ -3,7 +3,7 @@ priority: 2
 tags: [feature, pipeline, frontend, backend]
 description: "Restructure extract pipeline: auto-extract on file add, remove extract from Run"
 created_at: "2026-02-07T09:55:32Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-07T12:28:28Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -111,24 +111,24 @@ generate → review → refine
 
 ## Tasks
 
-- [ ] Backend: `PipelineExecutor._execute_full()` からextractステップを除外し、generate開始に変更
-- [ ] Backend: Full Pipeline実行時に用語が0件の場合のエラーハンドリング追加
-- [ ] Backend: `POST /api/projects/{project_id}/files/bulk` でファイル保存後にExtract自動開始
-- [ ] Backend: ファイル追加時、既にRunが実行中の場合のハンドリング（スキップ＋通知）
-- [ ] Frontend: `AddFileDialog` / `FilesPage` でファイル追加成功後のExtract開始通知UI
-- [ ] Frontend: `GlobalTopBar.tsx` のScopeセレクターのラベル/説明を更新
-- [ ] テスト: Full Pipelineがextractをスキップすることの検証
-- [ ] テスト: ファイル追加時にExtractが自動実行されることの検証
-- [ ] テスト: 用語0件でFull Pipeline実行時のエラーハンドリング検証
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Backend: `PipelineExecutor._execute_full()` からextractステップを除外し、generate開始に変更
+- [x] Backend: Full Pipeline実行時に用語が0件の場合のエラーハンドリング追加
+- [x] Backend: `POST /api/projects/{project_id}/files/bulk` でファイル保存後にExtract自動開始
+- [x] Backend: ファイル追加時、既にRunが実行中の場合のハンドリング（スキップ＋通知）
+- [x] Frontend: `AddFileDialog` / `FilesPage` でファイル追加成功後のExtract開始通知UI
+- [x] Frontend: `GlobalTopBar.tsx` のScopeセレクターのラベル/説明を更新
+- [x] テスト: Full Pipelineがextractをスキップすることの検証
+- [x] テスト: ファイル追加時にExtractが自動実行されることの検証
+- [x] テスト: 用語0件でFull Pipeline実行時のエラーハンドリング検証
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
