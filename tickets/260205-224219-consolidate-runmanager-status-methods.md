@@ -4,7 +4,7 @@ tags: [backend, refactoring]
 description: "Consolidate status update methods in RunManager"
 created_at: "2026-02-05T22:42:19Z"
 started_at: 2026-02-07T03:36:42Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T03:58:01Z # Do not modify manually
 ---
 
 # Consolidate status update methods in RunManager
