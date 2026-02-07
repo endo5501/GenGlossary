@@ -498,8 +498,9 @@ class RunManager:
             error_message: Error message if status is 'failed' (optional).
 
         Returns:
-            True if status was updated or already in terminal state.
-            False if both primary and fallback connections failed.
+            True if status was updated, already terminal, or run not found
+            (no fallback needed). False if both primary and fallback
+            connections failed with exceptions.
         """
         if conn is not None:
             try:
@@ -508,8 +509,11 @@ class RunManager:
                 )
                 self._log_update_result(run_id, status, result)
                 return True
-            except Exception:
-                pass  # Fall through to fallback
+            except Exception as e:
+                logger.debug(
+                    f"Primary connection failed for run {run_id} "
+                    f"status update to {status}: {e}"
+                )
 
         # Fallback to new connection
         try:
@@ -548,8 +552,10 @@ class RunManager:
             return
         if result == RunUpdateResult.NOT_FOUND:
             no_op_message = "run not found"
-        else:  # ALREADY_TERMINAL
+        elif result == RunUpdateResult.ALREADY_TERMINAL:
             no_op_message = "run was already in terminal state"
+        else:
+            no_op_message = f"unexpected result: {result.value}"
         self._broadcast_log(
             run_id,
             {
