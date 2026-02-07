@@ -16,6 +16,7 @@ import {
   IconFile,
   IconAlertCircle,
 } from '@tabler/icons-react'
+import { notifications } from '@mantine/notifications'
 import { useCreateFilesBulk } from '../../api/hooks'
 import type { FileCreateRequest } from '../../api/types'
 
@@ -110,7 +111,20 @@ export function AddFileDialog({ projectId, opened, onClose }: AddFileDialogProps
         file_name: f.name,
         content: f.content,
       }))
-      await createMutation.mutateAsync(files)
+      const result = await createMutation.mutateAsync(files)
+      if (result.extract_started) {
+        notifications.show({
+          title: 'Extract started',
+          message: 'Term extraction has been triggered automatically.',
+          color: 'green',
+        })
+      } else if (result.extract_skipped_reason) {
+        notifications.show({
+          title: 'Extract skipped',
+          message: result.extract_skipped_reason,
+          color: 'yellow',
+        })
+      }
       handleClose()
     } catch (err: unknown) {
       console.error('Failed to add files:', err)
