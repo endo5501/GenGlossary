@@ -1276,7 +1276,9 @@ class TestCreateFilesBulkAutoExtract:
 
         # Extract should be skipped but files saved
         assert data["extract_started"] is False
-        assert "already running" in data["extract_skipped_reason"]
+        # Sanitized message: no raw exception details exposed
+        assert data["extract_skipped_reason"] is not None
+        assert "Run already running: 10" not in data["extract_skipped_reason"]
 
         # Files should still be created
         assert len(data["files"]) == 1
@@ -1312,9 +1314,11 @@ class TestCreateFilesBulkAutoExtract:
         assert response.status_code == 201
         data = response.json()
 
-        # Extract should be skipped due to unexpected error
+        # Extract should be skipped with sanitized message
         assert data["extract_started"] is False
         assert data["extract_skipped_reason"] is not None
+        # Raw exception message must not leak to client
+        assert "Unexpected DB connection failure" not in data["extract_skipped_reason"]
 
         # Files should still be created
         assert len(data["files"]) == 1
