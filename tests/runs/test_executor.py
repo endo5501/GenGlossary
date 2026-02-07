@@ -2814,3 +2814,54 @@ class TestPipelineExecutorBaseUrl:
             call_kwargs = mock_llm_factory.call_args.kwargs
             # base_url should not be in kwargs or should be None
             assert call_kwargs.get("base_url") is None
+
+
+class TestExtractPreservesUserNotes:
+    """Test that extract scope preserves user_notes."""
+
+    def test_extract_scope_preserves_user_notes(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """Test that re-extract preserves existing user_notes."""
+        from genglossary.db.connection import transaction
+        from genglossary.db.term_repository import (
+            create_term,
+            get_term,
+            list_all_terms,
+            update_term,
+        )
+
+        # Setup: create terms with user_notes
+        with transaction(project_db):
+            term_id = create_term(project_db, "GP", "abbreviation")
+            update_term(
+                project_db, term_id, "GP", "abbreviation",
+                user_notes="General Practitioner",
+            )
+            create_term(project_db, "量子ビット", "technical")
+
+        # Add a document to DB so extract can find it
+        with transaction(project_db):
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("test.md", "GPは医師です。量子ビットは基本単位。", "hash123"),
+            )
+
+        # Mock TermExtractor to return terms including GP
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor:
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="GP", category=TermCategory.TECHNICAL_TERM),
+                ClassifiedTerm(term="新用語", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            executor.execute(project_db, "extract", execution_context)
+
+        # Verify user_notes preserved for GP
+        terms = list_all_terms(project_db)
+        term_map = {t["term_text"]: t["user_notes"] for t in terms}
+        assert term_map.get("GP") == "General Practitioner"
+        # New term should have empty notes
+        assert term_map.get("新用語") == ""

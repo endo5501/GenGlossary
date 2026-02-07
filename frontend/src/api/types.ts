@@ -70,6 +70,7 @@ export interface TermResponse {
   id: number
   term_text: string
   category: string | null
+  user_notes: string
 }
 
 // Term occurrence
@@ -93,6 +94,7 @@ export interface TermCreateRequest {
 export interface TermUpdateRequest {
   term_text?: string
   category?: string
+  user_notes?: string
 }
 
 // Excluded term types

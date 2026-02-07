@@ -1283,3 +1283,71 @@ class TestGlossaryGeneratorPromptInjectionProtection:
         assert start_tag_pos < end_tag_pos
         inner_content = prompt[start_tag_pos + len("<term>"):end_tag_pos]
         assert "TestTerm" in inner_content
+
+
+class TestGlossaryGeneratorUserNotes:
+    """Test suite for user_notes injection in GlossaryGenerator prompts."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    @pytest.fixture
+    def generator(self, mock_llm_client: MagicMock) -> GlossaryGenerator:
+        """Create a GlossaryGenerator instance."""
+        return GlossaryGenerator(llm_client=mock_llm_client)
+
+    def test_build_definition_prompt_includes_user_notes(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that user_notes is included in definition prompt when provided."""
+        prompt = generator._build_definition_prompt(
+            "GP", "コンテキスト", user_notes="General Practitioner（一般開業医）の略称"
+        )
+
+        assert "General Practitioner" in prompt
+        assert "一般開業医" in prompt
+        assert "<user_note>" in prompt
+        assert "</user_note>" in prompt
+
+    def test_build_definition_prompt_excludes_user_notes_when_empty(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that user_notes section is not included when notes is empty."""
+        prompt = generator._build_definition_prompt("GP", "コンテキスト", user_notes="")
+
+        assert "<user_note>" not in prompt
+        assert "補足情報" not in prompt
+
+    def test_build_definition_prompt_excludes_user_notes_when_not_provided(
+        self, generator: GlossaryGenerator
+    ) -> None:
+        """Test that user_notes section is not included when not provided."""
+        prompt = generator._build_definition_prompt("GP", "コンテキスト")
+
+        assert "<user_note>" not in prompt
+
+    def test_generate_passes_user_notes_to_prompt(
+        self,
+        mock_llm_client: MagicMock,
+    ) -> None:
+        """Test that generate passes user_notes_map to prompt building."""
+        doc = Document(
+            file_path="/test.md",
+            content="GPは医師です。\nGPの診察を受けました。",
+        )
+        mock_llm_client.generate_structured.return_value = MockDefinitionResponse(
+            definition="一般開業医", confidence=0.9
+        )
+
+        generator = GlossaryGenerator(llm_client=mock_llm_client)
+        generator.generate(
+            ["GP"],
+            [doc],
+            user_notes_map={"GP": "General Practitioner（一般開業医）の略称"},
+        )
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+        assert "General Practitioner" in prompt

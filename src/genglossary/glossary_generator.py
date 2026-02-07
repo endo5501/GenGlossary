@@ -75,6 +75,7 @@ Output:
         skip_common_nouns: bool = True,
         term_progress_callback: TermProgressCallback | None = None,
         cancel_event: Event | None = None,
+        user_notes_map: dict[str, str] | None = None,
     ) -> Glossary:
         """Generate a provisional glossary.
 
@@ -121,9 +122,12 @@ Output:
                 # Find occurrences
                 occurrences = self._find_term_occurrences(term_name, documents)
 
+                # Get user notes for this term
+                notes = (user_notes_map or {}).get(term_name, "")
+
                 # Generate definition using LLM
                 definition, confidence = self._generate_definition(
-                    term_name, occurrences
+                    term_name, occurrences, notes
                 )
 
                 # Create Term object
@@ -276,17 +280,29 @@ Output:
         )
         return f"<context>\n{lines}\n</context>"
 
-    def _build_definition_prompt(self, term: str, context_text: str) -> str:
+    def _build_definition_prompt(
+        self, term: str, context_text: str, user_notes: str = ""
+    ) -> str:
         """Build the prompt for definition generation.
 
         Args:
             term: The term to define.
             context_text: Formatted context text from occurrences.
+            user_notes: Optional user-provided supplementary notes.
 
         Returns:
             Complete prompt for LLM.
         """
         wrapped_term = wrap_user_data(term, "term")
+
+        user_notes_section = ""
+        if user_notes:
+            wrapped_notes = wrap_user_data(user_notes, "user_note")
+            user_notes_section = f"""
+ユーザー補足情報:
+{wrapped_notes}
+"""
+
         return f"""あなたは用語集を作成するアシスタントです。
 与えられた用語について、出現箇所のコンテキストから文脈固有の意味を1-2文で説明してください。
 
@@ -306,24 +322,25 @@ Output:
 用語: {wrapped_term}
 出現箇所とコンテキスト:
 {context_text}
-
+{user_notes_section}
 信頼度の基準: 明確=0.8+, 推測可能=0.5-0.7, 不明確=0.0-0.4
 JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-1.0}}"""
 
     def _generate_definition(
-        self, term: str, occurrences: list[TermOccurrence]
+        self, term: str, occurrences: list[TermOccurrence], user_notes: str = ""
     ) -> tuple[str, float]:
         """Generate a definition for a term using LLM.
 
         Args:
             term: The term to define.
             occurrences: List of occurrences with context.
+            user_notes: Optional user-provided supplementary notes.
 
         Returns:
             Tuple of (definition, confidence).
         """
         context_text = self._build_context_text(occurrences)
-        prompt = self._build_definition_prompt(term, context_text)
+        prompt = self._build_definition_prompt(term, context_text, user_notes)
 
         response = self.llm_client.generate_structured(
             prompt, DefinitionResponse

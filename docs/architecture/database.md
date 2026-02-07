@@ -1,6 +1,14 @@
-# データベース層 (Schema v5)
+# データベース層 (Schema v7)
 
 **役割**: SQLiteへのデータ永続化とCRUD操作
+
+**Schema v7の主な変更点**:
+- `terms_extracted`テーブルに`user_notes`カラムを追加（ユーザー補足情報）
+- `term_repository.py`に`backup_user_notes`/`restore_user_notes`関数を追加（Extract時の保持）
+
+**Schema v6の主な変更点**:
+- `terms_required`テーブルを追加（必須用語一覧）
+- `required_term_repository.py`を追加（必須用語のCRUD操作）
 
 **Schema v5の主な変更点**:
 - `terms_excluded`テーブルを追加（除外用語一覧）
@@ -121,12 +129,12 @@ def batch_insert(
 
 ## schema.py
 ```python
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 7
 
 def initialize_db(conn: sqlite3.Connection) -> None:
-    """データベーススキーマを初期化 (Schema v5)"""
+    """データベーススキーマを初期化 (Schema v7)"""
     # テーブル作成: metadata, documents, terms_extracted,
-    # glossary_provisional, glossary_issues, glossary_refined, runs, terms_excluded
+    # glossary_provisional, glossary_issues, glossary_refined, runs, terms_excluded, terms_required
     # metadataテーブルは単一行（id=1固定）でLLM設定や入力パスを保存
     # runsテーブルはバックグラウンド実行の履歴を管理
     #
@@ -144,6 +152,10 @@ def initialize_db(conn: sqlite3.Connection) -> None:
     #   term_text TEXT NOT NULL UNIQUE  -- 除外する用語（一意制約）
     #   source TEXT NOT NULL            -- 'auto'（LLM自動分類）| 'manual'（ユーザー手動追加）
     #   created_at TEXT NOT NULL        -- 作成日時
+    #
+    # terms_extracted テーブル (v7):
+    #   user_notes TEXT DEFAULT ''     -- ユーザー補足情報
+    #   Extract時にbackup/restoreで保持される
     ...
 
 def get_schema_version(conn: sqlite3.Connection) -> int:
@@ -276,9 +288,13 @@ def update_term(
     conn: sqlite3.Connection,
     term_id: int,
     term_text: str,
-    category: str | None = None
+    category: str | None = None,
+    user_notes: str | None = None
 ) -> None:
     """用語を更新
+
+    Args:
+        user_notes: 補足情報（Noneの場合は更新しない）
 
     Raises:
         ValueError: 指定されたIDの用語が存在しない場合
@@ -287,6 +303,21 @@ def update_term(
 
 def delete_term(conn: sqlite3.Connection, term_id: int) -> None:
     """用語を削除"""
+    ...
+
+def backup_user_notes(conn: sqlite3.Connection) -> dict[str, str]:
+    """全用語のuser_notesをバックアップ（Extract前に呼び出し）
+
+    Returns:
+        {term_text: user_notes} の辞書（空のuser_notesは除外）
+    """
+    ...
+
+def restore_user_notes(conn: sqlite3.Connection, notes_map: dict[str, str]) -> None:
+    """バックアップからuser_notesを復元（Extract後に呼び出し）
+
+    term_textをキーにマッチする用語のuser_notesを更新。
+    """
     ...
 
 def delete_all_terms(conn: sqlite3.Connection) -> None:

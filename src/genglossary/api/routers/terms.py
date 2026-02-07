@@ -120,9 +120,23 @@ async def update_existing_term(
     Raises:
         HTTPException: 404 if term not found.
     """
+    # Load existing term to fill in unspecified fields
+    existing = get_term(project_db, term_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
+
+    term_text: str = request.term_text if request.term_text is not None else existing["term_text"]
+    category = request.category if request.category is not None else existing["category"]
+
     try:
         with transaction(project_db):
-            update_term(project_db, term_id, request.term_text, request.category)
+            update_term(
+                project_db,
+                term_id,
+                term_text,
+                category,
+                user_notes=request.user_notes,
+            )
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
 

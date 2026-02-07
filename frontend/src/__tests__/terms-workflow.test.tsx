@@ -28,16 +28,19 @@ const mockTerms: TermResponse[] = [
     id: 1,
     term_text: '量子コンピュータ',
     category: '技術用語',
+    user_notes: '量子力学を応用した次世代コンピュータ',
   },
   {
     id: 2,
     term_text: '量子ビット',
     category: '技術用語',
+    user_notes: '',
   },
   {
     id: 3,
     term_text: '重ね合わせ',
     category: null,
+    user_notes: '',
   },
 ]
 
@@ -222,6 +225,7 @@ const termsHandlers = [
       id: mockTerms.length + 1,
       term_text: body.term_text,
       category: body.category ?? null,
+      user_notes: '',
     }, { status: 201 })
   }),
   http.patch(`${BASE_URL}/api/projects/:projectId/terms/:termId`, async ({ params, request }) => {
@@ -976,8 +980,8 @@ describe('Category Editing', () => {
     await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
 
     // Should show text input
-    expect(within(detailPanel).getByRole('textbox')).toBeInTheDocument()
-    expect(within(detailPanel).getByRole('textbox')).toHaveValue('技術用語')
+    expect(within(detailPanel).getByLabelText('カテゴリ')).toBeInTheDocument()
+    expect(within(detailPanel).getByLabelText('カテゴリ')).toHaveValue('技術用語')
   })
 
   it('saves category when save button is clicked', async () => {
@@ -1005,7 +1009,7 @@ describe('Category Editing', () => {
     const detailPanel = screen.getByTestId('term-detail-panel')
     await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
 
-    const input = within(detailPanel).getByRole('textbox')
+    const input = within(detailPanel).getByLabelText('カテゴリ')
     await user.clear(input)
     await user.type(input, '新しいカテゴリ')
 
@@ -1032,7 +1036,7 @@ describe('Category Editing', () => {
     const detailPanel = screen.getByTestId('term-detail-panel')
     await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
 
-    const input = within(detailPanel).getByRole('textbox')
+    const input = within(detailPanel).getByLabelText('カテゴリ')
     await user.clear(input)
     await user.type(input, '変更されたカテゴリ')
 
@@ -1040,7 +1044,7 @@ describe('Category Editing', () => {
 
     // Should exit edit mode and show original category
     await waitFor(() => {
-      expect(within(detailPanel).queryByRole('textbox')).not.toBeInTheDocument()
+      expect(within(detailPanel).queryByLabelText('カテゴリ')).not.toBeInTheDocument()
     })
     expect(within(detailPanel).getByText('技術用語')).toBeInTheDocument()
   })
@@ -1070,7 +1074,7 @@ describe('Category Editing', () => {
     const detailPanel = screen.getByTestId('term-detail-panel')
     await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
 
-    const input = within(detailPanel).getByRole('textbox')
+    const input = within(detailPanel).getByLabelText('カテゴリ')
     await user.clear(input)
 
     await user.click(within(detailPanel).getByRole('button', { name: /save/i }))
@@ -1105,7 +1109,7 @@ describe('Category Editing', () => {
     const detailPanel = screen.getByTestId('term-detail-panel')
     await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
 
-    const input = within(detailPanel).getByRole('textbox')
+    const input = within(detailPanel).getByLabelText('カテゴリ')
     await user.clear(input)
     await user.type(input, 'Enterで保存{Enter}')
 
@@ -1131,16 +1135,16 @@ describe('Category Editing', () => {
     const detailPanel = screen.getByTestId('term-detail-panel')
     await user.click(within(detailPanel).getByRole('button', { name: /edit category/i }))
 
-    // Verify we're in edit mode
-    expect(within(detailPanel).getByRole('textbox')).toBeInTheDocument()
+    // Verify we're in edit mode (category input is visible)
+    expect(within(detailPanel).getByLabelText('カテゴリ')).toBeInTheDocument()
 
     // Select a different term
     await user.click(screen.getByText('量子ビット'))
 
-    // Should exit edit mode (no textbox visible)
+    // Should exit edit mode (category input not visible)
     await waitFor(() => {
       const updatedPanel = screen.getByTestId('term-detail-panel')
-      expect(within(updatedPanel).queryByRole('textbox')).not.toBeInTheDocument()
+      expect(within(updatedPanel).queryByLabelText('カテゴリ')).not.toBeInTheDocument()
     })
   })
 })
@@ -1374,5 +1378,90 @@ describe('Required Terms', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
     expect(screen.getByText('必須用語を追加')).toBeInTheDocument()
+  })
+})
+
+describe('User Notes', () => {
+  beforeEach(() => {
+    server.use(...allTestHandlers)
+    // Override terms handler with user_notes data
+    server.use(
+      http.get(`${BASE_URL}/api/projects/:projectId/terms`, () => {
+        return HttpResponse.json(mockTerms)
+      }),
+    )
+  })
+
+  it('shows user_notes textarea in detail panel', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    const notesTextarea = within(detailPanel).getByLabelText('補足情報')
+    expect(notesTextarea).toBeInTheDocument()
+    await waitFor(() => {
+      expect(notesTextarea).toHaveValue('量子力学を応用した次世代コンピュータ')
+    })
+  })
+
+  it('shows empty textarea when user_notes is empty', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子ビット')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子ビット'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    const notesTextarea = within(detailPanel).getByLabelText('補足情報')
+    expect(notesTextarea).toHaveValue('')
+  })
+
+  it('auto-saves user_notes after typing (debounce)', async () => {
+    let savedUserNotes: string | undefined
+    server.use(
+      http.patch(`${BASE_URL}/api/projects/:projectId/terms/:termId`, async ({ request }) => {
+        const body = await request.json() as { user_notes?: string }
+        savedUserNotes = body.user_notes
+        return HttpResponse.json({ ...mockTerms[0], user_notes: body.user_notes })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    const notesTextarea = within(detailPanel).getByLabelText('補足情報')
+
+    await user.clear(notesTextarea)
+    await user.type(notesTextarea, '新しいメモ')
+
+    // Wait for debounce to fire (500ms)
+    await waitFor(() => {
+      expect(savedUserNotes).toBe('新しいメモ')
+    }, { timeout: 2000 })
   })
 })

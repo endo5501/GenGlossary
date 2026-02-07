@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -29,11 +29,12 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Extracted terms
+-- Extracted terms (v7: user_notes column added)
 CREATE TABLE IF NOT EXISTS terms_extracted (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     term_text TEXT NOT NULL UNIQUE,
     category TEXT,
+    user_notes TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -116,6 +117,7 @@ def initialize_db(conn: sqlite3.Connection) -> None:
 
     _ensure_metadata_input_path(conn)
     _migrate_documents_table_v4(conn)
+    _migrate_terms_user_notes_v7(conn)
 
     # Set schema version if not already set (INSERT OR IGNORE handles race conditions)
     cursor = conn.cursor()
@@ -186,6 +188,17 @@ def _migrate_documents_table_v4(conn: sqlite3.Connection) -> None:
         # Drop old table and rename new one
         cursor.execute("DROP TABLE documents")
         cursor.execute("ALTER TABLE documents_new RENAME TO documents")
+
+
+def _migrate_terms_user_notes_v7(conn: sqlite3.Connection) -> None:
+    """Migrate terms_extracted table to v7: add user_notes column."""
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(terms_extracted)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "user_notes" not in columns:
+        cursor.execute(
+            "ALTER TABLE terms_extracted ADD COLUMN user_notes TEXT NOT NULL DEFAULT ''"
+        )
 
 
 def get_schema_version(conn: sqlite3.Connection) -> int:

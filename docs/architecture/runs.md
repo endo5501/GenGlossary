@@ -645,6 +645,23 @@ def _cancellable(func: Callable) -> Callable:
 - `_execute_review`: レビューのみ
 - `_execute_refine`: 改善のみ
 
+### user_notes の受け渡し
+
+各スコープハンドラは `_build_user_notes_map()` で DB から `user_notes` を取得し、パイプラインステップに渡します。
+
+```python
+@staticmethod
+def _build_user_notes_map(term_rows: list[sqlite3.Row]) -> dict[str, str]:
+    """term_rowsからuser_notes_mapを構築（空のnotesは除外）"""
+    ...
+```
+
+- `_execute_full`: `list_all_terms()` → `_build_user_notes_map()` → `_do_generate`/`_do_review`/`_do_refine`
+- `_execute_generate`: `list_all_terms()` → `_build_user_notes_map()` → `_do_generate`
+- `_execute_review`: `list_all_terms()` → `_build_user_notes_map()` → `_do_review`
+- `_execute_refine`: `list_all_terms()` → `_build_user_notes_map()` → `_do_refine`
+- `_execute_extract`: user_notes不要（Extract前にbackup、Extract後にrestore）
+
 **残存する明示的チェック:**
 LLM呼び出しや最終保存の前には、レスポンシブなキャンセルのため明示的チェックが残ります。
 
@@ -1166,7 +1183,7 @@ get_run_manager(db_path) → RunManager
 - subscriber late registration（完了後に登録したsubscriberへの完了シグナル送信）
 - status update return values（_try_status_with_fallback, _finalize_run_status, _update_failed_status）
 
-**tests/runs/test_executor.py (50 tests)**
+**tests/runs/test_executor.py (81 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
 - キャンセル処理
 - 進捗ログ
@@ -1186,8 +1203,9 @@ get_run_manager(db_path) → RunManager
   - エントリーレベルのキャンセルチェック
   - 非キャンセル時の正常実行
   - 位置引数からのcontext検出
+- Extract時のuser_notes保持テスト（backup/restore）
 
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 234 tests** (Repository 87 + Manager 87 + Executor 50 + API 10)
+**合計: 265 tests** (Repository 87 + Manager 87 + Executor 81 + API 10)

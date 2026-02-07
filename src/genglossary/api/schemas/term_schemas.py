@@ -11,6 +11,7 @@ class TermResponse(BaseModel):
     id: int = Field(..., description="Term ID")
     term_text: str = Field(..., description="Term text")
     category: str | None = Field(None, description="Term category")
+    user_notes: str = Field("", description="User-provided supplementary notes")
 
     @classmethod
     def from_db_row(cls, row: Any) -> "TermResponse":
@@ -26,6 +27,7 @@ class TermResponse(BaseModel):
             id=row["id"],
             term_text=row["term_text"],
             category=row["category"],
+            user_notes=row["user_notes"],
         )
 
     @classmethod
@@ -50,4 +52,14 @@ class TermMutationRequest(BaseModel):
 
 # Aliases for clarity
 TermCreateRequest = TermMutationRequest
-TermUpdateRequest = TermMutationRequest
+
+
+class TermUpdateRequest(BaseModel):
+    """Request schema for partially updating a term.
+
+    All fields are optional. Only provided fields will be updated.
+    """
+
+    term_text: str | None = Field(None, description="Term text")
+    category: str | None = Field(None, description="Term category")
+    user_notes: str | None = Field(None, description="User-provided supplementary notes")

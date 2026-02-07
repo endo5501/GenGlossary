@@ -80,6 +80,7 @@ def update_term(
     term_id: int,
     term_text: str,
     category: str | None = None,
+    user_notes: str | None = None,
 ) -> None:
     """Update an existing term record.
 
@@ -88,19 +89,30 @@ def update_term(
         term_id: The term ID to update.
         term_text: The new term text.
         category: The new category (or None to set NULL).
+        user_notes: The new user notes (None to preserve existing value).
 
     Raises:
         ValueError: If no term with the given ID exists.
     """
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE terms_extracted
-        SET term_text = ?, category = ?
-        WHERE id = ?
-        """,
-        (term_text, category, term_id),
-    )
+    if user_notes is not None:
+        cursor.execute(
+            """
+            UPDATE terms_extracted
+            SET term_text = ?, category = ?, user_notes = ?
+            WHERE id = ?
+            """,
+            (term_text, category, user_notes, term_id),
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE terms_extracted
+            SET term_text = ?, category = ?
+            WHERE id = ?
+            """,
+            (term_text, category, term_id),
+        )
     if cursor.rowcount == 0:
         raise ValueError(f"Term with id {term_id} not found")
 
@@ -124,6 +136,39 @@ def delete_all_terms(conn: sqlite3.Connection) -> None:
     """
     cursor = conn.cursor()
     cursor.execute("DELETE FROM terms_extracted")
+
+
+def backup_user_notes(conn: sqlite3.Connection) -> dict[str, str]:
+    """Backup user_notes for all terms with non-empty notes.
+
+    Args:
+        conn: Database connection.
+
+    Returns:
+        dict[str, str]: Mapping of term_text to user_notes.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT term_text, user_notes FROM terms_extracted WHERE user_notes != ''"
+    )
+    return {row["term_text"]: row["user_notes"] for row in cursor.fetchall()}
+
+
+def restore_user_notes(
+    conn: sqlite3.Connection, notes_map: dict[str, str]
+) -> None:
+    """Restore user_notes from a backup map.
+
+    Args:
+        conn: Database connection.
+        notes_map: Mapping of term_text to user_notes.
+    """
+    cursor = conn.cursor()
+    for term_text, user_notes in notes_map.items():
+        cursor.execute(
+            "UPDATE terms_extracted SET user_notes = ? WHERE term_text = ?",
+            (user_notes, term_text),
+        )
 
 
 def create_terms_batch(

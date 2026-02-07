@@ -389,6 +389,56 @@ export function getRowSelectionProps<T extends { id: number }>(
 - Mantine固有の`bg`プロパティで選択状態をスタイリング
 - React hooksを使用していないため、hooks/ではなくutils/に配置
 
+#### TermsPage の補足情報（user_notes）
+
+詳細パネルに `Textarea` で補足情報を入力・自動保存する機能。
+
+**UI構成:**
+```
+┌──────────────────────────────────┐
+│ 用語名: 量子もつれ               │
+│ カテゴリ: [Badge: 技術用語] [✏️]  │
+│                                  │
+│ 補足情報:                        │
+│ ┌──────────────────────────────┐ │
+│ │ 複数の量子ビットが相互に    │ │
+│ │ 関連し合う現象。             │ │
+│ └──────────────────────────────┘ │
+└──────────────────────────────────┘
+```
+
+**実装:**
+```typescript
+// userNotesValue状態とdebounceTimerRef
+const [userNotesValue, setUserNotesValue] = useState('')
+const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+// 自動保存（debounce 500ms）
+const handleUserNotesChange = useCallback((value: string) => {
+  setUserNotesValue(value)
+  if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+  debounceTimerRef.current = setTimeout(() => {
+    if (selectedTerm) {
+      updateTerm.mutate({ termId: selectedTerm.id, data: { user_notes: value } })
+    }
+  }, 500)
+}, [selectedTerm, updateTerm])
+
+// 用語選択時にuserNotesValueを同期
+const handleSelectTerm = (termId: number) => {
+  setSelectedId(termId)
+  const term = terms?.find((t) => t.id === termId)
+  setUserNotesValue(term?.user_notes ?? '')
+}
+```
+
+**機能:**
+- `Textarea` による補足情報の入力（`autosize`, `minRows={3}`）
+- 入力のたびに500msのdebounce後に `PATCH` APIで自動保存
+- 用語選択変更時に `userNotesValue` を同期
+- アンマウント時にdebounceタイマーをクリーンアップ
+- LLMプロンプトに注入されることをプレースホルダーで説明
+
 #### TermsPage のカテゴリ編集機能
 
 詳細パネル内でカテゴリをインライン編集できる。
@@ -867,7 +917,7 @@ API レスポンスの TypeScript 型定義。
 |---|------|
 | `FileResponse` | ファイル情報（id, file_name, content_hash） |
 | `FileDetailResponse` | ファイル詳細（id, file_name, content_hash, content） |
-| `TermResponse` | 抽出された用語（id, term_text, category） |
+| `TermResponse` | 抽出された用語（id, term_text, category, user_notes） |
 | `TermOccurrence` | 用語の出現箇所（line_number, context） |
 | `GlossaryTermResponse` | 用語集エントリ（term_name, definition, confidence, occurrences） |
 | `IssueResponse` | 精査で見つかった問題（term_name, issue_type, description） |
@@ -948,7 +998,7 @@ export const useTerms = (projectId: number) =>
 |-------|------|
 | `useCreateFile` / `useCreateFilesBulk` / `useDeleteFile` | ファイルの追加/一括追加/削除 |
 | `useExtractTerms` | 用語抽出を実行 |
-| `useCreateTerm` / `useDeleteTerm` | 用語の追加/削除 |
+| `useCreateTerm` / `useUpdateTerm` / `useDeleteTerm` | 用語の追加/更新（user_notes含む）/削除 |
 | `useCreateExcludedTerm` / `useDeleteExcludedTerm` | 除外用語の追加/削除（`useTermsCrud` ラッパー） |
 | `useCreateRequiredTerm` / `useDeleteRequiredTerm` | 必須用語の追加/削除（`useTermsCrud` ラッパー） |
 | `useUpdateProvisional` | 暫定用語集エントリを更新 |
@@ -1198,12 +1248,12 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `projects-page.test.tsx` | 16 | HomePage、FilesPage、ダイアログコンポーネント |
 | `components/dialogs/AddFileDialog.test.tsx` | 6 | AddFileDialogコンポーネント |
 | `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
-| `terms-workflow.test.tsx` | 58 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel、カテゴリ編集 |
+| `terms-workflow.test.tsx` | 66 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel、カテゴリ編集、user_notes |
 | `logStore.test.ts` | 20 | Zustand ログストアの状態管理、進捗追跡 |
 | `LogPanel.test.tsx` | 5 | LogPanel の進捗表示UI |
 | `useLogStream.test.ts` | 7 | useLogStream フックの runId=0 処理、onComplete コールバック、projectId引数 |
 
-**合計**: 233 テスト
+**合計**: 261 テスト
 
 ### テスト実行
 

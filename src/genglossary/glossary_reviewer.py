@@ -62,6 +62,7 @@ class GlossaryReviewer:
         glossary: Glossary,
         cancel_event: Event | None = None,
         batch_progress_callback: Callable[[int, int], None] | None = None,
+        user_notes_map: dict[str, str] | None = None,
     ) -> list[GlossaryIssue] | None:
         """Review the glossary and identify issues.
 
@@ -107,7 +108,7 @@ class GlossaryReviewer:
 
             # Review this batch (skip on error, continue with next batch)
             try:
-                issues = self._review_batch(glossary, batch_terms)
+                issues = self._review_batch(glossary, batch_terms, user_notes_map)
                 all_issues.extend(issues)
             except Exception as e:
                 failed_batches.append(batch_idx + 1)
@@ -129,23 +130,30 @@ class GlossaryReviewer:
         return all_issues
 
     def _review_batch(
-        self, glossary: Glossary, term_names: list[str]
+        self,
+        glossary: Glossary,
+        term_names: list[str],
+        user_notes_map: dict[str, str] | None = None,
     ) -> list[GlossaryIssue]:
         """Review a batch of terms.
 
         Args:
             glossary: The full glossary (for term lookup).
             term_names: List of term names to review in this batch.
+            user_notes_map: Optional mapping of term_text to user notes.
 
         Returns:
             List of issues found in this batch.
         """
-        prompt = self._create_review_prompt(glossary, term_names)
+        prompt = self._create_review_prompt(glossary, term_names, user_notes_map=user_notes_map)
         response = self.llm_client.generate_structured(prompt, ReviewResponse)
         return self._parse_issues(response.issues)
 
     def _create_review_prompt(
-        self, glossary: Glossary, term_names: list[str] | None = None
+        self,
+        glossary: Glossary,
+        term_names: list[str] | None = None,
+        user_notes_map: dict[str, str] | None = None,
     ) -> str:
         """Create the prompt for glossary review.
 
@@ -153,10 +161,13 @@ class GlossaryReviewer:
             glossary: The glossary to review.
             term_names: Optional list of specific terms to review.
                 If None, reviews all terms.
+            user_notes_map: Optional mapping of term_text to user notes.
 
         Returns:
             The formatted prompt string.
         """
+        notes_map = user_notes_map or {}
+
         # Build term list with definitions and confidence
         target_terms = term_names if term_names is not None else glossary.all_term_names
         term_lines: list[str] = []
@@ -164,9 +175,12 @@ class GlossaryReviewer:
             term = glossary.get_term(term_name)
             if term is not None:
                 confidence_pct = int(term.confidence * 100)
-                term_lines.append(
-                    f"- {term.name}: {term.definition} (信頼度: {confidence_pct}%)"
-                )
+                line = f"- {term.name}: {term.definition} (信頼度: {confidence_pct}%)"
+                notes = notes_map.get(term_name, "")
+                if notes:
+                    wrapped_notes = wrap_user_data(notes, "user_note")
+                    line += f"\n  補足情報: {wrapped_notes}"
+                term_lines.append(line)
 
         terms_text = "\n".join(term_lines)
 

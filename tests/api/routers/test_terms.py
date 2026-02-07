@@ -170,6 +170,66 @@ def test_delete_term_removes_term(test_project_setup, client: TestClient):
     conn.close()
 
 
+def test_list_terms_includes_user_notes(test_project_setup, client: TestClient):
+    """Test GET /api/projects/{id}/terms includes user_notes in response."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    with transaction(conn):
+        create_term(conn, "GP", "abbreviation")
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/terms")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["user_notes"] == ""
+
+
+def test_get_term_includes_user_notes(test_project_setup, client: TestClient):
+    """Test GET /api/projects/{id}/terms/{term_id} includes user_notes."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    with transaction(conn):
+        term_id = create_term(conn, "GP", "abbreviation")
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/terms/{term_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user_notes"] == ""
+
+
+def test_update_term_user_notes(test_project_setup, client: TestClient):
+    """Test PATCH /api/projects/{id}/terms/{term_id} updates user_notes."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    with transaction(conn):
+        term_id = create_term(conn, "GP", "abbreviation")
+    conn.close()
+
+    payload = {
+        "term_text": "GP",
+        "category": "abbreviation",
+        "user_notes": "General Practitioner（一般開業医）の略称",
+    }
+
+    response = client.patch(
+        f"/api/projects/{project_id}/terms/{term_id}", json=payload
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user_notes"] == "General Practitioner（一般開業医）の略称"
+
+
 def test_get_terms_returns_404_for_missing_project(client: TestClient):
     """Test GET /api/projects/{id}/terms returns 404 for missing project."""
     response = client.get("/api/projects/999/terms")
