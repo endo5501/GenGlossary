@@ -958,3 +958,73 @@ class TestGlossaryRefinerLogging:
         assert caplog.records[0].levelno == logging.WARNING
         assert "Failed to refine 'TestTerm'" in caplog.text
         assert "LLM API error" in caplog.text
+
+
+class TestGlossaryRefinerUserNotes:
+    """Test suite for user_notes injection in GlossaryRefiner prompts."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    def test_refinement_prompt_includes_user_notes(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that user_notes is included in refinement prompt."""
+        term = Term(name="GP", definition="医師", confidence=0.5)
+        issue = GlossaryIssue(
+            term_name="GP", issue_type="unclear", description="定義が曖昧"
+        )
+        context_index: dict[str, list[str]] = {}
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        prompt = refiner._create_refinement_prompt(
+            term, issue, context_index,
+            user_notes="General Practitioner（一般開業医）の略称",
+        )
+
+        assert "General Practitioner" in prompt
+        assert "<user_note>" in prompt
+        assert "</user_note>" in prompt
+
+    def test_refinement_prompt_excludes_user_notes_when_empty(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that user_notes section is not included when notes is empty."""
+        term = Term(name="GP", definition="医師", confidence=0.5)
+        issue = GlossaryIssue(
+            term_name="GP", issue_type="unclear", description="定義が曖昧"
+        )
+        context_index: dict[str, list[str]] = {}
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        prompt = refiner._create_refinement_prompt(term, issue, context_index, user_notes="")
+
+        assert "<user_note>" not in prompt
+
+    def test_refine_passes_user_notes_map(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that refine passes user_notes_map to prompt building."""
+        mock_llm_client.generate_structured.return_value = MockRefinementResponse(
+            refined_definition="一般開業医", confidence=0.9
+        )
+
+        glossary = Glossary()
+        glossary.add_term(Term(name="GP", definition="医師", confidence=0.5))
+
+        issues = [
+            GlossaryIssue(term_name="GP", issue_type="unclear", description="曖昧")
+        ]
+        docs = [Document(file_path="/test.md", content="GPの診察を受けた。")]
+
+        refiner = GlossaryRefiner(llm_client=mock_llm_client)
+        refiner.refine(
+            glossary, issues, docs,
+            user_notes_map={"GP": "General Practitioner"},
+        )
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+        assert "General Practitioner" in prompt

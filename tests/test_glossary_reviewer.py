@@ -643,3 +643,60 @@ class TestGlossaryReviewerErrorHandling:
 
         assert "Batch 2/2 failed" in caplog.text
         assert "Parse error" in caplog.text
+
+
+class TestGlossaryReviewerUserNotes:
+    """Test suite for user_notes injection in GlossaryReviewer prompts."""
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        """Create a mock LLM client."""
+        return MagicMock(spec=BaseLLMClient)
+
+    def test_review_prompt_includes_user_notes(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that user_notes is included in review prompt."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="GP", definition="医師", confidence=0.8))
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        prompt = reviewer._create_review_prompt(
+            glossary,
+            user_notes_map={"GP": "General Practitioner（一般開業医）の略称"},
+        )
+
+        assert "General Practitioner" in prompt
+        assert "<user_note>" in prompt
+        assert "</user_note>" in prompt
+
+    def test_review_prompt_excludes_user_notes_when_empty(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that user_notes section is not included for terms without notes."""
+        glossary = Glossary()
+        glossary.add_term(Term(name="GP", definition="医師", confidence=0.8))
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        prompt = reviewer._create_review_prompt(glossary, user_notes_map={})
+
+        assert "<user_note>" not in prompt
+
+    def test_review_passes_user_notes_map(
+        self, mock_llm_client: MagicMock
+    ) -> None:
+        """Test that review passes user_notes_map to prompt."""
+        mock_llm_client.generate_structured.return_value = MockReviewResponse(issues=[])
+
+        glossary = Glossary()
+        glossary.add_term(Term(name="GP", definition="医師", confidence=0.8))
+
+        reviewer = GlossaryReviewer(llm_client=mock_llm_client)
+        reviewer.review(
+            glossary,
+            user_notes_map={"GP": "General Practitioner"},
+        )
+
+        call_args = mock_llm_client.generate_structured.call_args
+        prompt = call_args[0][0]
+        assert "General Practitioner" in prompt
