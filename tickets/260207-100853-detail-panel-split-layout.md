@@ -149,23 +149,23 @@ interface SplitLayoutProps {
 
 ## Tasks
 
-- [ ] 共通 `SplitLayout` コンポーネント（またはPageContainer拡張）の設計・実装
-- [ ] レイアウトCSS（左右分割、独立スクロール）の追加
-- [ ] TermsPage: リストと詳細パネルを分割レイアウトに移行
-- [ ] ProvisionalPage: リストと詳細パネルを分割レイアウトに移行
-- [ ] RefinedPage: リストと詳細パネルを分割レイアウトに移行
-- [ ] IssuesPage: リストと詳細パネルを分割レイアウトに移行
-- [ ] レスポンシブ対応（狭い画面幅での縦並びフォールバック）
-- [ ] テスト: 各ページの選択・詳細表示の動作確認
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 共通 `SplitLayout` コンポーネント（またはPageContainer拡張）の設計・実装
+- [x] レイアウトCSS（左右分割、独立スクロール）の追加
+- [x] TermsPage: リストと詳細パネルを分割レイアウトに移行
+- [x] ProvisionalPage: リストと詳細パネルを分割レイアウトに移行
+- [x] RefinedPage: リストと詳細パネルを分割レイアウトに移行
+- [x] IssuesPage: リストと詳細パネルを分割レイアウトに移行
+- [x] レスポンシブ対応（狭い画面幅での縦並びフォールバック）
+- [x] テスト: 各ページの選択・詳細表示の動作確認
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
