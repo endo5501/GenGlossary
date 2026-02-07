@@ -3,7 +3,6 @@
 import logging
 import sqlite3
 import traceback
-from collections.abc import Callable
 from datetime import datetime, timezone
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
@@ -226,7 +225,7 @@ class RunManager:
                 f"Run {run_id} failed (outside pipeline): {error_message}\n"
                 f"{error_traceback}"
             )
-            success = self._update_failed_status(conn, run_id, error_message)
+            success = self._try_update_status(conn, run_id, "failed", error_message)
             final_status = "failed"
             status_update_failed = not success
             self._broadcast_log(
@@ -421,48 +420,6 @@ class RunManager:
             # Store completion signal for subscribers that register after cleanup
             self._completed_runs[run_id] = completion_signal
 
-    def _try_status_with_fallback(
-        self,
-        conn: sqlite3.Connection | None,
-        run_id: int,
-        status_updater: Callable[[sqlite3.Connection, int], bool],
-        operation_name: str,
-    ) -> bool:
-        """Try status update with fallback to new connection.
-
-        Args:
-            conn: Primary database connection (may be None or unusable).
-            run_id: Run ID to update.
-            status_updater: Function that takes (conn, run_id) and returns bool.
-            operation_name: Name of the operation for error messages.
-
-        Returns:
-            True if status was updated successfully, False otherwise.
-        """
-        # Try primary connection
-        if conn is not None and status_updater(conn, run_id):
-            return True
-
-        # Fallback to new connection
-        try:
-            with database_connection(self.db_path) as fallback_conn:
-                if status_updater(fallback_conn, run_id):
-                    return True
-        except Exception as e:
-            logger.warning(
-                f"Failed to update {operation_name} status for run {run_id}: {e}"
-            )
-            self._broadcast_log(
-                run_id,
-                {
-                    "run_id": run_id,
-                    "level": "warning",
-                    "message": f"Failed to update {operation_name} status: {e}",
-                },
-            )
-
-        return False
-
     def _finalize_run_status(
         self,
         conn: sqlite3.Connection,
@@ -494,13 +451,7 @@ class RunManager:
         if pipeline_error is not None:
             # Check if it's a cancellation exception
             if isinstance(pipeline_error, PipelineCancelledException):
-                # Cancelled during execution - try to update status with fallback
-                success = self._try_status_with_fallback(
-                    conn,
-                    run_id,
-                    lambda c, rid: self._try_update_status(c, rid, "cancelled"),
-                    "cancelled",
-                )
+                success = self._try_update_status(conn, run_id, "cancelled")
                 return ("cancelled", success)
 
             # Pipeline failed - update to failed status
@@ -509,7 +460,9 @@ class RunManager:
             logger.error(
                 f"Run {run_id} failed: {error_message}\n{error_traceback}"
             )
-            success = self._update_failed_status(conn, run_id, error_message)
+            success = self._try_update_status(
+                conn, run_id, "failed", error_message
+            )
             self._broadcast_log(
                 run_id,
                 {
@@ -522,90 +475,86 @@ class RunManager:
             return ("failed", success)
 
         # Pipeline succeeded - completed
-        success = self._try_status_with_fallback(
-            conn,
-            run_id,
-            lambda c, rid: self._try_update_status(c, rid, "completed"),
-            "completed",
-        )
+        success = self._try_update_status(conn, run_id, "completed")
         return ("completed", success)
 
     def _try_update_status(
         self,
-        conn: sqlite3.Connection,
+        conn: sqlite3.Connection | None,
         run_id: int,
         status: str,
         error_message: str | None = None,
     ) -> bool:
-        """Try to update run status with error handling and logging.
+        """Try to update run status with fallback connection support.
 
-        This is the generic status update method that handles the common pattern
-        of updating status, logging no-op cases, and catching exceptions.
+        Attempts to update run status using the provided connection. If the
+        connection is None or the update fails with an exception, falls back
+        to a new connection via database_connection.
 
         Args:
-            conn: Database connection.
+            conn: Primary database connection (may be None or unusable).
             run_id: Run ID to update.
             status: New status ('cancelled', 'completed', 'failed').
             error_message: Error message if status is 'failed' (optional).
 
         Returns:
-            True if status was updated or already in terminal state (no fallback needed).
-            False if failed with exception (fallback needed).
+            True if status was updated or already in terminal state.
+            False if both primary and fallback connections failed.
         """
-        try:
-            with transaction(conn):
+        if conn is not None:
+            try:
                 result = update_run_status_if_active(
                     conn, run_id, status, error_message
                 )
-            if result != RunUpdateResult.UPDATED:
-                # Run was not updated - log appropriate message
-                if result == RunUpdateResult.NOT_FOUND:
-                    no_op_message = "run not found"
-                else:  # ALREADY_TERMINAL
-                    no_op_message = "run was already in terminal state"
-                self._broadcast_log(
-                    run_id,
-                    {
-                        "run_id": run_id,
-                        "level": "info",
-                        "message": f"{status.capitalize()} skipped: {no_op_message}",
-                    },
+                self._log_update_result(run_id, status, result)
+                return True
+            except Exception:
+                pass  # Fall through to fallback
+
+        # Fallback to new connection
+        try:
+            with database_connection(self.db_path) as fallback_conn:
+                result = update_run_status_if_active(
+                    fallback_conn, run_id, status, error_message
                 )
-            # Both success and no-op return True (no fallback needed)
-            return True
+                self._log_update_result(run_id, status, result)
+                return True
         except Exception as e:
+            logger.warning(
+                f"Failed to update {status} status for run {run_id}: {e}"
+            )
             self._broadcast_log(
                 run_id,
                 {
                     "run_id": run_id,
                     "level": "warning",
-                    "message": f"Failed to update run status to {status}: {e}",
+                    "message": f"Failed to update {status} status: {e}",
                 },
             )
-            return False
 
-    def _update_failed_status(
-        self,
-        conn: sqlite3.Connection | None,
-        run_id: int,
-        error_message: str,
-    ) -> bool:
-        """Update run status to failed with fallback connection support.
+        return False
 
-        Tries to update using the provided connection first. If that fails
-        (connection is None or unusable), falls back to a new connection.
+    def _log_update_result(
+        self, run_id: int, status: str, result: RunUpdateResult
+    ) -> None:
+        """Log a message when status update was a no-op.
 
         Args:
-            conn: Primary database connection (may be None or unusable).
-            run_id: Run ID to update.
-            error_message: Error message to store.
-
-        Returns:
-            True if status was updated successfully, False otherwise.
+            run_id: Run ID.
+            status: Target status that was attempted.
+            result: Result from update_run_status_if_active.
         """
-        return self._try_status_with_fallback(
-            conn,
+        if result == RunUpdateResult.UPDATED:
+            return
+        if result == RunUpdateResult.NOT_FOUND:
+            no_op_message = "run not found"
+        else:  # ALREADY_TERMINAL
+            no_op_message = "run was already in terminal state"
+        self._broadcast_log(
             run_id,
-            lambda c, rid: self._try_update_status(c, rid, "failed", error_message),
-            "failed",
+            {
+                "run_id": run_id,
+                "level": "info",
+                "message": f"{status.capitalize()} skipped: {no_op_message}",
+            },
         )
