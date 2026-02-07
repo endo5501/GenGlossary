@@ -124,8 +124,10 @@ Output:
             # Extract term name (support both str and ClassifiedTerm)
             term_name = term_item if isinstance(term_item, str) else term_item.term
 
-            # Skip non-primary synonym members
+            # Skip non-primary synonym members (still report progress)
             if term_name in non_primary_terms:
+                safe_callback(progress_callback, idx, total_terms)
+                safe_callback(term_progress_callback, idx, total_terms, term_name)
                 continue
 
             try:
@@ -336,7 +338,8 @@ Output:
 
         synonym_section = ""
         if synonyms:
-            synonym_section = f"\n同義語: {', '.join(synonyms)}\n"
+            escaped_synonyms = [escape_prompt_content(s, "synonym") for s in synonyms]
+            synonym_section = f"\n同義語: {', '.join(escaped_synonyms)}\n"
 
         return f"""あなたは用語集を作成するアシスタントです。
 与えられた用語について、出現箇所のコンテキストから文脈固有の意味を1-2文で説明してください。
