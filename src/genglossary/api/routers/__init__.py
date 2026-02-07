@@ -10,6 +10,7 @@ from genglossary.api.routers.projects import router as projects_router
 from genglossary.api.routers.provisional import router as provisional_router
 from genglossary.api.routers.refined import router as refined_router
 from genglossary.api.routers.runs import router as runs_router
+from genglossary.api.routers.synonym_groups import router as synonym_groups_router
 from genglossary.api.routers.terms import router as terms_router
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "provisional_router",
     "refined_router",
     "runs_router",
+    "synonym_groups_router",
     "terms_router",
 ]
