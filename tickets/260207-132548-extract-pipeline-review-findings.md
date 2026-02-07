@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 1
 tags: [improvement, backend, frontend]
 description: "Code review findings from extract pipeline restructuring"
 created_at: "2026-02-07T13:25:48Z"
@@ -39,7 +39,7 @@ closed_at: null   # Do not modify manually
 - `frontend/src/components/dialogs/AddFileDialog.tsx:34`
 - `src/genglossary/api/routers/files.py:32`
 
-**対応案**: 値を統一し、可能であればバックエンドの設定をフロントエンドで共有。
+**対応案**: 3MBへ値を統一し、可能であればバックエンドの設定をフロントエンドで共有。
 
 ### 4. N+1クエリ (Code-Simplifier #C)
 
