@@ -203,14 +203,14 @@ export function TermsPage({ projectId }: TermsPageProps) {
       actionBar: excludedActionBar,
       data: excludedTerms,
       emptyMessage: 'No excluded terms. Add terms to exclude them from extraction.',
-      isTabLoading: false,
+      isTabLoading: isLoadingExcluded,
       emptyTestId: 'excluded-terms-empty',
     },
     required: {
       actionBar: requiredActionBar,
       data: requiredTerms,
       emptyMessage: 'No required terms. Add terms to always include them in extraction.',
-      isTabLoading: false,
+      isTabLoading: isLoadingRequired,
       emptyTestId: 'required-terms-empty',
     },
   }
