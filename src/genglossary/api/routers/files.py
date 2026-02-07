@@ -383,7 +383,7 @@ async def create_files_bulk(
     try:
         manager.start_run(scope="extract", triggered_by="auto")
         extract_started = True
-    except RuntimeError as e:
+    except Exception as e:
         extract_skipped_reason = str(e)
 
     return FileCreateBulkResponse(
