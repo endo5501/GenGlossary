@@ -4,7 +4,7 @@ tags: [improvement, backend, frontend]
 description: "Code review findings from extract pipeline restructuring"
 created_at: "2026-02-07T13:25:48Z"
 started_at: 2026-02-07T13:38:28Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T13:58:27Z # Do not modify manually
 ---
 
 # Extract Pipeline リストラクチャリング コードレビュー指摘事項
