@@ -1281,3 +1281,41 @@ class TestCreateFilesBulkAutoExtract:
         # Files should still be created
         assert len(data["files"]) == 1
         assert data["files"][0]["file_name"] == "file1.txt"
+
+    def test_create_files_bulk_handles_unexpected_extract_error(
+        self, test_project_setup, client: TestClient
+    ):
+        """start_runが予期しない例外を投げてもファイル保存は成功しextract_startedはfalseになる"""
+        from genglossary.api.dependencies import get_run_manager
+
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "file1.txt", "content": "Content 1"},
+            ]
+        }
+
+        mock_manager = MagicMock()
+        mock_manager.start_run.side_effect = Exception(
+            "Unexpected DB connection failure"
+        )
+
+        client.app.dependency_overrides[get_run_manager] = lambda: mock_manager
+        try:
+            response = client.post(
+                f"/api/projects/{project_id}/files/bulk", json=payload
+            )
+        finally:
+            client.app.dependency_overrides.pop(get_run_manager, None)
+
+        assert response.status_code == 201
+        data = response.json()
+
+        # Extract should be skipped due to unexpected error
+        assert data["extract_started"] is False
+        assert data["extract_skipped_reason"] is not None
+
+        # Files should still be created
+        assert len(data["files"]) == 1
+        assert data["files"][0]["file_name"] == "file1.txt"
