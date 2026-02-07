@@ -28,16 +28,19 @@ const mockTerms: TermResponse[] = [
     id: 1,
     term_text: '量子コンピュータ',
     category: '技術用語',
+    user_notes: '量子力学を応用した次世代コンピュータ',
   },
   {
     id: 2,
     term_text: '量子ビット',
     category: '技術用語',
+    user_notes: '',
   },
   {
     id: 3,
     term_text: '重ね合わせ',
     category: null,
+    user_notes: '',
   },
 ]
 
@@ -1374,5 +1377,82 @@ describe('Required Terms', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
     expect(screen.getByText('必須用語を追加')).toBeInTheDocument()
+  })
+})
+
+describe('User Notes', () => {
+  beforeEach(() => {
+    server.use(...allTestHandlers)
+  })
+
+  it('shows user_notes textarea in detail panel', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    const notesTextarea = within(detailPanel).getByLabelText('補足情報')
+    expect(notesTextarea).toBeInTheDocument()
+    expect(notesTextarea).toHaveValue('量子力学を応用した次世代コンピュータ')
+  })
+
+  it('shows empty textarea when user_notes is empty', async () => {
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子ビット')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子ビット'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    const notesTextarea = within(detailPanel).getByLabelText('補足情報')
+    expect(notesTextarea).toHaveValue('')
+  })
+
+  it('auto-saves user_notes after typing (debounce)', async () => {
+    let savedUserNotes: string | undefined
+    server.use(
+      http.patch(`${BASE_URL}/api/projects/:projectId/terms/:termId`, async ({ request }) => {
+        const body = await request.json() as { user_notes?: string }
+        savedUserNotes = body.user_notes
+        return HttpResponse.json({ ...mockTerms[0], user_notes: body.user_notes })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('term-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('term-detail-panel')
+    const notesTextarea = within(detailPanel).getByLabelText('補足情報')
+
+    await user.clear(notesTextarea)
+    await user.type(notesTextarea, '新しいメモ')
+
+    // Wait for debounce to fire (500ms)
+    await waitFor(() => {
+      expect(savedUserNotes).toBe('新しいメモ')
+    }, { timeout: 2000 })
   })
 })
