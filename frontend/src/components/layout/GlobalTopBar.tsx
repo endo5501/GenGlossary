@@ -21,8 +21,8 @@ const scopeOptions = [
   { value: 'refine', label: 'Refine Only' },
 ]
 
-const isRunScope = (value: string): value is RunScope =>
-  ['full', 'extract', 'generate', 'review', 'refine'].includes(value)
+const scopeValues = scopeOptions.map((opt) => opt.value)
+const isRunScope = (value: string): value is RunScope => scopeValues.includes(value)
 
 export function GlobalTopBar({
   projectId,
