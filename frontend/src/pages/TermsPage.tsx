@@ -30,11 +30,18 @@ import {
   useRequiredTerms,
   useCreateRequiredTerm,
   useDeleteRequiredTerm,
+  useSynonymGroups,
+  useCreateSynonymGroup,
+  useDeleteSynonymGroup,
+  useAddSynonymMember,
+  useRemoveSynonymMember,
+  useUpdateSynonymGroup,
 } from '../api/hooks'
 import { PageContainer } from '../components/common/PageContainer'
 import { SplitLayout } from '../components/common/SplitLayout'
 import { AddTermModal } from '../components/common/AddTermModal'
 import { TermListTable } from '../components/common/TermListTable'
+import { SynonymGroupPanel } from '../components/common/SynonymGroupPanel'
 
 interface TermsPageProps {
   projectId: number
@@ -77,6 +84,12 @@ export function TermsPage({ projectId }: TermsPageProps) {
   const deleteExcludedTerm = useDeleteExcludedTerm(projectId)
   const createRequiredTerm = useCreateRequiredTerm(projectId)
   const deleteRequiredTerm = useDeleteRequiredTerm(projectId)
+  const { data: synonymGroups } = useSynonymGroups(projectId)
+  const createSynonymGroup = useCreateSynonymGroup(projectId)
+  const deleteSynonymGroup = useDeleteSynonymGroup(projectId)
+  const addSynonymMember = useAddSynonymMember(projectId)
+  const removeSynonymMember = useRemoveSynonymMember(projectId)
+  const updateSynonymGroup = useUpdateSynonymGroup(projectId)
 
   const isRunning = currentRun?.status === 'running'
 
@@ -454,6 +467,28 @@ export function TermsPage({ projectId }: TermsPageProps) {
                 onChange={(e) => handleUserNotesChange(e.target.value)}
                 minRows={3}
                 autosize
+                mb="md"
+              />
+
+              <SynonymGroupPanel
+                termText={selectedTerm.term_text}
+                synonymGroups={synonymGroups}
+                terms={terms}
+                projectId={projectId}
+                onCreateGroup={(primaryText, memberTexts) =>
+                  createSynonymGroup.mutate({ primary_term_text: primaryText, member_texts: memberTexts })
+                }
+                onDeleteGroup={(groupId) => deleteSynonymGroup.mutate(groupId)}
+                onAddMember={(groupId, termText) =>
+                  addSynonymMember.mutate({ groupId, data: { term_text: termText } })
+                }
+                onRemoveMember={(groupId, memberId) =>
+                  removeSynonymMember.mutate({ groupId, memberId })
+                }
+                onUpdatePrimary={(groupId, newPrimaryText) =>
+                  updateSynonymGroup.mutate({ groupId, data: { primary_term_text: newPrimaryText } })
+                }
+                isLoading={createSynonymGroup.isPending || addSynonymMember.isPending}
               />
             </Paper>
           ) : null}

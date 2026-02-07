@@ -133,6 +133,37 @@ export interface RequiredTermCreateRequest {
   term_text: string
 }
 
+// Synonym group types
+export interface SynonymMemberResponse {
+  id: number
+  group_id: number
+  term_text: string
+}
+
+export interface SynonymGroupResponse {
+  id: number
+  primary_term_text: string
+  members: SynonymMemberResponse[]
+}
+
+export interface SynonymGroupListResponse {
+  items: SynonymGroupResponse[]
+  total: number
+}
+
+export interface SynonymGroupCreateRequest {
+  primary_term_text: string
+  member_texts: string[]
+}
+
+export interface SynonymGroupUpdateRequest {
+  primary_term_text: string
+}
+
+export interface SynonymMemberCreateRequest {
+  term_text: string
+}
+
 // Provisional update request
 export interface ProvisionalUpdateRequest {
   definition?: string
