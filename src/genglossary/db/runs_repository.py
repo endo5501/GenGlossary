@@ -10,12 +10,16 @@ TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
 
 class RunUpdateResult(Enum):
-    """Result of update_run_status_if_active operation.
+    """Result of conditional status update operations.
+
+    Used by update_run_status_if_active, update_run_status_if_running,
+    complete_run_if_not_cancelled, fail_run_if_not_terminal, and cancel_run.
 
     This enum distinguishes between different outcomes when updating run status:
     - UPDATED: Run was successfully updated
     - NOT_FOUND: Run does not exist
-    - ALREADY_TERMINAL: Run exists but is already in terminal state
+    - ALREADY_TERMINAL: Run exists but is not in the expected state for the update
+      (e.g., already in a terminal state, or not in 'running' state when required)
     """
 
     UPDATED = "updated"
