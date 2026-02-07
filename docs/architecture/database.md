@@ -308,55 +308,144 @@ def create_terms_batch(
     ...
 ```
 
-## excluded_term_repository.py (v5)
-```python
-from typing import Literal
-from genglossary.models.excluded_term import ExcludedTerm
+## generic_term_repository.py (共通ジェネリックリポジトリ)
 
-def add_excluded_term(
+除外用語（`terms_excluded`）と必須用語（`terms_required`）の共通CRUD関数群。
+テーブル名とモデル型をパラメータで受け取り、同じロジックを共有する。
+
+```python
+from typing import TypeVar
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
+
+def add_term(
     conn: sqlite3.Connection,
     term_text: str,
-    source: Literal["auto", "manual"]
-) -> int:
-    """除外用語を追加（ON CONFLICT DO NOTHINGで重複を許容）
+    source: str,
+    table: str,
+    model_type: type[T],
+) -> tuple[int, bool]:
+    """用語を追加（ON CONFLICT DO NOTHINGで重複を許容）
 
     Returns:
-        追加または既存のエントリのID
+        tuple[int, bool]: (term_id, created) - createdは新規追加時True、既存時False
     """
     ...
 
-def delete_excluded_term(conn: sqlite3.Connection, term_id: int) -> bool:
-    """除外用語を削除
+def delete_term(conn: sqlite3.Connection, term_id: int, table: str) -> bool:
+    """用語を削除
 
     Returns:
         削除が成功した場合True、用語が存在しない場合False
     """
     ...
 
-def get_all_excluded_terms(conn: sqlite3.Connection) -> list[ExcludedTerm]:
-    """全ての除外用語を取得（created_at降順）"""
+def get_all_terms(
+    conn: sqlite3.Connection, table: str, model_type: type[T]
+) -> list[T]:
+    """全ての用語を取得（ID順）"""
     ...
 
-def term_exists_in_excluded(conn: sqlite3.Connection, term_text: str) -> bool:
-    """指定した用語テキストが除外リストに存在するか確認"""
+def get_term_by_id(
+    conn: sqlite3.Connection, term_id: int, table: str, model_type: type[T]
+) -> T | None:
+    """IDで用語を取得"""
     ...
 
-def get_excluded_term_texts(conn: sqlite3.Connection) -> set[str]:
-    """除外用語のテキスト一覧をsetで取得（高速フィルタ用）"""
+def term_exists(conn: sqlite3.Connection, term_text: str, table: str) -> bool:
+    """指定した用語テキストが存在するか確認"""
     ...
 
-def bulk_add_excluded_terms(
+def get_term_texts(conn: sqlite3.Connection, table: str) -> set[str]:
+    """用語テキスト一覧をsetで取得（高速フィルタ用）"""
+    ...
+
+def bulk_add_terms(
     conn: sqlite3.Connection,
-    term_texts: list[str],
-    source: Literal["auto", "manual"]
+    terms: list[str],
+    source: str,
+    table: str,
 ) -> int:
-    """複数の除外用語を一括追加（ON CONFLICT DO NOTHINGで重複を許容）
+    """複数の用語を一括追加（ON CONFLICT DO NOTHINGで重複を許容）
 
     Returns:
         実際に追加された件数
     """
     ...
 ```
+
+**設計ポイント:**
+- `table` パラメータでテーブル名を指定（`terms_excluded` / `terms_required`）
+- `model_type` パラメータで戻り値の型を制御（`ExcludedTerm` / `RequiredTerm`）
+- `add_term` は `tuple[int, bool]` を返し、新規/既存を呼び出し側が判別可能
+
+## excluded_term_repository.py (v5) - 薄いラッパー
+
+`generic_term_repository` の関数群を `terms_excluded` テーブルと `ExcludedTerm` モデルで固定化した薄いラッパー。
+
+```python
+from genglossary.db.generic_term_repository import (
+    add_term, bulk_add_terms, delete_term as _delete_term,
+    get_all_terms, get_term_by_id, get_term_texts, term_exists,
+)
+from genglossary.models.excluded_term import ExcludedTerm
+
+_TABLE = "terms_excluded"
+
+def add_excluded_term(conn, term_text, source) -> tuple[int, bool]:
+    return add_term(conn, term_text, source, _TABLE, ExcludedTerm)
+
+def delete_excluded_term(conn, term_id) -> bool:
+    return _delete_term(conn, term_id, _TABLE)
+
+def get_all_excluded_terms(conn) -> list[ExcludedTerm]:
+    return get_all_terms(conn, _TABLE, ExcludedTerm)
+
+def get_excluded_term_by_id(conn, term_id) -> ExcludedTerm | None:
+    return get_term_by_id(conn, term_id, _TABLE, ExcludedTerm)
+
+def term_exists_in_excluded(conn, term_text) -> bool:
+    return term_exists(conn, term_text, _TABLE)
+
+def get_excluded_term_texts(conn) -> set[str]:
+    return get_term_texts(conn, _TABLE)
+
+def bulk_add_excluded_terms(conn, terms, source) -> int:
+    return bulk_add_terms(conn, terms, source, _TABLE)
+```
+
+## required_term_repository.py (v6) - 薄いラッパー
+
+`generic_term_repository` の関数群を `terms_required` テーブルと `RequiredTerm` モデルで固定化した薄いラッパー。
+`excluded_term_repository.py` と同一構造。
+
+```python
+from genglossary.db.generic_term_repository import (
+    add_term, bulk_add_terms, delete_term as _delete_term,
+    get_all_terms, get_term_by_id, get_term_texts, term_exists,
+)
+from genglossary.models.required_term import RequiredTerm
+
+_TABLE = "terms_required"
+
+def add_required_term(conn, term_text, source) -> tuple[int, bool]:
+    return add_term(conn, term_text, source, _TABLE, RequiredTerm)
+
+def delete_required_term(conn, term_id) -> bool:
+    return _delete_term(conn, term_id, _TABLE)
+
+def get_all_required_terms(conn) -> list[RequiredTerm]:
+    return get_all_terms(conn, _TABLE, RequiredTerm)
+
+# ... 同様のパターンで get_term_by_id, term_exists, get_term_texts, bulk_add を委譲
+```
+
+**ジェネリックリポジトリパターン:**
+- 共通ロジックを `generic_term_repository.py` に集約し、コード重複を約70%削減
+- 個別リポジトリ（`excluded_term_repository.py`, `required_term_repository.py`）は薄いラッパーとして残す
+- 呼び出し側は個別リポジトリの関数を使い、テーブル名やモデル型を意識する必要がない
+- `glossary_helpers.py` のパターン（provisional/refined共通）と類似した設計思想
 
 ## glossary_helpers.py
 ```python

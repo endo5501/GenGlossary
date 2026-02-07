@@ -96,9 +96,27 @@ class Project(BaseModel):
     status: ProjectStatus
 ```
 
+### term_validator.py (共通バリデータ)
+```python
+def validate_term_text(v: str) -> str:
+    """Validate and normalize term text.
+
+    ExcludedTerm と RequiredTerm の field_validator から共通で呼び出される。
+    空白のトリミングと空文字チェックを行う。
+
+    Returns:
+        The validated and stripped term text.
+
+    Raises:
+        ValueError: If the term text is empty or contains only whitespace.
+    """
+    ...
+```
+
 ### excluded_term.py (v5)
 ```python
 from typing import Literal
+from genglossary.models.term_validator import validate_term_text
 
 class ExcludedTerm(BaseModel):
     """除外用語を表すモデル
@@ -110,7 +128,39 @@ class ExcludedTerm(BaseModel):
     term_text: str           # 除外する用語テキスト（一意）
     source: Literal["auto", "manual"]  # 'auto': LLM自動分類、'manual': ユーザー手動追加
     created_at: datetime
+
+    @field_validator("term_text")
+    @classmethod
+    def validate_term_text_field(cls, v: str) -> str:
+        return validate_term_text(v)  # 共通バリデータを使用
 ```
+
+### required_term.py (v6)
+```python
+from typing import Literal
+from genglossary.models.term_validator import validate_term_text
+
+class RequiredTerm(BaseModel):
+    """必須用語を表すモデル
+
+    ユーザーが手動で追加し、用語リストに必ず含まれるようにする用語。
+    SudachiPy解析やLLM分類の結果に関わらず、常に用語集に含まれる。
+    """
+    id: int
+    term_text: str           # 必須用語テキスト（一意）
+    source: Literal["manual"]  # 現在は'manual'のみ
+    created_at: datetime
+
+    @field_validator("term_text")
+    @classmethod
+    def validate_term_text_field(cls, v: str) -> str:
+        return validate_term_text(v)  # 共通バリデータを使用
+```
+
+**共通バリデータパターン:**
+- `term_validator.py` に `validate_term_text()` を抽出
+- `ExcludedTerm` と `RequiredTerm` が同じバリデーション関数を `field_validator` から呼び出す
+- モデル自体は個別に残す（`source` の型が `Literal["auto", "manual"]` vs `Literal["manual"]` で異なるため）
 
 ## 2. llm/ - LLMクライアント層
 

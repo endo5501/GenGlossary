@@ -9,7 +9,8 @@ GenGlossary/
 │   │   ├── document.py          # Document, Line管理
 │   │   ├── term.py              # Term, TermOccurrence
 │   │   ├── glossary.py          # Glossary, GlossaryIssue
-│   │   └── project.py           # Project, ProjectStatus
+│   │   ├── project.py           # Project, ProjectStatus
+│   │   └── term_validator.py    # 共通バリデータ (ExcludedTerm/RequiredTerm用)
 │   ├── llm/                      # LLMクライアント
 │   │   ├── __init__.py
 │   │   ├── base.py              # BaseLLMClient
@@ -24,6 +25,9 @@ GenGlossary/
 │   │   ├── metadata_repository.py    # メタデータCRUD
 │   │   ├── document_repository.py    # ドキュメントCRUD
 │   │   ├── term_repository.py   # 抽出用語CRUD
+│   │   ├── generic_term_repository.py # 除外/必須用語 共通CRUD
+│   │   ├── excluded_term_repository.py # 除外用語CRUD (薄いラッパー)
+│   │   ├── required_term_repository.py # 必須用語CRUD (薄いラッパー)
 │   │   ├── glossary_helpers.py  # 用語集共通処理
 │   │   ├── provisional_repository.py # 暫定用語集CRUD
 │   │   ├── issue_repository.py  # 精査結果CRUD
@@ -51,6 +55,9 @@ GenGlossary/
 │   │   ├── schemas/              # APIスキーマ
 │   │   │   ├── __init__.py
 │   │   │   ├── common.py         # 共通スキーマ (Health, Version, GlossaryTermResponse)
+│   │   │   ├── term_base_schemas.py   # 除外/必須用語 共通ベーススキーマ
+│   │   │   ├── excluded_term_schemas.py # 除外用語スキーマ (ベース継承)
+│   │   │   ├── required_term_schemas.py # 必須用語スキーマ (ベース継承)
 │   │   │   ├── term_schemas.py   # Terms用スキーマ
 │   │   │   ├── provisional_schemas.py  # Provisional用スキーマ
 │   │   │   ├── issue_schemas.py  # Issues用スキーマ
@@ -99,7 +106,8 @@ GenGlossary/
 │   │   ├── test_document.py
 │   │   ├── test_term.py
 │   │   ├── test_glossary.py
-│   │   └── test_project.py
+│   │   ├── test_project.py
+│   │   └── test_term_validator.py  # 共通バリデータテスト
 │   ├── llm/
 │   │   ├── test_base.py
 │   │   └── test_ollama_client.py
@@ -111,6 +119,7 @@ GenGlossary/
 │   │   ├── test_metadata_repository.py
 │   │   ├── test_document_repository.py
 │   │   ├── test_term_repository.py
+│   │   ├── test_generic_term_repository.py  # 共通リポジトリテスト
 │   │   ├── test_provisional_repository.py
 │   │   ├── test_issue_repository.py
 │   │   ├── test_refined_repository.py
@@ -160,11 +169,16 @@ frontend/
 │   ├── api/                 # API通信層
 │   │   ├── client.ts        # HTTPクライアント (ApiError, apiClient)
 │   │   ├── types.ts         # 型定義 (FileResponse, TermResponse, etc.)
-│   │   └── hooks/           # TanStack Queryフック（将来）
-│   │       └── index.ts
+│   │   └── hooks/           # TanStack Queryフック
+│   │       ├── index.ts
+│   │       ├── useTermsCrud.ts     # 共通用語CRUDフック (ジェネリック)
+│   │       ├── useExcludedTerms.ts # 除外用語フック (薄いラッパー)
+│   │       └── useRequiredTerms.ts # 必須用語フック (薄いラッパー)
 │   ├── components/          # Reactコンポーネント
 │   │   ├── common/
-│   │   │   └── PagePlaceholder.tsx  # 未実装ページ用
+│   │   │   ├── PagePlaceholder.tsx  # 未実装ページ用
+│   │   │   ├── AddTermModal.tsx     # 用語追加モーダル (除外/必須共通)
+│   │   │   └── TermListTable.tsx    # 用語一覧テーブル (除外/必須共通)
 │   │   └── layout/
 │   │       ├── index.ts
 │   │       ├── AppShell.tsx      # メインレイアウト

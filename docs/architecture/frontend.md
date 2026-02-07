@@ -633,6 +633,51 @@ interface LlmSettingsFormProps {
 | `PagePlaceholder` | 未実装ページ用のプレースホルダー。タイトルを表示 |
 | `PageContainer` | ページ共通のローディング、エラー、空状態を処理するコンテナ |
 | `OccurrenceList` | 用語の出現箇所リストを表示 |
+| `AddTermModal` | 用語追加モーダル（除外用語/必須用語で共通） |
+| `TermListTable` | 用語一覧テーブル（除外用語/必須用語で共通） |
+
+#### AddTermModal
+
+除外用語と必須用語の追加ダイアログを共通化したモーダルコンポーネント。
+
+```typescript
+interface AddTermModalProps {
+  opened: boolean
+  onClose: () => void
+  onSubmit: (termText: string) => void
+  title: string         // ダイアログタイトル（例: "除外用語を追加"）
+  placeholder: string   // 入力欄のプレースホルダー
+  isLoading: boolean    // 送信中のローディング状態
+}
+```
+
+**機能:**
+- テキスト入力 + 追加ボタン + キャンセルボタン
+- 空文字のサブミットを防止（`trim()` チェック）
+- サブミット後に入力欄を自動クリア
+- クローズ時に入力状態をリセット
+
+#### TermListTable
+
+除外用語と必須用語の一覧表示を共通化したテーブルコンポーネント。
+
+```typescript
+interface TermListTableProps {
+  terms: TermItem[] | undefined
+  onDelete: (termId: number) => void
+  isLoading: boolean
+  isDeletePending: boolean
+  showSourceColumn: boolean  // Source列の表示/非表示を制御
+  deleteTooltip: string
+  deleteAriaLabel: string
+}
+```
+
+**機能:**
+- 用語テキスト、ソースバッジ（自動/手動）、作成日時、削除ボタンを表示
+- `showSourceColumn` で Source 列の表示/非表示を制御（除外用語: 表示、必須用語: 非表示）
+- `LoadingOverlay` でローディング状態を表示
+- 削除ボタンにツールチップとアクセシビリティ属性を設定
 
 #### PageContainer
 
@@ -785,11 +830,56 @@ API レスポンスの TypeScript 型定義。
 
 TanStack Query を使用したカスタムフック。
 
+#### 共通用語CRUDフック（useTermsCrud.ts）
+
+除外用語と必須用語のデータフェッチ・ミューテーションを共通化したジェネリックフック群。
+
+```typescript
+interface UseTermsCrudOptions {
+  /** API path segment, e.g. "excluded-terms" or "required-terms" */
+  apiPath: string
+  /** Query key prefix, e.g. "excludedTerms" or "requiredTerms" */
+  queryKeyPrefix: string
+}
+
+// データフェッチ（ジェネリック型Tでレスポンス型を指定）
+function useTermsList<T>(projectId: number | undefined, options: UseTermsCrudOptions)
+
+// 用語追加ミューテーション
+function useCreateTerm<T>(projectId: number, options: UseTermsCrudOptions)
+
+// 用語削除ミューテーション
+function useDeleteTerm(projectId: number, options: UseTermsCrudOptions)
+```
+
+**使用例（薄いラッパー）:**
+```typescript
+// useExcludedTerms.ts
+const OPTIONS = { apiPath: 'excluded-terms', queryKeyPrefix: 'excludedTerms' } as const
+
+export function useExcludedTerms(projectId: number | undefined) {
+  const { keys: _keys, ...result } = useTermsList<ExcludedTermResponse>(projectId, OPTIONS)
+  return result
+}
+
+export function useCreateExcludedTerm(projectId: number) {
+  return useCreateTerm<ExcludedTermResponse>(projectId, OPTIONS)
+}
+```
+
+**設計ポイント:**
+- `apiPath` と `queryKeyPrefix` をパラメータ化し、APIパスとキャッシュキーを制御
+- ミューテーション成功時に自分のリストと `termKeys.list` の両方を無効化（用語リストとの連携）
+- `enabled: projectId !== undefined` で `projectId` 未確定時のフェッチを防止
+- 個別フック（`useExcludedTerms.ts`, `useRequiredTerms.ts`）は薄いラッパーとして残す
+
 #### データフェッチフック
 
 | フック | 説明 |
 |-------|------|
 | `useTerms` | 用語一覧を取得 |
+| `useExcludedTerms` | 除外用語一覧を取得（`useTermsCrud` ラッパー） |
+| `useRequiredTerms` | 必須用語一覧を取得（`useTermsCrud` ラッパー） |
 | `useProvisional` | 暫定用語集を取得 |
 | `useIssues` | 問題一覧を取得（issueType でフィルタ可能） |
 | `useRefined` | 最終用語集を取得 |
@@ -808,6 +898,8 @@ export const useTerms = (projectId: number) =>
 | `useCreateFile` / `useCreateFilesBulk` / `useDeleteFile` | ファイルの追加/一括追加/削除 |
 | `useExtractTerms` | 用語抽出を実行 |
 | `useCreateTerm` / `useDeleteTerm` | 用語の追加/削除 |
+| `useCreateExcludedTerm` / `useDeleteExcludedTerm` | 除外用語の追加/削除（`useTermsCrud` ラッパー） |
+| `useCreateRequiredTerm` / `useDeleteRequiredTerm` | 必須用語の追加/削除（`useTermsCrud` ラッパー） |
 | `useUpdateProvisional` | 暫定用語集エントリを更新 |
 | `useRegenerateProvisional` | 暫定用語集を再生成 |
 | `useReviewIssues` | 問題精査を実行 |
