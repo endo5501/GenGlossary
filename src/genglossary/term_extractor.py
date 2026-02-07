@@ -361,6 +361,9 @@ class TermExtractor:
         # Step 1c: Filter out excluded terms (if repo is provided)
         candidates = self._filter_excluded_terms(candidates)
 
+        # Step 1d: Merge required terms (if repo is provided)
+        candidates = self._merge_required_terms(candidates)
+
         if not candidates:
             return TermExtractionAnalysis(
                 sudachi_candidates=[],
@@ -778,7 +781,8 @@ JSON形式で回答してください:
         """Select terms from classification results, excluding common nouns.
 
         Automatically approves all terms that are not classified as common nouns.
-        Required terms are always included, even if classified as common_noun.
+        Required terms are always included, even if the LLM omits them entirely
+        from its classification response.
         No additional LLM call is needed - classification determines approval.
 
         Args:
@@ -798,6 +802,13 @@ JSON形式で回答してください:
             else:
                 # Include required terms even from common_noun category
                 approved.extend(t for t in terms if t in required)
+
+        # Guarantee required terms are in the final output even if LLM omitted them
+        if required:
+            approved_set = set(approved)
+            for term in sorted(required):
+                if term not in approved_set:
+                    approved.append(term)
 
         return self._process_terms(approved)
 
