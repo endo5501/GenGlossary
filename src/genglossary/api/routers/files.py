@@ -290,17 +290,13 @@ async def create_file(
     # Create document with normalized name
     try:
         with transaction(project_db):
-            doc_id = create_document(
+            row = create_document(
                 project_db, normalized_file_name, request.content, content_hash
             )
     except sqlite3.IntegrityError:
         raise HTTPException(
             status_code=409, detail=f"File already exists: {normalized_file_name}"
         )
-
-    # Return created document
-    row = get_document(project_db, doc_id)
-    assert row is not None
 
     return FileResponse.from_db_row(row)
 
@@ -355,15 +351,15 @@ async def create_files_bulk(
             )
 
     # Create all documents with normalized names
-    created_ids = []
+    created_rows: list[sqlite3.Row] = []
     try:
         with transaction(project_db):
             for normalized_name, content in normalized_files:
                 content_hash = compute_content_hash(content)
-                doc_id = create_document(
+                row = create_document(
                     project_db, normalized_name, content, content_hash
                 )
-                created_ids.append(doc_id)
+                created_rows.append(row)
     except sqlite3.IntegrityError as e:
         # Only map UNIQUE constraint violations to 409; re-raise others
         if "UNIQUE constraint failed" in str(e):
@@ -374,11 +370,7 @@ async def create_files_bulk(
         raise
 
     # Build file responses
-    file_responses = []
-    for doc_id in created_ids:
-        row = get_document(project_db, doc_id)
-        assert row is not None
-        file_responses.append(FileResponse.from_db_row(row))
+    file_responses = [FileResponse.from_db_row(row) for row in created_rows]
 
     # Auto-trigger extract run
     extract_started = False

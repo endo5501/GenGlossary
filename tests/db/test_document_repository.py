@@ -94,17 +94,17 @@ class TestGetDocument:
     ) -> None:
         """Test that get_document returns document data."""
         test_content = "Test content"
-        doc_id = create_document(
+        created = create_document(
             db_with_schema,
             file_name="doc.txt",
             content=test_content,
             content_hash="abc123",
         )
 
-        doc = get_document(db_with_schema, doc_id)
+        doc = get_document(db_with_schema, created["id"])
 
         assert doc is not None
-        assert doc["id"] == doc_id
+        assert doc["id"] == created["id"]
         assert doc["file_name"] == "doc.txt"
         assert doc["content"] == test_content
         assert doc["content_hash"] == "abc123"
@@ -133,13 +133,13 @@ class TestListAllDocuments:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Test that list_all_documents returns all documents."""
-        doc_id1 = create_document(
+        created1 = create_document(
             db_with_schema,
             file_name="doc1.txt",
             content="Content 1",
             content_hash="abc123",
         )
-        doc_id2 = create_document(
+        created2 = create_document(
             db_with_schema,
             file_name="doc2.txt",
             content="Content 2",
@@ -149,8 +149,8 @@ class TestListAllDocuments:
         docs = list_all_documents(db_with_schema)
 
         assert len(docs) == 2
-        assert docs[0]["id"] == doc_id1
-        assert docs[1]["id"] == doc_id2
+        assert docs[0]["id"] == created1["id"]
+        assert docs[1]["id"] == created2["id"]
 
     def test_list_all_documents_ordered_by_id(
         self, db_with_schema: sqlite3.Connection
@@ -182,7 +182,7 @@ class TestGetDocumentByName:
     ) -> None:
         """Test that get_document_by_name returns the correct document."""
         test_content = "Test content"
-        doc_id = create_document(
+        created = create_document(
             db_with_schema,
             file_name="doc.txt",
             content=test_content,
@@ -192,7 +192,7 @@ class TestGetDocumentByName:
         doc = get_document_by_name(db_with_schema, "doc.txt")
 
         assert doc is not None
-        assert doc["id"] == doc_id
+        assert doc["id"] == created["id"]
         assert doc["file_name"] == "doc.txt"
         assert doc["content"] == test_content
 
