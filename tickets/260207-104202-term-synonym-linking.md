@@ -4,7 +4,7 @@ tags: [feature, frontend, backend, pipeline, llm]
 description: "Add synonym linking between terms to aggregate context and improve glossary accuracy"
 created_at: "2026-02-07T10:42:02Z"
 started_at: 2026-02-07T15:14:19Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T15:48:45Z # Do not modify manually
 ---
 
 # 用語の同義語リンク（Synonym Linking）機能
