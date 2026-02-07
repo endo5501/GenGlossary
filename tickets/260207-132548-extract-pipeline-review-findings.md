@@ -57,19 +57,19 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] エラーメッセージのサニタイズ
-- [ ] scopeOptions の重複排除
-- [ ] ファイルサイズ上限の統一
-- [ ] N+1クエリの改善
-- [ ] fullスコープのドキュメント・API整合性確認
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] エラーメッセージのサニタイズ
+- [x] scopeOptions の重複排除
+- [x] ファイルサイズ上限の統一
+- [x] N+1クエリの改善
+- [x] fullスコープのドキュメント・API整合性確認（既にドキュメント更新済み）
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md（既に正確に記述済み、追加変更不要）
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 
