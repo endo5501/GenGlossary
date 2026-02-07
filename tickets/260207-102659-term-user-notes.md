@@ -3,7 +3,7 @@ priority: 2
 tags: [feature, frontend, backend, pipeline, llm]
 description: "Add user notes to terms for supplementary context used in glossary generation"
 created_at: "2026-02-07T10:26:59Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-07T13:59:56Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -79,8 +79,9 @@ ALTER TABLE terms_extracted ADD COLUMN user_notes TEXT DEFAULT '';
 ### 3. フロントエンドUI
 
 Terms画面の詳細パネルに:
-- `Textarea` による補足情報の入力欄を追加
-- 保存ボタンまたは自動保存（debounce）で `user_notes` を更新
+- `Textarea` による補足情報の入力欄を追加（カテゴリ選択の下に配置）
+- **採用: 自動保存（debounce 500ms）** で `PATCH` APIを自動呼び出し
+- 保存中はインジケーター表示（"保存中..." → "保存済み"）
 
 ### 4. パイプラインへの統合
 
@@ -102,8 +103,10 @@ Terms画面の詳細パネルに:
 
 Extract処理で `terms_extracted` テーブルをクリア・再作成する際、既存の `user_notes` を保持する仕組みが必要:
 
-- 方針A: Extract前に `user_notes` をバックアップし、Extract後に `term_text` をキーにして復元
-- 方針B: Extract処理で既存行を削除せず、UPSERT（INSERT OR IGNORE + UPDATE）に変更し `user_notes` を保持
+- **採用: 方針A**: Extract前に `user_notes` をバックアップし、Extract後に `term_text` をキーにして復元
+  - `backup_user_notes(conn)` → `{term_text: user_notes}` の辞書を返す
+  - `restore_user_notes(conn, notes_map)` → `term_text` をキーに `user_notes` を復元
+- ~~方針B: Extract処理で既存行を削除せず、UPSERT に変更~~ → 既存フローへの影響が大きいため不採用
 
 ## データフロー
 
