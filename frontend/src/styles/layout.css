@@ -24,3 +24,32 @@
   flex-shrink: 0;
   border-bottom: 1px solid var(--mantine-color-gray-3);
 }
+
+/* Split layout (list + detail side by side) */
+.split-layout {
+  display: flex;
+  gap: var(--mantine-spacing-md);
+  height: 100%;
+  min-height: 0;
+}
+
+.split-layout-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.split-layout-detail {
+  flex: 0 0 40%;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .split-layout {
+    flex-direction: column;
+  }
+  .split-layout-detail {
+    flex: none;
+  }
+}
