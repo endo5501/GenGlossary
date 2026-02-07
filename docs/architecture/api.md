@@ -731,8 +731,11 @@ def _validate_file_name(file_name: str) -> str:
     - Unicode look-alike文字を拒否:
       - スラッシュ類似: U+2215, U+FF0F, U+2044, U+29F8
       - ドット類似: U+2024, U+FF0E, U+00B7, U+3002, U+FF61
+    - Windows/NTFS無効文字を拒否:
+      - : < > " | ? *
+      - コロン拒否によりNTFS ADS（Alternate Data Stream）パターンも防止
+      - Windowsドライブパス（C:/ 等）もコロン拒否により自動的にブロック
     - 絶対パス（/で始まる）を拒否
-    - Windowsドライブパス（C:/path, D:/path）を拒否
     - パストラバーサル（..）を拒否
     - Windowsバックスラッシュを拒否（POSIX形式のみ）
     - 末尾スペース/ドット/Unicode空白を拒否（各セグメント、Windows互換性）:
