@@ -191,43 +191,41 @@ export function TermsPage({ projectId }: TermsPageProps) {
     </Button>
   )
 
-  const actionBar =
-    activeTab === 'terms'
-      ? termsActionBar
-      : activeTab === 'excluded'
-        ? excludedActionBar
-        : requiredActionBar
+  const tabConfig: Record<string, { actionBar: React.ReactNode; data: unknown[] | undefined; emptyMessage: string; isTabLoading: boolean; emptyTestId: string }> = {
+    terms: {
+      actionBar: termsActionBar,
+      data: terms,
+      emptyMessage: 'No terms found. Extract terms from documents or add manually.',
+      isTabLoading: isLoading,
+      emptyTestId: 'terms-empty',
+    },
+    excluded: {
+      actionBar: excludedActionBar,
+      data: excludedTerms,
+      emptyMessage: 'No excluded terms. Add terms to exclude them from extraction.',
+      isTabLoading: false,
+      emptyTestId: 'excluded-terms-empty',
+    },
+    required: {
+      actionBar: requiredActionBar,
+      data: requiredTerms,
+      emptyMessage: 'No required terms. Add terms to always include them in extraction.',
+      isTabLoading: false,
+      emptyTestId: 'required-terms-empty',
+    },
+  }
 
-  const isTermsEmpty = !terms || terms.length === 0
-  const isExcludedEmpty = !excludedTerms || excludedTerms.length === 0
-  const isRequiredEmpty = !requiredTerms || requiredTerms.length === 0
-  const isEmpty =
-    activeTab === 'terms'
-      ? isTermsEmpty
-      : activeTab === 'excluded'
-        ? isExcludedEmpty
-        : isRequiredEmpty
-  const emptyMessage =
-    activeTab === 'terms'
-      ? 'No terms found. Extract terms from documents or add manually.'
-      : activeTab === 'excluded'
-        ? 'No excluded terms. Add terms to exclude them from extraction.'
-        : 'No required terms. Add terms to always include them in extraction.'
+  const currentTab = tabConfig[activeTab ?? 'terms']
+  const isEmpty = !currentTab.data || currentTab.data.length === 0
 
   return (
     <PageContainer
-      isLoading={isLoading && activeTab === 'terms'}
+      isLoading={currentTab.isTabLoading}
       isEmpty={isEmpty}
-      emptyMessage={emptyMessage}
-      actionBar={actionBar}
+      emptyMessage={currentTab.emptyMessage}
+      actionBar={currentTab.actionBar}
       loadingTestId="terms-loading"
-      emptyTestId={
-        activeTab === 'terms'
-          ? 'terms-empty'
-          : activeTab === 'excluded'
-            ? 'excluded-terms-empty'
-            : 'required-terms-empty'
-      }
+      emptyTestId={currentTab.emptyTestId}
     >
       <Tabs value={activeTab} onChange={setActiveTab}>
         <Tabs.List mb="md">
