@@ -4,7 +4,7 @@ tags: [feature, frontend, backend, terms]
 description: "Add required terms list feature to Terms page - ensures specified terms always appear in glossary"
 created_at: "2026-02-07T09:34:17Z"
 started_at: 2026-02-07T10:46:15Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T11:11:33Z # Do not modify manually
 ---
 
 # 追加必須用語一覧（Required Terms List）
