@@ -162,6 +162,29 @@ class RequiredTerm(BaseModel):
 - `ExcludedTerm` と `RequiredTerm` が同じバリデーション関数を `field_validator` から呼び出す
 - モデル自体は個別に残す（`source` の型が `Literal["auto", "manual"]` vs `Literal["manual"]` で異なるため）
 
+### synonym.py (v8)
+```python
+from genglossary.models.term_validator import validate_term_text
+
+class SynonymMember(BaseModel):
+    """同義語グループのメンバー"""
+    id: int
+    group_id: int
+    term_text: str  # validate_term_text で検証
+
+class SynonymGroup(BaseModel):
+    """同義語グループ（代表用語 + メンバー一覧）"""
+    id: int
+    primary_term_text: str  # validate_term_text で検証
+    members: list[SynonymMember]
+```
+
+**パイプライン統合:**
+- `GlossaryGenerator`: 同義語の出現箇所を統合、非primary用語をスキップ
+- `GlossaryReviewer`: レビュープロンプトに同義語情報を付加
+- `GlossaryRefiner`: 改善プロンプトに同義語情報を付加
+- `MarkdownWriter`: 代表用語に `**別名**` セクションを追加
+
 ## 2. llm/ - LLMクライアント層
 
 **役割**: LLMとの通信を抽象化

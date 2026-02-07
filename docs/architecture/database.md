@@ -1,6 +1,11 @@
-# データベース層 (Schema v7)
+# データベース層 (Schema v8)
 
 **役割**: SQLiteへのデータ永続化とCRUD操作
+
+**Schema v8の主な変更点**:
+- `term_synonym_groups`テーブルを追加（同義語グループ管理）
+- `term_synonym_members`テーブルを追加（同義語メンバー管理、UNIQUE制約で重複所属防止）
+- `synonym_repository.py`を追加（同義語グループのCRUD操作）
 
 **Schema v7の主な変更点**:
 - `terms_extracted`テーブルに`user_notes`カラムを追加（ユーザー補足情報）
@@ -129,12 +134,13 @@ def batch_insert(
 
 ## schema.py
 ```python
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 def initialize_db(conn: sqlite3.Connection) -> None:
-    """データベーススキーマを初期化 (Schema v7)"""
+    """データベーススキーマを初期化 (Schema v8)"""
     # テーブル作成: metadata, documents, terms_extracted,
-    # glossary_provisional, glossary_issues, glossary_refined, runs, terms_excluded, terms_required
+    # glossary_provisional, glossary_issues, glossary_refined, runs, terms_excluded, terms_required,
+    # term_synonym_groups, term_synonym_members
     # metadataテーブルは単一行（id=1固定）でLLM設定や入力パスを保存
     # runsテーブルはバックグラウンド実行の履歴を管理
     #
@@ -674,6 +680,39 @@ def create_provisional_terms_batch(
     create_glossary_terms_batch(conn, "glossary_provisional", terms)
 
 # refined_repository.py にも同様の create_refined_terms_batch 関数あり
+```
+
+## synonym_repository.py (v8)
+```python
+from genglossary.models.synonym import SynonymGroup, SynonymMember
+
+def create_group(conn, primary_term_text, member_texts) -> int:
+    """同義語グループを作成（メンバー含む）"""
+    ...
+
+def delete_group(conn, group_id) -> bool:
+    """同義語グループを削除（CASCADE でメンバーも削除）"""
+    ...
+
+def add_member(conn, group_id, term_text) -> int:
+    """グループにメンバーを追加"""
+    ...
+
+def remove_member(conn, member_id) -> bool:
+    """グループからメンバーを削除"""
+    ...
+
+def update_primary_term(conn, group_id, new_primary_text) -> bool:
+    """グループの代表用語を変更"""
+    ...
+
+def list_groups(conn) -> list[SynonymGroup]:
+    """全グループとメンバーを取得"""
+    ...
+
+def get_synonyms_for_term(conn, term_text) -> list[str]:
+    """指定用語の同義語一覧を取得（自身を除く）"""
+    ...
 ```
 
 ## プロジェクト管理システム
