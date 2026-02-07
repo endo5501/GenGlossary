@@ -136,24 +136,24 @@ Extract処理で `terms_extracted` テーブルをクリア・再作成する際
 
 ## Tasks
 
-- [ ] DB: `terms_extracted` に `user_notes` カラム追加（スキーママイグレーション）
-- [ ] Model: Term モデルに `user_notes` フィールド追加
-- [ ] Repository: `term_repository` の CRUD 関数を `user_notes` 対応に更新
-- [ ] Repository: Extract時の `user_notes` 保持ロジック実装
-- [ ] API: 用語更新エンドポイントで `user_notes` の読み書きに対応
-- [ ] Frontend: Terms画面の詳細パネルに補足情報入力UI追加
-- [ ] Pipeline/Generator: `GlossaryGenerator._build_definition_prompt()` に `user_notes` 注入
-- [ ] Pipeline/Reviewer: `GlossaryReviewer._create_review_prompt()` に `user_notes` 注入
-- [ ] Pipeline/Refiner: `GlossaryRefiner._create_refinement_prompt()` に `user_notes` 注入
-- [ ] Pipeline/Executor: 各ステップ間での `user_notes` 受け渡し対応
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] DB: `terms_extracted` に `user_notes` カラム追加（スキーママイグレーション）
+- [x] Model: Term モデルに `user_notes` フィールド追加
+- [x] Repository: `term_repository` の CRUD 関数を `user_notes` 対応に更新
+- [x] Repository: Extract時の `user_notes` 保持ロジック実装
+- [x] API: 用語更新エンドポイントで `user_notes` の読み書きに対応
+- [x] Frontend: Terms画面の詳細パネルに補足情報入力UI追加
+- [x] Pipeline/Generator: `GlossaryGenerator._build_definition_prompt()` に `user_notes` 注入
+- [x] Pipeline/Reviewer: `GlossaryReviewer._create_review_prompt()` に `user_notes` 注入
+- [x] Pipeline/Refiner: `GlossaryRefiner._create_refinement_prompt()` に `user_notes` 注入
+- [x] Pipeline/Executor: 各ステップ間での `user_notes` 受け渡し対応
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 
