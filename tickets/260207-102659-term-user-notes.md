@@ -4,7 +4,7 @@ tags: [feature, frontend, backend, pipeline, llm]
 description: "Add user notes to terms for supplementary context used in glossary generation"
 created_at: "2026-02-07T10:26:59Z"
 started_at: 2026-02-07T13:59:56Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-07T15:00:11Z # Do not modify manually
 ---
 
 # 用語への後付け補足情報（User Notes）機能
