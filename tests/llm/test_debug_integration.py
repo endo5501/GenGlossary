@@ -158,3 +158,45 @@ class TestFactoryDebugIntegration:
             client = create_llm_client(provider="ollama")
 
             assert client._debug_logger is None
+
+    def test_factory_raises_when_debug_enabled_without_dir(self) -> None:
+        """llm_debug=Trueでdebug_dir未指定の場合、ValueErrorが発生する"""
+        from genglossary.llm.factory import create_llm_client
+
+        with patch("genglossary.llm.factory.OllamaClient") as mock_ollama:
+            mock_ollama.return_value = StubLLMClient()
+
+            with pytest.raises(ValueError, match="debug_dir"):
+                create_llm_client(provider="ollama", llm_debug=True)
+
+
+class TestDebugLoggingBestEffort:
+    """Tests for best-effort debug logging (errors don't break LLM calls)."""
+
+    def test_generate_returns_result_when_logging_fails(
+        self, tmp_path: Path
+    ) -> None:
+        """ロギングが失敗してもgenerate()は結果を返す"""
+        client = StubLLMClient()
+        logger = LlmDebugLogger(debug_dir=str(tmp_path / "llm-debug"))
+        client._debug_logger = logger
+        # Make log method raise an exception
+        logger.log = lambda **kwargs: (_ for _ in ()).throw(OSError("disk full"))  # type: ignore[assignment]
+
+        result = client.generate("test prompt")
+
+        assert result == "stub response"
+
+    def test_generate_structured_returns_result_when_logging_fails(
+        self, tmp_path: Path
+    ) -> None:
+        """ロギングが失敗してもgenerate_structured()は結果を返す"""
+        client = StubLLMClient()
+        logger = LlmDebugLogger(debug_dir=str(tmp_path / "llm-debug"))
+        client._debug_logger = logger
+        # Make log method raise an exception
+        logger.log = lambda **kwargs: (_ for _ in ()).throw(OSError("disk full"))  # type: ignore[assignment]
+
+        result = client.generate_structured("test prompt", SampleResponse)
+
+        assert result.text == "stub"

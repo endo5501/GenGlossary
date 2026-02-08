@@ -180,3 +180,21 @@ class TestLlmDebugLoggerDisabled:
         )
         # No files should exist anywhere related to debug
         assert not (tmp_path / "llm-debug").exists()
+
+
+class TestLlmDebugLoggerFilePermissions:
+    """Tests for debug log file permissions."""
+
+    def test_log_file_has_owner_only_permissions(self, tmp_path: Path) -> None:
+        """デバッグログファイルはオーナーのみ読み書き可能 (0o600)"""
+        debug_dir = tmp_path / "llm-debug"
+        logger = LlmDebugLogger(debug_dir=str(debug_dir))
+
+        logger.log(
+            model="m", method="generate", request="r", response="resp", duration=1.0
+        )
+
+        files = list(debug_dir.iterdir())
+        assert len(files) == 1
+        file_mode = files[0].stat().st_mode & 0o777
+        assert file_mode == 0o600
