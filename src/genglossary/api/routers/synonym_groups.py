@@ -15,6 +15,7 @@ from genglossary.api.schemas.synonym_group_schemas import (
 )
 from genglossary.db.connection import transaction
 from genglossary.db.synonym_repository import (
+    GroupNotFoundError,
     add_member as repo_add_member,
     create_group,
     delete_group,
@@ -125,6 +126,11 @@ async def add_member_to_group(
     try:
         with transaction(project_db):
             member_id = repo_add_member(project_db, group_id, request.term_text)
+    except GroupNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Synonym group {group_id} not found",
+        )
     except sqlite3.IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

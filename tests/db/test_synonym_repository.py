@@ -6,6 +6,7 @@ import pytest
 
 from genglossary.db.schema import initialize_db
 from genglossary.db.synonym_repository import (
+    GroupNotFoundError,
     add_member,
     create_group,
     delete_group,
@@ -72,6 +73,13 @@ class TestCreateGroup:
 
         with pytest.raises(sqlite3.IntegrityError):
             create_group(db_with_schema, "鈴木", ["鈴木", "田中"])
+
+    def test_create_group_raises_when_primary_not_in_members(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """primary_term_text must be included in member_texts."""
+        with pytest.raises(ValueError, match="primary_term_text must be included in member_texts"):
+            create_group(db_with_schema, "田中太郎", ["田中", "田中部長"])
 
 
 class TestDeleteGroup:
@@ -158,6 +166,13 @@ class TestAddMember:
 
         with pytest.raises(sqlite3.IntegrityError):
             add_member(db_with_schema, group_id, "田中太郎")
+
+    def test_add_member_to_nonexistent_group_raises_group_not_found(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Adding a member to a non-existent group raises GroupNotFoundError."""
+        with pytest.raises(GroupNotFoundError):
+            add_member(db_with_schema, 999, "田中")
 
 
 class TestRemoveMember:

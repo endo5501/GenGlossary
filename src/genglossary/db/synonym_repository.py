@@ -6,6 +6,14 @@ from typing import cast
 from genglossary.models.synonym import SynonymGroup, SynonymMember
 
 
+class GroupNotFoundError(Exception):
+    """Raised when a synonym group is not found."""
+
+    def __init__(self, group_id: int) -> None:
+        super().__init__(f"Synonym group {group_id} not found")
+        self.group_id = group_id
+
+
 def create_group(
     conn: sqlite3.Connection,
     primary_term_text: str,
@@ -22,8 +30,11 @@ def create_group(
         The ID of the created group.
 
     Raises:
+        ValueError: If primary_term_text is not in member_texts.
         sqlite3.IntegrityError: If any member term already belongs to another group.
     """
+    if primary_term_text not in member_texts:
+        raise ValueError("primary_term_text must be included in member_texts")
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO term_synonym_groups (primary_term_text) VALUES (?)",
@@ -71,13 +82,19 @@ def add_member(
         The ID of the created member.
 
     Raises:
+        GroupNotFoundError: If the group does not exist.
         sqlite3.IntegrityError: If the term already belongs to a group.
     """
     cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO term_synonym_members (group_id, term_text) VALUES (?, ?)",
-        (group_id, term_text),
-    )
+    try:
+        cursor.execute(
+            "INSERT INTO term_synonym_members (group_id, term_text) VALUES (?, ?)",
+            (group_id, term_text),
+        )
+    except sqlite3.IntegrityError as e:
+        if "FOREIGN KEY constraint failed" in str(e):
+            raise GroupNotFoundError(group_id) from e
+        raise
     return cast(int, cursor.lastrowid)
 
 

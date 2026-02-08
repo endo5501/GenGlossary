@@ -1132,10 +1132,10 @@ async def list_terms(
 
 **Synonym Groups API (同義語グループ管理) - 6エンドポイント (v8):**
 - `GET /api/projects/{project_id}/synonym-groups` - 同義語グループ一覧取得
-- `POST /api/projects/{project_id}/synonym-groups` - グループ作成（代表用語 + メンバー）
+- `POST /api/projects/{project_id}/synonym-groups` - グループ作成（代表用語 + メンバー、422: primary未含有）
 - `DELETE /api/projects/{project_id}/synonym-groups/{group_id}` - グループ削除
 - `PATCH /api/projects/{project_id}/synonym-groups/{group_id}` - 代表用語変更
-- `POST /api/projects/{project_id}/synonym-groups/{group_id}/members` - メンバー追加
+- `POST /api/projects/{project_id}/synonym-groups/{group_id}/members` - メンバー追加（404: グループ不在、409: 重複）
 - `DELETE /api/projects/{project_id}/synonym-groups/{group_id}/members/{member_id}` - メンバー削除
 
 **Runs API (パイプライン実行管理) - 6エンドポイント:**
