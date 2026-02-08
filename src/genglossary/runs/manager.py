@@ -4,11 +4,13 @@ import logging
 import sqlite3
 import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
 
 logger = logging.getLogger(__name__)
 
+from genglossary.config import Config
 from genglossary.db.connection import database_connection, get_connection, transaction
 from genglossary.db.runs_repository import (
     RunUpdateResult,
@@ -185,10 +187,14 @@ class RunManager:
             )
 
             # Execute pipeline with project settings
+            config = Config()
+            debug_dir = str(Path(self.db_path).parent / "llm-debug")
             executor = PipelineExecutor(
                 provider=self.llm_provider,
                 model=self.llm_model,
                 base_url=self.llm_base_url or None,
+                llm_debug=config.llm_debug,
+                debug_dir=debug_dir,
             )
 
             # Store executor for cancellation support

@@ -1,13 +1,80 @@
 """Base LLM client interface."""
+from __future__ import annotations
+
 import json
+import logging
 import re
 import time
 from abc import ABC, abstractmethod
-from typing import Callable, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+if TYPE_CHECKING:
+    from genglossary.llm.debug_logger import LlmDebugLogger
+
+logger = logging.getLogger(__name__)
+
 T = TypeVar("T", bound=BaseModel)
+
+
+def _wrap_generate(original: Any) -> Any:
+    """Wrap a generate method with debug logging."""
+    if getattr(original, "_debug_wrapped", False):
+        return original
+
+    def wrapped(self: BaseLLMClient, prompt: str, *args: Any, **kwargs: Any) -> str:
+        start = time.time()
+        result = original(self, prompt, *args, **kwargs)
+        duration = time.time() - start
+        if self._debug_logger is not None:
+            try:
+                model_name = getattr(self, "model", "unknown")
+                self._debug_logger.log(
+                    model=model_name,
+                    method="generate",
+                    request=prompt,
+                    response=result,
+                    duration=round(duration, 2),
+                )
+            except Exception:
+                logger.warning("Failed to write debug log", exc_info=True)
+        return result
+
+    wrapped._debug_wrapped = True  # type: ignore[attr-defined]
+    return wrapped
+
+
+def _wrap_generate_structured(original: Any) -> Any:
+    """Wrap a generate_structured method with debug logging."""
+    if getattr(original, "_debug_wrapped", False):
+        return original
+
+    def wrapped(self: BaseLLMClient, prompt: str, *args: Any, **kwargs: Any) -> Any:
+        start = time.time()
+        result = original(self, prompt, *args, **kwargs)
+        duration = time.time() - start
+        if self._debug_logger is not None:
+            try:
+                model_name = getattr(self, "model", "unknown")
+                response_str = (
+                    result.model_dump_json(indent=2)
+                    if isinstance(result, BaseModel)
+                    else str(result)
+                )
+                self._debug_logger.log(
+                    model=model_name,
+                    method="generate_structured",
+                    request=prompt,
+                    response=response_str,
+                    duration=round(duration, 2),
+                )
+            except Exception:
+                logger.warning("Failed to write debug log", exc_info=True)
+        return result
+
+    wrapped._debug_wrapped = True  # type: ignore[attr-defined]
+    return wrapped
 
 
 class BaseLLMClient(ABC):
@@ -15,7 +82,23 @@ class BaseLLMClient(ABC):
 
     Defines the interface that all LLM client implementations must follow.
     Provides common functionality for JSON parsing and prompt building.
+
+    Subclasses that override generate() or generate_structured() are
+    automatically wrapped with debug logging support via __init_subclass__.
     """
+
+    _debug_logger: LlmDebugLogger | None = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "generate" in cls.__dict__:
+            setattr(cls, "generate", _wrap_generate(cls.__dict__["generate"]))
+        if "generate_structured" in cls.__dict__:
+            setattr(
+                cls,
+                "generate_structured",
+                _wrap_generate_structured(cls.__dict__["generate_structured"]),
+            )
 
     @abstractmethod
     def generate(self, prompt: str) -> str:

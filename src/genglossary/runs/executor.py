@@ -137,6 +137,8 @@ class PipelineExecutor:
         model: str = "",
         base_url: str | None = None,
         review_batch_size: int = GlossaryReviewer.DEFAULT_BATCH_SIZE,
+        llm_debug: bool = False,
+        debug_dir: str | None = None,
     ):
         """Initialize the PipelineExecutor.
 
@@ -146,8 +148,16 @@ class PipelineExecutor:
             base_url: Base URL for the LLM API (optional).
             review_batch_size: Number of terms per batch for review step.
                 Defaults to GlossaryReviewer.DEFAULT_BATCH_SIZE (20).
+            llm_debug: Enable LLM debug logging (default: False).
+            debug_dir: Directory for debug log files.
         """
-        self._llm_client = create_llm_client(provider=provider, model=model, base_url=base_url)
+        self._llm_client = create_llm_client(
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            llm_debug=llm_debug,
+            debug_dir=debug_dir,
+        )
         self._review_batch_size = review_batch_size
 
     def close(self) -> None:

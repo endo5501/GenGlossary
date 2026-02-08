@@ -685,6 +685,8 @@ class PipelineExecutor:
         model: str = "",
         base_url: str | None = None,
         review_batch_size: int = 10,  # GlossaryReviewer のバッチサイズ
+        llm_debug: bool = False,
+        debug_dir: str | None = None,
     ):
         """Initialize the PipelineExecutor.
 
@@ -695,6 +697,8 @@ class PipelineExecutor:
             review_batch_size: レビューステップでのバッチサイズ。
                 大量の用語（50件以上）でのタイムアウトを防ぐため、
                 この数ずつLLMに送信します。デフォルト20件。
+            llm_debug: LLMデバッグログの有効化（デフォルト: False）
+            debug_dir: デバッグログファイルの出力先ディレクトリ
         """
         ...
 

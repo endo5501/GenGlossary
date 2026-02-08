@@ -14,9 +14,10 @@ GenGlossary/
 │   │   └── synonym.py          # SynonymGroup, SynonymMember
 │   ├── llm/                      # LLMクライアント
 │   │   ├── __init__.py
-│   │   ├── base.py              # BaseLLMClient
+│   │   ├── base.py              # BaseLLMClient (自動デバッグラップ付き)
 │   │   ├── ollama_client.py     # OllamaClient
 │   │   ├── openai_compatible_client.py  # OpenAICompatibleClient
+│   │   ├── debug_logger.py      # LlmDebugLogger (プロンプト・レスポンスのファイル出力)
 │   │   └── factory.py           # LLMクライアントファクトリ
 │   ├── db/                       # データベース層 (Schema v9)
 │   │   ├── __init__.py

@@ -124,8 +124,11 @@ def api() -> None:
 @click.option("--host", default="127.0.0.1")
 @click.option("--port", default=8000)
 @click.option("--reload", is_flag=True)
-def serve(host: str, port: int, reload: bool) -> None:
+@click.option("--llm-debug", is_flag=True)
+def serve(host: str, port: int, reload: bool, llm_debug: bool) -> None:
     """FastAPIサーバーを起動"""
+    if llm_debug:
+        os.environ["LLM_DEBUG"] = "true"
     uvicorn.run(
         "genglossary.api.app:create_app",
         host=host,
@@ -140,6 +143,7 @@ def serve(host: str, port: int, reload: bool) -> None:
 - `genglossary api serve` - FastAPIサーバー起動
 - `genglossary api serve --reload` - 開発モード（自動リロード）
 - `genglossary api serve --host 0.0.0.0 --port 3000` - カスタムホスト/ポート
+- `genglossary api serve --llm-debug` - LLMデバッグログ有効化（プロンプト・レスポンスをファイル出力）
 
 ## regenerateコマンド群
 
