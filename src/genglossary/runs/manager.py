@@ -338,9 +338,7 @@ class RunManager:
                 self._put_to_queue(queue, self._completed_runs[run_id])
             else:
                 # Run still active, register for future messages
-                if run_id not in self._subscribers:
-                    self._subscribers[run_id] = set()
-                self._subscribers[run_id].add(queue)
+                self._subscribers.setdefault(run_id, set()).add(queue)
         return queue
 
     def unregister_subscriber(self, run_id: int, queue: Queue) -> None:
@@ -567,8 +565,8 @@ class RunManager:
             return
         if result == RunUpdateResult.NOT_FOUND:
             no_op_message = "run not found"
-        elif result == RunUpdateResult.ALREADY_TERMINAL:
-            no_op_message = "run was already in terminal state"
+        elif result == RunUpdateResult.NOT_IN_EXPECTED_STATE:
+            no_op_message = "run not in expected state"
         else:
             no_op_message = f"unexpected result: {result.value}"
         self._broadcast_log(

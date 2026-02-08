@@ -2109,8 +2109,7 @@ class TestRunManagerLogMessageDistinction:
         # Find the log message about skipped operation
         skipped_logs = [m for m in log_messages if "skipped" in m.get("message", "").lower()]
         assert len(skipped_logs) == 1
-        assert "already" in skipped_logs[0]["message"].lower()
-        assert "terminal" in skipped_logs[0]["message"].lower()
+        assert "not in expected state" in skipped_logs[0]["message"].lower()
         assert "not found" not in skipped_logs[0]["message"].lower()
 
 
