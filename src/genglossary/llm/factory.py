@@ -54,7 +54,11 @@ def create_llm_client(
             f"Unknown provider: {provider}. Must be 'ollama' or 'openai'."
         )
 
-    if llm_debug and debug_dir:
+    if llm_debug:
+        if not debug_dir:
+            raise ValueError(
+                "debug_dir is required when llm_debug is enabled."
+            )
         client._debug_logger = LlmDebugLogger(debug_dir=debug_dir)
 
     return client

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from abc import ABC, abstractmethod
@@ -11,6 +12,8 @@ from pydantic import BaseModel, ValidationError
 
 if TYPE_CHECKING:
     from genglossary.llm.debug_logger import LlmDebugLogger
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -25,14 +28,17 @@ def _wrap_generate(original: Any) -> Any:
         result = original(self, prompt, *args, **kwargs)
         duration = time.time() - start
         if self._debug_logger is not None:
-            model_name = getattr(self, "model", "unknown")
-            self._debug_logger.log(
-                model=model_name,
-                method="generate",
-                request=prompt,
-                response=result,
-                duration=round(duration, 2),
-            )
+            try:
+                model_name = getattr(self, "model", "unknown")
+                self._debug_logger.log(
+                    model=model_name,
+                    method="generate",
+                    request=prompt,
+                    response=result,
+                    duration=round(duration, 2),
+                )
+            except Exception:
+                logger.warning("Failed to write debug log", exc_info=True)
         return result
 
     wrapped._debug_wrapped = True  # type: ignore[attr-defined]
@@ -49,19 +55,22 @@ def _wrap_generate_structured(original: Any) -> Any:
         result = original(self, prompt, *args, **kwargs)
         duration = time.time() - start
         if self._debug_logger is not None:
-            model_name = getattr(self, "model", "unknown")
-            response_str = (
-                result.model_dump_json(indent=2)
-                if isinstance(result, BaseModel)
-                else str(result)
-            )
-            self._debug_logger.log(
-                model=model_name,
-                method="generate_structured",
-                request=prompt,
-                response=response_str,
-                duration=round(duration, 2),
-            )
+            try:
+                model_name = getattr(self, "model", "unknown")
+                response_str = (
+                    result.model_dump_json(indent=2)
+                    if isinstance(result, BaseModel)
+                    else str(result)
+                )
+                self._debug_logger.log(
+                    model=model_name,
+                    method="generate_structured",
+                    request=prompt,
+                    response=response_str,
+                    duration=round(duration, 2),
+                )
+            except Exception:
+                logger.warning("Failed to write debug log", exc_info=True)
         return result
 
     wrapped._debug_wrapped = True  # type: ignore[attr-defined]

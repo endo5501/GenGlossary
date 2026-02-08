@@ -65,4 +65,5 @@ class LlmDebugLogger:
         )
 
         filepath.write_text(content, encoding="utf-8")
+        filepath.chmod(0o600)
         self.counter += 1
