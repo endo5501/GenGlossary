@@ -61,13 +61,30 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
 
   // Extract term texts for highlighting from glossary (not raw extracted terms)
   // Use refined if available, otherwise provisional (both exclude COMMON_NOUN)
-  const termTexts = useMemo(
-    () =>
-      (refinedTerms.length > 0 ? refinedTerms : provisionalTerms).map(
-        (t) => t.term_name
-      ),
-    [refinedTerms, provisionalTerms]
-  )
+  // Include aliases so they are also highlighted in the document
+  const activeTerms = refinedTerms.length > 0 ? refinedTerms : provisionalTerms
+
+  const termTexts = useMemo(() => {
+    const allTexts: string[] = []
+    for (const t of activeTerms) {
+      allTexts.push(t.term_name)
+      for (const alias of t.aliases ?? []) {
+        if (alias.trim()) allTexts.push(alias)
+      }
+    }
+    return allTexts
+  }, [activeTerms])
+
+  // Reverse lookup map: alias (lowercase) → representative term_name
+  const aliasToTermMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const t of activeTerms) {
+      for (const alias of t.aliases ?? []) {
+        if (alias.trim()) map[alias.toLowerCase()] = t.term_name
+      }
+    }
+    return map
+  }, [activeTerms])
 
   const refinedData = selectedTerm
     ? findTermData(refinedTerms, selectedTerm)
@@ -131,6 +148,7 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
             terms={termTexts}
             selectedTerm={selectedTerm}
             onTermClick={setSelectedTerm}
+            aliasToTermMap={aliasToTermMap}
           />
         </Box>
         <Box style={{ flex: 5, minWidth: 0, height: '100%' }}>

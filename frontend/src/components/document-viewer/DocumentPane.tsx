@@ -14,6 +14,7 @@ interface DocumentPaneProps {
   terms: string[]
   selectedTerm: string | null
   onTermClick: (term: string) => void
+  aliasToTermMap?: Record<string, string>
 }
 
 export function DocumentPane({
@@ -27,6 +28,7 @@ export function DocumentPane({
   terms,
   selectedTerm,
   onTermClick,
+  aliasToTermMap = {},
 }: DocumentPaneProps) {
   // Memoize term set for O(1) lookup (normalized to lowercase)
   const termSet = useMemo(
@@ -59,8 +61,10 @@ export function DocumentPane({
           // O(1) lookup instead of O(n) linear search
           const isTermMatch = termSet.has(part.toLowerCase())
           if (isTermMatch) {
+            const resolvedTerm = aliasToTermMap[part.toLowerCase()] ?? part
             const isSelected =
-              selectedTerm?.toLowerCase() === part.toLowerCase()
+              selectedTerm?.toLowerCase() === part.toLowerCase() ||
+              selectedTerm?.toLowerCase() === resolvedTerm.toLowerCase()
             return (
               <Text
                 key={index}
@@ -71,7 +75,7 @@ export function DocumentPane({
                   padding: '0 2px',
                   borderRadius: '2px',
                 }}
-                onClick={() => onTermClick(part)}
+                onClick={() => onTermClick(resolvedTerm)}
               >
                 {part}
               </Text>

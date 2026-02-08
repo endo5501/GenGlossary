@@ -3,8 +3,8 @@ priority: 1
 tags: [feature, frontend]
 description: "Synonym aliases are not highlighted in Document Viewer"
 created_at: "2026-02-08T04:53:50Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-08T06:39:07Z # Do not modify manually
+closed_at: 2026-02-08T06:55:55Z # Do not modify manually
 ---
 
 # Document Viewerで同義語（aliases）がハイライトされない
@@ -35,17 +35,49 @@ Document Viewer画面では、用語集の用語がドキュメント内でハ�
 
 ## Tasks
 
-- [ ] 原因調査：DocumentViewerPage の terms 構築ロジックを確認
-- [ ] 修正実装（TDD）
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 原因調査：DocumentViewerPage の terms 構築ロジックを確認
+- [x] 修正実装（TDD）
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## 設計
+
+### 方針: DocumentViewerPage で逆引きマップを作成し DocumentPane に渡す
+
+データ変換は Page 層、表示は Pane 層に責務を分離する。
+
+### 変更ファイル
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `DocumentViewerPage.tsx` | terms 配列に aliases 追加 + alias→代表用語の逆引きマップ作成 |
+| `DocumentPane.tsx` | `aliasToTermMap` prop 追加、クリック処理・選択判定の変更 |
+| `document-viewer-page.test.tsx` | aliases ハイライトのテスト3件追加 |
+
+### DocumentViewerPage.tsx
+
+1. `termTexts` に aliases も含める
+2. `aliasToTermMap: Record<string, string>`（alias.toLowerCase() → term_name）を作成
+3. 両方を `DocumentPane` に props として渡す
+
+### DocumentPane.tsx
+
+1. Props に `aliasToTermMap?: Record<string, string>` 追加
+2. クリック時: `aliasToTermMap[text.toLowerCase()] ?? text` で代表用語名に変換
+3. 選択判定: 代表用語選択中に alias も選択色（黄色）で表示
+
+### テスト計画
+
+1. aliases がハイライトされること
+2. alias クリック時に代表用語が選択されること
+3. 代表用語選択中に alias も選択色（黄色）で表示されること
 
 ## Notes
 

@@ -64,6 +64,25 @@ const mockRefinedTerms: GlossaryTermResponse[] = [
   },
 ]
 
+// Refined glossary with aliases
+const mockRefinedTermsWithAliases: GlossaryTermResponse[] = [
+  {
+    id: 1,
+    term_name: '量子コンピュータ',
+    definition: '量子力学の原理を利用した次世代コンピュータ',
+    confidence: 0.95,
+    occurrences: [{ document_path: 'test.md', line_number: 1, context: '量子コンピュータは...' }],
+    aliases: ['量子計算機'],
+  },
+]
+
+const mockFileDetailWithAliases: FileDetailResponse = {
+  id: 1,
+  file_name: 'test.md',
+  file_path: '/test.md',
+  content: '量子コンピュータは量子力学を利用します。量子計算機とも呼ばれます。',
+}
+
 // Mock react-router
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual('@tanstack/react-router')
@@ -230,6 +249,95 @@ describe('DocumentViewerPage - Term Highlighting Filter', () => {
       // No highlighted elements should exist
       const highlightedElements = document.querySelectorAll('[style*="background"]')
       expect(highlightedElements.length).toBe(0)
+    })
+  })
+})
+
+describe('DocumentViewerPage - Alias Highlighting', () => {
+  beforeEach(() => {
+    // Base handlers first
+    server.use(...handlers, ...filesHandlers, runsHandler)
+    // Override with alias-specific handlers (later server.use takes priority in MSW v2)
+    server.use(
+      http.get(`${BASE_URL}/api/projects/:projectId/files/:fileId`, () => {
+        return HttpResponse.json(mockFileDetailWithAliases)
+      }),
+      http.get(`${BASE_URL}/api/projects/:projectId/terms`, () => {
+        return HttpResponse.json(mockTermsWithCommonNoun)
+      }),
+      http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+        return HttpResponse.json([])
+      }),
+      http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+        return HttpResponse.json(mockRefinedTermsWithAliases)
+      })
+    )
+  })
+
+  it('highlights aliases in addition to term names', async () => {
+    renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/量子コンピュータ/)).toBeInTheDocument()
+    })
+
+    const highlightedElements = document.querySelectorAll('[style*="background"]')
+    const highlightedTexts = Array.from(highlightedElements).map(el => el.textContent)
+
+    // Both term_name and alias should be highlighted
+    expect(highlightedTexts).toContain('量子コンピュータ')
+    expect(highlightedTexts).toContain('量子計算機')
+  })
+
+  it('selects representative term when alias is clicked', async () => {
+    renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/量子計算機/)).toBeInTheDocument()
+    })
+
+    // Click the alias text
+    const highlightedElements = document.querySelectorAll('[style*="background"]')
+    const aliasElement = Array.from(highlightedElements).find(
+      el => el.textContent === '量子計算機'
+    )
+    expect(aliasElement).toBeDefined()
+    ;(aliasElement as HTMLElement).click()
+
+    // After clicking alias, the representative term '量子コンピュータ' should be selected
+    // which means both the term and alias should show selected color (#ffeb3b)
+    await waitFor(() => {
+      const updatedElements = document.querySelectorAll('[style*="background"]')
+      const termElement = Array.from(updatedElements).find(
+        el => el.textContent === '量子コンピュータ'
+      )
+      expect(termElement).toBeDefined()
+      expect((termElement as HTMLElement).style.backgroundColor).toBe('rgb(255, 235, 59)')
+    })
+  })
+
+  it('highlights alias with selected color when representative term is selected', async () => {
+    renderWithProviders(<DocumentViewerPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/量子コンピュータ/)).toBeInTheDocument()
+    })
+
+    // Click the representative term
+    const highlightedElements = document.querySelectorAll('[style*="background"]')
+    const termElement = Array.from(highlightedElements).find(
+      el => el.textContent === '量子コンピュータ'
+    )
+    ;(termElement as HTMLElement).click()
+
+    // After clicking representative term, alias should also show selected color
+    await waitFor(() => {
+      const updatedElements = document.querySelectorAll('[style*="background"]')
+      const aliasElement = Array.from(updatedElements).find(
+        el => el.textContent === '量子計算機'
+      )
+      expect(aliasElement).toBeDefined()
+      expect((aliasElement as HTMLElement).style.backgroundColor).toBe('rgb(255, 235, 59)')
     })
   })
 })
