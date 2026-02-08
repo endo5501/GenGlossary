@@ -1490,6 +1490,114 @@ describe('Required Terms', () => {
   })
 })
 
+describe('Tabs visibility with empty data', () => {
+  beforeEach(() => {
+    server.use(...allTestHandlers)
+  })
+
+  it('tabs remain visible when required terms list is empty', async () => {
+    server.use(
+      http.get(`${BASE_URL}/api/projects/:projectId/required-terms`, () => {
+        return HttpResponse.json({ items: [], total: 0 })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /必須用語/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('required-terms-empty')).toBeInTheDocument()
+    })
+
+    // Tabs should still be visible
+    expect(screen.getByRole('tab', { name: /用語一覧/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /除外用語/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /必須用語/i })).toBeInTheDocument()
+  })
+
+  it('tabs remain visible when excluded terms list is empty', async () => {
+    server.use(
+      http.get(`${BASE_URL}/api/projects/:projectId/excluded-terms`, () => {
+        return HttpResponse.json({ items: [], total: 0 })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /除外用語/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('excluded-terms-empty')).toBeInTheDocument()
+    })
+
+    // Tabs should still be visible
+    expect(screen.getByRole('tab', { name: /用語一覧/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /除外用語/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /必須用語/i })).toBeInTheDocument()
+  })
+
+  it('can switch from empty tab back to terms tab', async () => {
+    server.use(
+      http.get(`${BASE_URL}/api/projects/:projectId/required-terms`, () => {
+        return HttpResponse.json({ items: [], total: 0 })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    // Switch to empty required tab
+    await user.click(screen.getByRole('tab', { name: /必須用語/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('required-terms-empty')).toBeInTheDocument()
+    })
+
+    // Switch back to terms tab
+    await user.click(screen.getByRole('tab', { name: /用語一覧/i }))
+
+    // Terms should be visible again
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+  })
+
+  it('shows add button in action bar when required tab is empty', async () => {
+    server.use(
+      http.get(`${BASE_URL}/api/projects/:projectId/required-terms`, () => {
+        return HttpResponse.json({ items: [], total: 0 })
+      })
+    )
+
+    const { user } = renderWithProviders(<TermsPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('tab', { name: /必須用語/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('required-terms-empty')).toBeInTheDocument()
+    })
+
+    // Add button should still be visible in action bar
+    expect(screen.getByRole('button', { name: /add required term/i })).toBeInTheDocument()
+  })
+})
+
 describe('User Notes', () => {
   beforeEach(() => {
     server.use(...allTestHandlers)

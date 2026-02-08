@@ -3,7 +3,7 @@ priority: 1
 tags: [bugfix, frontend]
 description: "Tabs disappear when required terms list is empty, forcing navigation to another page"
 created_at: "2026-02-07T16:09:22Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-08T05:41:09Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -41,6 +41,23 @@ closed_at: null   # Do not modify manually
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
+
+## 原因分析
+
+- `TermsPage.tsx` L264: `isEmpty = !currentTab.data || currentTab.data.length === 0` でアクティブタブのデータが空かを判定
+- `PageContainer.tsx` L73-82: `isEmpty === true` の場合、children（Tabs全体）を表示せず空メッセージのみを表示
+- タブのナビゲーションボタンがPageContainerのchildren内にあるため、空状態でタブごと消える
+- 除外用語タブでも同様の問題が発生する
+
+## 設計（承認済み）
+
+**アプローチ**: タブ内で空状態を処理する（PageContainerに依存しない）
+
+**変更ファイル**: `frontend/src/pages/TermsPage.tsx` のみ
+
+1. `PageContainer` に `isEmpty={false}` を常に渡す
+2. `isLoading` は全データの初期ロード中のみ true にする
+3. 各 `Tabs.Panel` 内で空状態を判定し、空メッセージを表示
 
 ## Notes
 
