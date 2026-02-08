@@ -255,10 +255,13 @@ describe('DocumentViewerPage - Term Highlighting Filter', () => {
 
 describe('DocumentViewerPage - Alias Highlighting', () => {
   beforeEach(() => {
+    // Base handlers first
+    server.use(...handlers, ...filesHandlers, runsHandler)
+    // Override with alias-specific handlers (later server.use takes priority in MSW v2)
     server.use(
-      ...handlers,
-      ...filesHandlers,
-      runsHandler,
+      http.get(`${BASE_URL}/api/projects/:projectId/files/:fileId`, () => {
+        return HttpResponse.json(mockFileDetailWithAliases)
+      }),
       http.get(`${BASE_URL}/api/projects/:projectId/terms`, () => {
         return HttpResponse.json(mockTermsWithCommonNoun)
       }),
@@ -267,9 +270,6 @@ describe('DocumentViewerPage - Alias Highlighting', () => {
       }),
       http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
         return HttpResponse.json(mockRefinedTermsWithAliases)
-      }),
-      http.get(`${BASE_URL}/api/projects/:projectId/files/:fileId`, () => {
-        return HttpResponse.json(mockFileDetailWithAliases)
       })
     )
   })
