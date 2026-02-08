@@ -165,73 +165,16 @@ class RunManager:
             scope: Run scope.
         """
         conn = None
-        pipeline_error: Exception | None = None
-        pipeline_traceback: str | None = None
-
-        # Track final status for completion signal
         final_status: str | None = None
         status_update_failed: bool = False
 
         try:
-            # Create a new connection for this thread
-            conn = get_connection(self.db_path)
-            # Update status to running
-            with transaction(conn):
-                update_run_status(
-                    conn, run_id, "running", started_at=datetime.now(timezone.utc)
-                )
+            conn, context = self._setup_run(run_id)
 
-            # ログコールバックを作成
-            def log_callback(msg: dict) -> None:
-                self._broadcast_log(run_id, msg)
-
-            # Get cancel event (guaranteed to exist, created in start_run)
-            with self._cancel_events_lock:
-                cancel_event = self._cancel_events[run_id]
-
-            # Create execution context
-            context = ExecutionContext(
-                run_id=run_id,
-                log_callback=log_callback,
-                cancel_event=cancel_event,
+            pipeline_error, pipeline_traceback = self._run_pipeline(
+                conn, run_id, scope, context
             )
 
-            # Execute pipeline with project settings
-            config = Config()
-            debug_dir = str(Path(self.db_path).parent / "llm-debug")
-            executor = PipelineExecutor(
-                provider=self.llm_provider,
-                model=self.llm_model,
-                base_url=self.llm_base_url or None,
-                llm_debug=config.llm_debug,
-                debug_dir=debug_dir,
-            )
-
-            # Store executor for cancellation support
-            with self._executors_lock:
-                self._executors[run_id] = executor
-
-            # Execute pipeline - exceptions indicate cancellation or failure
-            try:
-                executor.execute(
-                    conn,
-                    scope,
-                    context,
-                    doc_root=self.doc_root,
-                )
-            except Exception as e:
-                pipeline_error = e
-                pipeline_traceback = traceback.format_exc()
-            finally:
-                # Cleanup executor reference and close resources
-                with self._executors_lock:
-                    self._executors.pop(run_id, None)
-                try:
-                    executor.close()
-                except Exception:
-                    logger.debug(f"Failed to close executor for run {run_id}", exc_info=True)
-
-            # Finalize run status (separate from pipeline execution)
             final_status, success = self._finalize_run_status(
                 conn, run_id, pipeline_error, pipeline_traceback
             )
@@ -267,6 +210,93 @@ class RunManager:
             # Close the connection when thread completes
             if conn is not None:
                 conn.close()
+
+    def _setup_run(
+        self, run_id: int
+    ) -> tuple[sqlite3.Connection, ExecutionContext]:
+        """Setup phase for run execution.
+
+        Creates a DB connection, updates status to running, and creates
+        the execution context with log callback and cancel event.
+
+        Args:
+            run_id: Run ID.
+
+        Returns:
+            Tuple of (connection, execution_context).
+        """
+        conn = get_connection(self.db_path)
+        with transaction(conn):
+            update_run_status(
+                conn, run_id, "running", started_at=datetime.now(timezone.utc)
+            )
+
+        def log_callback(msg: dict) -> None:
+            self._broadcast_log(run_id, msg)
+
+        with self._cancel_events_lock:
+            cancel_event = self._cancel_events[run_id]
+
+        context = ExecutionContext(
+            run_id=run_id,
+            log_callback=log_callback,
+            cancel_event=cancel_event,
+        )
+        return conn, context
+
+    def _run_pipeline(
+        self,
+        conn: sqlite3.Connection,
+        run_id: int,
+        scope: str,
+        context: ExecutionContext,
+    ) -> tuple[Exception | None, str | None]:
+        """Execute the pipeline and manage executor lifecycle.
+
+        Creates a PipelineExecutor, runs the pipeline, and ensures
+        the executor is cleaned up regardless of outcome.
+
+        Args:
+            conn: Database connection.
+            run_id: Run ID.
+            scope: Run scope.
+            context: Execution context.
+
+        Returns:
+            Tuple of (pipeline_error, pipeline_traceback).
+            Both are None if the pipeline succeeded.
+        """
+        config = Config()
+        debug_dir = str(Path(self.db_path).parent / "llm-debug")
+        executor = PipelineExecutor(
+            provider=self.llm_provider,
+            model=self.llm_model,
+            base_url=self.llm_base_url or None,
+            llm_debug=config.llm_debug,
+            debug_dir=debug_dir,
+        )
+
+        with self._executors_lock:
+            self._executors[run_id] = executor
+
+        pipeline_error: Exception | None = None
+        pipeline_traceback: str | None = None
+        try:
+            executor.execute(conn, scope, context, doc_root=self.doc_root)
+        except Exception as e:
+            pipeline_error = e
+            pipeline_traceback = traceback.format_exc()
+        finally:
+            with self._executors_lock:
+                self._executors.pop(run_id, None)
+            try:
+                executor.close()
+            except Exception:
+                logger.debug(
+                    f"Failed to close executor for run {run_id}", exc_info=True
+                )
+
+        return pipeline_error, pipeline_traceback
 
     def cancel_run(self, run_id: int) -> None:
         """Cancel a running run by setting its cancellation event.
