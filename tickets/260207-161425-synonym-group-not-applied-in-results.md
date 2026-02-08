@@ -4,7 +4,7 @@ tags: [bugfix, frontend, backend, pipeline]
 description: "Synonym group members disappear from provisional/refined results and primary term lacks synonym info"
 created_at: "2026-02-07T16:14:25Z"
 started_at: 2026-02-08T01:21:37Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T04:56:10Z # Do not modify manually
 ---
 
 # 同義語グループの情報がProvisional以降の結果画面に反映されない
