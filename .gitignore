@@ -27,6 +27,7 @@ saves/
 *.jpg
 *.png
 *.log
+llm-debug/
 current-ticket.md
 target_docs/
 tmp/
