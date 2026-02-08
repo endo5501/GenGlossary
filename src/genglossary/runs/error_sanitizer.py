@@ -4,12 +4,16 @@ import re
 
 # Paths that indicate sensitive filesystem locations (2+ segments required)
 _UNIX_PATH_PREFIXES = r"/(?:home|Users|var|tmp|etc|opt)"
-_WINDOWS_PATH_PREFIX = r"[A-Z]:"
+_WINDOWS_PATH_PREFIX = r"[A-Za-z]:"
 
-# Match filesystem paths with 2+ segments, but not URLs
-_PATH_PATTERN = re.compile(
-    rf"(?<!:/)(?<!://)(?:{_UNIX_PATH_PREFIXES}|{_WINDOWS_PATH_PREFIX})(?:[/\\]\S+)+"
-)
+# URL pattern to match and preserve HTTP/HTTPS URLs
+_URL_PATTERN = r"https?://\S+"
+
+# Path pattern for sensitive filesystem paths (2+ segments)
+_PATH_ONLY = rf"(?:{_UNIX_PATH_PREFIXES}|{_WINDOWS_PATH_PREFIX})(?:[/\\]\S+)+"
+
+# Combined pattern: URLs matched first (preserved), then paths (masked)
+_COMBINED_PATTERN = re.compile(rf"(?P<url>{_URL_PATTERN})|(?P<path>{_PATH_ONLY})")
 
 # Control characters except \n (0x0a) and \t (0x09)
 _CONTROL_CHAR_PATTERN = re.compile(
@@ -27,11 +31,9 @@ def sanitize_error_message(
     """Sanitize an exception into a safe error message string.
 
     Processing order:
-    1. Empty message fallback to exception class name
-    2. UTF-8 normalization
-    3. Control character removal (preserving newline/tab)
-    4. Sensitive path masking
-    5. Length truncation
+    1. Extract and sanitize message text
+    2. Format with prefix and class name
+    3. Length truncation
 
     Args:
         error: The exception to sanitize.
@@ -42,27 +44,15 @@ def sanitize_error_message(
         Sanitized error message string.
     """
     class_name = type(error).__name__
-    raw_msg = str(error)
+    msg = str(error)
 
-    # 1. Empty message fallback
-    if not raw_msg.strip():
-        msg = ""
-    else:
-        msg = raw_msg
+    # Sanitize message (all operations are safe for empty strings)
+    msg = msg.encode("utf-8", "replace").decode("utf-8")
+    msg = _CONTROL_CHAR_PATTERN.sub("", msg)
+    msg = _mask_paths(msg)
+    msg = msg.strip()
 
-    # 2. UTF-8 normalization
-    if msg:
-        msg = msg.encode("utf-8", "replace").decode("utf-8")
-
-    # 3. Control character removal
-    if msg:
-        msg = _CONTROL_CHAR_PATTERN.sub("", msg)
-
-    # 4. Path masking
-    if msg:
-        msg = _mask_paths(msg)
-
-    # 5. Format with prefix and class name
+    # Format with prefix and class name
     if prefix and msg:
         formatted = f"{prefix}: {msg} ({class_name})"
     elif prefix:
@@ -72,9 +62,12 @@ def sanitize_error_message(
     else:
         formatted = class_name
 
-    # 6. Length truncation
+    # Length truncation
     if len(formatted) > max_length:
-        formatted = formatted[: max_length - len(_TRUNCATION_SUFFIX)] + _TRUNCATION_SUFFIX
+        if max_length <= len(_TRUNCATION_SUFFIX):
+            formatted = formatted[:max_length]
+        else:
+            formatted = formatted[: max_length - len(_TRUNCATION_SUFFIX)] + _TRUNCATION_SUFFIX
 
     return formatted
 
@@ -82,8 +75,8 @@ def sanitize_error_message(
 def _mask_paths(msg: str) -> str:
     """Mask sensitive filesystem paths in the message.
 
-    Replaces Unix paths (/home/..., /Users/..., etc.) and Windows paths
-    (C:\\..., D:\\...) with '<path>'. URLs (http://, https://) are preserved.
+    Uses alternation to match URLs first (preserved) then filesystem paths
+    (masked). This prevents path patterns inside URLs from being masked.
 
     Args:
         msg: Message to process.
@@ -91,4 +84,10 @@ def _mask_paths(msg: str) -> str:
     Returns:
         Message with paths masked.
     """
-    return _PATH_PATTERN.sub("<path>", msg)
+
+    def _replacer(match: re.Match) -> str:  # type: ignore[type-arg]
+        if match.group("url"):
+            return match.group("url")
+        return "<path>"
+
+    return _COMBINED_PATTERN.sub(_replacer, msg)
