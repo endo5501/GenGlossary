@@ -324,7 +324,7 @@ class TestUpdateRunStatusIfRunning:
     def test_does_not_update_pending(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """pending状態のRunはALREADY_TERMINALではなく特別な状態として扱われる"""
+        """pending状態のRunはNOT_IN_EXPECTED_STATEではなく特別な状態として扱われる"""
         run_id = create_run(project_db, scope="full")
 
         result = update_run_status_if_running(project_db, run_id, "completed")
@@ -340,14 +340,14 @@ class TestUpdateRunStatusIfRunning:
     def test_does_not_update_completed(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """completed状態のRunはALREADY_TERMINALを返す"""
+        """completed状態のRunはNOT_IN_EXPECTED_STATEを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         update_run_status(project_db, run_id, "completed", finished_at=datetime.now(timezone.utc))
 
         result = update_run_status_if_running(project_db, run_id, "failed")
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "completed"
@@ -355,14 +355,14 @@ class TestUpdateRunStatusIfRunning:
     def test_does_not_update_cancelled(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """cancelled状態のRunはALREADY_TERMINALを返す"""
+        """cancelled状態のRunはNOT_IN_EXPECTED_STATEを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         cancel_run(project_db, run_id)
 
         result = update_run_status_if_running(project_db, run_id, "completed")
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "cancelled"
@@ -370,7 +370,7 @@ class TestUpdateRunStatusIfRunning:
     def test_does_not_update_failed(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """failed状態のRunはALREADY_TERMINALを返す"""
+        """failed状態のRunはNOT_IN_EXPECTED_STATEを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         update_run_status(
@@ -380,7 +380,7 @@ class TestUpdateRunStatusIfRunning:
 
         result = update_run_status_if_running(project_db, run_id, "completed")
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "failed"
@@ -440,14 +440,14 @@ class TestCompleteRunIfNotCancelled:
     def test_does_not_complete_cancelled_run(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """cancelledのRunはALREADY_TERMINALを返す"""
+        """cancelledのRunはNOT_IN_EXPECTED_STATEを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         cancel_run(project_db, run_id)
 
         result = complete_run_if_not_cancelled(project_db, run_id)
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "cancelled"
@@ -463,7 +463,7 @@ class TestCompleteRunIfNotCancelled:
     def test_does_not_overwrite_failed_status(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """failedのRunはALREADY_TERMINALを返す"""
+        """failedのRunはNOT_IN_EXPECTED_STATEを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         update_run_status(
@@ -473,7 +473,7 @@ class TestCompleteRunIfNotCancelled:
 
         result = complete_run_if_not_cancelled(project_db, run_id)
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "failed"
@@ -482,14 +482,14 @@ class TestCompleteRunIfNotCancelled:
     def test_does_not_overwrite_completed_status(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """既にcompletedのRunはALREADY_TERMINALを返す"""
+        """既にcompletedのRunはNOT_IN_EXPECTED_STATEを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         update_run_status(project_db, run_id, "completed", finished_at=datetime.now(timezone.utc))
 
         result = complete_run_if_not_cancelled(project_db, run_id)
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "completed"
@@ -531,7 +531,7 @@ class TestFailRunIfNotTerminal:
     def test_does_not_overwrite_cancelled_status(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """cancelledのRunはALREADY_TERMINALを返す"""
+        """cancelledのRunはNOT_IN_EXPECTED_STATEを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         cancel_run(project_db, run_id)
@@ -540,7 +540,7 @@ class TestFailRunIfNotTerminal:
             project_db, run_id, error_message="Test error"
         )
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "cancelled"
@@ -549,7 +549,7 @@ class TestFailRunIfNotTerminal:
     def test_does_not_overwrite_completed_status(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """completedのRunはALREADY_TERMINALを返す"""
+        """completedのRunはNOT_IN_EXPECTED_STATEを返す"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         update_run_status(project_db, run_id, "completed", finished_at=datetime.now(timezone.utc))
@@ -558,7 +558,7 @@ class TestFailRunIfNotTerminal:
             project_db, run_id, error_message="Test error"
         )
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "completed"
@@ -567,7 +567,7 @@ class TestFailRunIfNotTerminal:
     def test_does_not_overwrite_failed_status(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """既にfailedのRunはALREADY_TERMINALを返す（べき等性）"""
+        """既にfailedのRunはNOT_IN_EXPECTED_STATEを返す（べき等性）"""
         run_id = create_run(project_db, scope="full")
         update_run_status(project_db, run_id, "running", started_at=datetime.now(timezone.utc))
         update_run_status(
@@ -579,7 +579,7 @@ class TestFailRunIfNotTerminal:
             project_db, run_id, error_message="New error"
         )
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "failed"
@@ -605,7 +605,7 @@ class TestRunUpdateResultEnum:
 
         assert hasattr(RunUpdateResult, "UPDATED")
         assert hasattr(RunUpdateResult, "NOT_FOUND")
-        assert hasattr(RunUpdateResult, "ALREADY_TERMINAL")
+        assert hasattr(RunUpdateResult, "NOT_IN_EXPECTED_STATE")
 
 
 class TestUpdateRunStatusIfActive:
@@ -673,10 +673,10 @@ class TestUpdateRunStatusIfActive:
         assert run["error_message"] == "Test error"
         assert run["finished_at"] is not None
 
-    def test_returns_already_terminal_for_terminal_state(
+    def test_returns_not_in_expected_state_for_terminal_state(
         self, project_db: sqlite3.Connection
     ) -> None:
-        """terminal状態のRunはALREADY_TERMINALを返す"""
+        """terminal状態のRunはNOT_IN_EXPECTED_STATEを返す"""
         from genglossary.db.runs_repository import (
             RunUpdateResult,
             update_run_status_if_active,
@@ -688,7 +688,7 @@ class TestUpdateRunStatusIfActive:
 
         result = update_run_status_if_active(project_db, run_id, "completed")
 
-        assert result == RunUpdateResult.ALREADY_TERMINAL
+        assert result == RunUpdateResult.NOT_IN_EXPECTED_STATE
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["status"] == "cancelled"

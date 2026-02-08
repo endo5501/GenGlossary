@@ -18,13 +18,13 @@ class RunUpdateResult(Enum):
     This enum distinguishes between different outcomes when updating run status:
     - UPDATED: Run was successfully updated
     - NOT_FOUND: Run does not exist
-    - ALREADY_TERMINAL: Run exists but is not in the expected state for the update
+    - NOT_IN_EXPECTED_STATE: Run exists but is not in the expected state for the update
       (e.g., already in a terminal state, or not in 'running' state when required)
     """
 
     UPDATED = "updated"
     NOT_FOUND = "not_found"
-    ALREADY_TERMINAL = "terminal"
+    NOT_IN_EXPECTED_STATE = "not_in_expected_state"
 
 
 def _validate_status(status: str, allowed: set[str] | None = None) -> None:
@@ -304,7 +304,7 @@ def _update_run_status_if_in_states(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully updated
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run exists but is not in allowed states
+        - NOT_IN_EXPECTED_STATE: Run exists but is not in allowed states
 
     Raises:
         ValueError: If status is not terminal, or finished_at is naive.
@@ -347,7 +347,7 @@ def _update_run_status_if_in_states(
     cursor.execute("SELECT id FROM runs WHERE id = ?", (run_id,))
     if cursor.fetchone() is None:
         return RunUpdateResult.NOT_FOUND
-    return RunUpdateResult.ALREADY_TERMINAL
+    return RunUpdateResult.NOT_IN_EXPECTED_STATE
 
 
 def update_run_status_if_active(
@@ -374,7 +374,7 @@ def update_run_status_if_active(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully updated
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run exists but is already in terminal state
+        - NOT_IN_EXPECTED_STATE: Run exists but is already in terminal state
 
     Raises:
         ValueError: If status is not terminal, or finished_at is naive.
@@ -416,7 +416,7 @@ def update_run_status_if_running(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully updated
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run exists but is not in 'running' state
+        - NOT_IN_EXPECTED_STATE: Run exists but is not in 'running' state
 
     Raises:
         ValueError: If status is not terminal, or finished_at is naive.
@@ -467,7 +467,7 @@ def complete_run_if_not_cancelled(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully completed
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run exists but is not in 'running' state
+        - NOT_IN_EXPECTED_STATE: Run exists but is not in 'running' state
     """
     return update_run_status_if_running(conn, run_id, "completed")
 
@@ -490,6 +490,6 @@ def fail_run_if_not_terminal(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully failed
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run is already in a terminal state
+        - NOT_IN_EXPECTED_STATE: Run is already in a terminal state
     """
     return update_run_status_if_active(conn, run_id, "failed", error_message)

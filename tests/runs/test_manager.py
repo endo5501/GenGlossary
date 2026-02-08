@@ -1140,7 +1140,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
     """Tests for improved status update fallback logic.
 
     Issues addressed:
-    1. _try_complete_status returns False for both no-op (already terminal) and
+    1. _try_complete_status returns False for both no-op (not in expected state) and
        failure (exception), causing unnecessary fallback for no-op case.
     2. _try_status_with_fallback doesn't catch exceptions from updater,
        preventing fallback when updater throws.
@@ -1150,7 +1150,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
     def test_complete_status_no_op_does_not_trigger_fallback(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """update_run_status_if_activeがALREADY_TERMINALを返した場合（no-op）、
+        """update_run_status_if_activeがNOT_IN_EXPECTED_STATEを返した場合（no-op）、
         フォールバックは試行されない"""
         from genglossary.db.runs_repository import RunUpdateResult
 
@@ -1162,8 +1162,8 @@ class TestRunManagerStatusUpdateFallbackLogic:
 
             def counting_update(conn, run_id, status, error_message=None):
                 call_count["value"] += 1
-                # Return ALREADY_TERMINAL to simulate no-op (already cancelled)
-                return RunUpdateResult.ALREADY_TERMINAL
+                # Return NOT_IN_EXPECTED_STATE to simulate no-op (already cancelled)
+                return RunUpdateResult.NOT_IN_EXPECTED_STATE
 
             with patch(
                 "genglossary.runs.manager.update_run_status_if_active",
@@ -1226,7 +1226,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
     def test_cancel_status_no_op_logged_and_no_fallback(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """update_run_status_if_activeがALREADY_TERMINALを返した場合（no-op）、ログに記録されフォールバックは試行されない"""
+        """update_run_status_if_activeがNOT_IN_EXPECTED_STATEを返した場合（no-op）、ログに記録されフォールバックは試行されない"""
         from genglossary.db.runs_repository import RunUpdateResult
         from genglossary.runs.executor import PipelineCancelledException
 
@@ -1246,8 +1246,8 @@ class TestRunManagerStatusUpdateFallbackLogic:
             def counting_update(conn, run_id, status, error_message=None):
                 if status == "cancelled":
                     call_count["value"] += 1
-                    # Return ALREADY_TERMINAL to simulate no-op (already terminal)
-                    return RunUpdateResult.ALREADY_TERMINAL
+                    # Return NOT_IN_EXPECTED_STATE to simulate no-op (not in expected state)
+                    return RunUpdateResult.NOT_IN_EXPECTED_STATE
                 return RunUpdateResult.UPDATED  # For other status updates
 
             with patch(
@@ -2051,7 +2051,7 @@ class TestRunManagerCleanupRunResources:
 
 
 class TestRunManagerLogMessageDistinction:
-    """Tests for distinguishing log messages between 'not found' and 'already terminal'."""
+    """Tests for distinguishing log messages between 'not found' and 'not in expected state'."""
 
     def test_try_update_status_logs_not_found_for_nonexistent_run(
         self, manager: RunManager, project_db: sqlite3.Connection
@@ -2078,10 +2078,10 @@ class TestRunManagerLogMessageDistinction:
         assert "not found" in skipped_logs[0]["message"].lower()
         assert "terminal" not in skipped_logs[0]["message"].lower()
 
-    def test_try_update_status_logs_already_terminal_for_terminal_run(
+    def test_try_update_status_logs_not_in_expected_state_for_terminal_run(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """既にterminal状態のrunを更新しようとした場合、'already terminal'をログ出力する"""
+        """既にterminal状態のrunを更新しようとした場合、'not in expected state'をログ出力する"""
         from genglossary.db.runs_repository import update_run_status
         from datetime import datetime, timezone
 
@@ -2100,17 +2100,16 @@ class TestRunManagerLogMessageDistinction:
 
         manager._broadcast_log = capture_log  # type: ignore
 
-        # Call _try_update_status directly with already terminal run
+        # Call _try_update_status directly with terminal run (not in expected state)
         result = manager._try_update_status(project_db, run_id, "cancelled")
 
-        # Should return True (no fallback needed, already terminal)
+        # Should return True (no fallback needed, not in expected state)
         assert result is True
 
         # Find the log message about skipped operation
         skipped_logs = [m for m in log_messages if "skipped" in m.get("message", "").lower()]
         assert len(skipped_logs) == 1
-        assert "already" in skipped_logs[0]["message"].lower()
-        assert "terminal" in skipped_logs[0]["message"].lower()
+        assert "not in expected state" in skipped_logs[0]["message"].lower()
         assert "not found" not in skipped_logs[0]["message"].lower()
 
 
