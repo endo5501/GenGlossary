@@ -226,23 +226,27 @@ class RunManager:
             Tuple of (connection, execution_context).
         """
         conn = get_connection(self.db_path)
-        with transaction(conn):
-            update_run_status(
-                conn, run_id, "running", started_at=datetime.now(timezone.utc)
+        try:
+            with transaction(conn):
+                update_run_status(
+                    conn, run_id, "running", started_at=datetime.now(timezone.utc)
+                )
+
+            def log_callback(msg: dict) -> None:
+                self._broadcast_log(run_id, msg)
+
+            with self._cancel_events_lock:
+                cancel_event = self._cancel_events[run_id]
+
+            context = ExecutionContext(
+                run_id=run_id,
+                log_callback=log_callback,
+                cancel_event=cancel_event,
             )
-
-        def log_callback(msg: dict) -> None:
-            self._broadcast_log(run_id, msg)
-
-        with self._cancel_events_lock:
-            cancel_event = self._cancel_events[run_id]
-
-        context = ExecutionContext(
-            run_id=run_id,
-            log_callback=log_callback,
-            cancel_event=cancel_event,
-        )
-        return conn, context
+            return conn, context
+        except Exception:
+            conn.close()
+            raise
 
     def _run_pipeline(
         self,
