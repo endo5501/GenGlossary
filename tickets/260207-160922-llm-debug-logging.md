@@ -84,19 +84,19 @@ llm-debug/
 ## Tasks
 
 - [x] 設計検討（出力形式、出力先、有効化方法）
-- [ ] Config に LLM_DEBUG フィールドを追加
-- [ ] BaseLLMClient にデバッグログ出力ロジックを追加
-- [ ] create_llm_client() ファクトリにデバッグ設定を渡す
-- [ ] CLI に --llm-debug オプションを追加
-- [ ] .gitignore に llm-debug/ を追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Config に LLM_DEBUG フィールドを追加
+- [x] BaseLLMClient にデバッグログ出力ロジックを追加
+- [x] create_llm_client() ファクトリにデバッグ設定を渡す
+- [x] CLI に --llm-debug オプションを追加
+- [x] .gitignore に llm-debug/ を追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions) — 0 errors
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions) — 1470 passed / 272 passed
 - [ ] Get developer approval before closing
 
 ## Notes
