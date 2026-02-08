@@ -3,7 +3,7 @@ priority: 1
 tags: [bugfix, frontend, backend]
 description: "Required terms not reflected in term list, preventing synonym group assignment"
 created_at: "2026-02-07T16:09:21Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-08T04:58:09Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -38,6 +38,37 @@ closed_at: null   # Do not modify manually
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
+
+## 原因分析
+
+- `list_all_terms()` は `terms_extracted` テーブルのみをクエリしている
+- `terms_required` テーブルの用語は含まれない
+- フロントエンドの `SynonymGroupPanel` は `useTerms()` （= `terms_extracted` のみ）から候補を取得
+- 同義語グループは `term_text` で管理されており、`terms_extracted` への FK制約はない → テキストさえ候補に出れば設定可能
+
+## 設計
+
+### アプローチ: バックエンドの `list_all_terms()` クエリを UNION 拡張
+
+`term_repository.py` の `list_all_terms()` を修正し、`terms_extracted` と `terms_required` の UNION を返す。
+
+```sql
+SELECT id, term_text, category, user_notes FROM terms_extracted
+WHERE NOT EXISTS (SELECT 1 FROM terms_excluded WHERE ...)
+UNION ALL
+SELECT -id, term_text, NULL, '' FROM terms_required
+WHERE term_text NOT IN (SELECT term_text FROM terms_extracted)
+  AND term_text NOT IN (SELECT term_text FROM terms_excluded)
+ORDER BY term_text
+```
+
+- 必須用語のみの項目は `id < 0` で区別（PATCH/DELETE対象外）
+- `terms_extracted` に既存の必須用語は重複しない
+- フロントエンド変更不要（同義語候補に自動的に含まれる）
+
+### 修正対象ファイル
+
+- `src/genglossary/db/term_repository.py` - `list_all_terms()` のSQL修正
 
 ## Notes
 
