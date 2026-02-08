@@ -1150,7 +1150,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
     def test_complete_status_no_op_does_not_trigger_fallback(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """update_run_status_if_activeがALREADY_TERMINALを返した場合（no-op）、
+        """update_run_status_if_activeがNOT_IN_EXPECTED_STATEを返した場合（no-op）、
         フォールバックは試行されない"""
         from genglossary.db.runs_repository import RunUpdateResult
 
@@ -1162,8 +1162,8 @@ class TestRunManagerStatusUpdateFallbackLogic:
 
             def counting_update(conn, run_id, status, error_message=None):
                 call_count["value"] += 1
-                # Return ALREADY_TERMINAL to simulate no-op (already cancelled)
-                return RunUpdateResult.ALREADY_TERMINAL
+                # Return NOT_IN_EXPECTED_STATE to simulate no-op (already cancelled)
+                return RunUpdateResult.NOT_IN_EXPECTED_STATE
 
             with patch(
                 "genglossary.runs.manager.update_run_status_if_active",
@@ -1226,7 +1226,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
     def test_cancel_status_no_op_logged_and_no_fallback(
         self, manager: RunManager, project_db: sqlite3.Connection
     ) -> None:
-        """update_run_status_if_activeがALREADY_TERMINALを返した場合（no-op）、ログに記録されフォールバックは試行されない"""
+        """update_run_status_if_activeがNOT_IN_EXPECTED_STATEを返した場合（no-op）、ログに記録されフォールバックは試行されない"""
         from genglossary.db.runs_repository import RunUpdateResult
         from genglossary.runs.executor import PipelineCancelledException
 
@@ -1246,8 +1246,8 @@ class TestRunManagerStatusUpdateFallbackLogic:
             def counting_update(conn, run_id, status, error_message=None):
                 if status == "cancelled":
                     call_count["value"] += 1
-                    # Return ALREADY_TERMINAL to simulate no-op (already terminal)
-                    return RunUpdateResult.ALREADY_TERMINAL
+                    # Return NOT_IN_EXPECTED_STATE to simulate no-op (already terminal)
+                    return RunUpdateResult.NOT_IN_EXPECTED_STATE
                 return RunUpdateResult.UPDATED  # For other status updates
 
             with patch(
