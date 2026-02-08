@@ -362,3 +362,25 @@ class TestAzureOpenAI:
         request = route.calls.last.request
         assert "Authorization" in request.headers
         assert request.headers["Authorization"] == "Bearer test-key"
+
+
+class TestClose:
+    """Test resource cleanup."""
+
+    def test_close_closes_http_client(self):
+        """Test that close() closes the underlying httpx client."""
+        client = OpenAICompatibleClient(
+            base_url="http://localhost:8080/v1",
+            api_key="test-key",
+        )
+        client.close()
+        assert client.client.is_closed
+
+    def test_close_without_client_attribute(self):
+        """Test that close() does not raise when client attribute is missing."""
+        client = OpenAICompatibleClient(
+            base_url="http://localhost:8080/v1",
+            api_key="test-key",
+        )
+        del client.client
+        client.close()  # Should not raise
