@@ -11,7 +11,12 @@ from threading import Event, Lock, Thread
 logger = logging.getLogger(__name__)
 
 from genglossary.config import Config
-from genglossary.db.connection import database_connection, get_connection, transaction
+from genglossary.db.connection import (
+    database_connection,
+    get_connection,
+    immediate_transaction,
+    transaction,
+)
 from genglossary.db.runs_repository import (
     RunUpdateResult,
     create_run,
@@ -63,7 +68,9 @@ class RunManager:
         self._thread: Thread | None = None
         self._cancel_events: dict[int, Event] = {}
         self._cancel_events_lock = Lock()
-        self._start_run_lock = Lock()  # Synchronize start_run to prevent race conditions
+        # In-process lock to avoid unnecessary SQLITE_BUSY contention.
+        # Cross-process safety is provided by immediate_transaction (BEGIN IMMEDIATE).
+        self._start_run_lock = Lock()
         # Executor管理 (for cancellation)
         self._executors: dict[int, PipelineExecutor] = {}
         self._executors_lock = Lock()
@@ -87,16 +94,16 @@ class RunManager:
         Raises:
             RuntimeError: If a run is already running.
         """
-        # Synchronize to prevent race conditions between concurrent start_run calls
+        # Synchronize to prevent race conditions between concurrent start_run calls.
+        # _start_run_lock: in-process optimization to avoid SQLITE_BUSY contention.
+        # immediate_transaction: DB-level write lock for cross-process safety.
         with self._start_run_lock:
-            # Check if a run is already active and create run record atomically
             with database_connection(self.db_path) as conn:
-                active_run = get_active_run(conn)
-                if active_run is not None:
-                    raise RuntimeError(f"Run already running: {active_run['id']}")
+                with immediate_transaction(conn):
+                    active_run = get_active_run(conn)
+                    if active_run is not None:
+                        raise RuntimeError(f"Run already running: {active_run['id']}")
 
-                # Create run record atomically within the same lock
-                with transaction(conn):
                     run_id = create_run(conn, scope=scope, triggered_by=triggered_by)
 
             # Create cancel event within the same lock to ensure consistency
