@@ -30,8 +30,11 @@ def create_group(
         The ID of the created group.
 
     Raises:
+        ValueError: If primary_term_text is not in member_texts.
         sqlite3.IntegrityError: If any member term already belongs to another group.
     """
+    if primary_term_text not in member_texts:
+        raise ValueError("primary_term_text must be included in member_texts")
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO term_synonym_groups (primary_term_text) VALUES (?)",
@@ -83,15 +86,15 @@ def add_member(
         sqlite3.IntegrityError: If the term already belongs to a group.
     """
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT 1 FROM term_synonym_groups WHERE id = ?", (group_id,)
-    )
-    if cursor.fetchone() is None:
-        raise GroupNotFoundError(group_id)
-    cursor.execute(
-        "INSERT INTO term_synonym_members (group_id, term_text) VALUES (?, ?)",
-        (group_id, term_text),
-    )
+    try:
+        cursor.execute(
+            "INSERT INTO term_synonym_members (group_id, term_text) VALUES (?, ?)",
+            (group_id, term_text),
+        )
+    except sqlite3.IntegrityError as e:
+        if "FOREIGN KEY constraint failed" in str(e):
+            raise GroupNotFoundError(group_id) from e
+        raise
     return cast(int, cursor.lastrowid)
 
 
