@@ -136,7 +136,7 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
             </Group>
 
             <Stack gap="md">
-              {selectedEntry.aliases.length > 0 && (
+              {selectedEntry.aliases?.length > 0 && (
                 <Box>
                   <Text fw={500} mb="xs">
                     Aliases

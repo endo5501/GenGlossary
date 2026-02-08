@@ -92,7 +92,7 @@ export function RefinedPage({ projectId }: RefinedPageProps) {
               {selectedEntry.term_name}
             </Text>
 
-            {selectedEntry.aliases.length > 0 && (
+            {selectedEntry.aliases?.length > 0 && (
               <Box mb="md">
                 <Text fw={500} mb="xs">
                   Aliases
