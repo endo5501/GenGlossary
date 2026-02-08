@@ -54,13 +54,13 @@ class RunUpdateResult(Enum):
     This enum distinguishes between different outcomes when updating run status:
     - UPDATED: Run was successfully updated
     - NOT_FOUND: Run does not exist
-    - ALREADY_TERMINAL: Run exists but is not in the expected state for the update
+    - NOT_IN_EXPECTED_STATE: Run exists but is not in the expected state for the update
       (e.g., already in a terminal state, or not in 'running' state when required)
     """
 
     UPDATED = "updated"
     NOT_FOUND = "not_found"
-    ALREADY_TERMINAL = "terminal"
+    NOT_IN_EXPECTED_STATE = "terminal"
 ```
 
 この enum により、「run が存在しない」と「run が期待される状態にない」を明確に区別できます。全ての条件付きステータス更新関数が統一的にこの enum を返します。
@@ -146,7 +146,7 @@ def update_run_status_if_active(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully updated
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run exists but is already in terminal state
+        - NOT_IN_EXPECTED_STATE: Run exists but is not in expected state
     """
     ...
 
@@ -173,7 +173,7 @@ def update_run_status_if_running(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully updated
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run exists but is not in 'running' state
+        - NOT_IN_EXPECTED_STATE: Run exists but is not in 'running' state
     """
     ...
 
@@ -204,7 +204,7 @@ def complete_run_if_not_cancelled(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully completed
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run exists but is not in 'running' state
+        - NOT_IN_EXPECTED_STATE: Run exists but is not in 'running' state
     """
     return update_run_status_if_running(conn, run_id, "completed")
 
@@ -221,7 +221,7 @@ def fail_run_if_not_terminal(
         RunUpdateResult indicating the outcome:
         - UPDATED: Run was successfully failed
         - NOT_FOUND: Run does not exist
-        - ALREADY_TERMINAL: Run is already in a terminal state
+        - NOT_IN_EXPECTED_STATE: Run is already in a terminal state
     """
     return update_run_status_if_active(conn, run_id, "failed", error_message)
 ```
@@ -510,7 +510,7 @@ class RunManager:
 
         ログメッセージの区別:
             - NOT_FOUND: "run not found"
-            - ALREADY_TERMINAL: "run was already in terminal state"
+            - NOT_IN_EXPECTED_STATE: "run not in expected state"
         """
         ...
 
