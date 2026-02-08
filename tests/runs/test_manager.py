@@ -2345,3 +2345,86 @@ class TestSubscriberCompletedRunRegistration:
         )
         assert msg.get("complete") is True
         assert msg.get("db_status") == "completed"
+
+
+class TestExecutorCloseOnCompletion:
+    """Tests for executor.close() being called after pipeline execution."""
+
+    def test_executor_closed_on_successful_completion(
+        self, manager: RunManager
+    ) -> None:
+        """正常完了時にexecutor.close()が呼ばれる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            run_id = manager.start_run(scope="full")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            mock_executor.return_value.close.assert_called()
+
+    def test_executor_closed_on_pipeline_failure(
+        self, manager: RunManager
+    ) -> None:
+        """パイプライン失敗時にexecutor.close()が呼ばれる"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = RuntimeError("Pipeline error")
+
+            run_id = manager.start_run(scope="full")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            mock_executor.return_value.close.assert_called()
+
+    def test_executor_close_exception_does_not_mask_pipeline_error(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """executor.close()の例外がパイプラインエラーを上書きしない"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = RuntimeError("Pipeline error")
+            mock_executor.return_value.close.side_effect = OSError("Close failed")
+
+            run_id = manager.start_run(scope="full")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "failed"
+            assert "Pipeline error" in (run["error_message"] or "")
+
+    def test_executor_close_exception_does_not_mask_completed_status(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """executor.close()の例外が正常完了ステータスを上書きしない"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+            mock_executor.return_value.close.side_effect = OSError("Close failed")
+
+            run_id = manager.start_run(scope="full")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            run = get_run(project_db, run_id)
+            assert run is not None
+            assert run["status"] == "completed"
+
+    def test_executor_closed_on_cancellation(
+        self, manager: RunManager
+    ) -> None:
+        """キャンセル時にexecutor.close()が呼ばれる"""
+        from genglossary.runs.executor import PipelineCancelledException
+
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.side_effect = PipelineCancelledException()
+
+            run_id = manager.start_run(scope="full")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            mock_executor.return_value.close.assert_called()
