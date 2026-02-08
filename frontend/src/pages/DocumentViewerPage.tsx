@@ -69,7 +69,7 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
     for (const t of activeTerms) {
       allTexts.push(t.term_name)
       for (const alias of t.aliases ?? []) {
-        allTexts.push(alias)
+        if (alias.trim()) allTexts.push(alias)
       }
     }
     return allTexts
@@ -80,7 +80,7 @@ export function DocumentViewerPage({ projectId, fileId }: DocumentViewerPageProp
     const map: Record<string, string> = {}
     for (const t of activeTerms) {
       for (const alias of t.aliases ?? []) {
-        map[alias.toLowerCase()] = t.term_name
+        if (alias.trim()) map[alias.toLowerCase()] = t.term_name
       }
     }
     return map
