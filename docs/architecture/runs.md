@@ -60,7 +60,7 @@ class RunUpdateResult(Enum):
 
     UPDATED = "updated"
     NOT_FOUND = "not_found"
-    NOT_IN_EXPECTED_STATE = "terminal"
+    NOT_IN_EXPECTED_STATE = "not_in_expected_state"
 ```
 
 この enum により、「run が存在しない」と「run が期待される状態にない」を明確に区別できます。全ての条件付きステータス更新関数が統一的にこの enum を返します。

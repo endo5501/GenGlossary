@@ -673,7 +673,7 @@ class TestUpdateRunStatusIfActive:
         assert run["error_message"] == "Test error"
         assert run["finished_at"] is not None
 
-    def test_returns_already_terminal_for_terminal_state(
+    def test_returns_not_in_expected_state_for_terminal_state(
         self, project_db: sqlite3.Connection
     ) -> None:
         """terminal状態のRunはNOT_IN_EXPECTED_STATEを返す"""

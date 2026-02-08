@@ -509,7 +509,7 @@ class RunManager:
             error_message: Error message if status is 'failed' (optional).
 
         Returns:
-            True if status was updated, already terminal, or run not found
+            True if status was updated, not in expected state, or run not found
             (no fallback needed). False if both primary and fallback
             connections failed with exceptions.
         """

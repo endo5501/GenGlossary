@@ -24,7 +24,7 @@ class RunUpdateResult(Enum):
 
     UPDATED = "updated"
     NOT_FOUND = "not_found"
-    NOT_IN_EXPECTED_STATE = "terminal"
+    NOT_IN_EXPECTED_STATE = "not_in_expected_state"
 
 
 def _validate_status(status: str, allowed: set[str] | None = None) -> None:
