@@ -42,7 +42,8 @@ GenGlossary/
 │   ├── runs/                     # Run管理 (Schema v3で追加)
 │   │   ├── __init__.py
 │   │   ├── manager.py           # RunManager (スレッド管理)
-│   │   └── executor.py          # PipelineExecutor (パイプライン実行)
+│   │   ├── executor.py          # PipelineExecutor (パイプライン実行)
+│   │   └── error_sanitizer.py   # エラーメッセージのサニタイズ
 │   ├── document_loader.py        # ドキュメント読み込み
 │   ├── term_extractor.py         # ステップ1: 用語抽出
 │   ├── glossary_generator.py     # ステップ2: 用語集生成
@@ -134,8 +135,9 @@ GenGlossary/
 │   │   ├── test_project_repository.py
 │   │   └── test_synonym_repository.py
 │   ├── runs/                     # Run管理テスト (Schema v3)
-│   │   ├── test_manager.py      # RunManagerテスト (13 tests)
-│   │   └── test_executor.py     # PipelineExecutorテスト (5 tests)
+│   │   ├── test_manager.py      # RunManagerテスト (87 tests)
+│   │   ├── test_executor.py     # PipelineExecutorテスト (81 tests)
+│   │   └── test_error_sanitizer.py  # エラーサニタイズテスト (28 tests)
 │   ├── test_document_loader.py
 │   ├── test_term_extractor.py
 │   ├── test_glossary_generator.py

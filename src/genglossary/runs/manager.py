@@ -21,6 +21,7 @@ from genglossary.db.runs_repository import (
     update_run_status,
     update_run_status_if_active,
 )
+from genglossary.runs.error_sanitizer import sanitize_error_message
 from genglossary.runs.executor import (
     ExecutionContext,
     PipelineCancelledException,
@@ -119,7 +120,9 @@ class RunManager:
                     with transaction(conn):
                         update_run_status(
                             conn, run_id, "failed",
-                            error_message=f"Failed to start execution thread: {e}",
+                            error_message=sanitize_error_message(
+                                e, "Failed to start execution thread"
+                            ),
                             finished_at=datetime.now(timezone.utc),
                         )
             except Exception as db_error:
@@ -229,7 +232,7 @@ class RunManager:
 
         except Exception as e:
             # Connection errors or other errors outside pipeline execution
-            error_message = str(e)
+            error_message = sanitize_error_message(e)
             error_traceback = traceback.format_exc()
             logger.error(
                 f"Run {run_id} failed (outside pipeline): {error_message}\n"
@@ -465,7 +468,7 @@ class RunManager:
                 return ("cancelled", success)
 
             # Pipeline failed - update to failed status
-            error_message = str(pipeline_error)
+            error_message = sanitize_error_message(pipeline_error)
             error_traceback = pipeline_traceback or traceback.format_exc()
             logger.error(
                 f"Run {run_id} failed: {error_message}\n{error_traceback}"
