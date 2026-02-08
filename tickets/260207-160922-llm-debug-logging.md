@@ -4,7 +4,7 @@ tags: [feature, backend, debug]
 description: "Add LLM debug mode to log prompts and responses for troubleshooting"
 created_at: "2026-02-07T16:09:22Z"
 started_at: 2026-02-08T08:20:48Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T09:14:39Z # Do not modify manually
 ---
 
 # LLMデバッグログ機能の追加
