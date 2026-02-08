@@ -3,7 +3,7 @@ priority: 4
 tags: [improvement, backend, error-handling]
 description: "RunManager: capture original exception details in DB on thread start failure"
 created_at: "2026-02-02T22:51:33Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-08T09:30:22Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -49,18 +49,18 @@ except Exception as e:
 
 ## Tasks
 
-- [ ] 設計レビュー・承認
-- [ ] 実装
-- [ ] テストの更新
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 設計レビュー・承認
+- [x] 実装
+- [x] テストの更新
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
