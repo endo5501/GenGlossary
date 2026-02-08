@@ -99,7 +99,8 @@ def remove_member(
     """
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT group_id FROM term_synonym_members WHERE id = ?", (member_id,)
+        "SELECT group_id, term_text FROM term_synonym_members WHERE id = ?",
+        (member_id,),
     )
     row = cursor.fetchone()
     if row is None:
@@ -108,6 +109,14 @@ def remove_member(
         raise ValueError(
             f"Member {member_id} does not belong to group {group_id}"
         )
+    # If removing the primary term member, delete the entire group
+    cursor.execute(
+        "SELECT primary_term_text FROM term_synonym_groups WHERE id = ?",
+        (group_id,),
+    )
+    group_row = cursor.fetchone()
+    if group_row is not None and group_row["primary_term_text"] == row["term_text"]:
+        return delete_group(conn, group_id)
     cursor.execute(
         "DELETE FROM term_synonym_members WHERE id = ?", (member_id,)
     )
