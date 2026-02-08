@@ -11,6 +11,7 @@ from genglossary.db.connection import get_connection, transaction
 from genglossary.db.project_repository import create_project
 from genglossary.db.provisional_repository import create_provisional_term
 from genglossary.db.registry_schema import initialize_registry
+from genglossary.db.synonym_repository import create_group
 from genglossary.models.term import TermOccurrence
 
 
@@ -422,3 +423,71 @@ def test_regenerate_provisional_invalid_llm_provider_returns_400(
 
     assert response.status_code == 400
     assert "provider" in response.json()["detail"].lower()
+
+
+def test_list_provisional_returns_aliases_for_synonym_group(
+    test_project_setup, client: TestClient
+):
+    """Test GET /api/projects/{id}/provisional returns aliases for terms with synonym groups."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    with transaction(conn):
+        create_provisional_term(conn, "田中太郎", "主人公", 0.9, [occ])
+        create_provisional_term(conn, "量子ビット", "量子情報の単位", 0.85, [occ])
+        # Create synonym group: primary=田中太郎, members=[田中太郎, 田中, 田中部長]
+        create_group(conn, "田中太郎", ["田中太郎", "田中", "田中部長"])
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/provisional")
+
+    assert response.status_code == 200
+    data = response.json()
+    # Find 田中太郎 entry
+    tanaka = next(e for e in data if e["term_name"] == "田中太郎")
+    assert set(tanaka["aliases"]) == {"田中", "田中部長"}
+
+    # 量子ビット should have empty aliases
+    qubit = next(e for e in data if e["term_name"] == "量子ビット")
+    assert qubit["aliases"] == []
+
+
+def test_get_provisional_by_id_returns_aliases(test_project_setup, client: TestClient):
+    """Test GET /api/projects/{id}/provisional/{entry_id} returns aliases."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    with transaction(conn):
+        term_id = create_provisional_term(conn, "田中太郎", "主人公", 0.9, [occ])
+        create_group(conn, "田中太郎", ["田中太郎", "田中", "田中部長"])
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/provisional/{term_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data["aliases"]) == {"田中", "田中部長"}
+
+
+def test_list_provisional_returns_empty_aliases_when_no_synonym_groups(
+    test_project_setup, client: TestClient
+):
+    """Test GET /api/projects/{id}/provisional returns empty aliases when no synonym groups."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    with transaction(conn):
+        create_provisional_term(conn, "量子ビット", "量子情報の単位", 0.85, [occ])
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/provisional")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data[0]["aliases"] == []

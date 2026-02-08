@@ -9,6 +9,7 @@ from genglossary.db.connection import get_connection, transaction
 from genglossary.db.project_repository import create_project
 from genglossary.db.refined_repository import create_refined_term
 from genglossary.db.registry_schema import initialize_registry
+from genglossary.db.synonym_repository import create_group
 from genglossary.models.term import TermOccurrence
 
 
@@ -163,3 +164,90 @@ def test_get_refined_returns_404_for_missing_project(client: TestClient):
     response = client.get("/api/projects/999/refined")
 
     assert response.status_code == 404
+
+
+def test_list_refined_returns_aliases_for_synonym_group(
+    test_project_setup, client: TestClient
+):
+    """Test GET /api/projects/{id}/refined returns aliases for terms with synonym groups."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    with transaction(conn):
+        create_refined_term(conn, "田中太郎", "主人公", 0.95, [occ])
+        create_refined_term(conn, "量子ビット", "量子情報の単位", 0.92, [occ])
+        create_group(conn, "田中太郎", ["田中太郎", "田中", "田中部長"])
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/refined")
+
+    assert response.status_code == 200
+    data = response.json()
+    tanaka = next(e for e in data if e["term_name"] == "田中太郎")
+    assert set(tanaka["aliases"]) == {"田中", "田中部長"}
+
+    qubit = next(e for e in data if e["term_name"] == "量子ビット")
+    assert qubit["aliases"] == []
+
+
+def test_get_refined_by_id_returns_aliases(test_project_setup, client: TestClient):
+    """Test GET /api/projects/{id}/refined/{term_id} returns aliases."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    with transaction(conn):
+        term_id = create_refined_term(conn, "田中太郎", "主人公", 0.95, [occ])
+        create_group(conn, "田中太郎", ["田中太郎", "田中", "田中部長"])
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/refined/{term_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data["aliases"]) == {"田中", "田中部長"}
+
+
+def test_export_markdown_includes_aliases(test_project_setup, client: TestClient):
+    """Test GET /api/projects/{id}/refined/export-md includes alias section."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    with transaction(conn):
+        create_refined_term(conn, "田中太郎", "主人公", 0.95, [occ])
+        create_group(conn, "田中太郎", ["田中太郎", "田中", "田中部長"])
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/refined/export-md")
+
+    assert response.status_code == 200
+    content = response.text
+    assert "田中太郎" in content
+    assert "**別名**:" in content
+    assert "田中" in content
+    assert "田中部長" in content
+
+
+def test_list_refined_returns_empty_aliases_when_no_synonym_groups(
+    test_project_setup, client: TestClient
+):
+    """Test GET /api/projects/{id}/refined returns empty aliases when no synonym groups."""
+    project_id = test_project_setup["project_id"]
+    project_db_path = test_project_setup["project_db_path"]
+
+    conn = get_connection(project_db_path)
+    occ = TermOccurrence(document_path="doc.txt", line_number=1, context="context")
+    with transaction(conn):
+        create_refined_term(conn, "量子ビット", "量子情報の単位", 0.92, [occ])
+    conn.close()
+
+    response = client.get(f"/api/projects/{project_id}/refined")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data[0]["aliases"] == []
