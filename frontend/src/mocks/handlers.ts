@@ -80,6 +80,7 @@ export const mockProvisionalEntries: GlossaryTermResponse[] = [
     occurrences: [
       { document_path: 'doc1.md', line_number: 1, context: '量子コンピュータは...' },
     ],
+    aliases: [],
   },
   {
     id: 2,
@@ -89,6 +90,7 @@ export const mockProvisionalEntries: GlossaryTermResponse[] = [
     occurrences: [
       { document_path: 'doc1.md', line_number: 3, context: '量子ビット（キュービット）を使用します。' },
     ],
+    aliases: [],
   },
 ]
 
@@ -132,6 +134,7 @@ export const mockRefinedEntries: GlossaryTermResponse[] = [
       { document_path: 'doc1.md', line_number: 1, context: '量子コンピュータは...' },
       { document_path: 'doc1.md', line_number: 5, context: '量子コンピュータの最大の特徴は...' },
     ],
+    aliases: [],
   },
 ]
 
