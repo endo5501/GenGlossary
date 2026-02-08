@@ -4,7 +4,7 @@ tags: [improvement, backend, error-handling]
 description: "RunManager: capture original exception details in DB on thread start failure"
 created_at: "2026-02-02T22:51:33Z"
 started_at: 2026-02-08T09:30:22Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T09:48:22Z # Do not modify manually
 ---
 
 # RunManager: capture original exception details in DB on thread start failure
