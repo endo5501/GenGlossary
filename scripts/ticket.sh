@@ -1579,7 +1579,7 @@ EOF
 cmd_list() {
     local filter_status=""
     local count=20
-    
+
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -1618,15 +1618,15 @@ EOF
                 ;;
         esac
     done
-    
+
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
-    
+
     # Load configuration
     yaml_parse "$CONFIG_FILE"
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
-    
+
     # Check if tickets directory exists
     if [[ ! -d "$tickets_dir" ]]; then
         cat >&2 << EOF
@@ -1638,7 +1638,7 @@ Directory '$tickets_dir' does not exist. Please:
 EOF
         return 1
     fi
-    
+
     echo "📋 Ticket List"
     echo "---------------------------"
     if [[ "$filter_status" == "done" ]]; then
@@ -1646,70 +1646,94 @@ EOF
     elif [[ -z "$filter_status" ]]; then
         echo "(sorted by status: doing, todo, done, then by priority asc)"
     fi
-    
-    local displayed=0
-    local temp_file=$(mktemp)
-    
-    # Collect all tickets with their metadata
-    for ticket_file in "$tickets_dir"/*.md "$tickets_dir"/done/*.md; do
-        [[ -f "$ticket_file" ]] || continue
-        
-        # Extract YAML frontmatter
-        local yaml_content=$(extract_yaml_frontmatter "$ticket_file" 2>/dev/null)
-        [[ -z "$yaml_content" ]] && continue
-        
-        # Parse YAML in a temporary file
-        echo "$yaml_content" >| "${temp_file}.yml"
-        yaml_parse "${temp_file}.yml" 2>/dev/null || continue
-        
-        # Get fields
-        local priority=$(yaml_get "priority" 2>/dev/null || echo "2")
-        local description=$(yaml_get "description" 2>/dev/null || echo "")
-        local created_at=$(yaml_get "created_at" 2>/dev/null || echo "")
-        local started_at=$(yaml_get "started_at" 2>/dev/null || echo "null")
-        local closed_at=$(yaml_get "closed_at" 2>/dev/null || echo "null")
-        
-        # Determine status
-        local status=$(get_ticket_status "$started_at" "$closed_at")
-        
-        # Apply filter
-        if [[ -n "$filter_status" ]] && [[ "$status" != "$filter_status" ]]; then
-            continue
-        fi
-        
-        # Default filter: show only todo and doing
-        if [[ -z "$filter_status" ]] && [[ "$status" == "done" ]]; then
-            continue
-        fi
-        
-        # Get relative path from project root
-        local ticket_path="${ticket_file#./}"
-        
-        # Store in temp file for sorting
-        # Format: status|priority|ticket_path|description|created_at|started_at|closed_at
-        echo "${status}|${priority}|${ticket_path}|${description}|${created_at}|${started_at}|${closed_at}" >> "$temp_file"
-    done
-    
-    # Sort and display
-    # Sort by: status (doing first, then todo, then done), then by priority
-    # For done tickets, sort by closed_at in descending order (most recent first)
-    local sorted_file=$(mktemp)
+
+    # Determine target files based on status filter
+    # Done tickets are in done/ folder, active tickets in tickets/ folder
+    local target_files=()
     if [[ "$filter_status" == "done" ]]; then
-        # For done tickets only: sort by closed_at in descending order
-        sort -t'|' -k7,7r "$temp_file" > "$sorted_file"
+        for f in "$tickets_dir"/done/*.md; do
+            [[ -f "$f" ]] && target_files+=("$f")
+        done
     else
-        # For all tickets or other statuses: use original sorting logic
-        sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/' > "$sorted_file"
+        for f in "$tickets_dir"/*.md; do
+            [[ -f "$f" ]] && target_files+=("$f")
+        done
     fi
-    
-    while IFS='|' read -r status priority ticket_path description created_at started_at closed_at; do
+
+    if [[ ${#target_files[@]} -eq 0 ]]; then
+        echo "(No tickets found)"
+        return 0
+    fi
+
+    # Single AWK pass to extract frontmatter metadata from all target files
+    # Output format: filepath\tpriority\tdescription\tcreated_at\tstarted_at\tclosed_at\tstatus
+    local raw_data
+    raw_data=$(awk '
+    FILENAME != _prev {
+        if (_prev != "" && _has_fm) {
+            if (_ca != "null" && _ca != "") s = "done"
+            else if (_sa != "null" && _sa != "") s = "doing"
+            else s = "todo"
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", _prev, _pri, _desc, _cr, _sa, _ca, s
+        }
+        _prev = FILENAME; _has_fm = 0; _infm = 0; _past = 0
+        _pri = "2"; _desc = ""; _cr = ""; _sa = "null"; _ca = "null"
+    }
+    _past { next }
+    FNR == 1 && $0 == "---" { _has_fm = 1; _infm = 1; next }
+    _infm && $0 == "---" { _infm = 0; _past = 1; next }
+    _infm {
+        if (/^priority:/) { v=$0; sub(/^priority:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); gsub(/"/, "", v); _pri = v }
+        else if (/^description:/) { v=$0; sub(/^description:[[:space:]]*/, "", v); gsub(/^"|"$/, "", v); _desc = v }
+        else if (/^created_at:/) { v=$0; sub(/^created_at:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); gsub(/"/, "", v); _cr = v }
+        else if (/^started_at:/) { v=$0; sub(/^started_at:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); gsub(/"/, "", v); _sa = v }
+        else if (/^closed_at:/) { v=$0; sub(/^closed_at:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); gsub(/"/, "", v); _ca = v }
+    }
+    END {
+        if (_prev != "" && _has_fm) {
+            if (_ca != "null" && _ca != "") s = "done"
+            else if (_sa != "null" && _sa != "") s = "doing"
+            else s = "todo"
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", _prev, _pri, _desc, _cr, _sa, _ca, s
+        }
+    }
+    ' "${target_files[@]}" 2>/dev/null)
+
+    # Apply status filter for edge cases
+    if [[ -n "$filter_status" ]]; then
+        raw_data=$(printf '%s' "$raw_data" | awk -F'\t' -v st="$filter_status" '$7 == st')
+    else
+        # Default: show only todo and doing
+        raw_data=$(printf '%s' "$raw_data" | awk -F'\t' '$7 != "done"')
+    fi
+
+    # Sort results
+    local sorted_data
+    if [[ "$filter_status" == "done" ]]; then
+        sorted_data=$(printf '%s' "$raw_data" | sort -t$'\t' -k6,6r)
+    else
+        sorted_data=$(printf '%s' "$raw_data" | awk -F'\t' -v OFS='\t' '{
+            if ($7 == "doing") p = "0"
+            else if ($7 == "todo") p = "1"
+            else p = "2"
+            print p, $0
+        }' | sort -t$'\t' -k1,1n -k3,3n | cut -f2-)
+    fi
+
+    # Display results
+    local displayed=0
+    while IFS=$'\t' read -r ticket_path priority description created_at started_at closed_at status; do
+        [[ -z "$ticket_path" ]] && continue
         [[ $displayed -ge $count ]] && break
-        
+
         # Convert timestamps to local timezone
         local created_at_local=$(convert_utc_to_local "$created_at")
         local started_at_local=$(convert_utc_to_local "$started_at")
         local closed_at_local=$(convert_utc_to_local "$closed_at")
-        
+
+        # Remove ./ prefix if present
+        ticket_path="${ticket_path#./}"
+
         echo "- status: $status"
         echo "  ticket_path: $ticket_path"
         [[ -n "$description" ]] && echo "  description: $description"
@@ -1718,19 +1742,14 @@ EOF
         [[ "$status" != "todo" ]] && echo "  started_at: $started_at_local"
         [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at_local"
         echo
-        
+
         ((displayed++))
-    done < "$sorted_file" || true
-    
-    rm -f "$sorted_file"
-    
-    # Cleanup
-    rm -f "$temp_file" "${temp_file}.yml"
-    
+    done <<< "$sorted_data"
+
     if [[ $displayed -eq 0 ]]; then
         echo "(No tickets found)"
     fi
-    
+
     # Always return success
     return 0
 }
