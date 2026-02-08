@@ -216,7 +216,10 @@ class RunManager:
                 # Cleanup executor reference and close resources
                 with self._executors_lock:
                     self._executors.pop(run_id, None)
-                executor.close()
+                try:
+                    executor.close()
+                except Exception:
+                    logger.debug(f"Failed to close executor for run {run_id}", exc_info=True)
 
             # Finalize run status (separate from pipeline execution)
             final_status, success = self._finalize_run_status(
