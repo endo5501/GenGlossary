@@ -10,6 +10,7 @@ from pydantic import BaseModel, ValidationError
 from genglossary.llm.base import BaseLLMClient
 from genglossary.models.glossary import Glossary, GlossaryIssue, IssueType
 from genglossary.models.synonym import SynonymGroup
+from genglossary.synonym_utils import build_synonym_lookup
 from genglossary.utils.prompt_escape import wrap_user_data
 
 logger = logging.getLogger(__name__)
@@ -180,16 +181,7 @@ class GlossaryReviewer:
         notes_map = user_notes_map or {}
 
         # Build synonym lookup: term_name -> list of synonym texts
-        synonym_lookup: dict[str, list[str]] = {}
-        if synonym_groups:
-            for group in synonym_groups:
-                others = [
-                    m.term_text
-                    for m in group.members
-                    if m.term_text != group.primary_term_text
-                ]
-                if others:
-                    synonym_lookup[group.primary_term_text] = others
+        synonym_lookup = build_synonym_lookup(synonym_groups)
 
         # Build term list with definitions and confidence
         target_terms = term_names if term_names is not None else glossary.all_term_names

@@ -6,6 +6,7 @@ from pathlib import Path
 from genglossary.models.glossary import Glossary
 from genglossary.models.synonym import SynonymGroup
 from genglossary.models.term import Term, TermOccurrence
+from genglossary.synonym_utils import get_synonyms_for_primary
 
 
 class MarkdownWriter:
@@ -128,17 +129,9 @@ class MarkdownWriter:
         lines.append(f"### {term.name}\n")
 
         # Aliases from synonym groups
-        if synonym_groups:
-            for group in synonym_groups:
-                if group.primary_term_text == term.name:
-                    aliases = [
-                        m.term_text
-                        for m in group.members
-                        if m.term_text != group.primary_term_text
-                    ]
-                    if aliases:
-                        lines.append(f"**別名**: {'、'.join(aliases)}\n")
-                    break
+        aliases = get_synonyms_for_primary(synonym_groups, term.name)
+        if aliases:
+            lines.append(f"**別名**: {'、'.join(aliases)}\n")
 
         # Definition
         if term.definition:

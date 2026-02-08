@@ -13,6 +13,7 @@ from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary
 from genglossary.models.synonym import SynonymGroup
+from genglossary.synonym_utils import build_non_primary_set, build_synonym_lookup
 from genglossary.models.term import ClassifiedTerm, Term, TermCategory, TermOccurrence
 from genglossary.types import ProgressCallback, TermProgressCallback
 from genglossary.utils.callback import safe_callback
@@ -112,8 +113,8 @@ Output:
             return glossary
 
         # Build synonym lookup maps
-        synonym_map = self._build_synonym_map(synonym_groups)
-        non_primary_terms = self._build_non_primary_set(synonym_groups)
+        synonym_map = build_synonym_lookup(synonym_groups)
+        non_primary_terms = build_non_primary_set(synonym_groups)
 
         total_terms = len(filtered_terms)
         for idx, term_item in enumerate(filtered_terms, start=1):
@@ -392,49 +393,3 @@ JSON形式で回答してください: {{"definition": "...", "confidence": 0.0-
         )
 
         return response.definition, response.confidence
-
-    @staticmethod
-    def _build_synonym_map(
-        synonym_groups: list[SynonymGroup] | None,
-    ) -> dict[str, list[str]]:
-        """Build a mapping from primary term to its synonym texts.
-
-        Args:
-            synonym_groups: List of synonym groups.
-
-        Returns:
-            dict mapping primary_term_text to list of other member texts.
-        """
-        if not synonym_groups:
-            return {}
-        result: dict[str, list[str]] = {}
-        for group in synonym_groups:
-            others = [
-                m.term_text
-                for m in group.members
-                if m.term_text != group.primary_term_text
-            ]
-            if others:
-                result[group.primary_term_text] = others
-        return result
-
-    @staticmethod
-    def _build_non_primary_set(
-        synonym_groups: list[SynonymGroup] | None,
-    ) -> set[str]:
-        """Build a set of non-primary synonym member texts.
-
-        Args:
-            synonym_groups: List of synonym groups.
-
-        Returns:
-            Set of term texts that are non-primary members.
-        """
-        if not synonym_groups:
-            return set()
-        non_primary: set[str] = set()
-        for group in synonym_groups:
-            for member in group.members:
-                if member.term_text != group.primary_term_text:
-                    non_primary.add(member.term_text)
-        return non_primary
