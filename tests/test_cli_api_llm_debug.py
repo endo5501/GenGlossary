@@ -14,7 +14,8 @@ class TestServeCommandLlmDebugOption:
     def test_serve_accepts_llm_debug_flag(self) -> None:
         """serve コマンドが --llm-debug フラグを受け付ける"""
         runner = CliRunner()
-        with patch("genglossary.cli_api.uvicorn") as mock_uvicorn:
+        with patch("genglossary.cli_api.uvicorn") as mock_uvicorn, \
+             patch.dict("os.environ", {}, clear=False):
             mock_uvicorn.run = MagicMock()
             result = runner.invoke(serve, ["--llm-debug"])
             # Should not fail due to unrecognized option
