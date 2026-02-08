@@ -540,6 +540,23 @@ class TestListAllTermsIncludesRequiredTerms:
         term_texts = [t["term_text"] for t in terms]
         assert "必須かつ除外の用語" in term_texts
 
+    def test_extracted_required_and_excluded_uses_positive_id(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Term in all three tables should appear once with extracted (positive) ID."""
+        from genglossary.db.excluded_term_repository import add_excluded_term
+        from genglossary.db.required_term_repository import add_required_term
+
+        create_term(db_with_schema, term_text="三重登録用語", category="technical")
+        add_required_term(db_with_schema, "三重登録用語", "manual")
+        add_excluded_term(db_with_schema, "三重登録用語", "manual")
+
+        terms = list_all_terms(db_with_schema)
+
+        matching = [t for t in terms if t["term_text"] == "三重登録用語"]
+        assert len(matching) == 1
+        assert matching[0]["id"] > 0  # Should use extracted (positive) ID
+
     def test_mixed_extracted_and_required_terms(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
