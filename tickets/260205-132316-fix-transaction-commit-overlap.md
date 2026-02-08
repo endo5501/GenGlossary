@@ -4,7 +4,7 @@ tags: [backend, database, potential-bug]
 description: "Fix transaction/commit overlap in update_run_status_if_active"
 created_at: "2026-02-05T13:23:16Z"
 started_at: 2026-02-08T11:07:40Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T11:25:24Z # Do not modify manually
 ---
 
 # Fix transaction/commit overlap in update_run_status_if_active
