@@ -1,8 +1,9 @@
 """Schemas for Synonym Groups API."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from genglossary.models.synonym import SynonymGroup, SynonymMember
+from genglossary.models.term_validator import validate_term_text
 
 
 class SynonymMemberResponse(BaseModel):
@@ -50,14 +51,34 @@ class SynonymGroupCreateRequest(BaseModel):
     primary_term_text: str = Field(..., min_length=1, description="Representative term")
     member_texts: list[str] = Field(..., min_length=1, description="Member term texts")
 
+    @field_validator("primary_term_text")
+    @classmethod
+    def validate_primary(cls, v: str) -> str:
+        return validate_term_text(v)
+
+    @field_validator("member_texts")
+    @classmethod
+    def validate_members(cls, v: list[str]) -> list[str]:
+        return [validate_term_text(t) for t in v]
+
 
 class SynonymGroupUpdateRequest(BaseModel):
     """Request schema for updating a synonym group's primary term."""
 
     primary_term_text: str = Field(..., min_length=1, description="New primary term")
 
+    @field_validator("primary_term_text")
+    @classmethod
+    def validate_primary(cls, v: str) -> str:
+        return validate_term_text(v)
+
 
 class SynonymMemberCreateRequest(BaseModel):
     """Request schema for adding a member to a group."""
 
     term_text: str = Field(..., min_length=1, description="Term text to add")
+
+    @field_validator("term_text")
+    @classmethod
+    def validate_term(cls, v: str) -> str:
+        return validate_term_text(v)
