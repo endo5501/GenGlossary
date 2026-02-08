@@ -171,31 +171,50 @@ def list_groups(conn: sqlite3.Connection) -> list[SynonymGroup]:
     """
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, primary_term_text, created_at FROM term_synonym_groups ORDER BY id"
+        """
+        SELECT g.id AS group_id, g.primary_term_text,
+               m.id AS member_id, m.term_text AS member_text
+        FROM term_synonym_groups g
+        LEFT JOIN term_synonym_members m ON g.id = m.group_id
+        ORDER BY g.id, m.id
+        """
     )
-    group_rows = cursor.fetchall()
+    rows = cursor.fetchall()
 
     groups: list[SynonymGroup] = []
-    for row in group_rows:
-        group_id = row["id"]
-        cursor.execute(
-            "SELECT id, group_id, term_text, created_at FROM term_synonym_members WHERE group_id = ? ORDER BY id",
-            (group_id,),
-        )
-        member_rows = cursor.fetchall()
-        members = [
-            SynonymMember(
-                id=m["id"],
-                group_id=m["group_id"],
-                term_text=m["term_text"],
+    current_group_id: int | None = None
+    current_primary: str = ""
+    current_members: list[SynonymMember] = []
+
+    for row in rows:
+        gid = row["group_id"]
+        if gid != current_group_id:
+            if current_group_id is not None:
+                groups.append(
+                    SynonymGroup(
+                        id=current_group_id,
+                        primary_term_text=current_primary,
+                        members=current_members,
+                    )
+                )
+            current_group_id = gid
+            current_primary = row["primary_term_text"]
+            current_members = []
+        if row["member_id"] is not None:
+            current_members.append(
+                SynonymMember(
+                    id=row["member_id"],
+                    group_id=gid,
+                    term_text=row["member_text"],
+                )
             )
-            for m in member_rows
-        ]
+
+    if current_group_id is not None:
         groups.append(
             SynonymGroup(
-                id=group_id,
-                primary_term_text=row["primary_term_text"],
-                members=members,
+                id=current_group_id,
+                primary_term_text=current_primary,
+                members=current_members,
             )
         )
 
