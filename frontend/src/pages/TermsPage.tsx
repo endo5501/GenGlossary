@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  Center,
   Group,
   Table,
   Badge,
@@ -261,17 +262,15 @@ export function TermsPage({ projectId }: TermsPageProps) {
   }
 
   const currentTab = tabConfig[activeTab ?? 'terms']
-  const isEmpty = !currentTab.data || currentTab.data.length === 0
 
   return (
     <>
       <PageContainer
-        isLoading={currentTab.isTabLoading}
-        isEmpty={isEmpty}
-        emptyMessage={currentTab.emptyMessage}
+        isLoading={isLoading}
+        isEmpty={false}
+        emptyMessage=""
         actionBar={currentTab.actionBar}
         loadingTestId="terms-loading"
-        emptyTestId={currentTab.emptyTestId}
       >
         <SplitLayout
           list={
@@ -289,6 +288,11 @@ export function TermsPage({ projectId }: TermsPageProps) {
               </Tabs.List>
 
               <Tabs.Panel value="terms">
+                {!terms || terms.length === 0 ? (
+                  <Center data-testid="terms-empty" style={{ flex: 1 }}>
+                    <Text c="dimmed">No terms found. Extract terms from documents or add manually.</Text>
+                  </Center>
+                ) : (
                 <Box style={{ flex: 1 }}>
                   <Table highlightOnHover>
                     <Table.Thead>
@@ -361,30 +365,43 @@ export function TermsPage({ projectId }: TermsPageProps) {
                     </Table.Tbody>
                   </Table>
                 </Box>
+                )}
               </Tabs.Panel>
 
               <Tabs.Panel value="excluded">
-                <TermListTable
-                  terms={excludedTerms}
-                  onDelete={handleDeleteExcludedTerm}
-                  isLoading={isLoadingExcluded}
-                  isDeletePending={deleteExcludedTerm.isPending}
-                  showSourceColumn={true}
-                  deleteTooltip="除外リストから削除"
-                  deleteAriaLabel="Remove from excluded"
-                />
+                {!excludedTerms || excludedTerms.length === 0 ? (
+                  <Center data-testid="excluded-terms-empty" style={{ flex: 1 }}>
+                    <Text c="dimmed">No excluded terms. Add terms to exclude them from extraction.</Text>
+                  </Center>
+                ) : (
+                  <TermListTable
+                    terms={excludedTerms}
+                    onDelete={handleDeleteExcludedTerm}
+                    isLoading={isLoadingExcluded}
+                    isDeletePending={deleteExcludedTerm.isPending}
+                    showSourceColumn={true}
+                    deleteTooltip="除外リストから削除"
+                    deleteAriaLabel="Remove from excluded"
+                  />
+                )}
               </Tabs.Panel>
 
               <Tabs.Panel value="required">
-                <TermListTable
-                  terms={requiredTerms}
-                  onDelete={handleDeleteRequiredTerm}
-                  isLoading={isLoadingRequired}
-                  isDeletePending={deleteRequiredTerm.isPending}
-                  showSourceColumn={false}
-                  deleteTooltip="必須リストから削除"
-                  deleteAriaLabel="Remove from required"
-                />
+                {!requiredTerms || requiredTerms.length === 0 ? (
+                  <Center data-testid="required-terms-empty" style={{ flex: 1 }}>
+                    <Text c="dimmed">No required terms. Add terms to always include them in extraction.</Text>
+                  </Center>
+                ) : (
+                  <TermListTable
+                    terms={requiredTerms}
+                    onDelete={handleDeleteRequiredTerm}
+                    isLoading={isLoadingRequired}
+                    isDeletePending={deleteRequiredTerm.isPending}
+                    showSourceColumn={false}
+                    deleteTooltip="必須リストから削除"
+                    deleteAriaLabel="Remove from required"
+                  />
+                )}
               </Tabs.Panel>
             </Tabs>
           }
