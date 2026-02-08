@@ -126,6 +126,24 @@ class TestCreateSynonymGroup:
 
         assert response.status_code == 409
 
+    def test_returns_422_when_primary_not_in_members(
+        self, test_project_setup, client: TestClient
+    ):
+        """Creating a group where primary_term_text is not in member_texts returns 422."""
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "primary_term_text": "田中太郎",
+            "member_texts": ["田中", "田中部長"],
+        }
+
+        response = client.post(
+            f"/api/projects/{project_id}/synonym-groups",
+            json=payload,
+        )
+
+        assert response.status_code == 422
+
 
 class TestDeleteSynonymGroup:
     """Test DELETE /api/projects/{project_id}/synonym-groups/{group_id}."""
@@ -239,6 +257,19 @@ class TestAddMember:
         )
 
         assert response.status_code == 409
+
+    def test_returns_404_for_nonexistent_group(
+        self, test_project_setup, client: TestClient
+    ):
+        """Adding a member to a non-existent group returns 404."""
+        project_id = test_project_setup["project_id"]
+
+        response = client.post(
+            f"/api/projects/{project_id}/synonym-groups/999/members",
+            json={"term_text": "田中"},
+        )
+
+        assert response.status_code == 404
 
 
 class TestRemoveMember:

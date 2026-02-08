@@ -6,6 +6,7 @@ import pytest
 
 from genglossary.db.schema import initialize_db
 from genglossary.db.synonym_repository import (
+    GroupNotFoundError,
     add_member,
     create_group,
     delete_group,
@@ -158,6 +159,13 @@ class TestAddMember:
 
         with pytest.raises(sqlite3.IntegrityError):
             add_member(db_with_schema, group_id, "田中太郎")
+
+    def test_add_member_to_nonexistent_group_raises_group_not_found(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Adding a member to a non-existent group raises GroupNotFoundError."""
+        with pytest.raises(GroupNotFoundError):
+            add_member(db_with_schema, 999, "田中")
 
 
 class TestRemoveMember:
