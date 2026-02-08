@@ -44,22 +44,22 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] メンバー削除APIでgroup_id検証を追加
-- [ ] 代表語変更時のメンバー存在確認を追加
-- [ ] 代表語のメンバー削除を禁止またはグループ削除
-- [ ] issueテーブルに should_exclude, exclusion_reason カラムを追加
-- [ ] APIスキーマにvalidate_term_textバリデーションを追加
-- [ ] list_groups をJOINベースに最適化
-- [ ] 同義語ルックアップロジックを共通化
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] メンバー削除APIでgroup_id検証を追加
+- [x] 代表語変更時のメンバー存在確認を追加
+- [x] 代表語のメンバー削除を禁止またはグループ削除
+- [x] issueテーブルに should_exclude, exclusion_reason カラムを追加
+- [x] APIスキーマにvalidate_term_textバリデーションを追加
+- [x] list_groups をJOINベースに最適化
+- [x] 同義語ルックアップロジックを共通化
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## 設計
