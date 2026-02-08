@@ -520,6 +520,7 @@ class RunManager:
                 result = update_run_status_if_active(
                     conn, run_id, status, error_message
                 )
+                conn.commit()
                 self._log_update_result(run_id, status, result)
                 return True
             except Exception as e:
@@ -534,6 +535,7 @@ class RunManager:
                 result = update_run_status_if_active(
                     fallback_conn, run_id, status, error_message
                 )
+                fallback_conn.commit()
                 self._log_update_result(run_id, status, result)
                 return True
         except Exception as e:

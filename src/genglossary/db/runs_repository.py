@@ -274,7 +274,6 @@ def update_run_progress(
         """,
         (current, total, current_step, run_id),
     )
-    conn.commit()  # Commit immediately for real-time UI updates
 
 
 def _update_run_status_if_in_states(
@@ -342,7 +341,6 @@ def _update_run_status_if_in_states(
         )
 
     if cursor.rowcount > 0:
-        conn.commit()  # Commit immediately for real-time UI updates
         return RunUpdateResult.UPDATED
 
     # No rows updated - check if run exists to distinguish cases

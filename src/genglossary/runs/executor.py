@@ -315,6 +315,7 @@ class PipelineExecutor:
             )
             # Update database with current step and progress
             update_run_progress(conn, context.run_id, current, total, step_name)
+            conn.commit()
         return callback
 
     def execute(
