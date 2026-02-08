@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import PlainTextResponse
 
 from genglossary.api.dependencies import get_project_db
+from genglossary.api.routers._synonym_helpers import build_aliases_map
 from genglossary.api.schemas.refined_schemas import RefinedResponse
 from genglossary.db.refined_repository import get_refined_term, list_all_refined
 
@@ -27,7 +28,8 @@ async def list_refined(
         list[RefinedResponse]: List of all refined terms.
     """
     rows = list_all_refined(project_db)
-    return RefinedResponse.from_db_rows(rows)
+    aliases_map = build_aliases_map(project_db)
+    return RefinedResponse.from_db_rows(rows, aliases_map)
 
 
 @router.get("/export-md", response_class=PlainTextResponse)
@@ -45,6 +47,7 @@ async def export_markdown(
         PlainTextResponse: Markdown formatted glossary.
     """
     rows = list_all_refined(project_db)
+    aliases_map = build_aliases_map(project_db)
 
     # Generate Markdown
     lines = ["# 用語集\n"]
@@ -52,6 +55,11 @@ async def export_markdown(
     for row in rows:
         lines.append(f"## {row['term_name']}\n")
         lines.append(f"**定義**: {row['definition']}\n")
+
+        aliases = aliases_map.get(row["term_name"], [])
+        if aliases:
+            lines.append(f"**別名**: {'、'.join(aliases)}\n")
+
         lines.append(f"**信頼度**: {row['confidence']:.2f}\n")
 
         if row["occurrences"]:
@@ -92,4 +100,5 @@ async def get_refined_by_id(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Term {term_id} not found")
 
-    return RefinedResponse.from_db_row(row)
+    aliases_map = build_aliases_map(project_db)
+    return RefinedResponse.from_db_row(row, aliases_map)
