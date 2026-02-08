@@ -84,6 +84,12 @@ class Config(BaseSettings):
         description="Azure OpenAI API version (e.g., '2024-02-15-preview')",
     )
 
+    llm_debug: bool = Field(
+        default=False,
+        validation_alias="LLM_DEBUG",
+        description="Enable LLM debug logging of prompts and responses",
+    )
+
     input_dir: str = Field(
         default="./target_docs",
         validation_alias="GENGLOSSARY_INPUT_DIR",
