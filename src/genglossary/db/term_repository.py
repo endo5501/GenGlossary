@@ -58,14 +58,14 @@ def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     in terms_extracted. Required-only terms use negative IDs (negated
     terms_required.id) to distinguish them from extracted terms.
 
-    Both extracted and required terms in the excluded list are filtered out.
+    Excluded terms are filtered out, but required terms override exclusion
+    (a term in both required and excluded lists will be shown).
 
     Args:
         conn: Database connection.
 
     Returns:
-        list[sqlite3.Row]: List of all term records ordered by term_text,
-            excluding terms that are in the terms_excluded table.
+        list[sqlite3.Row]: List of all term records ordered by term_text.
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -75,15 +75,15 @@ def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
             SELECT 1 FROM terms_excluded
             WHERE terms_excluded.term_text = terms_extracted.term_text
         )
+        OR EXISTS (
+            SELECT 1 FROM terms_required
+            WHERE terms_required.term_text = terms_extracted.term_text
+        )
         UNION ALL
         SELECT -id, term_text, NULL AS category, '' AS user_notes FROM terms_required
         WHERE NOT EXISTS (
             SELECT 1 FROM terms_extracted
             WHERE terms_extracted.term_text = terms_required.term_text
-        )
-        AND NOT EXISTS (
-            SELECT 1 FROM terms_excluded
-            WHERE terms_excluded.term_text = terms_required.term_text
         )
         ORDER BY term_text
         """
