@@ -28,23 +28,6 @@ from genglossary.models.project import ProjectStatus
 console = Console()
 
 
-def _get_registry_conn(registry_path: str | None):
-    """Get registry database connection.
-
-    Args:
-        registry_path: Optional path to registry database.
-                      If None, uses default path.
-
-    Returns:
-        SQLite connection to registry database.
-    """
-    if registry_path is None:
-        registry_path = str(get_default_registry_path())
-
-    conn = get_registry_connection(registry_path)
-    initialize_registry(conn)
-    return conn
-
 
 def _get_projects_dir(registry: Path | None) -> Path:
     """Get projects directory path based on registry location.

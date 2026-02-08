@@ -32,7 +32,7 @@ class Project(BaseModel):
     Attributes:
         id: Unique project identifier (auto-generated).
         name: Human-readable project name (must be unique).
-        doc_root: Absolute path to the document directory.
+        doc_root: Path to the document directory (empty string when documents are stored in DB).
         db_path: Absolute path to the project's database file.
         llm_provider: LLM provider name (e.g., "ollama", "openai").
         llm_model: LLM model name (e.g., "llama3.2", "gpt-4").
