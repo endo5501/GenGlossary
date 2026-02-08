@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from genglossary.db.connection import get_connection, transaction
+from genglossary.db.connection import get_connection, immediate_transaction, transaction
 
 
 class TestGetConnection:
@@ -265,3 +265,68 @@ class TestNestedTransaction:
         assert len(rows) == 2
         assert rows[0]["name"] == "level1"
         assert rows[1]["name"] == "after_middle"
+
+
+class TestImmediateTransaction:
+    """Test immediate_transaction context manager."""
+
+    def test_immediate_transaction_commits_on_success(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """成功時にコミットされる"""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+
+        with immediate_transaction(in_memory_db):
+            in_memory_db.execute("INSERT INTO test VALUES (1, 'test')")
+
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test")
+        assert cursor.fetchone()[0] == 1
+
+    def test_immediate_transaction_rollback_on_exception(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """例外発生時にロールバックされる"""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER, name TEXT)")
+        in_memory_db.commit()
+
+        with pytest.raises(ValueError):
+            with immediate_transaction(in_memory_db):
+                in_memory_db.execute("INSERT INTO test VALUES (1, 'test')")
+                raise ValueError("Test error")
+
+        cursor = in_memory_db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test")
+        assert cursor.fetchone()[0] == 0
+
+    def test_immediate_transaction_re_raises_exception(
+        self, in_memory_db: sqlite3.Connection
+    ) -> None:
+        """元の例外が再送出される"""
+        in_memory_db.execute("CREATE TABLE test (id INTEGER)")
+
+        with pytest.raises(RuntimeError, match="Original error"):
+            with immediate_transaction(in_memory_db):
+                raise RuntimeError("Original error")
+
+    def test_immediate_transaction_acquires_write_lock(
+        self, tmp_path: Path
+    ) -> None:
+        """BEGIN IMMEDIATEによりDBレベルの書き込みロックが取得される"""
+        db_path = str(tmp_path / "lock_test.db")
+        conn1 = get_connection(db_path)
+        conn1.execute("CREATE TABLE test (id INTEGER)")
+        conn1.commit()
+
+        # conn2 has zero busy_timeout so it fails immediately if locked
+        conn2 = get_connection(db_path)
+        conn2.execute("PRAGMA busy_timeout = 0")
+
+        with immediate_transaction(conn1):
+            # conn1 holds write lock; conn2 should fail to acquire one
+            with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+                with immediate_transaction(conn2):
+                    pass  # pragma: no cover
+
+        conn1.close()
+        conn2.close()
