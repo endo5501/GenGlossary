@@ -4,7 +4,7 @@ tags: [improvement, backend, security]
 description: "Sanitize error messages before DB persistence and API exposure"
 created_at: "2026-02-08T09:44:48Z"
 started_at: 2026-02-08T10:37:58Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T11:01:32Z # Do not modify manually
 ---
 
 # Sanitize error messages before DB persistence and API exposure
