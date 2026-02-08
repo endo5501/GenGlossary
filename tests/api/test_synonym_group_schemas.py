@@ -27,15 +27,15 @@ class TestSynonymGroupCreateRequestValidation:
 
     def test_strips_whitespace_from_primary_term(self) -> None:
         req = SynonymGroupCreateRequest(
-            primary_term_text="  田中太郎  ", member_texts=["田中"]
+            primary_term_text="  田中太郎  ", member_texts=["田中太郎", "田中"]
         )
         assert req.primary_term_text == "田中太郎"
 
     def test_strips_whitespace_from_member_texts(self) -> None:
         req = SynonymGroupCreateRequest(
-            primary_term_text="田中太郎", member_texts=["  田中  "]
+            primary_term_text="田中太郎", member_texts=["  田中太郎  ", "  田中  "]
         )
-        assert req.member_texts == ["田中"]
+        assert req.member_texts == ["田中太郎", "田中"]
 
 
 class TestSynonymGroupUpdateRequestValidation:
