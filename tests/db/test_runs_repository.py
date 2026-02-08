@@ -1369,14 +1369,20 @@ class TestRepositoryFunctionsDoNotCommit:
         yield connection
         connection.close()
 
+    def _setup_running_run(self, conn: sqlite3.Connection) -> int:
+        """Create a run in 'running' state and commit setup data."""
+        run_id = create_run(conn, scope="full")
+        update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
+        conn.commit()  # Commit setup so reader_conn can see initial state
+        return run_id
+
     def test_update_run_status_if_active_does_not_commit(
         self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
     ) -> None:
         """update_run_status_if_activeはconn.commit()を呼ばない"""
         from genglossary.db.runs_repository import update_run_status_if_active
 
-        run_id = create_run(conn, scope="full")
-        update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
+        run_id = self._setup_running_run(conn)
 
         result = update_run_status_if_active(conn, run_id, "completed")
 
@@ -1389,8 +1395,7 @@ class TestRepositoryFunctionsDoNotCommit:
         self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
     ) -> None:
         """update_run_status_if_runningはconn.commit()を呼ばない"""
-        run_id = create_run(conn, scope="full")
-        update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
+        run_id = self._setup_running_run(conn)
 
         result = update_run_status_if_running(conn, run_id, "completed")
 
@@ -1402,8 +1407,7 @@ class TestRepositoryFunctionsDoNotCommit:
         self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
     ) -> None:
         """update_run_progressはconn.commit()を呼ばない"""
-        run_id = create_run(conn, scope="full")
-        update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
+        run_id = self._setup_running_run(conn)
 
         update_run_progress(conn, run_id, 1, 4, "extract")
 
@@ -1416,8 +1420,7 @@ class TestRepositoryFunctionsDoNotCommit:
         self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
     ) -> None:
         """cancel_runはconn.commit()を呼ばない"""
-        run_id = create_run(conn, scope="full")
-        update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
+        run_id = self._setup_running_run(conn)
 
         result = cancel_run(conn, run_id)
 
@@ -1429,8 +1432,7 @@ class TestRepositoryFunctionsDoNotCommit:
         self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
     ) -> None:
         """fail_run_if_not_terminalはconn.commit()を呼ばない"""
-        run_id = create_run(conn, scope="full")
-        update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
+        run_id = self._setup_running_run(conn)
 
         result = fail_run_if_not_terminal(conn, run_id, "error")
 
