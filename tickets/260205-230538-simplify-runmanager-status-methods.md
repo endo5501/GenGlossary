@@ -3,7 +3,7 @@ priority: 3
 tags: [backend, refactoring]
 description: "Simplify RunManager status update methods and rename ALREADY_TERMINAL enum"
 created_at: "2026-02-05T23:05:38Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-08T11:27:02Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -22,29 +22,18 @@ Code-simplifier review identified opportunities to reduce redundancy in RunManag
 
 ## Proposed Changes
 
-### 1. Consolidate status update methods
+### 1. Rename ALREADY_TERMINAL enum value → NOT_IN_EXPECTED_STATE
 
-Merge `_try_status_with_fallback` and `_update_failed_status` into `_try_update_status`:
-- Make `_try_update_status` accept `conn: sqlite3.Connection | None`
-- Add fallback logic directly into `_try_update_status`
-- Remove lambda function wrappers
+`RunUpdateResult.ALREADY_TERMINAL` は `update_run_status_if_running` で `pending`（非terminal）状態にも返されるため、名前が不正確。`NOT_IN_EXPECTED_STATE` へ改名する。
 
-### 2. Extract error broadcast helper
+対象ファイル:
+- `src/genglossary/db/runs_repository.py`: enum定義、docstring、戻り値コメント
+- `src/genglossary/runs/manager.py`: `_log_update_result` での比較、ログメッセージ
+- `tests/db/test_runs_repository.py`: テストでの参照
+- `tests/runs/test_manager.py`: テストでの参照
 
-Create `_broadcast_error` helper to reduce duplication:
-```python
-def _broadcast_error(
-    self,
-    run_id: int,
-    error_message: str,
-    error_traceback: str,
-    log_to_logger: bool = True,
-) -> None:
-```
+### 2. Simplify register_subscriber with setdefault
 
-### 3. Use setdefault for dict operations
-
-Simplify `register_subscriber`:
 ```python
 # Before
 if run_id not in self._subscribers:
@@ -55,20 +44,18 @@ self._subscribers[run_id].add(queue)
 self._subscribers.setdefault(run_id, set()).add(queue)
 ```
 
-### 4. Rename ALREADY_TERMINAL enum value
+### Previously completed (no longer needed)
 
-`RunUpdateResult.ALREADY_TERMINAL` は `update_run_status_if_running` で `pending`（非terminal）状態にも返されるため、名前が不正確。`NOT_IN_EXPECTED_STATE` や `PRECONDITION_FAILED` 等へ改名する。
+- ~~Consolidate status update methods~~ → `_try_update_status` に統合済み
+- ~~Extract error broadcast helper~~ → 不要（統合済み）
 
 ## Tasks
 
-- [ ] Rename `ALREADY_TERMINAL` to a more accurate name (e.g. `NOT_IN_EXPECTED_STATE`)
-- [ ] Update all references in production code and tests
-- [ ] Refactor `_try_update_status` to include fallback logic
-- [ ] Remove `_try_status_with_fallback` method
-- [ ] Remove `_update_failed_status` method
-- [ ] Create `_broadcast_error` helper
+- [ ] Rename `ALREADY_TERMINAL` to `NOT_IN_EXPECTED_STATE` in enum definition and all docstrings
+- [ ] Update all references in production code
+- [ ] Update all references in tests
+- [ ] Update log message in `_log_update_result`
 - [ ] Simplify `register_subscriber` with setdefault
-- [ ] Update all callers
 - [ ] Commit
 - [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
