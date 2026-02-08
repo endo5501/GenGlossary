@@ -107,6 +107,27 @@ def transaction(conn: sqlite3.Connection) -> Iterator[None]:
     except Exception:
         rollback_fn()
         raise
+
+@contextmanager
+def immediate_transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """BEGIN IMMEDIATEトランザクションのコンテキストマネージャー
+
+    トランザクション開始時にDBレベルの書き込みロックを取得し、
+    他の接続からの同時書き込みトランザクションを防止する。
+    check-then-actパターンのクロスプロセス原子性を保証。
+
+    transaction()とは異なり、ネストはサポートしない。
+
+    Raises:
+        sqlite3.OperationalError: busy_timeout以内にロック取得できない場合
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 ```
 
 ## db_helpers.py
@@ -892,6 +913,7 @@ def clone_project(
 - 書き込み操作には`transaction()`コンテキストマネージャを使用
 - 複数の操作を1つのトランザクションにまとめて原子性を保証
 - **ネストされたトランザクションをサポート**（SQLite SAVEPOINTを使用）
+- **クロスプロセス排他制御**には`immediate_transaction()`を使用（BEGIN IMMEDIATE）
 
 ```python
 # 正しいパターン: 呼び出し元がトランザクションを管理
