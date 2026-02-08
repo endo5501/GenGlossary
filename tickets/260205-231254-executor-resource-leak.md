@@ -3,7 +3,7 @@ priority: 2
 tags: [backend, bug-prevention]
 description: "Close PipelineExecutor on completion/failure to prevent resource leak"
 created_at: "2026-02-05T23:12:54Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-08T10:06:34Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -57,21 +57,26 @@ Or use a context manager if `PipelineExecutor` supports it.
 
 ## Tasks
 
-- [ ] Review `PipelineExecutor` implementation to confirm `close()` behavior
-- [ ] Add `executor.close()` call in `_execute_run` finally block
-- [ ] Consider making `PipelineExecutor` a context manager
-- [ ] Add test for proper resource cleanup
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Review `PipelineExecutor` implementation to confirm `close()` behavior
+- [x] Add `executor.close()` call in `_execute_run` finally block
+- [x] Consider making `PipelineExecutor` a context manager → YAGNI（使用箇所が1箇所のみ）
+- [x] Add test for proper resource cleanup (5 tests added)
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions) → 0 errors
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions) → 1475 passed
+- [x] Get developer approval before closing
 
 ## Notes
 
 Identified by codex MCP during review of ticket 260205-224243.
-Low impact if `PipelineExecutor.execute()` already closes resources internally.
+
+### Review findings addressed
+- `executor.close()` exception safety: wrapped in try/except to prevent status masking
+- `OpenAICompatibleClient` missing `close()`: created ticket 260208-101337-openai-client-missing-close-method
+- Context manager not needed (YAGNI): single usage site, finally block suffices
+- Double close (cancel_run + finally): intentional for immediate cancellation, httpx close() is idempotent
