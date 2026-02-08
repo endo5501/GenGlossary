@@ -299,7 +299,9 @@ class RunManager:
         self._thread: Thread | None = None
         self._cancel_events: dict[int, Event] = {}  # Per-run cancellation
         self._cancel_events_lock = Lock()
-        self._start_run_lock = Lock()  # Synchronize start_run calls
+        # In-process lock to avoid unnecessary SQLITE_BUSY contention.
+        # Cross-process safety is provided by immediate_transaction (BEGIN IMMEDIATE).
+        self._start_run_lock = Lock()
         self._log_queue: Queue = Queue()
         self._completed_runs: dict[int, dict] = {}  # Track completed runs for late subscribers
 
@@ -320,17 +322,21 @@ class RunManager:
         この順序により、以下のレースコンディションを防止:
         - 並行する start_run 呼び出し
         - start_run と cancel_run の競合
+
+        排他制御の2層構造:
+        - _start_run_lock: インプロセスの軽量最適化（SQLITE_BUSY回避）
+        - immediate_transaction: DBレベルの書き込みロック（クロスプロセス安全性）
         """
         # Synchronize to prevent race conditions between concurrent start_run calls
         with self._start_run_lock:
-            # Check if a run is already active and create run record atomically
             with database_connection(self.db_path) as conn:
-                active_run = get_active_run(conn)
-                if active_run is not None:
-                    raise RuntimeError(f"Run already running: {active_run['id']}")
+                # BEGIN IMMEDIATE でDBレベルの書き込みロックを取得し、
+                # アクティブrun確認と新run作成をアトミックに実行
+                with immediate_transaction(conn):
+                    active_run = get_active_run(conn)
+                    if active_run is not None:
+                        raise RuntimeError(f"Run already running: {active_run['id']}")
 
-                # Create run record atomically within the same lock
-                with transaction(conn):
                     run_id = create_run(conn, scope=scope)
 
             # Create cancel event within the same lock to ensure consistency
