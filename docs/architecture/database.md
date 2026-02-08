@@ -1,6 +1,11 @@
-# データベース層 (Schema v8)
+# データベース層 (Schema v9)
 
 **役割**: SQLiteへのデータ永続化とCRUD操作
+
+**Schema v9の主な変更点**:
+- `glossary_issues`テーブルに`should_exclude`カラムを追加（除外フラグ）
+- `glossary_issues`テーブルに`exclusion_reason`カラムを追加（除外理由）
+- review→refine分離実行時にshould_exclude情報が保持される
 
 **Schema v8の主な変更点**:
 - `term_synonym_groups`テーブルを追加（同義語グループ管理）
@@ -134,10 +139,10 @@ def batch_insert(
 
 ## schema.py
 ```python
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 def initialize_db(conn: sqlite3.Connection) -> None:
-    """データベーススキーマを初期化 (Schema v8)"""
+    """データベーススキーマを初期化 (Schema v9)"""
     # テーブル作成: metadata, documents, terms_extracted,
     # glossary_provisional, glossary_issues, glossary_refined, runs, terms_excluded, terms_required,
     # term_synonym_groups, term_synonym_members

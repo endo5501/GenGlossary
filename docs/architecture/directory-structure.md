@@ -10,14 +10,15 @@ GenGlossary/
 │   │   ├── term.py              # Term, TermOccurrence
 │   │   ├── glossary.py          # Glossary, GlossaryIssue
 │   │   ├── project.py           # Project, ProjectStatus
-│   │   └── term_validator.py    # 共通バリデータ (ExcludedTerm/RequiredTerm用)
+│   │   ├── term_validator.py    # 共通バリデータ (ExcludedTerm/RequiredTerm用)
+│   │   └── synonym.py          # SynonymGroup, SynonymMember
 │   ├── llm/                      # LLMクライアント
 │   │   ├── __init__.py
 │   │   ├── base.py              # BaseLLMClient
 │   │   ├── ollama_client.py     # OllamaClient
 │   │   ├── openai_compatible_client.py  # OpenAICompatibleClient
 │   │   └── factory.py           # LLMクライアントファクトリ
-│   ├── db/                       # データベース層 (Schema v3)
+│   ├── db/                       # データベース層 (Schema v9)
 │   │   ├── __init__.py
 │   │   ├── connection.py        # SQLite接続管理
 │   │   ├── schema.py            # スキーマ定義・初期化
@@ -33,6 +34,7 @@ GenGlossary/
 │   │   ├── issue_repository.py  # 精査結果CRUD
 │   │   ├── refined_repository.py     # 最終用語集CRUD
 │   │   ├── runs_repository.py   # Run管理CRUD (Schema v3で追加)
+│   │   ├── synonym_repository.py # 同義語グループCRUD
 │   │   ├── registry_connection.py    # レジストリDB接続管理
 │   │   ├── registry_schema.py   # レジストリスキーマ定義
 │   │   └── project_repository.py     # プロジェクトCRUD
@@ -45,6 +47,7 @@ GenGlossary/
 │   ├── glossary_generator.py     # ステップ2: 用語集生成
 │   ├── glossary_reviewer.py      # ステップ3: 精査
 │   ├── glossary_refiner.py       # ステップ4: 改善
+│   ├── synonym_utils.py          # 同義語ルックアップ共通ユーティリティ
 │   ├── output/
 │   │   ├── __init__.py
 │   │   └── markdown_writer.py    # Markdown出力
@@ -63,7 +66,8 @@ GenGlossary/
 │   │   │   ├── issue_schemas.py  # Issues用スキーマ
 │   │   │   ├── refined_schemas.py      # Refined用スキーマ
 │   │   │   ├── file_schemas.py   # Files用スキーマ
-│   │   │   └── run_schemas.py    # Runs用スキーマ (Schema v3)
+│   │   │   ├── run_schemas.py    # Runs用スキーマ (Schema v3)
+│   │   │   └── synonym_group_schemas.py # 同義語グループスキーマ
 │   │   ├── middleware/
 │   │   │   ├── __init__.py
 │   │   │   ├── request_id.py    # リクエストIDミドルウェア
@@ -76,7 +80,8 @@ GenGlossary/
 │   │       ├── issues.py        # /api/projects/{project_id}/issues
 │   │       ├── refined.py       # /api/projects/{project_id}/refined
 │   │       ├── files.py         # /api/projects/{project_id}/files
-│   │       └── runs.py          # /api/projects/{project_id}/runs (Schema v3)
+│   │       ├── runs.py          # /api/projects/{project_id}/runs (Schema v3)
+│   │       └── synonym_groups.py # /api/projects/{project_id}/synonym-groups
 │   ├── config.py                 # 設定管理
 │   ├── utils/                    # ユーティリティモジュール
 │   │   ├── __init__.py
@@ -125,7 +130,8 @@ GenGlossary/
 │   │   ├── test_refined_repository.py
 │   │   ├── test_runs_repository.py  # Run管理テスト (20 tests, Schema v3)
 │   │   ├── test_registry_schema.py
-│   │   └── test_project_repository.py
+│   │   ├── test_project_repository.py
+│   │   └── test_synonym_repository.py
 │   ├── runs/                     # Run管理テスト (Schema v3)
 │   │   ├── test_manager.py      # RunManagerテスト (13 tests)
 │   │   └── test_executor.py     # PipelineExecutorテスト (5 tests)
