@@ -73,10 +73,10 @@ class Project(BaseModel):
             raise ValueError("Project name cannot be empty")
         return stripped
 
-    @field_validator("doc_root", "db_path")
+    @field_validator("db_path")
     @classmethod
     def validate_non_empty_path(cls, v: str) -> str:
-        """Validate that path is not empty.
+        """Validate that db_path is not empty.
 
         Args:
             v: The path to validate.
