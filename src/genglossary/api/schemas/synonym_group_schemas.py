@@ -1,6 +1,8 @@
 """Schemas for Synonym Groups API."""
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Self
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from genglossary.models.synonym import SynonymGroup, SynonymMember
 from genglossary.models.term_validator import validate_term_text
@@ -60,6 +62,14 @@ class SynonymGroupCreateRequest(BaseModel):
     @classmethod
     def validate_members(cls, v: list[str]) -> list[str]:
         return [validate_term_text(t) for t in v]
+
+    @model_validator(mode="after")
+    def validate_primary_in_members(self) -> Self:
+        if self.primary_term_text not in self.member_texts:
+            raise ValueError(
+                "primary_term_text must be included in member_texts"
+            )
+        return self
 
 
 class SynonymGroupUpdateRequest(BaseModel):

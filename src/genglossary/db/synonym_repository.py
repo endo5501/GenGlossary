@@ -6,6 +6,14 @@ from typing import cast
 from genglossary.models.synonym import SynonymGroup, SynonymMember
 
 
+class GroupNotFoundError(Exception):
+    """Raised when a synonym group is not found."""
+
+    def __init__(self, group_id: int) -> None:
+        super().__init__(f"Synonym group {group_id} not found")
+        self.group_id = group_id
+
+
 def create_group(
     conn: sqlite3.Connection,
     primary_term_text: str,
@@ -71,9 +79,15 @@ def add_member(
         The ID of the created member.
 
     Raises:
+        GroupNotFoundError: If the group does not exist.
         sqlite3.IntegrityError: If the term already belongs to a group.
     """
     cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM term_synonym_groups WHERE id = ?", (group_id,)
+    )
+    if cursor.fetchone() is None:
+        raise GroupNotFoundError(group_id)
     cursor.execute(
         "INSERT INTO term_synonym_members (group_id, term_text) VALUES (?, ?)",
         (group_id, term_text),
