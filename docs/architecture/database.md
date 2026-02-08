@@ -285,7 +285,8 @@ def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     - terms_extractedに既にある必須用語は重複しない
     - 必須用語のみの項目は負のID（-terms_required.id）で区別
     - 必須用語のみの項目はcategory=NULL, user_notes=''
-    - terms_excludedテーブルに登録された用語は両ソースとも除外
+    - terms_excludedテーブルに登録された用語は除外（ただし必須用語は除外されない）
+    - 必須用語は除外用語より優先される（両方に登録されている場合は表示される）
     - 結果はterm_text順でソート
     """
     ...

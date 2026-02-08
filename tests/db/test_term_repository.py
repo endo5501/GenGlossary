@@ -525,20 +525,37 @@ class TestListAllTermsIncludesRequiredTerms:
         matching = [t for t in terms if t["term_text"] == "共通用語"]
         assert matching[0]["id"] > 0
 
-    def test_required_term_excluded_when_in_excluded_list(
+    def test_required_term_overrides_excluded(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        """Required terms in the excluded list should not appear."""
+        """Required terms should appear even if also in excluded list."""
         from genglossary.db.excluded_term_repository import add_excluded_term
         from genglossary.db.required_term_repository import add_required_term
 
-        add_required_term(db_with_schema, "除外される必須用語", "manual")
-        add_excluded_term(db_with_schema, "除外される必須用語", "manual")
+        add_required_term(db_with_schema, "必須かつ除外の用語", "manual")
+        add_excluded_term(db_with_schema, "必須かつ除外の用語", "manual")
 
         terms = list_all_terms(db_with_schema)
 
         term_texts = [t["term_text"] for t in terms]
-        assert "除外される必須用語" not in term_texts
+        assert "必須かつ除外の用語" in term_texts
+
+    def test_extracted_required_and_excluded_uses_positive_id(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Term in all three tables should appear once with extracted (positive) ID."""
+        from genglossary.db.excluded_term_repository import add_excluded_term
+        from genglossary.db.required_term_repository import add_required_term
+
+        create_term(db_with_schema, term_text="三重登録用語", category="technical")
+        add_required_term(db_with_schema, "三重登録用語", "manual")
+        add_excluded_term(db_with_schema, "三重登録用語", "manual")
+
+        terms = list_all_terms(db_with_schema)
+
+        matching = [t for t in terms if t["term_text"] == "三重登録用語"]
+        assert len(matching) == 1
+        assert matching[0]["id"] > 0  # Should use extracted (positive) ID
 
     def test_mixed_extracted_and_required_terms(
         self, db_with_schema: sqlite3.Connection
@@ -568,9 +585,9 @@ class TestListAllTermsIncludesRequiredTerms:
         assert "共通用語" in term_texts
         assert "必須用語のみ" in term_texts
         assert "除外される抽出用語" not in term_texts
-        assert "除外される必須用語" not in term_texts
+        assert "除外される必須用語" in term_texts  # Required overrides excluded
         assert term_texts.count("共通用語") == 1
-        assert len(terms) == 3
+        assert len(terms) == 4
 
 
 class TestBackupRestoreUserNotes:
