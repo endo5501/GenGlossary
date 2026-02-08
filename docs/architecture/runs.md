@@ -224,6 +224,37 @@ def fail_run_if_not_terminal(
     return update_run_status_if_active(conn, run_id, "failed", error_message)
 ```
 
+## error_sanitizer.py (エラーメッセージのサニタイズ)
+
+RunManager が DB に保存するエラーメッセージは `sanitize_error_message()` でサニタイズされます。API レスポンス経由でファイルパスやホスト名等の機密情報が漏洩するリスクを防止します。
+
+```python
+def sanitize_error_message(
+    error: Exception,
+    prefix: str | None = None,
+    max_length: int = 1024,
+) -> str:
+    """例外を安全なエラーメッセージ文字列に変換"""
+```
+
+**サニタイズ処理（順に適用）:**
+1. UTF-8 正規化（不正バイトを置換文字に変換）
+2. 制御文字の除去（改行・タブは保持）
+3. 機密パスのマスキング（Unix/Windows パスを `<path>` に置換、URL は保持）
+4. 長さ制限（デフォルト 1024 文字、超過時は `...(truncated)` を付加）
+
+**出力フォーマット:**
+- prefix あり + メッセージあり: `"{prefix}: {msg} ({ExceptionClass})"`
+- prefix あり + メッセージ空: `"{prefix} ({ExceptionClass})"`
+- prefix なし + メッセージあり: `"{msg} ({ExceptionClass})"`
+- prefix なし + メッセージ空: `"{ExceptionClass}"`
+
+**パスマスキングルール:**
+- URL を先にマッチし保持（alternation pattern）、次にパスをマスク
+- Unix パス: `/home/...`, `/Users/...`, `/var/...`, `/tmp/...`, `/etc/...`, `/opt/...`（2+セグメント）
+- Windows パス: `C:\...`, `d:\...` 等（大文字・小文字対応）
+- 単一セグメントのパス（`/tmp` 単体など）はマスクしない
+
 ## manager.py (RunManager - スレッド管理)
 
 ```python
@@ -1179,6 +1210,13 @@ get_run_manager(db_path) → RunManager
 - 各関数の status validation テスト
 - error_message 自動クリアテスト
 
+**tests/runs/test_error_sanitizer.py (28 tests)**
+- 空メッセージフォールバック（例外クラス名へのフォールバック）
+- UTF-8正規化、制御文字除去
+- パスマスキング（Unix/Windows、URL除外、小文字ドライブレター）
+- 長さ制限（デフォルト1024文字、truncation suffix 境界ケース）
+- 複合シナリオ（パス+制御文字、prefix+パスマスキング）
+
 **tests/runs/test_manager.py (87 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - start_run synchronization（並行呼び出しの競合状態防止）
@@ -1220,4 +1258,4 @@ get_run_manager(db_path) → RunManager
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 265 tests** (Repository 87 + Manager 87 + Executor 81 + API 10)
+**合計: 293 tests** (Repository 87 + ErrorSanitizer 28 + Manager 87 + Executor 81 + API 10)
