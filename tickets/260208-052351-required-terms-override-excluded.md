@@ -4,7 +4,7 @@ tags: [bugfix, backend]
 description: "Required terms should override excluded terms in term list and extraction"
 created_at: "2026-02-08T05:23:51Z"
 started_at: 2026-02-08T07:22:03Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T07:46:16Z # Do not modify manually
 ---
 
 # 必須用語が除外用語より優先されるようにする
