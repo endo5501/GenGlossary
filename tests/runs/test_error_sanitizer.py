@@ -137,6 +137,19 @@ class TestSanitizeErrorMessage:
         result = sanitize_error_message(error)
         assert "/tmp" in result
 
+    def test_windows_lowercase_drive_letter_masked(self):
+        """Lowercase Windows drive letters should also be masked."""
+        error = RuntimeError(r"File: c:\users\john\project\file.py")
+        result = sanitize_error_message(error)
+        assert r"c:\users" not in result
+        assert "<path>" in result
+
+    def test_url_with_sensitive_path_prefix_not_masked(self):
+        """URLs containing /home/ or /Users/ in path should not be masked."""
+        error = RuntimeError("Error at https://host/home/user/data")
+        result = sanitize_error_message(error)
+        assert "https://host/home/user/data" in result
+
     # --- Length truncation ---
 
     def test_message_within_limit_not_truncated(self):
@@ -166,6 +179,13 @@ class TestSanitizeErrorMessage:
         error = RuntimeError(long_msg)
         result = sanitize_error_message(error)
         assert len(result) <= 1024
+
+    def test_max_length_smaller_than_truncation_suffix(self):
+        """When max_length is smaller than truncation suffix, still respect limit."""
+        long_msg = "x" * 100
+        error = RuntimeError(long_msg)
+        result = sanitize_error_message(error, max_length=5)
+        assert len(result) <= 5
 
     # --- Combined scenarios ---
 
