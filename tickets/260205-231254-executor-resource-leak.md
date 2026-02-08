@@ -4,7 +4,7 @@ tags: [backend, bug-prevention]
 description: "Close PipelineExecutor on completion/failure to prevent resource leak"
 created_at: "2026-02-05T23:12:54Z"
 started_at: 2026-02-08T10:06:34Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T10:16:44Z # Do not modify manually
 ---
 
 # Close PipelineExecutor on completion/failure
