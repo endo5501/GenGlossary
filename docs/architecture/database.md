@@ -696,8 +696,14 @@ def create_provisional_terms_batch(
 ```python
 from genglossary.models.synonym import SynonymGroup, SynonymMember
 
+class GroupNotFoundError(Exception):
+    """指定されたグループが存在しない場合に発生"""
+    ...
+
 def create_group(conn, primary_term_text, member_texts) -> int:
-    """同義語グループを作成（メンバー含む）"""
+    """同義語グループを作成（メンバー含む）
+    Raises: ValueError (primary_term_textがmember_textsに含まれない場合)
+            IntegrityError (メンバーが他グループに所属済みの場合)"""
     ...
 
 def delete_group(conn, group_id) -> bool:
@@ -705,7 +711,9 @@ def delete_group(conn, group_id) -> bool:
     ...
 
 def add_member(conn, group_id, term_text) -> int:
-    """グループにメンバーを追加"""
+    """グループにメンバーを追加
+    Raises: GroupNotFoundError (グループが存在しない場合)
+            IntegrityError (メンバーが他グループに所属済みの場合)"""
     ...
 
 def remove_member(conn, member_id) -> bool:
