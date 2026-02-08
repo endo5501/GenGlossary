@@ -1482,7 +1482,11 @@ class TestRunManagerStateConsistency:
             assert row["status"] == "failed", (
                 f"Expected status 'failed' but got '{row['status']}'"
             )
-            assert "Failed to start execution thread" in (row["error_message"] or "")
+            error_message = row["error_message"] or ""
+            assert "Failed to start execution thread" in error_message
+            assert "Failed to start thread" in error_message, (
+                "Original exception details should be included in error_message"
+            )
 
     def test_thread_start_failure_reraises_exception(
         self, manager: RunManager
