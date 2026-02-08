@@ -88,9 +88,15 @@ async def update_synonym_group(
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> SynonymGroupResponse:
     """Update the primary term of a synonym group."""
-    with transaction(project_db):
-        updated = update_primary_term(
-            project_db, group_id, request.primary_term_text
+    try:
+        with transaction(project_db):
+            updated = update_primary_term(
+                project_db, group_id, request.primary_term_text
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
 
     if not updated:

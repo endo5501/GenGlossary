@@ -126,8 +126,24 @@ def update_primary_term(
 
     Returns:
         True if the group was updated, False if not found.
+
+    Raises:
+        ValueError: If new_primary_text is not a member of the group.
     """
     cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id FROM term_synonym_groups WHERE id = ?", (group_id,)
+    )
+    if cursor.fetchone() is None:
+        return False
+    cursor.execute(
+        "SELECT id FROM term_synonym_members WHERE group_id = ? AND term_text = ?",
+        (group_id, new_primary_text),
+    )
+    if cursor.fetchone() is None:
+        raise ValueError(
+            f"'{new_primary_text}' is not a member of group {group_id}"
+        )
     cursor.execute(
         "UPDATE term_synonym_groups SET primary_term_text = ? WHERE id = ?",
         (new_primary_text, group_id),
