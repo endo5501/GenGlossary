@@ -93,21 +93,21 @@ rm -rf ~/.genglossary
 
 ## Tasks
 
-- [ ] テスト隔離: ルート `tests/conftest.py` に `isolate_data_dir` autouse フィクスチャ追加
-- [ ] テスト隔離: `tests/api/conftest.py` の `isolate_registry` 削除
-- [ ] テスト実行して既存テストが全パスすることを確認
-- [ ] CLI 統一: `cli_project.py` の `_get_project_db_path()` をフラット方式に変更
-- [ ] API 廃止: `_generate_doc_root()`, `_cleanup_doc_root()` 削除、`doc_root` 未指定時は空文字
-- [ ] テスト実行して全パスすることを確認
-- [ ] クリーンアップ: `~/.genglossary/` 削除
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] テスト隔離: ルート `tests/conftest.py` に `isolate_data_dir` autouse フィクスチャ追加
+- [x] テスト隔離: `tests/api/conftest.py` の `isolate_registry` 削除
+- [x] テスト実行して既存テストが全パスすることを確認
+- [x] CLI 統一: `cli_project.py` の `_get_project_db_path()` をフラット方式に変更
+- [x] API 廃止: `_generate_doc_root()`, `_cleanup_doc_root()` 削除、`doc_root` 未指定時は空文字
+- [x] テスト実行して全パスすることを確認
+- [x] クリーンアップ: `~/.genglossary/` 削除
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
