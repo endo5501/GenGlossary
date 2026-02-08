@@ -316,6 +316,26 @@ class TestListGroups:
         assert "田中部長" in member_texts
 
 
+    def test_list_groups_with_group_having_no_members(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test list_groups handles groups with no members (edge case for JOIN)."""
+        # Create group, then delete all members directly
+        group_id = create_group(
+            db_with_schema, "田中太郎", ["田中太郎"]
+        )
+        cursor = db_with_schema.cursor()
+        cursor.execute(
+            "DELETE FROM term_synonym_members WHERE group_id = ?", (group_id,)
+        )
+
+        groups = list_groups(db_with_schema)
+
+        assert len(groups) == 1
+        assert groups[0].primary_term_text == "田中太郎"
+        assert groups[0].members == []
+
+
 class TestGetSynonymsForTerm:
     """Test get_synonyms_for_term function."""
 
