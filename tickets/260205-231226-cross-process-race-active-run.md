@@ -83,17 +83,17 @@ def immediate_transaction(conn: sqlite3.Connection) -> Iterator[None]:
 ## Tasks
 
 - [x] Choose solution approach
-- [ ] Add `immediate_transaction` to `connection.py` with tests (TDD)
-- [ ] Update `start_run` to use `immediate_transaction`
-- [ ] Update `_start_run_lock` comment
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Add `immediate_transaction` to `connection.py` with tests (TDD)
+- [x] Update `start_run` to use `immediate_transaction`
+- [x] Update `_start_run_lock` comment
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 ## Notes
