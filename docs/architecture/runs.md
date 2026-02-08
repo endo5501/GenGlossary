@@ -131,6 +131,8 @@ def update_run_status_if_active(
     終了状態（completed, cancelled, failed）のRunは更新しない。
     cancel_run, fail_run_if_not_terminal の共通ロジックを統合した汎用関数。
 
+    注: この関数はconn.commit()を呼ばない。呼び出し元がコミットの責任を持つ。
+
     Status Validation:
         TERMINAL_STATUSES のみ受け付ける（completed, failed, cancelled）。
         pending や running は ValueError を発生。finished_at を自動設定するため、
@@ -475,6 +477,8 @@ class RunManager:
 
         update_run_status_if_active を使用し、プライマリ接続で失敗した場合は
         新しいフォールバック接続で再試行。conn=None の場合は直接フォールバック。
+
+        Repository関数はcommitしないため、本メソッドが更新後にconn.commit()を呼ぶ。
 
         以前の _try_status_with_fallback と _update_failed_status を統合。
         lambda式によるコールバックパターンを排除し、直接呼び出しに簡素化。
