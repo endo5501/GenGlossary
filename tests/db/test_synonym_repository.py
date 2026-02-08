@@ -236,6 +236,17 @@ class TestUpdatePrimaryTerm:
         result = update_primary_term(db_with_schema, 999, "田中")
         assert result is False
 
+    def test_update_primary_term_to_non_member_raises(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Changing primary_term_text to a non-member value raises ValueError."""
+        group_id = create_group(
+            db_with_schema, "田中太郎", ["田中太郎", "田中"]
+        )
+
+        with pytest.raises(ValueError, match="is not a member"):
+            update_primary_term(db_with_schema, group_id, "鈴木")
+
 
 class TestListGroups:
     """Test list_groups function."""
