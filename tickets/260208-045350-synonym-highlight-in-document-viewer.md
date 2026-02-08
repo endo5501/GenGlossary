@@ -4,7 +4,7 @@ tags: [feature, frontend]
 description: "Synonym aliases are not highlighted in Document Viewer"
 created_at: "2026-02-08T04:53:50Z"
 started_at: 2026-02-08T06:39:07Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T06:55:55Z # Do not modify manually
 ---
 
 # Document Viewerで同義語（aliases）がハイライトされない
