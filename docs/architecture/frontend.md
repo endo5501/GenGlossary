@@ -273,7 +273,7 @@ const progressPercent = progress && progress.total > 0
 |---------------|------|
 | `HomePage` | プロジェクト一覧とサマリー表示 |
 | `FilesPage` | ファイル一覧と追加・削除 |
-| `TermsPage` | 抽出された用語一覧と詳細表示、カテゴリ編集 |
+| `TermsPage` | 抽出された用語一覧と詳細表示、カテゴリ編集。3タブ構成（用語一覧/除外用語/必須用語） |
 | `ProvisionalPage` | 暫定用語集の表示と編集 |
 | `IssuesPage` | 精査で見つかった問題一覧 |
 | `RefinedPage` | 最終用語集の表示とエクスポート |
@@ -790,6 +790,8 @@ CSS クラス（`styles/layout.css`）を使用してレイアウトを管理し
 3. `isEmpty: true` → `renderEmpty` があればカスタム表示、なければデフォルト空状態
 4. それ以外 → `children` を表示
 
+**注意:** `isEmpty: true` の場合、`children` は表示されない。タブナビゲーションなど常に表示すべき要素が `children` に含まれる場合は、`isEmpty={false}` を渡し、各パネル内で空状態を処理する必要がある（TermsPage の実装を参照）。
+
 **カスタムレンダリングの例（FilesPage）:**
 ```tsx
 <PageContainer
@@ -1248,12 +1250,12 @@ const routes = routeConfigs.map(({ path, title }) =>
 | `projects-page.test.tsx` | 16 | HomePage、FilesPage、ダイアログコンポーネント |
 | `components/dialogs/AddFileDialog.test.tsx` | 6 | AddFileDialogコンポーネント |
 | `settings-page.test.tsx` | 11 | SettingsPage（フォーム、バリデーション、API連携） |
-| `terms-workflow.test.tsx` | 66 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel、カテゴリ編集、user_notes |
+| `terms-workflow.test.tsx` | 74 | Terms/Provisional/Issues/Refined ページ、Run管理、LogPanel、カテゴリ編集、user_notes、タブ空状態表示 |
 | `logStore.test.ts` | 20 | Zustand ログストアの状態管理、進捗追跡 |
 | `LogPanel.test.tsx` | 5 | LogPanel の進捗表示UI |
 | `useLogStream.test.ts` | 7 | useLogStream フックの runId=0 処理、onComplete コールバック、projectId引数 |
 
-**合計**: 261 テスト
+**合計**: 269 テスト
 
 ### テスト実行
 
