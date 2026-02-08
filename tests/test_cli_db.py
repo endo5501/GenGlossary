@@ -321,9 +321,8 @@ class TestDbTermsImport:
         conn.close()
 
         assert len(terms) == 3
-        assert terms[0]["term_text"] == "量子コンピュータ"
-        assert terms[1]["term_text"] == "量子ビット"
-        assert terms[2]["term_text"] == "キュービット"
+        term_texts = {t["term_text"] for t in terms}
+        assert term_texts == {"量子コンピュータ", "量子ビット", "キュービット"}
 
 
 class TestDbProvisionalList:

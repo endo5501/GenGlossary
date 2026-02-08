@@ -462,6 +462,117 @@ class TestUserNotes:
         assert term["user_notes"] == "General Practitioner"
 
 
+class TestListAllTermsIncludesRequiredTerms:
+    """Test that list_all_terms includes required terms not yet extracted."""
+
+    def test_includes_required_terms_not_in_extracted(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Required terms not in terms_extracted appear in list_all_terms."""
+        from genglossary.db.required_term_repository import add_required_term
+
+        create_term(db_with_schema, term_text="量子コンピュータ", category="technical")
+        add_required_term(db_with_schema, "必須用語A", "manual")
+
+        terms = list_all_terms(db_with_schema)
+
+        term_texts = [t["term_text"] for t in terms]
+        assert "量子コンピュータ" in term_texts
+        assert "必須用語A" in term_texts
+        assert len(terms) == 2
+
+    def test_required_term_has_negative_id(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Required-only terms should have negative IDs to distinguish them."""
+        from genglossary.db.required_term_repository import add_required_term
+
+        add_required_term(db_with_schema, "必須用語A", "manual")
+
+        terms = list_all_terms(db_with_schema)
+
+        assert len(terms) == 1
+        assert terms[0]["id"] < 0
+
+    def test_required_term_has_null_category_and_empty_user_notes(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Required-only terms should have NULL category and empty user_notes."""
+        from genglossary.db.required_term_repository import add_required_term
+
+        add_required_term(db_with_schema, "必須用語A", "manual")
+
+        terms = list_all_terms(db_with_schema)
+
+        assert len(terms) == 1
+        assert terms[0]["category"] is None
+        assert terms[0]["user_notes"] == ""
+
+    def test_no_duplicate_when_required_term_already_extracted(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Required term already in terms_extracted should not appear twice."""
+        from genglossary.db.required_term_repository import add_required_term
+
+        create_term(db_with_schema, term_text="共通用語", category="technical")
+        add_required_term(db_with_schema, "共通用語", "manual")
+
+        terms = list_all_terms(db_with_schema)
+
+        term_texts = [t["term_text"] for t in terms]
+        assert term_texts.count("共通用語") == 1
+        # The extracted version should be used (positive ID)
+        matching = [t for t in terms if t["term_text"] == "共通用語"]
+        assert matching[0]["id"] > 0
+
+    def test_required_term_excluded_when_in_excluded_list(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Required terms in the excluded list should not appear."""
+        from genglossary.db.excluded_term_repository import add_excluded_term
+        from genglossary.db.required_term_repository import add_required_term
+
+        add_required_term(db_with_schema, "除外される必須用語", "manual")
+        add_excluded_term(db_with_schema, "除外される必須用語", "manual")
+
+        terms = list_all_terms(db_with_schema)
+
+        term_texts = [t["term_text"] for t in terms]
+        assert "除外される必須用語" not in term_texts
+
+    def test_mixed_extracted_and_required_terms(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Comprehensive test with extracted, required, and excluded terms."""
+        from genglossary.db.excluded_term_repository import add_excluded_term
+        from genglossary.db.required_term_repository import add_required_term
+
+        # Extracted terms
+        create_term(db_with_schema, term_text="抽出用語A", category="technical")
+        create_term(db_with_schema, term_text="共通用語", category="concept")
+        create_term(db_with_schema, term_text="除外される抽出用語", category="technical")
+
+        # Required terms
+        add_required_term(db_with_schema, "必須用語のみ", "manual")
+        add_required_term(db_with_schema, "共通用語", "manual")  # Also extracted
+        add_required_term(db_with_schema, "除外される必須用語", "manual")
+
+        # Excluded terms
+        add_excluded_term(db_with_schema, "除外される抽出用語", "manual")
+        add_excluded_term(db_with_schema, "除外される必須用語", "manual")
+
+        terms = list_all_terms(db_with_schema)
+        term_texts = [t["term_text"] for t in terms]
+
+        assert "抽出用語A" in term_texts
+        assert "共通用語" in term_texts
+        assert "必須用語のみ" in term_texts
+        assert "除外される抽出用語" not in term_texts
+        assert "除外される必須用語" not in term_texts
+        assert term_texts.count("共通用語") == 1
+        assert len(terms) == 3
+
+
 class TestBackupRestoreUserNotes:
     """Test backup_user_notes and restore_user_notes functions."""
 

@@ -572,7 +572,7 @@ async def update_existing_project(
 - `_get_project_or_404()`: プロジェクト取得と404チェックを一元化。GET/DELETE/PATCHで使用
 - `_cleanup_db_file()`: DBファイルの孤立防止。create/clone失敗時に使用
 
-### terms.py (Terms API - 抽出用語の管理)
+### terms.py (Terms API - 抽出用語+必須用語の統合管理)
 ```python
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
@@ -583,7 +583,7 @@ async def list_all_terms_endpoint(
     project_id: int = Path(...),
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> list[TermResponse]:
-    """抽出用語の一覧を取得"""
+    """抽出用語+必須用語の統合一覧を取得（必須用語のみの項目はid<0）"""
     rows = list_all_terms(project_db)
     return TermResponse.from_db_rows(rows)
 
@@ -1080,8 +1080,8 @@ async def list_terms(
 - `GET /docs` - OpenAPI ドキュメント（Swagger UI）
 - `GET /redoc` - ReDoc ドキュメント
 
-**Terms API (抽出用語の管理) - 5エンドポイント:**
-- `GET /api/projects/{project_id}/terms` - 用語一覧取得
+**Terms API (抽出用語+必須用語の統合管理) - 5エンドポイント:**
+- `GET /api/projects/{project_id}/terms` - 用語一覧取得（抽出+必須用語の統合、必須用語のみはid<0）
 - `GET /api/projects/{project_id}/terms/{term_id}` - 用語詳細取得
 - `POST /api/projects/{project_id}/terms` - 用語作成
 - `PATCH /api/projects/{project_id}/terms/{term_id}` - 用語更新
