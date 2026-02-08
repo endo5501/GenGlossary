@@ -195,6 +195,7 @@ export interface GlossaryTermResponse {
   definition: string
   confidence: number
   occurrences: TermOccurrence[]
+  aliases: string[]
 }
 
 // Issue types - matches actual backend response

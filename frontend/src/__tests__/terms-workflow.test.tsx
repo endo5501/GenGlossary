@@ -53,6 +53,7 @@ const mockProvisionalEntries: GlossaryTermResponse[] = [
     occurrences: [
       { document_path: 'doc1.md', line_number: 1, context: '量子コンピュータは...' },
     ],
+    aliases: [],
   },
   {
     id: 2,
@@ -62,6 +63,7 @@ const mockProvisionalEntries: GlossaryTermResponse[] = [
     occurrences: [
       { document_path: 'doc1.md', line_number: 3, context: '量子ビット（キュービット）を使用します。' },
     ],
+    aliases: [],
   },
 ]
 
@@ -104,6 +106,7 @@ const mockRefinedEntries: GlossaryTermResponse[] = [
       { document_path: 'doc1.md', line_number: 1, context: '量子コンピュータは...' },
       { document_path: 'doc1.md', line_number: 5, context: '量子コンピュータの最大の特徴は...' },
     ],
+    aliases: [],
   },
 ]
 
@@ -570,6 +573,59 @@ describe('ProvisionalPage', () => {
     const regenerateButton = screen.getByRole('button', { name: /regenerate/i })
     expect(regenerateButton).toBeDisabled()
   })
+
+  it('shows aliases in detail panel when term has synonym group', async () => {
+    const entriesWithAliases: GlossaryTermResponse[] = [
+      {
+        id: 1,
+        term_name: '田中太郎',
+        definition: '主人公の名前。',
+        confidence: 0.9,
+        occurrences: [
+          { document_path: 'doc1.md', line_number: 1, context: '田中太郎は...' },
+        ],
+        aliases: ['タナカ', '部長'],
+      },
+    ]
+    server.use(
+      http.get(`${BASE_URL}/api/projects/:projectId/provisional`, () => {
+        return HttpResponse.json(entriesWithAliases)
+      })
+    )
+
+    const { user } = renderWithProviders(<ProvisionalPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('田中太郎')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('田中太郎'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('provisional-detail-editor')).toBeInTheDocument()
+    })
+
+    const editor = screen.getByTestId('provisional-detail-editor')
+    expect(within(editor).getByText('Aliases')).toBeInTheDocument()
+    expect(within(editor).getByText('タナカ、部長')).toBeInTheDocument()
+  })
+
+  it('does not show aliases section when term has no aliases', async () => {
+    const { user } = renderWithProviders(<ProvisionalPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('provisional-detail-editor')).toBeInTheDocument()
+    })
+
+    const editor = screen.getByTestId('provisional-detail-editor')
+    expect(within(editor).queryByText('Aliases')).not.toBeInTheDocument()
+  })
 })
 
 describe('IssuesPage', () => {
@@ -786,6 +842,59 @@ describe('RefinedPage', () => {
 
     const regenerateButton = screen.getByRole('button', { name: /regenerate/i })
     expect(regenerateButton).toBeDisabled()
+  })
+
+  it('shows aliases in detail panel when term has synonym group', async () => {
+    const entriesWithAliases: GlossaryTermResponse[] = [
+      {
+        id: 1,
+        term_name: '田中太郎',
+        definition: '主人公の名前。',
+        confidence: 0.95,
+        occurrences: [
+          { document_path: 'doc1.md', line_number: 1, context: '田中太郎は...' },
+        ],
+        aliases: ['タナカ', '部長'],
+      },
+    ]
+    server.use(
+      http.get(`${BASE_URL}/api/projects/:projectId/refined`, () => {
+        return HttpResponse.json(entriesWithAliases)
+      })
+    )
+
+    const { user } = renderWithProviders(<RefinedPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('田中太郎')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('田中太郎'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('refined-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('refined-detail-panel')
+    expect(within(detailPanel).getByText('Aliases')).toBeInTheDocument()
+    expect(within(detailPanel).getByText('タナカ、部長')).toBeInTheDocument()
+  })
+
+  it('does not show aliases section when term has no aliases', async () => {
+    const { user } = renderWithProviders(<RefinedPage projectId={1} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('量子コンピュータ')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('量子コンピュータ'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('refined-detail-panel')).toBeInTheDocument()
+    })
+
+    const detailPanel = screen.getByTestId('refined-detail-panel')
+    expect(within(detailPanel).queryByText('Aliases')).not.toBeInTheDocument()
   })
 })
 

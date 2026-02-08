@@ -6,6 +6,7 @@ import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 
 from genglossary.api.dependencies import get_project_by_id, get_project_db
+from genglossary.api.routers._synonym_helpers import build_aliases_map
 from genglossary.db.connection import transaction
 from genglossary.api.schemas.provisional_schemas import (
     ProvisionalResponse,
@@ -60,7 +61,8 @@ def _get_term_response(conn: sqlite3.Connection, entry_id: int) -> ProvisionalRe
     row = get_provisional_term(conn, entry_id)
     if row is None:
         raise RuntimeError(f"Entry {entry_id} disappeared after update")
-    return ProvisionalResponse.from_db_row(row)
+    aliases_map = build_aliases_map(conn)
+    return ProvisionalResponse.from_db_row(row, aliases_map)
 
 
 def _regenerate_definition(row: GlossaryTermRow, project: Project) -> tuple[str, float]:
@@ -102,7 +104,8 @@ async def list_provisional(
         list[ProvisionalResponse]: List of all provisional terms.
     """
     rows = list_all_provisional(project_db)
-    return ProvisionalResponse.from_db_rows(rows)
+    aliases_map = build_aliases_map(project_db)
+    return ProvisionalResponse.from_db_rows(rows, aliases_map)
 
 
 @router.get("/{entry_id}", response_model=ProvisionalResponse)
@@ -125,7 +128,8 @@ async def get_provisional_by_id(
         HTTPException: 404 if term not found.
     """
     row = _ensure_term_exists(project_db, entry_id)
-    return ProvisionalResponse.from_db_row(row)
+    aliases_map = build_aliases_map(project_db)
+    return ProvisionalResponse.from_db_row(row, aliases_map)
 
 
 @router.patch("/{entry_id}", response_model=ProvisionalResponse)
