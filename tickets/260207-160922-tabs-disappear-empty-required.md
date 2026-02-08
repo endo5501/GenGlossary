@@ -4,7 +4,7 @@ tags: [bugfix, frontend]
 description: "Tabs disappear when required terms list is empty, forcing navigation to another page"
 created_at: "2026-02-07T16:09:22Z"
 started_at: 2026-02-08T05:41:09Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T06:29:20Z # Do not modify manually
 ---
 
 # 必須用語が0件の場合にタブが消えて用語一覧に戻れなくなる
