@@ -4,7 +4,7 @@ tags: [bugfix, frontend, backend]
 description: "Required terms not reflected in term list, preventing synonym group assignment"
 created_at: "2026-02-07T16:09:21Z"
 started_at: 2026-02-08T04:58:09Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T05:21:03Z # Do not modify manually
 ---
 
 # 必須用語が用語一覧に反映されず同義語グループに追加できない
