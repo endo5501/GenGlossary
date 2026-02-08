@@ -102,6 +102,7 @@ async def cancel_run(
 
     # Immediately update DB status for instant UI feedback
     db_cancel_run(project_db, run_id)
+    project_db.commit()
 
     return {"message": "Run cancelled successfully"}
 
