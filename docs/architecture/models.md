@@ -207,6 +207,10 @@ class BaseLLMClient(ABC):
     def generate_structured(self, prompt: str, response_model: type[BaseModel]) -> BaseModel:
         """構造化出力生成"""
         ...
+
+    def close(self) -> None:
+        """リソース解放（サブクラスでオーバーライド）"""
+        pass
 ```
 
 ### ollama_client.py
