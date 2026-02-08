@@ -381,10 +381,18 @@ class RunManager:
             except Exception as e:
                 pipeline_error = e
                 pipeline_traceback = traceback.format_exc()
+            finally:
+                # Executor参照を削除し、リソースを解放
+                with self._executors_lock:
+                    self._executors.pop(run_id, None)
+                try:
+                    executor.close()
+                except Exception:
+                    logger.debug(...)
 
             # ステータス更新（パイプライン実行とは別に処理）
             self._finalize_run_status(
-                conn, run_id, cancel_event, pipeline_error, pipeline_traceback
+                conn, run_id, pipeline_error, pipeline_traceback
             )
 
         except Exception as e:
