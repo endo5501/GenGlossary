@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -48,12 +48,14 @@ CREATE TABLE IF NOT EXISTS glossary_provisional (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Review issues
+-- Review issues (v9: should_exclude, exclusion_reason columns added)
 CREATE TABLE IF NOT EXISTS glossary_issues (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     term_name TEXT NOT NULL,
     issue_type TEXT NOT NULL,
     description TEXT NOT NULL,
+    should_exclude INTEGER NOT NULL DEFAULT 0,
+    exclusion_reason TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -134,6 +136,7 @@ def initialize_db(conn: sqlite3.Connection) -> None:
     _migrate_documents_table_v4(conn)
     _migrate_terms_user_notes_v7(conn)
     _migrate_synonym_tables_v8(conn)
+    _migrate_issues_exclude_columns_v9(conn)
 
     # Set schema version if not already set (INSERT OR IGNORE handles race conditions)
     cursor = conn.cursor()
@@ -242,6 +245,21 @@ def _migrate_synonym_tables_v8(conn: sqlite3.Connection) -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
             """
+        )
+
+
+def _migrate_issues_exclude_columns_v9(conn: sqlite3.Connection) -> None:
+    """Migrate to v9: add should_exclude and exclusion_reason to glossary_issues."""
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(glossary_issues)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "should_exclude" not in columns:
+        cursor.execute(
+            "ALTER TABLE glossary_issues ADD COLUMN should_exclude INTEGER NOT NULL DEFAULT 0"
+        )
+    if "exclusion_reason" not in columns:
+        cursor.execute(
+            "ALTER TABLE glossary_issues ADD COLUMN exclusion_reason TEXT"
         )
 
 

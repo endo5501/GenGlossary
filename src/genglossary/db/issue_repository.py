@@ -12,6 +12,8 @@ def create_issue(
     term_name: str,
     issue_type: str,
     description: str,
+    should_exclude: bool = False,
+    exclusion_reason: str | None = None,
 ) -> int:
     """Create a new glossary issue.
 
@@ -20,6 +22,8 @@ def create_issue(
         term_name: The term name this issue relates to.
         issue_type: Type of issue (e.g., "unclear", "contradiction").
         description: Description of the issue.
+        should_exclude: Whether the term should be excluded.
+        exclusion_reason: Reason for exclusion, if applicable.
 
     Returns:
         int: The ID of the created issue.
@@ -28,13 +32,15 @@ def create_issue(
     cursor.execute(
         """
         INSERT INTO glossary_issues
-        (term_name, issue_type, description)
-        VALUES (?, ?, ?)
+        (term_name, issue_type, description, should_exclude, exclusion_reason)
+        VALUES (?, ?, ?, ?, ?)
         """,
         (
             term_name,
             issue_type,
             description,
+            1 if should_exclude else 0,
+            exclusion_reason,
         ),
     )
     return cast(int, cursor.lastrowid)
@@ -81,14 +87,29 @@ def delete_all_issues(conn: sqlite3.Connection) -> None:
 
 def create_issues_batch(
     conn: sqlite3.Connection,
-    issues: Sequence[tuple[str, str, str]],
+    issues: Sequence[tuple[str, str, str] | tuple[str, str, str, bool, str | None]],
 ) -> None:
     """Create multiple issue records in a batch.
 
     Args:
         conn: Database connection.
-        issues: List of tuples (term_name, issue_type, description).
+        issues: List of tuples. Either 3-element (term_name, issue_type, description)
+            or 5-element (term_name, issue_type, description, should_exclude, exclusion_reason).
     """
-    batch_insert(
-        conn, "glossary_issues", ["term_name", "issue_type", "description"], issues
-    )
+    if not issues:
+        return
+    if len(issues[0]) == 5:
+        normalized = [
+            (t[0], t[1], t[2], 1 if t[3] else 0, t[4])  # type: ignore[index]
+            for t in issues
+        ]
+        batch_insert(
+            conn,
+            "glossary_issues",
+            ["term_name", "issue_type", "description", "should_exclude", "exclusion_reason"],
+            normalized,
+        )
+    else:
+        batch_insert(
+            conn, "glossary_issues", ["term_name", "issue_type", "description"], issues
+        )
