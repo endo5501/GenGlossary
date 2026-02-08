@@ -279,10 +279,14 @@ def create_term(
     ...
 
 def list_all_terms(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """全ての抽出用語を取得（除外用語は自動的にフィルタリング）
+    """抽出用語と必須用語の統合一覧を取得
 
-    terms_excludedテーブルに登録された用語は結果から除外されます。
-    NOT EXISTSサブクエリを使用し、term_textの完全一致でフィルタリング。
+    terms_extractedとterms_requiredをUNION ALLで統合します。
+    - terms_extractedに既にある必須用語は重複しない
+    - 必須用語のみの項目は負のID（-terms_required.id）で区別
+    - 必須用語のみの項目はcategory=NULL, user_notes=''
+    - terms_excludedテーブルに登録された用語は両ソースとも除外
+    - 結果はterm_text順でソート
     """
     ...
 
