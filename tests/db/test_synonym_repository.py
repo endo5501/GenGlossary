@@ -193,7 +193,7 @@ class TestRemoveMember:
         self, db_with_schema: sqlite3.Connection
     ) -> None:
         """Removing a member with mismatched group_id raises ValueError."""
-        group_a = create_group(
+        create_group(
             db_with_schema, "田中太郎", ["田中太郎", "田中"]
         )
         group_b = create_group(
@@ -208,6 +208,36 @@ class TestRemoveMember:
 
         with pytest.raises(ValueError, match="does not belong to group"):
             remove_member(db_with_schema, group_b, member_id)
+
+    def test_remove_primary_member_deletes_entire_group(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Removing the primary term member deletes the entire group."""
+        group_id = create_group(
+            db_with_schema, "田中太郎", ["田中太郎", "田中"]
+        )
+        cursor = db_with_schema.cursor()
+        cursor.execute(
+            "SELECT id FROM term_synonym_members WHERE term_text = ?",
+            ("田中太郎",),
+        )
+        primary_member_id = cursor.fetchone()[0]
+
+        result = remove_member(db_with_schema, group_id, primary_member_id)
+
+        assert result is True
+        # Group should be deleted
+        cursor.execute(
+            "SELECT COUNT(*) FROM term_synonym_groups WHERE id = ?",
+            (group_id,),
+        )
+        assert cursor.fetchone()[0] == 0
+        # All members should be cascade-deleted
+        cursor.execute(
+            "SELECT COUNT(*) FROM term_synonym_members WHERE group_id = ?",
+            (group_id,),
+        )
+        assert cursor.fetchone()[0] == 0
 
 
 class TestUpdatePrimaryTerm:
