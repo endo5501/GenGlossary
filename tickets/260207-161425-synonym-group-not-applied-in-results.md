@@ -3,7 +3,7 @@ priority: 1
 tags: [bugfix, frontend, backend, pipeline]
 description: "Synonym group members disappear from provisional/refined results and primary term lacks synonym info"
 created_at: "2026-02-07T16:14:25Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-08T01:21:37Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -37,19 +37,41 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] 原因調査：パイプライン実行時のsynonym_groups受け渡しを確認
-- [ ] 原因調査：結果画面のAPI応答内容を確認
-- [ ] 修正実装
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs/architecture/*.md
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 原因調査：パイプライン実行時のsynonym_groups受け渡しを確認
+- [x] 原因調査：結果画面のAPI応答内容を確認
+- [x] 修正実装
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs/architecture/*.md
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
+
+## 調査結果
+
+### 根本原因
+パイプライン実行時の synonym_groups 受け渡しは正常。問題はAPI層にある：
+1. `GlossaryTermResponse` スキーマに aliases フィールドがない
+2. provisional/refined APIエンドポイントが synonym_groups を読み込んでいない
+3. `export-md` エンドポイントが手動Markdown生成しており別名セクションなし
+4. フロントエンドが ProvisionalPage/RefinedPage で同義語情報をフェッチ/表示していない
+
+### 修正方針（アプローチA: API拡張）
+
+#### バックエンド
+1. `GlossaryTermResponse` に `aliases: list[str]` フィールドを追加
+2. `from_db_row` に aliases 引数を追加し synonym_groups からマッピング
+3. provisional/refined APIエンドポイントで `list_groups()` を呼び aliases を付与
+4. `export-md` に `**別名**` セクションを追加
+
+#### フロントエンド
+1. `GlossaryTermResponse` 型に `aliases: string[]` を追加
+2. ProvisionalPage の detail パネルに aliases テキスト表示
+3. RefinedPage の detail パネルに aliases テキスト表示
 
 ## Notes
 
