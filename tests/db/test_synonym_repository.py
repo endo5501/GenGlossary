@@ -74,6 +74,13 @@ class TestCreateGroup:
         with pytest.raises(sqlite3.IntegrityError):
             create_group(db_with_schema, "鈴木", ["鈴木", "田中"])
 
+    def test_create_group_raises_when_primary_not_in_members(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """primary_term_text must be included in member_texts."""
+        with pytest.raises(ValueError, match="primary_term_text must be included in member_texts"):
+            create_group(db_with_schema, "田中太郎", ["田中", "田中部長"])
+
 
 class TestDeleteGroup:
     """Test delete_group function."""
