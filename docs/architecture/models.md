@@ -64,9 +64,11 @@ class Glossary(BaseModel):
 
 class GlossaryIssue(BaseModel):
     """用語集の問題点"""
-    term: str
-    issue_type: str  # "unclear", "contradiction", "missing"
+    term_name: str
+    issue_type: str  # "unclear", "contradiction", "missing_relation", "unnecessary"
     description: str
+    should_exclude: bool = False       # v9: 除外フラグ
+    exclusion_reason: str | None = None  # v9: 除外理由
 ```
 
 ### project.py

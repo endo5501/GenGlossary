@@ -622,6 +622,8 @@ class PipelineExecutor:
                 term_name=row["term_name"],
                 issue_type=row["issue_type"],
                 description=row["description"],
+                should_exclude=bool(row["should_exclude"]),
+                exclusion_reason=row["exclusion_reason"],
             )
             for row in issue_rows
         ]
@@ -847,8 +849,14 @@ class PipelineExecutor:
 
         # Save issues using batch insert
         with transaction(conn):
-            issues_data = [
-                (issue.term_name, issue.issue_type, issue.description)
+            issues_data: list[tuple[str, str, str, bool, str | None]] = [
+                (
+                    issue.term_name,
+                    issue.issue_type,
+                    issue.description,
+                    issue.should_exclude,
+                    issue.exclusion_reason,
+                )
                 for issue in issues
             ]
             create_issues_batch(conn, issues_data)

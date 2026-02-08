@@ -3,8 +3,8 @@ priority: 2
 tags: [bugfix, backend, api]
 description: "Fix synonym group integrity issues found during code review"
 created_at: "2026-02-07T15:40:49Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-08T07:48:37Z # Do not modify manually
+closed_at: 2026-02-08T08:16:02Z # Do not modify manually
 ---
 
 # 同義語グループ整合性修正
@@ -44,23 +44,65 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] メンバー削除APIでgroup_id検証を追加
-- [ ] 代表語変更時のメンバー存在確認を追加
-- [ ] 代表語のメンバー削除を禁止またはグループ削除
-- [ ] issueテーブルに should_exclude, exclusion_reason カラムを追加
-- [ ] APIスキーマにvalidate_term_textバリデーションを追加
-- [ ] list_groups をJOINベースに最適化
-- [ ] 同義語ルックアップロジックを共通化
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] メンバー削除APIでgroup_id検証を追加
+- [x] 代表語変更時のメンバー存在確認を追加
+- [x] 代表語のメンバー削除を禁止またはグループ削除
+- [x] issueテーブルに should_exclude, exclusion_reason カラムを追加
+- [x] APIスキーマにvalidate_term_textバリデーションを追加
+- [x] list_groups をJOINベースに最適化
+- [x] 同義語ルックアップロジックを共通化
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
+
+## 設計
+
+### 問題1: メンバー削除APIでgroup_id検証
+
+- `synonym_repository.py` の `remove_member()` に `group_id` 引数を追加
+- 削除前にメンバーの所属group_idとURLのgroup_idの一致を検証
+- 不一致時は例外を送出
+- APIルーター側も `group_id` を渡すように変更
+
+### 問題2: 代表語の整合性保護
+
+**2a. 代表語変更時のメンバー存在確認**
+- `update_primary_term()` で新しい `primary_term_text` がグループのメンバーに存在するか検証
+- 存在しない場合は `ValueError` を送出、API側で HTTP 400 にマッピング
+
+**2b. 代表語のメンバー削除 → グループ全体削除**
+- `remove_member()` 内で、削除対象が `primary_term_text` と一致する場合はグループ全体を削除
+- APIレスポンスは変わらず 204
+
+### 問題3: glossary_issuesテーブルにカラム追加
+
+- スキーマバージョン 8 → 9
+- `ALTER TABLE glossary_issues ADD COLUMN should_exclude INTEGER NOT NULL DEFAULT 0`
+- `ALTER TABLE glossary_issues ADD COLUMN exclusion_reason TEXT`
+- `issue_repository.py` の保存・読み取りで新カラムを対応
+
+### 問題4: APIスキーマのバリデーション統一
+
+- リクエストスキーマに `validate_term_text` バリデータを追加
+- モデル側と同様に `strip()` 後の空文字チェック
+
+### 問題5: list_groups の N+1 クエリ解消
+
+- JOINで1クエリに統合
+- Python側で `SynonymGroup` リストに組み立て
+
+### 問題6: 同義語ルックアップロジックのDRY化
+
+- `src/genglossary/synonym_utils.py` を新規作成
+- 共通関数: `build_synonym_lookup()`, `build_non_primary_set()`, `get_synonyms_for_primary()`
+- 4ファイル（generator, reviewer, refiner, markdown_writer）の重複ロジックを置き換え
 
 ## Notes
 

@@ -45,7 +45,7 @@ class TestSchemaInitialization:
         initialize_db(in_memory_db)
 
         version = get_schema_version(in_memory_db)
-        assert version == 8  # v8: synonym group tables added
+        assert version == 9  # v9: glossary_issues exclude columns added
 
     def test_initialize_db_is_idempotent(self, in_memory_db: sqlite3.Connection) -> None:
         """Test that initialize_db can be called multiple times safely."""
@@ -409,9 +409,9 @@ class TestGlossaryIssuesTable:
         assert "issue_type" in columns
         assert "description" in columns
         assert "created_at" in columns
+        assert "should_exclude" in columns  # v9: should_exclude added
+        assert "exclusion_reason" in columns  # v9: exclusion_reason added
         assert "run_id" not in columns  # v2: run_id should be removed
-        assert "should_exclude" not in columns  # v2: should_exclude should be removed
-        assert "exclusion_reason" not in columns  # v2: exclusion_reason should be removed
 
     def test_glossary_issues_insert(
         self, in_memory_db: sqlite3.Connection

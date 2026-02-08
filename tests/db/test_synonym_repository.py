@@ -176,15 +176,68 @@ class TestRemoveMember:
         )
         member_id = cursor.fetchone()[0]
 
-        result = remove_member(db_with_schema, member_id)
+        result = remove_member(db_with_schema, group_id, member_id)
 
         assert result is True
 
     def test_remove_nonexistent_member_returns_false(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        result = remove_member(db_with_schema, 999)
+        group_id = create_group(
+            db_with_schema, "田中太郎", ["田中太郎"]
+        )
+        result = remove_member(db_with_schema, group_id, 999)
         assert result is False
+
+    def test_remove_member_with_wrong_group_id_raises(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Removing a member with mismatched group_id raises ValueError."""
+        create_group(
+            db_with_schema, "田中太郎", ["田中太郎", "田中"]
+        )
+        group_b = create_group(
+            db_with_schema, "サーバー", ["サーバー", "サーバ"]
+        )
+        cursor = db_with_schema.cursor()
+        cursor.execute(
+            "SELECT id FROM term_synonym_members WHERE term_text = ?",
+            ("田中",),
+        )
+        member_id = cursor.fetchone()[0]
+
+        with pytest.raises(ValueError, match="does not belong to group"):
+            remove_member(db_with_schema, group_b, member_id)
+
+    def test_remove_primary_member_deletes_entire_group(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Removing the primary term member deletes the entire group."""
+        group_id = create_group(
+            db_with_schema, "田中太郎", ["田中太郎", "田中"]
+        )
+        cursor = db_with_schema.cursor()
+        cursor.execute(
+            "SELECT id FROM term_synonym_members WHERE term_text = ?",
+            ("田中太郎",),
+        )
+        primary_member_id = cursor.fetchone()[0]
+
+        result = remove_member(db_with_schema, group_id, primary_member_id)
+
+        assert result is True
+        # Group should be deleted
+        cursor.execute(
+            "SELECT COUNT(*) FROM term_synonym_groups WHERE id = ?",
+            (group_id,),
+        )
+        assert cursor.fetchone()[0] == 0
+        # All members should be cascade-deleted
+        cursor.execute(
+            "SELECT COUNT(*) FROM term_synonym_members WHERE group_id = ?",
+            (group_id,),
+        )
+        assert cursor.fetchone()[0] == 0
 
 
 class TestUpdatePrimaryTerm:
@@ -212,6 +265,17 @@ class TestUpdatePrimaryTerm:
     ) -> None:
         result = update_primary_term(db_with_schema, 999, "田中")
         assert result is False
+
+    def test_update_primary_term_to_non_member_raises(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Changing primary_term_text to a non-member value raises ValueError."""
+        group_id = create_group(
+            db_with_schema, "田中太郎", ["田中太郎", "田中"]
+        )
+
+        with pytest.raises(ValueError, match="is not a member"):
+            update_primary_term(db_with_schema, group_id, "鈴木")
 
 
 class TestListGroups:
@@ -250,6 +314,26 @@ class TestListGroups:
         assert "田中太郎" in member_texts
         assert "田中" in member_texts
         assert "田中部長" in member_texts
+
+
+    def test_list_groups_with_group_having_no_members(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test list_groups handles groups with no members (edge case for JOIN)."""
+        # Create group, then delete all members directly
+        group_id = create_group(
+            db_with_schema, "田中太郎", ["田中太郎"]
+        )
+        cursor = db_with_schema.cursor()
+        cursor.execute(
+            "DELETE FROM term_synonym_members WHERE group_id = ?", (group_id,)
+        )
+
+        groups = list_groups(db_with_schema)
+
+        assert len(groups) == 1
+        assert groups[0].primary_term_text == "田中太郎"
+        assert groups[0].members == []
 
 
 class TestGetSynonymsForTerm:

@@ -58,6 +58,40 @@ class TestCreateIssue:
         assert row["issue_type"] == "unclear"
         assert row["description"] == "定義が曖昧です"
 
+    def test_create_issue_with_should_exclude(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that create_issue stores should_exclude and exclusion_reason."""
+        issue_id = create_issue(
+            db_with_schema,
+            term_name="量子コンピュータ",
+            issue_type="unnecessary",
+            description="不要な用語",
+            should_exclude=True,
+            exclusion_reason="一般的すぎる",
+        )
+
+        row = get_issue(db_with_schema, issue_id)
+        assert row is not None
+        assert row["should_exclude"] == 1
+        assert row["exclusion_reason"] == "一般的すぎる"
+
+    def test_create_issue_defaults_should_exclude_false(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that should_exclude defaults to False."""
+        issue_id = create_issue(
+            db_with_schema,
+            term_name="量子コンピュータ",
+            issue_type="unclear",
+            description="定義が曖昧です",
+        )
+
+        row = get_issue(db_with_schema, issue_id)
+        assert row is not None
+        assert row["should_exclude"] == 0
+        assert row["exclusion_reason"] is None
+
 
 class TestGetIssue:
     """Test get_issue function."""
@@ -205,3 +239,21 @@ class TestCreateIssuesBatch:
 
         all_issues = list_all_issues(db_with_schema)
         assert len(all_issues) == 0
+
+    def test_create_issues_batch_with_should_exclude(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that batch insert stores should_exclude and exclusion_reason."""
+        issues = [
+            ("量子コンピュータ", "unnecessary", "不要", True, "一般的すぎる"),
+            ("量子ビット", "unclear", "曖昧", False, None),
+        ]
+
+        create_issues_batch(db_with_schema, issues)
+
+        all_issues = list_all_issues(db_with_schema)
+        assert len(all_issues) == 2
+        assert all_issues[0]["should_exclude"] == 1
+        assert all_issues[0]["exclusion_reason"] == "一般的すぎる"
+        assert all_issues[1]["should_exclude"] == 0
+        assert all_issues[1]["exclusion_reason"] is None

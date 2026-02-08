@@ -13,6 +13,7 @@ from genglossary.llm.base import BaseLLMClient
 from genglossary.models.document import Document
 from genglossary.models.glossary import Glossary, GlossaryIssue
 from genglossary.models.synonym import SynonymGroup
+from genglossary.synonym_utils import get_synonyms_for_primary
 from genglossary.models.term import Term
 from genglossary.types import ProgressCallback, TermProgressCallback
 from genglossary.utils.callback import safe_callback
@@ -228,17 +229,9 @@ class GlossaryRefiner:
 
         # Build synonym info
         synonym_line = ""
-        if synonym_groups:
-            for group in synonym_groups:
-                if group.primary_term_text == term.name:
-                    others = [
-                        m.term_text
-                        for m in group.members
-                        if m.term_text != group.primary_term_text
-                    ]
-                    if others:
-                        synonym_line = f"\n同義語: {', '.join(others)}"
-                    break
+        others = get_synonyms_for_primary(synonym_groups, term.name)
+        if others:
+            synonym_line = f"\n同義語: {', '.join(others)}"
 
         # Build the refinement data section
         refinement_data = f"""用語: {term.name}{synonym_line}

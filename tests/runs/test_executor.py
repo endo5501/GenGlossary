@@ -1049,7 +1049,7 @@ class TestPipelineExecutorProgressCallbackIntegration:
                 {"term_name": "term1", "definition": "def1", "confidence": 0.8, "occurrences": []}
             ]
             mock_list_issues.return_value = [
-                {"term_name": "term1", "issue_type": "unclear", "description": "Issue"}
+                {"term_name": "term1", "issue_type": "unclear", "description": "Issue", "should_exclude": 0, "exclusion_reason": None}
             ]
 
             mock_refiner_cls.return_value.refine.return_value = Glossary(terms={})
@@ -2459,7 +2459,7 @@ class TestPipelineExecutorCancelEventPropagation:
 
             # Return issues from DB to trigger refiner
             mock_list_issues.return_value = [
-                {"term_name": "term1", "issue_type": "unclear", "description": "Issue"}
+                {"term_name": "term1", "issue_type": "unclear", "description": "Issue", "should_exclude": 0, "exclusion_reason": None}
             ]
 
             mock_refiner_cls.return_value.refine.return_value = Glossary(terms={})
