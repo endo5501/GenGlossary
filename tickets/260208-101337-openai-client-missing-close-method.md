@@ -4,7 +4,7 @@ tags: [backend, bug-prevention]
 description: "Add close() method to OpenAICompatibleClient to properly release HTTP resources"
 created_at: "2026-02-08T10:13:37Z"
 started_at: 2026-02-08T13:02:45Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T13:11:03Z # Do not modify manually
 ---
 
 # Add close() to OpenAICompatibleClient
