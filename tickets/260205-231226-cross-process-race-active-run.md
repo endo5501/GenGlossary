@@ -4,7 +4,7 @@ tags: [backend, bug-prevention]
 description: "Fix cross-process race condition for active run check"
 created_at: "2026-02-05T23:12:26Z"
 started_at: 2026-02-08T12:05:57Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T12:22:45Z # Do not modify manually
 ---
 
 # Fix cross-process race condition for active run check
