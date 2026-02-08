@@ -4,7 +4,7 @@ tags: [backend, refactoring]
 description: "Refactor RunManager._execute_run into smaller methods"
 created_at: "2026-02-07T03:53:07Z"
 started_at: 2026-02-08T12:24:31Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T13:00:13Z # Do not modify manually
 ---
 
 # Refactor _execute_run into smaller methods
