@@ -3,7 +3,7 @@ priority: 3
 tags: [backend, bug-prevention]
 description: "Add close() method to OpenAICompatibleClient to properly release HTTP resources"
 created_at: "2026-02-08T10:13:37Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-08T13:02:45Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -26,20 +26,21 @@ closed_at: null   # Do not modify manually
 ## Proposed Solution
 
 Add `close()` to `OpenAICompatibleClient` that closes its httpx client, matching the pattern in `OllamaClient`.
+Also update `__del__` to call `self.close()` instead of directly calling `self.client.close()`, matching the `OllamaClient` pattern.
 
 ## Tasks
 
-- [ ] Add `close()` method to `OpenAICompatibleClient`
-- [ ] Add test for proper resource cleanup
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Add `close()` method to `OpenAICompatibleClient`
+- [x] Add test for proper resource cleanup
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
