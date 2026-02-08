@@ -51,20 +51,20 @@ self._subscribers.setdefault(run_id, set()).add(queue)
 
 ## Tasks
 
-- [ ] Rename `ALREADY_TERMINAL` to `NOT_IN_EXPECTED_STATE` in enum definition and all docstrings
-- [ ] Update all references in production code
-- [ ] Update all references in tests
-- [ ] Update log message in `_log_update_result`
-- [ ] Simplify `register_subscriber` with setdefault
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Rename `ALREADY_TERMINAL` to `NOT_IN_EXPECTED_STATE` in enum definition and all docstrings
+- [x] Update all references in production code
+- [x] Update all references in tests
+- [x] Update log message in `_log_update_result`
+- [x] Simplify `register_subscriber` with setdefault
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
