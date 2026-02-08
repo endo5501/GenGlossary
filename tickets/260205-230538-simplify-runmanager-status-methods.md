@@ -4,7 +4,7 @@ tags: [backend, refactoring]
 description: "Simplify RunManager status update methods and rename ALREADY_TERMINAL enum"
 created_at: "2026-02-05T23:05:38Z"
 started_at: 2026-02-08T11:27:02Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T11:42:15Z # Do not modify manually
 ---
 
 # Simplify RunManager status update methods + Rename ALREADY_TERMINAL enum
