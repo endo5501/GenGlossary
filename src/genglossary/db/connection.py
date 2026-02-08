@@ -97,6 +97,36 @@ def transaction(conn: sqlite3.Connection) -> Iterator[None]:
 
 
 @contextmanager
+def immediate_transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """Context manager for BEGIN IMMEDIATE transactions.
+
+    Acquires a write lock at transaction start, preventing other
+    connections from starting concurrent write transactions. This
+    ensures atomicity of check-then-act patterns across processes.
+
+    Unlike transaction(), this does not support nesting.
+
+    Args:
+        conn: Database connection to manage transaction for.
+
+    Yields:
+        None
+
+    Raises:
+        sqlite3.OperationalError: If write lock cannot be acquired
+            within busy_timeout.
+        Exception: Re-raises any exception that occurs within the transaction.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+@contextmanager
 def database_connection(db_path: str) -> Iterator[sqlite3.Connection]:
     """Context manager for database connections.
 
