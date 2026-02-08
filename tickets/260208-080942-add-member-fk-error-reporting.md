@@ -4,7 +4,7 @@ tags: [bugfix, backend]
 description: "Synonym group validation improvements: FK error reporting and primary member validation"
 created_at: "2026-02-08T08:09:42Z"
 started_at: 2026-02-08T10:17:50Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T10:36:44Z # Do not modify manually
 ---
 
 # Synonym group バリデーション改善
