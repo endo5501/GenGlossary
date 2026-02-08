@@ -165,6 +165,34 @@ class TestCancelRun:
             assert response.status_code == 200
             assert response.json()["status"] == "cancelled"
 
+    def test_cancel_run_commits_immediately(
+        self, test_project_setup, client: TestClient
+    ) -> None:
+        """キャンセルがDBに即座にコミットされる（別接続から確認）"""
+        from datetime import datetime, timezone
+
+        project_id = test_project_setup["project_id"]
+        project_db_path = test_project_setup["project_db_path"]
+
+        # Create a running run directly in DB
+        conn = get_connection(project_db_path)
+        with transaction(conn):
+            run_id = create_run(conn, scope="full")
+            update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
+        conn.close()
+
+        # Cancel via API (no background executor needed since run is already in DB)
+        with patch("genglossary.runs.manager.RunManager.cancel_run"):
+            response = client.delete(f"/api/projects/{project_id}/runs/{run_id}")
+            assert response.status_code == 200
+
+        # Verify from a separate connection that the cancel was committed
+        reader = get_connection(project_db_path)
+        row = reader.execute("SELECT status FROM runs WHERE id = ?", (run_id,)).fetchone()
+        reader.close()
+        assert row is not None
+        assert row["status"] == "cancelled"
+
     def test_cancel_nonexistent_run_returns_404(
         self, test_project_setup, client: TestClient
     ) -> None:

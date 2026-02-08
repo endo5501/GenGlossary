@@ -1336,3 +1336,106 @@ class TestErrorMessageClearing:
         run = get_run(project_db, run_id)
         assert run is not None
         assert run["error_message"] == "New error"
+
+
+class TestRepositoryFunctionsDoNotCommit:
+    """Repository functions should not call conn.commit() internally.
+
+    Transaction management is the caller's responsibility.
+    Verified by checking that changes are NOT visible from a separate connection
+    (uncommitted changes are only visible within the same connection in SQLite).
+    """
+
+    @pytest.fixture
+    def db_path(self, tmp_path: Path) -> str:
+        """Create a file-based database and return its path."""
+        db_path = str(tmp_path / "test_no_commit.db")
+        conn = get_connection(db_path)
+        initialize_db(conn)
+        conn.close()
+        return db_path
+
+    @pytest.fixture
+    def conn(self, db_path: str) -> sqlite3.Connection:
+        """Primary connection for writes."""
+        connection = get_connection(db_path)
+        yield connection
+        connection.close()
+
+    @pytest.fixture
+    def reader_conn(self, db_path: str) -> sqlite3.Connection:
+        """Separate read connection to verify commit behavior."""
+        connection = get_connection(db_path)
+        yield connection
+        connection.close()
+
+    def _setup_running_run(self, conn: sqlite3.Connection) -> int:
+        """Create a run in 'running' state and commit setup data."""
+        run_id = create_run(conn, scope="full")
+        update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
+        conn.commit()  # Commit setup so reader_conn can see initial state
+        return run_id
+
+    def test_update_run_status_if_active_does_not_commit(
+        self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
+    ) -> None:
+        """update_run_status_if_activeはconn.commit()を呼ばない"""
+        from genglossary.db.runs_repository import update_run_status_if_active
+
+        run_id = self._setup_running_run(conn)
+
+        result = update_run_status_if_active(conn, run_id, "completed")
+
+        assert result == RunUpdateResult.UPDATED
+        # Changes should NOT be visible from another connection
+        row = reader_conn.execute("SELECT status FROM runs WHERE id = ?", (run_id,)).fetchone()
+        assert row["status"] != "completed"
+
+    def test_update_run_status_if_running_does_not_commit(
+        self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
+    ) -> None:
+        """update_run_status_if_runningはconn.commit()を呼ばない"""
+        run_id = self._setup_running_run(conn)
+
+        result = update_run_status_if_running(conn, run_id, "completed")
+
+        assert result == RunUpdateResult.UPDATED
+        row = reader_conn.execute("SELECT status FROM runs WHERE id = ?", (run_id,)).fetchone()
+        assert row["status"] != "completed"
+
+    def test_update_run_progress_does_not_commit(
+        self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
+    ) -> None:
+        """update_run_progressはconn.commit()を呼ばない"""
+        run_id = self._setup_running_run(conn)
+
+        update_run_progress(conn, run_id, 1, 4, "extract")
+
+        row = reader_conn.execute(
+            "SELECT progress_current FROM runs WHERE id = ?", (run_id,)
+        ).fetchone()
+        assert row["progress_current"] != 1
+
+    def test_cancel_run_does_not_commit(
+        self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
+    ) -> None:
+        """cancel_runはconn.commit()を呼ばない"""
+        run_id = self._setup_running_run(conn)
+
+        result = cancel_run(conn, run_id)
+
+        assert result == RunUpdateResult.UPDATED
+        row = reader_conn.execute("SELECT status FROM runs WHERE id = ?", (run_id,)).fetchone()
+        assert row["status"] != "cancelled"
+
+    def test_fail_run_if_not_terminal_does_not_commit(
+        self, conn: sqlite3.Connection, reader_conn: sqlite3.Connection
+    ) -> None:
+        """fail_run_if_not_terminalはconn.commit()を呼ばない"""
+        run_id = self._setup_running_run(conn)
+
+        result = fail_run_if_not_terminal(conn, run_id, "error")
+
+        assert result == RunUpdateResult.UPDATED
+        row = reader_conn.execute("SELECT status FROM runs WHERE id = ?", (run_id,)).fetchone()
+        assert row["status"] != "failed"
