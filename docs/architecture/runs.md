@@ -311,7 +311,7 @@ class RunManager:
             self._thread = Thread(target=self._execute_run, args=(run_id, scope))
             self._thread.daemon = True
             self._thread.start()
-        except Exception:
+        except Exception as e:
             # Cleanup on thread start failure
             with self._cancel_events_lock:
                 self._cancel_events.pop(run_id, None)
@@ -325,7 +325,7 @@ class RunManager:
                     with transaction(conn):
                         update_run_status(
                             conn, run_id, "failed",
-                            error_message="Failed to start execution thread",
+                            error_message=f"Failed to start execution thread: {e}",
                             finished_at=datetime.now(timezone.utc),
                         )
             except Exception as db_error:
