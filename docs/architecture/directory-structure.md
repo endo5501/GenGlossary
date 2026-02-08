@@ -135,7 +135,7 @@ GenGlossary/
 │   │   ├── test_project_repository.py
 │   │   └── test_synonym_repository.py
 │   ├── runs/                     # Run管理テスト (Schema v3)
-│   │   ├── test_manager.py      # RunManagerテスト (87 tests)
+│   │   ├── test_manager.py      # RunManagerテスト (92 tests)
 │   │   ├── test_executor.py     # PipelineExecutorテスト (81 tests)
 │   │   └── test_error_sanitizer.py  # エラーサニタイズテスト (28 tests)
 │   ├── test_document_loader.py

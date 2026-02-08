@@ -382,73 +382,64 @@ class RunManager:
         return run_id
 
     def _execute_run(self, run_id: int, scope: str) -> None:
-        """バックグラウンドスレッドでRunを実行
+        """バックグラウンドスレッドでRunを実行（オーケストレーター）
 
-        Note:
-            このメソッドは別スレッドで実行されるため、
-            独自のDB接続を作成します。
-            接続作成が失敗した場合もクリーンアップと完了シグナルを保証します。
+        3つのフェーズを順に実行:
+        1. _setup_run: DB接続作成、ステータス更新、実行コンテキスト作成
+        2. _run_pipeline: パイプライン実行とexecutorライフサイクル管理
+        3. _finalize_run_status: 最終ステータス確定
 
         重要: パイプライン実行とステータス更新は分離されています。
             これにより、パイプラインが成功してもDB更新が失敗した場合に
             ステータスが誤って 'failed' になる問題を防止します。
         """
         conn = None
-        pipeline_error = None
-        pipeline_traceback = None
         try:
-            # スレッド内で新しい接続を作成
-            conn = get_connection(self.db_path)
-
-            update_run_status(conn, run_id, "running", started_at=datetime.now(timezone.utc))
-
-            # Get cancel event (guaranteed to exist, created in start_run)
-            with self._cancel_events_lock:
-                cancel_event = self._cancel_events[run_id]
-
-            # 実行コンテキストを作成
-            context = ExecutionContext(
-                run_id=run_id,
-                log_callback=lambda msg: self._broadcast_log(run_id, msg),
-                cancel_event=cancel_event,
+            conn, context = self._setup_run(run_id)
+            pipeline_error, pipeline_traceback = self._run_pipeline(
+                conn, run_id, scope, context
             )
-
-            # パイプライン実行（分離されたtry/except）
-            executor = PipelineExecutor()
-            try:
-                executor.execute(conn, scope, context, doc_root=self.doc_root)
-            except Exception as e:
-                pipeline_error = e
-                pipeline_traceback = traceback.format_exc()
-            finally:
-                # Executor参照を削除し、リソースを解放
-                with self._executors_lock:
-                    self._executors.pop(run_id, None)
-                try:
-                    executor.close()
-                except Exception:
-                    logger.debug(...)
-
-            # ステータス更新（パイプライン実行とは別に処理）
             self._finalize_run_status(
                 conn, run_id, pipeline_error, pipeline_traceback
             )
-
         except Exception as e:
             # 接続エラーなど、パイプライン外のエラー
-            error_message = str(e)
-            error_traceback = traceback.format_exc()
-            self._update_failed_status(conn, run_id, error_message)
-            self._broadcast_log(run_id, {
-                "run_id": run_id, "level": "error",
-                "message": ..., "traceback": error_traceback
-            })
+            self._try_update_status(conn, run_id, "failed", str(e))
+            ...
         finally:
-            # Cleanup run resources (cancel event, completion signal, subscribers)
-            self._cleanup_run_resources(run_id, db_status=final_status, status_update_failed=status_update_failed)
-            # スレッド終了時に接続を閉じる（接続があれば）
+            self._cleanup_run_resources(run_id, ...)
             if conn is not None:
                 conn.close()
+
+    def _setup_run(self, run_id) -> tuple[Connection, ExecutionContext]:
+        """セットアップフェーズ: DB接続、ステータス更新、実行コンテキスト作成
+
+        接続作成後に失敗した場合は接続をcloseしてから例外を再送出。
+        """
+        conn = get_connection(self.db_path)
+        try:
+            update_run_status(conn, run_id, "running", ...)
+            context = ExecutionContext(run_id, log_callback, cancel_event)
+            return conn, context
+        except Exception:
+            conn.close()
+            raise
+
+    def _run_pipeline(self, conn, run_id, scope, context) -> tuple[Exception | None, str | None]:
+        """パイプライン実行とexecutorライフサイクル管理
+
+        executorの作成・登録・実行・参照削除・closeを包含。
+        例外は戻り値として返す（呼び出し元で処理）。
+        """
+        executor = PipelineExecutor(...)
+        try:
+            executor.execute(conn, scope, context, doc_root=self.doc_root)
+        except Exception as e:
+            return e, traceback.format_exc()
+        finally:
+            self._executors.pop(run_id, None)
+            executor.close()
+        return None, None
 
     def _finalize_run_status(self, conn, run_id, pipeline_error, pipeline_traceback) -> None:
         """パイプライン実行後のステータスを確定
@@ -1088,15 +1079,20 @@ if not issues:
 │ Background Thread                        │  │
 │                                          ↓  │
 │  _execute_run(run_id, scope):               │
-│    ├─ Connection作成（スレッド専用）        │
-│    ├─ update_run_status(conn, "running")    │
-│    ├─ PipelineExecutor.execute(conn, ...)   │
-│    │    ├─ DocumentLoader                    │
-│    │    ├─ TermExtractor                     │
-│    │    ├─ GlossaryGenerator                 │
-│    │    ├─ GlossaryReviewer                  │
-│    │    └─ GlossaryRefiner                   │
-│    ├─ update_run_status(conn, "completed")   │
+│    ├─ _setup_run(run_id)                     │
+│    │    ├─ Connection作成（スレッド専用）    │
+│    │    ├─ update_run_status("running")      │
+│    │    └─ ExecutionContext作成              │
+│    ├─ _run_pipeline(conn, run_id, scope, ctx)│
+│    │    ├─ PipelineExecutor作成              │
+│    │    ├─ executor.execute(conn, ...)       │
+│    │    │    ├─ DocumentLoader                │
+│    │    │    ├─ TermExtractor                 │
+│    │    │    ├─ GlossaryGenerator             │
+│    │    │    ├─ GlossaryReviewer              │
+│    │    │    └─ GlossaryRefiner               │
+│    │    └─ executor.close()                  │
+│    ├─ _finalize_run_status(conn, ...)        │
 │    └─ Connection閉じる                       │
 └─────────────────────────────────────────────┘
 
