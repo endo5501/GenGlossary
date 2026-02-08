@@ -136,6 +136,15 @@ export function ProvisionalPage({ projectId }: ProvisionalPageProps) {
             </Group>
 
             <Stack gap="md">
+              {selectedEntry.aliases.length > 0 && (
+                <Box>
+                  <Text fw={500} mb="xs">
+                    Aliases
+                  </Text>
+                  <Text size="sm">{selectedEntry.aliases.join('、')}</Text>
+                </Box>
+              )}
+
               <Textarea
                 label="Definition"
                 value={editDefinition}

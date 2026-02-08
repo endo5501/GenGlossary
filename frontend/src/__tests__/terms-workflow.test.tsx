@@ -584,7 +584,7 @@ describe('ProvisionalPage', () => {
         occurrences: [
           { document_path: 'doc1.md', line_number: 1, context: '田中太郎は...' },
         ],
-        aliases: ['田中', '田中部長'],
+        aliases: ['タナカ', '部長'],
       },
     ]
     server.use(
@@ -606,8 +606,8 @@ describe('ProvisionalPage', () => {
     })
 
     const editor = screen.getByTestId('provisional-detail-editor')
-    expect(within(editor).getByText(/田中/)).toBeInTheDocument()
-    expect(within(editor).getByText(/田中部長/)).toBeInTheDocument()
+    expect(within(editor).getByText('Aliases')).toBeInTheDocument()
+    expect(within(editor).getByText('タナカ、部長')).toBeInTheDocument()
   })
 
   it('does not show aliases section when term has no aliases', async () => {
@@ -854,7 +854,7 @@ describe('RefinedPage', () => {
         occurrences: [
           { document_path: 'doc1.md', line_number: 1, context: '田中太郎は...' },
         ],
-        aliases: ['田中', '田中部長'],
+        aliases: ['タナカ', '部長'],
       },
     ]
     server.use(
@@ -876,8 +876,8 @@ describe('RefinedPage', () => {
     })
 
     const detailPanel = screen.getByTestId('refined-detail-panel')
-    expect(within(detailPanel).getByText(/田中/)).toBeInTheDocument()
-    expect(within(detailPanel).getByText(/田中部長/)).toBeInTheDocument()
+    expect(within(detailPanel).getByText('Aliases')).toBeInTheDocument()
+    expect(within(detailPanel).getByText('タナカ、部長')).toBeInTheDocument()
   })
 
   it('does not show aliases section when term has no aliases', async () => {

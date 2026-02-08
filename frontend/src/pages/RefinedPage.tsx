@@ -1,9 +1,9 @@
 import {
   Box,
   Button,
-  Text,
   Paper,
   Stack,
+  Text,
 } from '@mantine/core'
 import { IconRefresh, IconDownload } from '@tabler/icons-react'
 import { useState } from 'react'
@@ -91,6 +91,15 @@ export function RefinedPage({ projectId }: RefinedPageProps) {
             <Text fw={600} size="lg" mb="md">
               {selectedEntry.term_name}
             </Text>
+
+            {selectedEntry.aliases.length > 0 && (
+              <Box mb="md">
+                <Text fw={500} mb="xs">
+                  Aliases
+                </Text>
+                <Text size="sm">{selectedEntry.aliases.join('、')}</Text>
+              </Box>
+            )}
 
             <Text fw={500} mb="xs">
               Definition
