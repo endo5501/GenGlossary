@@ -2114,6 +2114,45 @@ class TestRunManagerLogMessageDistinction:
         assert "not found" not in skipped_logs[0]["message"].lower()
 
 
+class TestTryUpdateStatusCommits:
+    """Tests that _try_update_status commits after updating.
+
+    Verified by checking that changes ARE visible from a separate connection
+    (committed changes are visible across connections in SQLite).
+    """
+
+    def test_try_update_status_commits_after_update(
+        self, manager: RunManager, project_db_path: str
+    ) -> None:
+        """_try_update_statusの更新後、別接続からデータが見える（commitされている）"""
+        from datetime import datetime, timezone
+        from genglossary.db.connection import get_connection
+        from genglossary.db.runs_repository import update_run_status
+
+        conn = get_connection(project_db_path)
+        try:
+            run_id = create_run(conn, scope="full")
+            update_run_status(
+                conn, run_id, "running",
+                started_at=datetime.now(timezone.utc),
+            )
+
+            result = manager._try_update_status(conn, run_id, "completed")
+            assert result is True
+
+            # Verify from a separate connection that commit happened
+            reader = get_connection(project_db_path)
+            try:
+                row = reader.execute(
+                    "SELECT status FROM runs WHERE id = ?", (run_id,)
+                ).fetchone()
+                assert row["status"] == "completed"
+            finally:
+                reader.close()
+        finally:
+            conn.close()
+
+
 class TestCleanupRunResourcesWithDbStatus:
     """Tests for _cleanup_run_resources with db_status parameter."""
 
