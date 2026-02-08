@@ -141,8 +141,14 @@ async def remove_member_from_group(
     project_db: sqlite3.Connection = Depends(get_project_db),
 ) -> None:
     """Remove a member from a synonym group."""
-    with transaction(project_db):
-        removed = remove_member(project_db, member_id)
+    try:
+        with transaction(project_db):
+            removed = remove_member(project_db, group_id, member_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Member {member_id} does not belong to group {group_id}",
+        )
 
     if not removed:
         raise HTTPException(

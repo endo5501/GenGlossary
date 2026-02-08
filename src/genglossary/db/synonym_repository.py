@@ -81,17 +81,33 @@ def add_member(
     return cast(int, cursor.lastrowid)
 
 
-def remove_member(conn: sqlite3.Connection, member_id: int) -> bool:
+def remove_member(
+    conn: sqlite3.Connection, group_id: int, member_id: int
+) -> bool:
     """Remove a member from a synonym group.
 
     Args:
         conn: Database connection.
+        group_id: The expected group ID the member belongs to.
         member_id: The ID of the member to remove.
 
     Returns:
         True if a member was removed, False if not found.
+
+    Raises:
+        ValueError: If the member exists but belongs to a different group.
     """
     cursor = conn.cursor()
+    cursor.execute(
+        "SELECT group_id FROM term_synonym_members WHERE id = ?", (member_id,)
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return False
+    if row["group_id"] != group_id:
+        raise ValueError(
+            f"Member {member_id} does not belong to group {group_id}"
+        )
     cursor.execute(
         "DELETE FROM term_synonym_members WHERE id = ?", (member_id,)
     )
