@@ -176,15 +176,38 @@ class TestRemoveMember:
         )
         member_id = cursor.fetchone()[0]
 
-        result = remove_member(db_with_schema, member_id)
+        result = remove_member(db_with_schema, group_id, member_id)
 
         assert result is True
 
     def test_remove_nonexistent_member_returns_false(
         self, db_with_schema: sqlite3.Connection
     ) -> None:
-        result = remove_member(db_with_schema, 999)
+        group_id = create_group(
+            db_with_schema, "田中太郎", ["田中太郎"]
+        )
+        result = remove_member(db_with_schema, group_id, 999)
         assert result is False
+
+    def test_remove_member_with_wrong_group_id_raises(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Removing a member with mismatched group_id raises ValueError."""
+        group_a = create_group(
+            db_with_schema, "田中太郎", ["田中太郎", "田中"]
+        )
+        group_b = create_group(
+            db_with_schema, "サーバー", ["サーバー", "サーバ"]
+        )
+        cursor = db_with_schema.cursor()
+        cursor.execute(
+            "SELECT id FROM term_synonym_members WHERE term_text = ?",
+            ("田中",),
+        )
+        member_id = cursor.fetchone()[0]
+
+        with pytest.raises(ValueError, match="does not belong to group"):
+            remove_member(db_with_schema, group_b, member_id)
 
 
 class TestUpdatePrimaryTerm:
