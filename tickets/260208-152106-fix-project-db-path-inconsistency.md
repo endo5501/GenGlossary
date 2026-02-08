@@ -3,7 +3,7 @@ priority: 2
 tags: [bug, storage, testing]
 description: "Fix project DB path generation inconsistency between CLI and API, and fix test data leaking to production directory"
 created_at: "2026-02-08T15:21:06Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-08T15:31:57Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -34,17 +34,72 @@ DBはフラットに置かれる一方、空のサブディレクトリが残る
 
 ## 対象ファイル
 
-- `src/genglossary/api/routers/projects.py` — `_generate_db_path()`, `_generate_doc_root()`
+- `src/genglossary/api/routers/projects.py` — `_generate_db_path()`, `_generate_doc_root()`, `_cleanup_doc_root()`, `_create_project_with_cleanup()`
 - `src/genglossary/cli_project.py` — `_get_project_db_path()`
-- `tests/api/conftest.py` — `isolate_registry` フィクスチャ
+- `tests/conftest.py` — ルートレベルのテスト隔離フィクスチャ追加
+- `tests/api/conftest.py` — `isolate_registry` フィクスチャ削除
+
+## 設計
+
+### 1. テスト隔離 (tests/conftest.py)
+
+ルートレベルに autouse フィクスチャを追加し、全テストで `GENGLOSSARY_DATA_DIR` と `GENGLOSSARY_REGISTRY_PATH` を `tmp_path` 配下に向ける。
+
+```python
+@pytest.fixture(autouse=True)
+def isolate_data_dir(tmp_path, monkeypatch):
+    test_data_dir = tmp_path / "genglossary_data"
+    test_data_dir.mkdir()
+    monkeypatch.setenv("GENGLOSSARY_DATA_DIR", str(test_data_dir))
+    monkeypatch.setenv("GENGLOSSARY_REGISTRY_PATH", str(test_data_dir / "registry.db"))
+```
+
+`tests/api/conftest.py` の `isolate_registry` はルートに統合されるため削除。
+pytest の `tmp_path` は直近3回分のみ保持し古い分は自動削除されるため、残骸蓄積の心配なし。
+
+### 2. CLI の DB パス生成をフラット方式に統一 (cli_project.py)
+
+`_get_project_db_path()` を API と同じ `{名前}_{UUID}.db` 方式に変更。
+
+```python
+def _get_project_db_path(registry, project_name):
+    projects_dir = _get_projects_dir(registry)
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in project_name)
+    unique_id = uuid4().hex[:8]
+    db_path = projects_dir / f"{safe_name}_{unique_id}.db"
+    return db_path.resolve()
+```
+
+サニタイズロジックは CLI/API で重複するが、2箇所のみ・1行のロジックなので共通化しない（YAGNI）。
+
+### 3. API の `_generate_doc_root()` 廃止 (api/routers/projects.py)
+
+Web API ではドキュメントは DB に直接保存されるため、`doc_root` ディレクトリの自動生成は不要。
+
+- `doc_root` 未指定時は空文字 `""` を registry に保存
+- `_generate_doc_root()` 関数を削除
+- `_cleanup_doc_root()` 関数を削除
+- `_create_project_with_cleanup()` の `doc_root_auto_generated` パラメータと関連ロジックを削除
+- registry スキーマの `doc_root TEXT NOT NULL` はそのまま（空文字で対応、スキーマ変更不要）
+
+### 4. テスト残骸のクリーンアップ
+
+全コード変更・テスト完了後に `~/.genglossary/` を削除。次回プロジェクト作成時に自動再作成される。
+
+```bash
+rm -rf ~/.genglossary
+```
 
 ## Tasks
 
-- [ ] `tests/api/conftest.py` の `isolate_registry` に `GENGLOSSARY_DATA_DIR` の隔離を追加
-- [ ] テスト残骸防止策: ルートレベル `tests/conftest.py` に `GENGLOSSARY_DATA_DIR` を `tmp_path` に向ける autouse フィクスチャを追加し、全テストで本番ディレクトリへの書き込みを防止する
-- [ ] テストを実行し、テストDBが `tmp_path` 配下に作成されることを確認（`~/.genglossary/` に新規ファイルが増えないことを検証）
-- [ ] CLI と API の DB パス生成方式を統一（API側をネスト構造に合わせる方向を検討）
-- [ ] `~/.genglossary/projects/` のテスト残骸ファイルを手動クリーンアップ
+- [ ] テスト隔離: ルート `tests/conftest.py` に `isolate_data_dir` autouse フィクスチャ追加
+- [ ] テスト隔離: `tests/api/conftest.py` の `isolate_registry` 削除
+- [ ] テスト実行して既存テストが全パスすることを確認
+- [ ] CLI 統一: `cli_project.py` の `_get_project_db_path()` をフラット方式に変更
+- [ ] API 廃止: `_generate_doc_root()`, `_cleanup_doc_root()` 削除、`doc_root` 未指定時は空文字
+- [ ] テスト実行して全パスすることを確認
+- [ ] クリーンアップ: `~/.genglossary/` 削除
 - [ ] Commit
 - [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before reviewing and pass all tests (No exceptions)
@@ -57,13 +112,5 @@ DBはフラットに置かれる一方、空のサブディレクトリが残る
 
 ## Notes
 
-- 開発中のツールのため `~/.genglossary/` 配下のファイルは全削除可能
-- DB パス統一の方向性はCLI側のネスト構造 (`projects/{名前}/project.db`) に合わせるのが自然
-  - API の `_generate_db_path()` を修正し、ネスト構造に変更
-  - `_generate_doc_root()` も同じディレクトリ内でドキュメントを管理する形に
-- registry.db にはプロジェクトの `db_path` が絶対パスで保存されているため、
-  パス変更時は既存レコードのマイグレーションも必要（ただし全削除前提なら不要）
-- テスト残骸防止の方針:
-  - ルート `tests/conftest.py` に autouse フィクスチャで `GENGLOSSARY_DATA_DIR` と `GENGLOSSARY_REGISTRY_PATH` を `tmp_path` 配下に向ける
-  - これにより、API テスト以外（CLI テスト等が将来追加された場合）でも本番ディレクトリを汚さない
-  - `tests/api/conftest.py` の `isolate_registry` は必要に応じてルートフィクスチャと統合または削除
+- 開発中のツールのため `~/.genglossary/` 配下は全削除可能
+- `provisional.py` が `DocumentLoader().load_directory(project.doc_root)` でファイルシステムから直接読んでいる問題は別チケットで対応
