@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 3
 tags: [backend, database, potential-bug]
 description: "Fix transaction/commit overlap in update_run_status_if_active"
 created_at: "2026-02-05T13:23:16Z"

@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 3
 tags: [backend, refactoring]
 description: "Refactor RunManager._execute_run into smaller methods"
 created_at: "2026-02-07T03:53:07Z"

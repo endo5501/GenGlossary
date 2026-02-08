@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 2
 tags: [improvement, backend, security]
 description: "Sanitize error messages before DB persistence and API exposure"
 created_at: "2026-02-08T09:44:48Z"

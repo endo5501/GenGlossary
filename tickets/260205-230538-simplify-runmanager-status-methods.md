@@ -1,21 +1,24 @@
 ---
-priority: 4
+priority: 3
 tags: [backend, refactoring]
-description: "Simplify RunManager status update methods"
+description: "Simplify RunManager status update methods and rename ALREADY_TERMINAL enum"
 created_at: "2026-02-05T23:05:38Z"
 started_at: null  # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
-# Simplify RunManager status update methods
+# Simplify RunManager status update methods + Rename ALREADY_TERMINAL enum
 
 ## Overview
 
-Code-simplifier review identified opportunities to reduce redundancy in RunManager's status update methods.
+Code-simplifier review identified opportunities to reduce redundancy in RunManager's status update methods. Additionally, `RunUpdateResult.ALREADY_TERMINAL` needs renaming as it is inaccurate.
 
 ## Related Files
 
 - `src/genglossary/runs/manager.py`
+- `src/genglossary/db/runs_repository.py`
+- `tests/db/test_runs_repository.py`
+- `tests/runs/test_manager.py`
 
 ## Proposed Changes
 
@@ -52,8 +55,14 @@ self._subscribers[run_id].add(queue)
 self._subscribers.setdefault(run_id, set()).add(queue)
 ```
 
+### 4. Rename ALREADY_TERMINAL enum value
+
+`RunUpdateResult.ALREADY_TERMINAL` は `update_run_status_if_running` で `pending`（非terminal）状態にも返されるため、名前が不正確。`NOT_IN_EXPECTED_STATE` や `PRECONDITION_FAILED` 等へ改名する。
+
 ## Tasks
 
+- [ ] Rename `ALREADY_TERMINAL` to a more accurate name (e.g. `NOT_IN_EXPECTED_STATE`)
+- [ ] Update all references in production code and tests
 - [ ] Refactor `_try_update_status` to include fallback logic
 - [ ] Remove `_try_status_with_fallback` method
 - [ ] Remove `_update_failed_status` method
@@ -61,8 +70,8 @@ self._subscribers.setdefault(run_id, set()).add(queue)
 - [ ] Simplify `register_subscriber` with setdefault
 - [ ] Update all callers
 - [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest`) before reviwing and pass all tests (No exceptions)
+- [ ] Run static analysis (`pyright`) before reviewing and pass all tests (No exceptions)
+- [ ] Run tests (`uv run pytest`) before reviewing and pass all tests (No exceptions)
 - [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
 - [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
 - [ ] Update docs (glob: "*.md" in ./docs/architecture)
@@ -72,5 +81,7 @@ self._subscribers.setdefault(run_id, set()).add(queue)
 
 ## Notes
 
-Identified during code-simplifier review of ticket 260205-224243.
-Expected to reduce ~50-60 lines of code.
+- Identified during code-simplifier review of ticket 260205-224243.
+- Expected to reduce ~50-60 lines of code.
+- Enum rename identified by codex MCP review of ticket 260205-132315.
+- 統合元チケット: 260207-032015-rename-already-terminal-enum

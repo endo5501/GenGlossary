@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 3
 tags: [backend, bug-prevention]
 description: "Fix cross-process race condition for active run check"
 created_at: "2026-02-05T23:12:26Z"

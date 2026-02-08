@@ -1,5 +1,5 @@
 ---
-priority: 4
+priority: 2
 tags: [backend, bug-prevention]
 description: "Close PipelineExecutor on completion/failure to prevent resource leak"
 created_at: "2026-02-05T23:12:54Z"
