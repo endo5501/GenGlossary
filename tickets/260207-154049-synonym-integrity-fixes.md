@@ -4,7 +4,7 @@ tags: [bugfix, backend, api]
 description: "Fix synonym group integrity issues found during code review"
 created_at: "2026-02-07T15:40:49Z"
 started_at: 2026-02-08T07:48:37Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-08T08:16:02Z # Do not modify manually
 ---
 
 # 同義語グループ整合性修正
