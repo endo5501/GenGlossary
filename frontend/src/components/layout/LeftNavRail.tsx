@@ -10,6 +10,7 @@ import {
 } from '@tabler/icons-react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useCurrentRun } from '../../api/hooks/useRuns'
+import { extractProjectId } from '../../utils/extractProjectId'
 
 interface NavItem {
   label: string
@@ -33,11 +34,6 @@ const STEP_TO_MENU: Record<string, string> = {
   provisional: '/provisional',
   issues: '/issues',
   refined: '/refined',
-}
-
-function extractProjectId(pathname: string): number | undefined {
-  const match = pathname.match(/^\/projects\/(\d+)/)
-  return match ? Number(match[1]) : undefined
 }
 
 function getPath(basePath: string, projectId: number | undefined, projectScoped: boolean): string {
