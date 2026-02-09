@@ -398,6 +398,9 @@ def add_term(
 
     Returns:
         tuple[int, bool]: (term_id, created) - createdは新規追加時True、既存時False
+
+    Raises:
+        RuntimeError: INSERTもSELECTも行を返さない異常な状態
     """
     ...
 
@@ -447,6 +450,7 @@ def bulk_add_terms(
 - `table` パラメータでテーブル名を指定（`terms_excluded` / `terms_required`）
 - `model_type` パラメータで戻り値の型を制御（`ExcludedTerm` / `RequiredTerm`）
 - `add_term` は `tuple[int, bool]` を返し、新規/既存を呼び出し側が判別可能
+- `add_term` は `fetchone()` が `None` を返す異常時に `RuntimeError` を送出（防御的ガード）
 
 ## excluded_term_repository.py (v5) - 薄いラッパー
 

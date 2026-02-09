@@ -188,9 +188,9 @@ class TermResponseBase(BaseModel):
         ...
 
 
-class TermListResponseBase(BaseModel):
+class TermListResponseBase(BaseModel, Generic[T]):
     """Base response schema for list of terms."""
-    items: list = Field(..., description="List of terms")
+    items: list[T] = Field(..., description="List of terms")
     total: int = Field(..., description="Total number of terms")
 
 
@@ -256,6 +256,7 @@ class RequiredTermCreateRequest(TermCreateRequestBase):
 
 **スキーマ共通化パターン:**
 - `TermResponseBase` / `TermListResponseBase` / `TermCreateRequestBase` をベースクラスとして抽出
+- `TermListResponseBase` は `Generic[T]` を継承し、`items: list[T]` でOpenAPIスキーマに型情報を反映
 - 各スキーマは `source` フィールドの `Literal` 型を具体化するだけ
 - バリデーション（`validate_term_text`）はベースクラスに実装し、サブクラスは継承するだけ
 - `project_schemas.py` の `_validate_project_name()` パターンと類似した設計思想

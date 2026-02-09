@@ -31,7 +31,7 @@ class ExcludedTermResponse(TermResponseBase):
         return [cls.from_model(model) for model in models]
 
 
-class ExcludedTermListResponse(TermListResponseBase):
+class ExcludedTermListResponse(TermListResponseBase[ExcludedTermResponse]):
     """Response schema for list of excluded terms."""
 
     items: list[ExcludedTermResponse] = Field(
