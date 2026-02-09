@@ -39,6 +39,7 @@ export function useTermsList<T>(
     ...useQuery({
       queryKey: keys.list(projectId!),
       queryFn: async () => {
+        if (projectId === undefined) return []
         const response = await apiClient.get<TermListResponse<T>>(
           `/api/projects/${projectId}/${options.apiPath}`
         )

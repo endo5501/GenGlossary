@@ -3,8 +3,8 @@ priority: 4
 tags: [improvement, backend, frontend]
 description: "Minor improvements from dedup refactoring code review"
 created_at: "2026-02-07T11:32:10Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-09T14:21:35Z # Do not modify manually
+closed_at: 2026-02-09T14:38:45Z # Do not modify manually
 ---
 
 # Minor improvements from dedup refactoring code review
@@ -26,19 +26,34 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] generic_term_repository: add_term で row が None の場合のエラーハンドリング追加
-- [ ] useTermsCrud: projectId undefined 時の安全ガード追加
-- [ ] term_base_schemas: TermListResponseBase.items にジェネリック型を適用
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] generic_term_repository: add_term で row が None の場合のエラーハンドリング追加
+- [x] useTermsCrud: projectId undefined 時の安全ガード追加
+- [x] term_base_schemas: TermListResponseBase.items にジェネリック型を適用
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
+
+## Design
+
+### 1. generic_term_repository: None row ガード
+- `row = cursor.fetchone()` の後に `if row is None:` のガードを追加
+- `RuntimeError` を送出、テーブル名と term_text をエラーメッセージに含める
+
+### 2. useTermsCrud: projectId undefined ガード
+- 各フック内で `projectId` が undefined/falsy の場合に早期リターン
+- リスト取得は空配列を返し、mutation系は何もしない
+
+### 3. term_base_schemas: ジェネリック型の適用
+- `TermListResponseBase` を `BaseModel, Generic[T]` に変更
+- `items: list[T]` に型パラメータを適用
+- サブクラスで具象型を指定
 
 ## Notes
 

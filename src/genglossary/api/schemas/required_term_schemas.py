@@ -31,7 +31,7 @@ class RequiredTermResponse(TermResponseBase):
         return [cls.from_model(model) for model in models]
 
 
-class RequiredTermListResponse(TermListResponseBase):
+class RequiredTermListResponse(TermListResponseBase[RequiredTermResponse]):
     """Response schema for list of required terms."""
 
     items: list[RequiredTermResponse] = Field(

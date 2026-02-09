@@ -1,7 +1,7 @@
 """Base schemas shared by Excluded Terms and Required Terms APIs."""
 
 from datetime import datetime
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -34,10 +34,10 @@ class TermResponseBase(BaseModel):
         return [cls.from_model(model) for model in models]
 
 
-class TermListResponseBase(BaseModel):
+class TermListResponseBase(BaseModel, Generic[T]):
     """Base response schema for list of terms."""
 
-    items: list = Field(..., description="List of terms")
+    items: list[T] = Field(..., description="List of terms")
     total: int = Field(..., description="Total number of terms")
 
 
