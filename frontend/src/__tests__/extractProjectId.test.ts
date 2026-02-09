@@ -22,11 +22,19 @@ describe('extractProjectId', () => {
     expect(extractProjectId('/projects/foo')).toBeUndefined()
   })
 
-  it('should return undefined when Number() produces NaN', () => {
+  it('should return undefined for trailing slash without ID', () => {
     expect(extractProjectId('/projects/')).toBeUndefined()
   })
 
-  it('should handle large numeric IDs', () => {
+  it('should return undefined for malformed path with suffix after digits', () => {
+    expect(extractProjectId('/projects/123abc')).toBeUndefined()
+  })
+
+  it('should return undefined for IDs exceeding Number.MAX_SAFE_INTEGER', () => {
+    expect(extractProjectId('/projects/99999999999999999')).toBeUndefined()
+  })
+
+  it('should handle large but safe numeric IDs', () => {
     expect(extractProjectId('/projects/999999')).toBe(999999)
   })
 })

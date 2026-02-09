@@ -1,6 +1,6 @@
 export function extractProjectId(pathname: string): number | undefined {
-  const match = pathname.match(/^\/projects\/(\d+)/)
+  const match = pathname.match(/^\/projects\/(\d+)(?:\/|$)/)
   if (!match) return undefined
   const id = Number(match[1])
-  return Number.isFinite(id) ? id : undefined
+  return Number.isSafeInteger(id) ? id : undefined
 }
