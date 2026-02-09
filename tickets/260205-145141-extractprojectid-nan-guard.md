@@ -4,7 +4,7 @@ tags: [edge-case, frontend]
 description: "Add NaN guard to extractProjectId in AppShell"
 created_at: "2026-02-05T14:51:41Z"
 started_at: 2026-02-09T14:11:58Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-09T14:20:41Z # Do not modify manually
 ---
 
 # Add NaN guard to extractProjectId
