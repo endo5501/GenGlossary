@@ -3,7 +3,7 @@ priority: 4
 tags: [improvement, backend, frontend]
 description: "Minor improvements from dedup refactoring code review"
 created_at: "2026-02-07T11:32:10Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-09T14:21:35Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -39,6 +39,21 @@ closed_at: null   # Do not modify manually
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
+
+## Design
+
+### 1. generic_term_repository: None row ガード
+- `row = cursor.fetchone()` の後に `if row is None:` のガードを追加
+- `RuntimeError` を送出、テーブル名と term_text をエラーメッセージに含める
+
+### 2. useTermsCrud: projectId undefined ガード
+- 各フック内で `projectId` が undefined/falsy の場合に早期リターン
+- リスト取得は空配列を返し、mutation系は何もしない
+
+### 3. term_base_schemas: ジェネリック型の適用
+- `TermListResponseBase` を `BaseModel, Generic[T]` に変更
+- `items: list[T]` に型パラメータを適用
+- サブクラスで具象型を指定
 
 ## Notes
 
