@@ -1241,10 +1241,12 @@ class TestCreateFilesBulkAutoExtract:
         assert len(data["files"]) == 1
         assert data["files"][0]["file_name"] == "file1.txt"
 
-        # RunManager.start_run should have been called with extract scope
-        mock_manager.start_run.assert_called_once_with(
-            scope="extract", triggered_by="auto"
-        )
+        # RunManager.start_run should have been called with extract scope and document_ids
+        mock_manager.start_run.assert_called_once()
+        call_kwargs = mock_manager.start_run.call_args.kwargs
+        assert call_kwargs["scope"] == "extract"
+        assert call_kwargs["triggered_by"] == "auto"
+        assert call_kwargs["document_ids"] is not None
 
     def test_create_files_bulk_skips_extract_when_run_active(
         self, test_project_setup, client: TestClient

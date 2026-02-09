@@ -372,11 +372,16 @@ async def create_files_bulk(
     # Build file responses
     file_responses = [FileResponse.from_db_row(row) for row in created_rows]
 
-    # Auto-trigger extract run
+    # Collect new document IDs for incremental extract
+    new_document_ids = [row["id"] for row in created_rows]
+
+    # Auto-trigger extract run (only for new files)
     extract_started = False
     extract_skipped_reason: str | None = None
     try:
-        manager.start_run(scope="extract", triggered_by="auto")
+        manager.start_run(
+            scope="extract", triggered_by="auto", document_ids=new_document_ids
+        )
         extract_started = True
     except Exception as e:
         logger.warning("Auto-extract skipped: %s", e)
