@@ -97,6 +97,9 @@ Mantine のデフォルトテーマをベースにカスタマイズ。
 
 #### AppShell レイアウト
 
+**projectId抽出:**
+`extractProjectId` ユーティリティ (`utils/extractProjectId.ts`) がURLパスからプロジェクトIDを抽出します。`AppShell`と`LeftNavRail`の両方で共有されており、セグメント境界チェックと`Number.isSafeInteger`ガードを含みます。
+
 **レイアウト分離:**
 - ホーム画面（`/`）: シンプルレイアウト（ヘッダーのみ）
 - プロジェクト詳細画面（`/projects/$projectId/*`）: フルレイアウト
