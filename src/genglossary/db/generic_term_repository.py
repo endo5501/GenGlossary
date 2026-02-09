@@ -51,6 +51,10 @@ def add_term(
         (term_text,),
     )
     row = cursor.fetchone()
+    if row is None:
+        raise RuntimeError(
+            f"Failed to retrieve term from {table}: '{term_text}'"
+        )
     return cast(int, row["id"]), False
 
 
