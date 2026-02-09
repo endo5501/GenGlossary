@@ -13,6 +13,7 @@ from genglossary.db.document_repository import (
     create_documents_batch,
     delete_all_documents,
     list_all_documents,
+    list_documents_by_ids,
 )
 from genglossary.db.issue_repository import create_issues_batch, delete_all_issues, list_all_issues
 from genglossary.db.models import GlossaryTermRow
@@ -324,6 +325,7 @@ class PipelineExecutor:
         scope: str | PipelineScope,
         context: ExecutionContext,
         doc_root: str = ".",
+        document_ids: list[int] | None = None,
     ) -> None:
         """Execute the pipeline for the given scope.
 
@@ -332,6 +334,10 @@ class PipelineExecutor:
             scope: Execution scope (PipelineScope enum or string).
             context: Execution context containing run_id, log_callback, and cancel_event.
             doc_root: Root directory for documents (default: ".").
+            document_ids: Optional list of document IDs to extract from.
+                When provided (incremental extract), only specified documents are
+                processed and existing terms are preserved. When None, all documents
+                are processed and existing terms are cleared (full extract).
 
         Raises:
             PipelineCancelledException: If execution is cancelled.
@@ -344,13 +350,13 @@ class PipelineExecutor:
 
         self._check_cancellation(context)  # Raises if cancelled
 
-        # Backup user_notes before clearing terms (extract scope only)
+        # Skip table clearing and user_notes backup for incremental extract
         user_notes_backup: dict[str, str] = {}
-        if scope_enum == PipelineScope.EXTRACT:
-            user_notes_backup = backup_user_notes(conn)
-
-        # Clear tables before execution
-        self._clear_tables_for_scope(conn, scope_enum)
+        if document_ids is None:
+            # Full extract: backup user_notes and clear tables
+            if scope_enum == PipelineScope.EXTRACT:
+                user_notes_backup = backup_user_notes(conn)
+            self._clear_tables_for_scope(conn, scope_enum)
 
         # Execute based on scope using dispatch table with direct method references
         scope_handlers = {
@@ -366,9 +372,12 @@ class PipelineExecutor:
             self._log(context, "error", f"Unknown scope: {scope_enum}")
             raise ValueError(f"Unknown scope: {scope_enum}")
 
-        handler(conn, context, doc_root)
+        if document_ids is not None and scope_enum == PipelineScope.EXTRACT:
+            self._execute_extract_incremental(conn, context, document_ids)
+        else:
+            handler(conn, context, doc_root)
 
-        # Restore user_notes after extract
+        # Restore user_notes after full extract
         if user_notes_backup:
             with transaction(conn):
                 restore_user_notes(conn, user_notes_backup)
@@ -531,6 +540,33 @@ class PipelineExecutor:
         """
         documents = self._load_documents(conn, context, doc_root)
         self._log(context, "info", f"Loaded {len(documents)} documents")
+        self._do_extract(conn, context, documents)
+
+    @_cancellable
+    def _execute_extract_incremental(
+        self,
+        conn: sqlite3.Connection,
+        context: ExecutionContext,
+        document_ids: list[int],
+    ) -> None:
+        """Execute incremental extract for specified documents only.
+
+        Unlike full extract, this does not clear existing terms.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging and cancellation.
+            document_ids: List of document IDs to extract from.
+
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+        """
+        doc_rows = list_documents_by_ids(conn, document_ids)
+        if not doc_rows:
+            self._log(context, "warning", "No documents found for specified IDs")
+            return
+        documents = self._documents_from_db_rows(doc_rows)
+        self._log(context, "info", f"Loaded {len(documents)} documents (incremental)")
         self._do_extract(conn, context, documents)
 
     @_cancellable
