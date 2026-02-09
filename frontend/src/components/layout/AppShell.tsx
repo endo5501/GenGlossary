@@ -13,11 +13,7 @@ import {
   issueKeys,
   refinedKeys,
 } from '../../api/hooks'
-
-function extractProjectId(pathname: string): number | undefined {
-  const match = pathname.match(/^\/projects\/(\d+)/)
-  return match ? Number(match[1]) : undefined
-}
+import { extractProjectId } from '../../utils/extractProjectId'
 
 export function AppShell() {
   const location = useLocation()

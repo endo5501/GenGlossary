@@ -197,6 +197,11 @@ frontend/
 │   │       ├── GlobalTopBar.tsx  # ヘッダー
 │   │       ├── LeftNavRail.tsx   # 左ナビゲーション
 │   │       └── LogPanel.tsx      # ログビューア
+│   ├── utils/               # ユーティリティ
+│   │   ├── extractProjectId.ts # URLからプロジェクトID抽出
+│   │   ├── colors.ts        # カラーユーティリティ
+│   │   ├── termUtils.ts     # 用語関連ユーティリティ
+│   │   └── getRowSelectionProps.ts # テーブル行選択ヘルパー
 │   ├── routes/              # ルーティング設定
 │   │   └── index.tsx        # TanStack Routerルート定義
 │   ├── theme/               # テーマ設定

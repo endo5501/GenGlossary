@@ -3,8 +3,8 @@ priority: 4
 tags: [edge-case, frontend]
 description: "Add NaN guard to extractProjectId in AppShell"
 created_at: "2026-02-05T14:51:41Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-09T14:11:58Z # Do not modify manually
+closed_at: 2026-02-09T14:20:41Z # Do not modify manually
 ---
 
 # Add NaN guard to extractProjectId
@@ -35,17 +35,17 @@ codex MCPのコードレビューで指摘された問題。
 
 ## Tasks
 
-- [ ] `extractProjectId`または`hasProject`で`Number.isFinite()`ガードを追加
-- [ ] テストの追加
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] `extractProjectId`または`hasProject`で`Number.isFinite()`ガードを追加
+- [x] テストの追加
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes
