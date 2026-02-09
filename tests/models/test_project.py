@@ -84,14 +84,14 @@ class TestProjectCreation:
                 db_path="/path/to/project.db",
             )
 
-    def test_project_doc_root_cannot_be_empty(self) -> None:
-        """doc_rootが空文字列の場合はエラーになる"""
-        with pytest.raises(ValidationError):
-            Project(
-                name="test-project",
-                doc_root="",
-                db_path="/path/to/project.db",
-            )
+    def test_project_doc_root_can_be_empty(self) -> None:
+        """doc_rootは空文字列を許容する (API経由の場合doc_rootは不要)"""
+        project = Project(
+            name="test-project",
+            doc_root="",
+            db_path="/path/to/project.db",
+        )
+        assert project.doc_root == ""
 
     def test_project_db_path_cannot_be_empty(self) -> None:
         """db_pathが空文字列の場合はエラーになる"""

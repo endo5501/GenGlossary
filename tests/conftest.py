@@ -13,6 +13,22 @@ from genglossary.models.glossary import Glossary
 from genglossary.models.term import Term, TermOccurrence
 
 
+# --- Data Directory Isolation ---
+
+
+@pytest.fixture(autouse=True)
+def isolate_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate test data from production directory.
+
+    Redirects GENGLOSSARY_DATA_DIR and GENGLOSSARY_REGISTRY_PATH to tmp_path
+    to prevent test data from leaking into ~/.genglossary/.
+    """
+    test_data_dir = tmp_path / "genglossary_data"
+    test_data_dir.mkdir()
+    monkeypatch.setenv("GENGLOSSARY_DATA_DIR", str(test_data_dir))
+    monkeypatch.setenv("GENGLOSSARY_REGISTRY_PATH", str(test_data_dir / "registry.db"))
+
+
 # --- Mock Response Models ---
 
 

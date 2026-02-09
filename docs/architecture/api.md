@@ -525,15 +525,14 @@ async def create_new_project(
 ) -> ProjectResponse:
     """新しいプロジェクトを作成
 
-    doc_rootが未指定の場合、{data_dir}/projects/{project_name}/に自動生成される。
+    doc_rootが未指定の場合、空文字列が保存される（APIではドキュメントはDBに直接保存）。
     """
     db_path = _generate_db_path(request.name)
-    doc_root = request.doc_root or _generate_doc_root(request.name)
+    doc_root = request.doc_root or ""
     try:
         project_id = create_project(registry_conn, ...)
     except sqlite3.IntegrityError:
         _cleanup_db_file(db_path)  # 共通ヘルパーでクリーンアップ
-        _cleanup_doc_root(doc_root)  # 自動生成したdoc_rootもクリーンアップ
         raise HTTPException(status_code=409, detail="Project name already exists")
     ...
 

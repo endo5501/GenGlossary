@@ -4,6 +4,7 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator
+from uuid import uuid4
 
 import click
 from rich.console import Console
@@ -26,23 +27,6 @@ from genglossary.models.project import ProjectStatus
 
 console = Console()
 
-
-def _get_registry_conn(registry_path: str | None):
-    """Get registry database connection.
-
-    Args:
-        registry_path: Optional path to registry database.
-                      If None, uses default path.
-
-    Returns:
-        SQLite connection to registry database.
-    """
-    if registry_path is None:
-        registry_path = str(get_default_registry_path())
-
-    conn = get_registry_connection(registry_path)
-    initialize_registry(conn)
-    return conn
 
 
 def _get_projects_dir(registry: Path | None) -> Path:
@@ -73,8 +57,10 @@ def _get_project_db_path(registry: Path | None, project_name: str) -> Path:
         Path to project database file (absolute path).
     """
     projects_dir = _get_projects_dir(registry)
-    db_path = projects_dir / project_name / "project.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in project_name)
+    unique_id = uuid4().hex[:8]
+    db_path = projects_dir / f"{safe_name}_{unique_id}.db"
     return db_path.resolve()
 
 

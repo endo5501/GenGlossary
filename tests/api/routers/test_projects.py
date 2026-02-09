@@ -260,15 +260,9 @@ class TestCreateProject:
     def test_creates_project_without_doc_root(
         self, test_registry_setup, client: TestClient, monkeypatch
     ):
-        """Test creates project without doc_root and auto-generates it."""
-        # Set data directory for predictable path
-        tmp_path = Path(test_registry_setup["tmp_path"])
-        data_dir = tmp_path / "genglossary_data"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setenv("GENGLOSSARY_DATA_DIR", str(data_dir))
-
+        """Test creates project without doc_root stores empty string."""
         payload = {
-            "name": "Auto Doc Root Project",
+            "name": "No Doc Root Project",
             "llm_provider": "ollama",
             "llm_model": "llama3.2",
         }
@@ -278,15 +272,12 @@ class TestCreateProject:
         assert response.status_code == 201
         data = response.json()
         assert "id" in data
-        assert data["name"] == "Auto Doc Root Project"
-        # doc_root should be auto-generated under projects directory
-        expected_doc_root = str(data_dir / "projects" / "Auto Doc Root Project")
-        assert data["doc_root"] == expected_doc_root
+        assert data["name"] == "No Doc Root Project"
+        # doc_root should be empty string when not provided
+        assert data["doc_root"] == ""
         assert data["llm_provider"] == "ollama"
         assert data["llm_model"] == "llama3.2"
         assert data["status"] == "created"
-        # Verify the directory was created
-        assert Path(data["doc_root"]).exists()
 
     def test_returns_409_for_duplicate_name(
         self, test_project_in_registry, client: TestClient

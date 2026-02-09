@@ -138,6 +138,39 @@ class TestProjectInit:
         project_db_path = Path(proj.db_path)
         assert project_db_path.exists()
 
+    def test_init_creates_flat_db_path(self, tmp_path: Path) -> None:
+        """プロジェクトDBはフラット形式 ({name}_{uuid}.db) で作成される"""
+        import re
+
+        runner = CliRunner()
+        registry_path = tmp_path / "registry.db"
+        doc_root = tmp_path / "docs"
+        doc_root.mkdir()
+
+        runner.invoke(
+            project,
+            [
+                "init",
+                "test-project",
+                "--doc-root",
+                str(doc_root),
+                "--registry",
+                str(registry_path),
+            ],
+        )
+
+        conn = get_registry_connection(str(registry_path))
+        proj = get_project_by_name(conn, "test-project")
+        conn.close()
+
+        assert proj is not None
+        db_path = Path(proj.db_path)
+        # DB file should be directly under projects/ (flat, not nested)
+        projects_dir = registry_path.parent / "projects"
+        assert db_path.parent == projects_dir.resolve()
+        # DB filename should match pattern: {safe_name}_{hex8}.db
+        assert re.match(r"test-project_[0-9a-f]{8}\.db", db_path.name)
+
     def test_init_with_relative_registry_stores_absolute_db_path(
         self, tmp_path: Path
     ) -> None:

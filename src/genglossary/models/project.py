@@ -32,7 +32,7 @@ class Project(BaseModel):
     Attributes:
         id: Unique project identifier (auto-generated).
         name: Human-readable project name (must be unique).
-        doc_root: Absolute path to the document directory.
+        doc_root: Path to the document directory (empty string when documents are stored in DB).
         db_path: Absolute path to the project's database file.
         llm_provider: LLM provider name (e.g., "ollama", "openai").
         llm_model: LLM model name (e.g., "llama3.2", "gpt-4").
@@ -73,10 +73,10 @@ class Project(BaseModel):
             raise ValueError("Project name cannot be empty")
         return stripped
 
-    @field_validator("doc_root", "db_path")
+    @field_validator("db_path")
     @classmethod
     def validate_non_empty_path(cls, v: str) -> str:
-        """Validate that path is not empty.
+        """Validate that db_path is not empty.
 
         Args:
             v: The path to validate.
