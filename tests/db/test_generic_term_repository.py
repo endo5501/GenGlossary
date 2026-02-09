@@ -168,6 +168,29 @@ class TestGetTermTexts:
         assert texts == {"用語1", "用語2"}
 
 
+class TestAddTermNoneRowGuard:
+    """Test add_term raises RuntimeError when row lookup fails."""
+
+    def test_add_term_raises_runtime_error_when_row_not_found(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """When INSERT does nothing and SELECT returns None, raise RuntimeError."""
+        from unittest.mock import MagicMock, patch
+
+        mock_cursor = MagicMock()
+        # INSERT does nothing (conflict)
+        mock_cursor.lastrowid = 0
+        mock_cursor.rowcount = 0
+        # SELECT returns None (unexpected)
+        mock_cursor.fetchone.return_value = None
+
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+        mock_conn.cursor.return_value = mock_cursor
+
+        with pytest.raises(RuntimeError, match="terms_excluded.*テスト用語"):
+            add_term(mock_conn, "テスト用語", "auto", "terms_excluded", ExcludedTerm)
+
+
 class TestBulkAddTerms:
     """Test generic bulk_add_terms function."""
 
