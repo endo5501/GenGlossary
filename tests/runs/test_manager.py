@@ -2466,3 +2466,42 @@ class TestExecutorCloseOnCompletion:
                 manager._thread.join(timeout=2)
 
             mock_executor.return_value.close.assert_called()
+
+
+class TestRunManagerDocumentIds:
+    """Tests for RunManager.start_run with document_ids parameter."""
+
+    def test_start_run_passes_document_ids_to_executor(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """start_runのdocument_idsがexecutor.executeに渡される"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            run_id = manager.start_run(
+                scope="extract", triggered_by="auto", document_ids=[1, 2, 3]
+            )
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            # Verify executor.execute was called with document_ids
+            mock_executor.return_value.execute.assert_called_once()
+            call_kwargs = mock_executor.return_value.execute.call_args
+            assert call_kwargs.kwargs.get("document_ids") == [1, 2, 3]
+
+    def test_start_run_without_document_ids_passes_none(
+        self, manager: RunManager, project_db: sqlite3.Connection
+    ) -> None:
+        """document_ids未指定時はNoneが渡される"""
+        with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
+            mock_executor.return_value.execute.return_value = None
+
+            run_id = manager.start_run(scope="extract")
+
+            if manager._thread:
+                manager._thread.join(timeout=2)
+
+            mock_executor.return_value.execute.assert_called_once()
+            call_kwargs = mock_executor.return_value.execute.call_args
+            assert call_kwargs.kwargs.get("document_ids") is None
