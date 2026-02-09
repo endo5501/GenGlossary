@@ -133,7 +133,7 @@ class TestCancelRun:
         project_id = test_project_setup["project_id"]
 
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
-            def cancellable_execute(conn, scope, context, doc_root="."):
+            def cancellable_execute(conn, scope, context, doc_root=".", **kwargs):
                 # Wait for cancellation, checking the event and raise PipelineCancelledException
                 for _ in range(50):  # 5 seconds max
                     if context.cancel_event.is_set():
