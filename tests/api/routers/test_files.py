@@ -1325,3 +1325,43 @@ class TestCreateFilesBulkAutoExtract:
         # Files should still be created
         assert len(data["files"]) == 1
         assert data["files"][0]["file_name"] == "file1.txt"
+
+    def test_create_files_bulk_passes_document_ids_to_start_run(
+        self, test_project_setup, client: TestClient
+    ):
+        """bulk upload時にstart_runに新規ドキュメントIDリストが渡される"""
+        from genglossary.api.dependencies import get_run_manager
+
+        project_id = test_project_setup["project_id"]
+
+        payload = {
+            "files": [
+                {"file_name": "file1.txt", "content": "Content 1"},
+                {"file_name": "file2.txt", "content": "Content 2"},
+            ]
+        }
+
+        mock_manager = MagicMock()
+        mock_manager.start_run.return_value = 42
+
+        client.app.dependency_overrides[get_run_manager] = lambda: mock_manager
+        try:
+            response = client.post(
+                f"/api/projects/{project_id}/files/bulk", json=payload
+            )
+        finally:
+            client.app.dependency_overrides.pop(get_run_manager, None)
+
+        assert response.status_code == 201
+
+        # Verify start_run was called with document_ids
+        mock_manager.start_run.assert_called_once()
+        call_kwargs = mock_manager.start_run.call_args
+
+        # document_ids should contain the IDs of the newly created files
+        document_ids = call_kwargs.kwargs.get("document_ids")
+        assert document_ids is not None
+        assert len(document_ids) == 2
+        # IDs should match the created file IDs from response
+        response_ids = [f["id"] for f in response.json()["files"]]
+        assert sorted(document_ids) == sorted(response_ids)
