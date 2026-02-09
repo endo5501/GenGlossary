@@ -4,7 +4,7 @@ tags: [bug, storage, testing]
 description: "Fix project DB path generation inconsistency between CLI and API, and fix test data leaking to production directory"
 created_at: "2026-02-08T15:21:06Z"
 started_at: 2026-02-08T15:31:57Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-09T14:09:58Z # Do not modify manually
 ---
 
 # プロジェクトDBパス生成の不統一とテストデータ漏洩の修正
