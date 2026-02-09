@@ -232,7 +232,7 @@ class TestRunManagerCancel:
 
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             # Mock executor that checks cancel event and raises PipelineCancelledException
-            def cancellable_execute(conn, scope, context, doc_root="."):
+            def cancellable_execute(conn, scope, context, doc_root=".", **kwargs):
                 # Wait for cancellation, checking the event
                 for _ in range(50):  # 5 seconds max
                     if context.cancel_event.is_set():
@@ -261,7 +261,7 @@ class TestRunManagerCancel:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             execution_barrier = Event()
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 # Wait to keep run "active" until we cancel
                 execution_barrier.wait(timeout=5)
 
@@ -411,7 +411,7 @@ class TestRunManagerLogStreaming:
         """実行中のログがキャプチャされる"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting execution"})
                 context.log_callback({"run_id": context.run_id, "level": "info", "message": "Completed"})
 
@@ -439,7 +439,7 @@ class TestRunManagerLogStreaming:
             # Mock executor that checks cancellation event
             cancel_detected = []
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting"})
                 # Simulate some work, checking for cancellation
                 for i in range(10):
@@ -482,7 +482,7 @@ class TestRunManagerLogStreaming:
         """ログメッセージにrun_idが含まれることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting"})
                 context.log_callback({"run_id": context.run_id, "level": "info", "message": "Completed"})
 
@@ -512,7 +512,7 @@ class TestRunManagerLogStreaming:
         """完了シグナルにrun_idが含まれることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting"})
 
             mock_executor.return_value.execute.side_effect = mock_execute
@@ -543,7 +543,7 @@ class TestRunManagerLogStreaming:
         """SSEストリームが完了シグナルを受け取ることを確認"""
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 context.log_callback({"run_id": context.run_id, "level": "info", "message": "Starting"})
                 context.log_callback({"run_id": context.run_id, "level": "info", "message": "Completed"})
                 # Completion signal should be sent by manager, not executor
@@ -583,7 +583,7 @@ class TestRunManagerPerRunCancellation:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             captured_events = []
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 captured_events.append(context.cancel_event)
 
             mock_executor.return_value.execute.side_effect = mock_execute
@@ -604,7 +604,7 @@ class TestRunManagerPerRunCancellation:
             captured_events: dict[int, Event] = {}
             execution_barrier = Event()
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 captured_events[context.run_id] = context.cancel_event
                 # Wait to keep first run "active" until we cancel
                 if context.run_id == 1:
@@ -658,7 +658,7 @@ class TestRunManagerPerRunCancellation:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             execution_barrier = Event()
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 # Keep running until barrier is released
                 execution_barrier.wait(timeout=5)
 
@@ -986,7 +986,7 @@ class TestRunManagerCancellationRaceCondition:
             # then cancel happens before status update
             cancel_after_execute = Event()
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 # Simulate some work
                 context.log_callback(
                     {"run_id": context.run_id, "level": "info", "message": "Done"}
@@ -1080,7 +1080,7 @@ class TestRunManagerSubscriberCleanup:
 
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
 
-            def cancellable_execute(conn, scope, context, doc_root="."):
+            def cancellable_execute(conn, scope, context, doc_root=".", **kwargs):
                 # Wait for cancellation and raise PipelineCancelledException
                 for _ in range(50):
                     if context.cancel_event.is_set():
@@ -1232,7 +1232,7 @@ class TestRunManagerStatusUpdateFallbackLogic:
 
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             # Mock executor that waits for cancellation and raises PipelineCancelledException
-            def cancellable_execute(conn, scope, context, doc_root="."):
+            def cancellable_execute(conn, scope, context, doc_root=".", **kwargs):
                 for _ in range(50):
                     if context.cancel_event.is_set():
                         raise PipelineCancelledException()
@@ -1302,7 +1302,7 @@ class TestRunManagerFailedStatusGuard:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             cancel_set = Event()
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 # Signal that we are ready to be cancelled
                 cancel_set.set()
                 # Wait to allow cancel to happen
@@ -1344,7 +1344,7 @@ class TestRunManagerFailedStatusGuard:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             exec_done = Event()
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 # Signal that execution is complete
                 exec_done.set()
                 # Wait a bit before returning
@@ -1386,7 +1386,7 @@ class TestRunManagerFailedStatusGuard:
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             cancel_set = Event()
 
-            def mock_execute(conn, scope, context, doc_root="."):
+            def mock_execute(conn, scope, context, doc_root=".", **kwargs):
                 cancel_set.set()
                 time.sleep(0.2)
                 raise RuntimeError("Test error after cancel")
@@ -1704,7 +1704,7 @@ class TestRunManagerStatusMisclassification:
 
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             # Mock executor that waits for cancellation and raises PipelineCancelledException
-            def cancellable_execute(conn, scope, context, doc_root="."):
+            def cancellable_execute(conn, scope, context, doc_root=".", **kwargs):
                 for _ in range(50):
                     if context.cancel_event.is_set():
                         raise PipelineCancelledException()
@@ -1790,7 +1790,7 @@ class TestRunManagerStatusMisclassification:
 
         with patch("genglossary.runs.manager.PipelineExecutor") as mock_executor:
             # Mock executor that waits for cancellation and raises PipelineCancelledException
-            def cancellable_execute(conn, scope, context, doc_root="."):
+            def cancellable_execute(conn, scope, context, doc_root=".", **kwargs):
                 for _ in range(50):
                     if context.cancel_event.is_set():
                         raise PipelineCancelledException()
