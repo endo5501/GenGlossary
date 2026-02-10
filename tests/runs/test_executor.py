@@ -2985,6 +2985,53 @@ class TestExtractWithDocumentIds:
         assert "既存用語" not in term_texts
         assert "新用語" in term_texts
 
+    def test_extract_with_document_ids_handles_duplicate_terms(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """document_ids指定時に既存用語と重複する用語が抽出されてもエラーにならない"""
+        from genglossary.db.connection import transaction
+        from genglossary.db.term_repository import create_term, list_all_terms
+
+        # Setup: create existing term
+        with transaction(project_db):
+            create_term(project_db, "共通用語", "technical")
+
+        # Setup: add documents
+        with transaction(project_db):
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("existing.md", "Existing doc", "hash1"),
+            )
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("new_doc.md", "New doc with 共通用語", "hash2"),
+            )
+
+        cursor = project_db.cursor()
+        cursor.execute("SELECT id FROM documents WHERE file_name = 'new_doc.md'")
+        new_doc_id = cursor.fetchone()["id"]
+
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor:
+            # Return a term that already exists + a new term
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="共通用語", category=TermCategory.TECHNICAL_TERM),
+                ClassifiedTerm(term="新規用語", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            # Should NOT raise IntegrityError
+            executor.execute(
+                project_db, "extract", execution_context, document_ids=[new_doc_id]
+            )
+
+        # Both terms should exist (existing preserved + new added)
+        terms = list_all_terms(project_db)
+        term_texts = [t["term_text"] for t in terms]
+        assert "共通用語" in term_texts
+        assert "新規用語" in term_texts
+
     def test_extract_with_document_ids_does_not_backup_restore_user_notes(
         self,
         executor: PipelineExecutor,
