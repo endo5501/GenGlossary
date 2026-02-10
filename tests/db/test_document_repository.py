@@ -10,6 +10,7 @@ from genglossary.db.document_repository import (
     get_document,
     get_document_by_name,
     list_all_documents,
+    list_documents_by_ids,
 )
 from genglossary.db.schema import initialize_db
 
@@ -203,6 +204,60 @@ class TestGetDocumentByName:
         doc = get_document_by_name(db_with_schema, "nonexistent.txt")
 
         assert doc is None
+
+
+class TestListDocumentsByIds:
+    """Test list_documents_by_ids function."""
+
+    def test_returns_matching_documents(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that list_documents_by_ids returns only matching documents."""
+        doc1 = create_document(db_with_schema, "doc1.txt", "Content 1", "hash1")
+        create_document(db_with_schema, "doc2.txt", "Content 2", "hash2")
+        doc3 = create_document(db_with_schema, "doc3.txt", "Content 3", "hash3")
+
+        docs = list_documents_by_ids(db_with_schema, [doc1["id"], doc3["id"]])
+
+        assert len(docs) == 2
+        assert docs[0]["file_name"] == "doc1.txt"
+        assert docs[1]["file_name"] == "doc3.txt"
+
+    def test_returns_empty_for_no_matches(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that list_documents_by_ids returns empty list for non-existent IDs."""
+        create_document(db_with_schema, "doc1.txt", "Content 1", "hash1")
+
+        docs = list_documents_by_ids(db_with_schema, [999, 1000])
+
+        assert docs == []
+
+    def test_returns_empty_for_empty_id_list(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that list_documents_by_ids returns empty list for empty ID list."""
+        create_document(db_with_schema, "doc1.txt", "Content 1", "hash1")
+
+        docs = list_documents_by_ids(db_with_schema, [])
+
+        assert docs == []
+
+    def test_ordered_by_id(
+        self, db_with_schema: sqlite3.Connection
+    ) -> None:
+        """Test that list_documents_by_ids returns documents ordered by id."""
+        doc1 = create_document(db_with_schema, "doc1.txt", "Content 1", "hash1")
+        doc2 = create_document(db_with_schema, "doc2.txt", "Content 2", "hash2")
+        doc3 = create_document(db_with_schema, "doc3.txt", "Content 3", "hash3")
+
+        # Request in reverse order
+        docs = list_documents_by_ids(db_with_schema, [doc3["id"], doc1["id"], doc2["id"]])
+
+        assert len(docs) == 3
+        assert docs[0]["id"] == doc1["id"]
+        assert docs[1]["id"] == doc2["id"]
+        assert docs[2]["id"] == doc3["id"]
 
 
 class TestCreateDocumentsBatch:

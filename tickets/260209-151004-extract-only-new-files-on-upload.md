@@ -3,8 +3,8 @@ priority: 2
 tags: [bug, performance, extraction]
 description: "ファイル登録時、新規追加ファイルのみを対象に用語抽出を行うよう改善する"
 created_at: "2026-02-09T15:10:04Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-02-09T22:52:04Z # Do not modify manually
+closed_at: 2026-02-10T12:01:08Z # Do not modify manually
 ---
 
 # ファイル登録時、新規追加ファイルのみを対象に用語抽出を行う
@@ -54,21 +54,36 @@ executor.py:_load_documents()
 
 ## Tasks
 
-- [ ] 調査：現在の用語抽出フローの詳細確認
-- [ ] 設計：対象ドキュメント絞り込みの実装方針決定
-- [ ] 実装：ドキュメントIDリストによるフィルタリング機能追加
-- [ ] 実装：bulk upload時に新規ドキュメントIDを抽出対象として渡す
-- [ ] テスト：新規ファイルのみが抽出対象となることを確認
-- [ ] テスト：既存の全ファイル対象の抽出（手動実行）が引き続き動作することを確認
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 調査：現在の用語抽出フローの詳細確認
+- [x] 設計：対象ドキュメント絞り込みの実装方針決定
+- [x] 実装：ドキュメントIDリストによるフィルタリング機能追加
+- [x] 実装：bulk upload時に新規ドキュメントIDを抽出対象として渡す
+- [x] テスト：新規ファイルのみが抽出対象となることを確認
+- [x] テスト：既存の全ファイル対象の抽出（手動実行）が引き続き動作することを確認
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
+
+## 設計（確定）
+
+`start_run()` にオプショナルな `document_ids` パラメータを追加し、指定時はそのドキュメントのみを対象に抽出する。
+
+### 変更箇所
+
+1. **`document_repository.py`**: `list_documents_by_ids(conn, ids)` を新設
+2. **`manager.py`**: `start_run()` に `document_ids` パラメータ追加、executor まで伝播
+3. **`executor.py`**: `execute()` に `document_ids` パラメータ追加。指定時は `_clear_tables_for_scope()` をスキップし、IDリストでフィルタリングしたドキュメントのみ取得
+4. **`files.py`**: bulk upload で新規ドキュメントIDを収集し `start_run()` に渡す
+
+### 動作パターン
+- **自動トリガー（bulk upload）**: `document_ids` あり → 新規ファイルのみ抽出、既存termsは保持
+- **手動実行（API）**: `document_ids` なし → 従来通り全ファイル対象、termsクリア後に再抽出
 
 ## Notes
 

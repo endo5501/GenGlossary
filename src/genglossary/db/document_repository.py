@@ -66,6 +66,29 @@ def list_all_documents(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return cursor.fetchall()
 
 
+def list_documents_by_ids(
+    conn: sqlite3.Connection, ids: Sequence[int]
+) -> list[sqlite3.Row]:
+    """List documents matching the given IDs.
+
+    Args:
+        conn: Database connection.
+        ids: List of document IDs to retrieve.
+
+    Returns:
+        list[sqlite3.Row]: Matching document records ordered by id.
+    """
+    if not ids:
+        return []
+    placeholders = ",".join("?" for _ in ids)
+    cursor = conn.cursor()
+    cursor.execute(
+        f"SELECT * FROM documents WHERE id IN ({placeholders}) ORDER BY id",
+        list(ids),
+    )
+    return cursor.fetchall()
+
+
 def get_document_by_name(
     conn: sqlite3.Connection, file_name: str
 ) -> sqlite3.Row | None:

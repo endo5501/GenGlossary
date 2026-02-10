@@ -2865,3 +2865,198 @@ class TestExtractPreservesUserNotes:
         assert term_map.get("GP") == "General Practitioner"
         # New term should have empty notes
         assert term_map.get("新用語") == ""
+
+
+class TestExtractWithDocumentIds:
+    """Tests for extract scope with document_ids filtering."""
+
+    def test_extract_with_document_ids_loads_only_specified_documents(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """document_ids指定時は指定されたドキュメントのみ読み込む"""
+        from genglossary.db.connection import transaction
+
+        # Setup: insert 3 documents into DB
+        with transaction(project_db):
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("doc1.md", "Document 1 content", "hash1"),
+            )
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("doc2.md", "Document 2 content", "hash2"),
+            )
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("doc3.md", "Document 3 content", "hash3"),
+            )
+
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor:
+            mock_extractor.return_value.extract_terms.return_value = []
+
+            # Execute with document_ids=[1, 3] (only doc1 and doc3)
+            executor.execute(
+                project_db, "extract", execution_context, document_ids=[1, 3]
+            )
+
+            # Verify extract_terms was called with only 2 documents
+            call_args = mock_extractor.return_value.extract_terms.call_args
+            documents = call_args[0][0]  # first positional arg
+            assert len(documents) == 2
+            assert documents[0].file_path == "doc1.md"
+            assert documents[1].file_path == "doc3.md"
+
+    def test_extract_with_document_ids_does_not_clear_existing_terms(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """document_ids指定時は既存termsをクリアしない"""
+        from genglossary.db.connection import transaction
+        from genglossary.db.term_repository import create_term, list_all_terms
+
+        # Setup: create existing terms
+        with transaction(project_db):
+            create_term(project_db, "既存用語", "technical")
+
+        # Setup: add a new document
+        with transaction(project_db):
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("new_doc.md", "New document content", "hash_new"),
+            )
+
+        # Get the document ID
+        cursor = project_db.cursor()
+        cursor.execute("SELECT id FROM documents WHERE file_name = 'new_doc.md'")
+        new_doc_id = cursor.fetchone()["id"]
+
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor:
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="新用語", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            executor.execute(
+                project_db, "extract", execution_context, document_ids=[new_doc_id]
+            )
+
+        # Verify both existing and new terms are present
+        terms = list_all_terms(project_db)
+        term_texts = [t["term_text"] for t in terms]
+        assert "既存用語" in term_texts
+        assert "新用語" in term_texts
+
+    def test_extract_without_document_ids_clears_existing_terms(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """document_ids未指定時は従来通り既存termsをクリアする"""
+        from genglossary.db.connection import transaction
+        from genglossary.db.term_repository import create_term, list_all_terms
+
+        # Setup: create existing terms
+        with transaction(project_db):
+            create_term(project_db, "既存用語", "technical")
+
+        # Setup: add a document
+        with transaction(project_db):
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("doc.md", "Document content", "hash1"),
+            )
+
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor:
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="新用語", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            # Execute without document_ids (default behavior)
+            executor.execute(project_db, "extract", execution_context)
+
+        # Verify existing terms were cleared and only new terms remain
+        terms = list_all_terms(project_db)
+        term_texts = [t["term_text"] for t in terms]
+        assert "既存用語" not in term_texts
+        assert "新用語" in term_texts
+
+    def test_extract_with_document_ids_handles_duplicate_terms(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """document_ids指定時に既存用語と重複する用語が抽出されてもエラーにならない"""
+        from genglossary.db.connection import transaction
+        from genglossary.db.term_repository import create_term, list_all_terms
+
+        # Setup: create existing term
+        with transaction(project_db):
+            create_term(project_db, "共通用語", "technical")
+
+        # Setup: add documents
+        with transaction(project_db):
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("existing.md", "Existing doc", "hash1"),
+            )
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("new_doc.md", "New doc with 共通用語", "hash2"),
+            )
+
+        cursor = project_db.cursor()
+        cursor.execute("SELECT id FROM documents WHERE file_name = 'new_doc.md'")
+        new_doc_id = cursor.fetchone()["id"]
+
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor:
+            # Return a term that already exists + a new term
+            mock_extractor.return_value.extract_terms.return_value = [
+                ClassifiedTerm(term="共通用語", category=TermCategory.TECHNICAL_TERM),
+                ClassifiedTerm(term="新規用語", category=TermCategory.TECHNICAL_TERM),
+            ]
+
+            # Should NOT raise IntegrityError
+            executor.execute(
+                project_db, "extract", execution_context, document_ids=[new_doc_id]
+            )
+
+        # Both terms should exist (existing preserved + new added)
+        terms = list_all_terms(project_db)
+        term_texts = [t["term_text"] for t in terms]
+        assert "共通用語" in term_texts
+        assert "新規用語" in term_texts
+
+    def test_extract_with_document_ids_does_not_backup_restore_user_notes(
+        self,
+        executor: PipelineExecutor,
+        project_db: sqlite3.Connection,
+        execution_context: ExecutionContext,
+    ) -> None:
+        """document_ids指定時はuser_notesのバックアップ・リストアをスキップする"""
+        from genglossary.db.connection import transaction
+
+        # Setup: add a document
+        with transaction(project_db):
+            project_db.execute(
+                "INSERT INTO documents (file_name, content, content_hash) VALUES (?, ?, ?)",
+                ("doc.md", "Content", "hash1"),
+            )
+
+        with patch("genglossary.runs.executor.TermExtractor") as mock_extractor, \
+             patch("genglossary.runs.executor.backup_user_notes") as mock_backup, \
+             patch("genglossary.runs.executor.restore_user_notes") as mock_restore:
+            mock_extractor.return_value.extract_terms.return_value = []
+
+            executor.execute(
+                project_db, "extract", execution_context, document_ids=[1]
+            )
+
+            # backup/restore should NOT be called for incremental extract
+            mock_backup.assert_not_called()
+            mock_restore.assert_not_called()

@@ -13,6 +13,7 @@ from genglossary.db.document_repository import (
     create_documents_batch,
     delete_all_documents,
     list_all_documents,
+    list_documents_by_ids,
 )
 from genglossary.db.issue_repository import create_issues_batch, delete_all_issues, list_all_issues
 from genglossary.db.models import GlossaryTermRow
@@ -324,6 +325,7 @@ class PipelineExecutor:
         scope: str | PipelineScope,
         context: ExecutionContext,
         doc_root: str = ".",
+        document_ids: list[int] | None = None,
     ) -> None:
         """Execute the pipeline for the given scope.
 
@@ -332,6 +334,10 @@ class PipelineExecutor:
             scope: Execution scope (PipelineScope enum or string).
             context: Execution context containing run_id, log_callback, and cancel_event.
             doc_root: Root directory for documents (default: ".").
+            document_ids: Optional list of document IDs to extract from.
+                When provided (incremental extract), only specified documents are
+                processed and existing terms are preserved. When None, all documents
+                are processed and existing terms are cleared (full extract).
 
         Raises:
             PipelineCancelledException: If execution is cancelled.
@@ -344,13 +350,13 @@ class PipelineExecutor:
 
         self._check_cancellation(context)  # Raises if cancelled
 
-        # Backup user_notes before clearing terms (extract scope only)
+        # Incremental extract: skip table clearing and user_notes backup
+        incremental = document_ids is not None and scope_enum == PipelineScope.EXTRACT
         user_notes_backup: dict[str, str] = {}
-        if scope_enum == PipelineScope.EXTRACT:
-            user_notes_backup = backup_user_notes(conn)
-
-        # Clear tables before execution
-        self._clear_tables_for_scope(conn, scope_enum)
+        if not incremental:
+            if scope_enum == PipelineScope.EXTRACT:
+                user_notes_backup = backup_user_notes(conn)
+            self._clear_tables_for_scope(conn, scope_enum)
 
         # Execute based on scope using dispatch table with direct method references
         scope_handlers = {
@@ -366,9 +372,12 @@ class PipelineExecutor:
             self._log(context, "error", f"Unknown scope: {scope_enum}")
             raise ValueError(f"Unknown scope: {scope_enum}")
 
-        handler(conn, context, doc_root)
+        if incremental:
+            self._execute_extract_incremental(conn, context, document_ids)
+        else:
+            handler(conn, context, doc_root)
 
-        # Restore user_notes after extract
+        # Restore user_notes after full extract
         if user_notes_backup:
             with transaction(conn):
                 restore_user_notes(conn, user_notes_backup)
@@ -534,6 +543,38 @@ class PipelineExecutor:
         self._do_extract(conn, context, documents)
 
     @_cancellable
+    def _execute_extract_incremental(
+        self,
+        conn: sqlite3.Connection,
+        context: ExecutionContext,
+        document_ids: list[int],
+    ) -> None:
+        """Execute incremental extract for specified documents only.
+
+        Unlike full extract, this does not clear existing terms.
+
+        Args:
+            conn: Project database connection.
+            context: Execution context for logging and cancellation.
+            document_ids: List of document IDs to extract from.
+
+        Raises:
+            PipelineCancelledException: If execution is cancelled.
+        """
+        doc_rows = list_documents_by_ids(conn, document_ids)
+        if not doc_rows:
+            self._log(context, "warning", "No documents found for specified IDs")
+            return
+        documents = self._documents_from_db_rows(doc_rows)
+        self._log(context, "info", f"Loaded {len(documents)} documents (incremental)")
+
+        # Query existing terms directly to exclude from batch insert (avoid UNIQUE violation)
+        cursor = conn.cursor()
+        cursor.execute("SELECT term_text FROM terms_extracted")
+        existing_terms = {row["term_text"] for row in cursor.fetchall()}
+        self._do_extract(conn, context, documents, exclude_terms=existing_terms)
+
+    @_cancellable
     def _execute_generate(
         self,
         conn: sqlite3.Connection,
@@ -694,6 +735,7 @@ class PipelineExecutor:
         conn: sqlite3.Connection,
         context: ExecutionContext,
         documents: list[Document],
+        exclude_terms: set[str] | None = None,
     ) -> list[ClassifiedTerm]:
         """Execute term extraction and save to DB.
 
@@ -701,6 +743,8 @@ class PipelineExecutor:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
             documents: Documents to extract terms from.
+            exclude_terms: Optional set of existing term texts to skip
+                when saving (for incremental extract).
 
         Returns:
             list[ClassifiedTerm]: Unique extracted terms.
@@ -726,11 +770,12 @@ class PipelineExecutor:
             return_categories=True,
         )
 
-        # Build unique list (skip duplicates)
+        # Build unique list (skip duplicates and existing terms)
+        skip_terms = exclude_terms or set()
         seen_terms: set[str] = set()
         unique_terms: list[ClassifiedTerm] = []
         for classified_term in extracted_terms:
-            if classified_term.term in seen_terms:
+            if classified_term.term in seen_terms or classified_term.term in skip_terms:
                 continue
             seen_terms.add(classified_term.term)
             unique_terms.append(classified_term)

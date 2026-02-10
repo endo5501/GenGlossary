@@ -305,12 +305,18 @@ class RunManager:
         self._log_queue: Queue = Queue()
         self._completed_runs: dict[int, dict] = {}  # Track completed runs for late subscribers
 
-    def start_run(self, scope: str, triggered_by: str = "api") -> int:
+    def start_run(
+        self, scope: str, triggered_by: str = "api",
+        document_ids: list[int] | None = None,
+    ) -> int:
         """バックグラウンドでRunを開始
 
         Args:
             scope: 実行スコープ（"full", "extract", "generate", "review", "refine"）
             triggered_by: トリガー元（"api", "manual", "auto"）
+            document_ids: インクリメンタル抽出対象のドキュメントIDリスト（extract scope専用）
+                指定時は既存用語を保持したまま、指定ドキュメントのみから用語を抽出。
+                None の場合は全ドキュメントから抽出し、既存用語をクリアする。
 
         Returns:
             作成されたRunのID
@@ -347,7 +353,7 @@ class RunManager:
 
         # バックグラウンドスレッドを起動（ロック外で）
         try:
-            self._thread = Thread(target=self._execute_run, args=(run_id, scope))
+            self._thread = Thread(target=self._execute_run, args=(run_id, scope, document_ids))
             self._thread.daemon = True
             self._thread.start()
         except Exception as e:
@@ -381,7 +387,7 @@ class RunManager:
 
         return run_id
 
-    def _execute_run(self, run_id: int, scope: str) -> None:
+    def _execute_run(self, run_id: int, scope: str, document_ids: list[int] | None = None) -> None:
         """バックグラウンドスレッドでRunを実行（オーケストレーター）
 
         3つのフェーズを順に実行:
@@ -397,7 +403,7 @@ class RunManager:
         try:
             conn, context = self._setup_run(run_id)
             pipeline_error, pipeline_traceback = self._run_pipeline(
-                conn, run_id, scope, context
+                conn, run_id, scope, context, document_ids=document_ids
             )
             self._finalize_run_status(
                 conn, run_id, pipeline_error, pipeline_traceback
@@ -425,7 +431,7 @@ class RunManager:
             conn.close()
             raise
 
-    def _run_pipeline(self, conn, run_id, scope, context) -> tuple[Exception | None, str | None]:
+    def _run_pipeline(self, conn, run_id, scope, context, document_ids=None) -> tuple[Exception | None, str | None]:
         """パイプライン実行とexecutorライフサイクル管理
 
         executorの作成・登録・実行・参照削除・closeを包含。
@@ -433,7 +439,7 @@ class RunManager:
         """
         executor = PipelineExecutor(...)
         try:
-            executor.execute(conn, scope, context, doc_root=self.doc_root)
+            executor.execute(conn, scope, context, doc_root=self.doc_root, document_ids=document_ids)
         except Exception as e:
             return e, traceback.format_exc()
         finally:
@@ -680,7 +686,8 @@ def _cancellable(func: Callable) -> Callable:
 
 **適用先:**
 - `_execute_full`: フルパイプライン実行
-- `_execute_extract`: 用語抽出のみ
+- `_execute_extract`: 用語抽出のみ（全ドキュメント対象）
+- `_execute_extract_incremental`: インクリメンタル抽出（指定ドキュメントのみ）
 - `_execute_generate`: 用語集生成のみ
 - `_execute_review`: レビューのみ
 - `_execute_refine`: 改善のみ
@@ -748,6 +755,7 @@ class PipelineExecutor:
         scope: str | PipelineScope,  # Enum または文字列を受け付け
         context: ExecutionContext,   # 実行コンテキスト
         doc_root: str = ".",
+        document_ids: list[int] | None = None,
     ) -> None:
         """指定されたスコープでパイプラインを実行
 
@@ -756,28 +764,35 @@ class PipelineExecutor:
             scope: 実行スコープ（PipelineScope または文字列）
             context: 実行コンテキスト（run_id, log_callback, cancel_event）
             doc_root: ドキュメントルートディレクトリ
+            document_ids: インクリメンタル抽出対象のドキュメントIDリスト（extract scope専用）
 
         Raises:
             PipelineCancelledException: キャンセルされた場合
             ValueError: 不明なスコープが指定された場合
+
+        インクリメンタル抽出:
+            document_ids が指定され、scope が EXTRACT の場合、インクリメンタルモードで実行。
+            - テーブルクリアをスキップ（既存用語を保持）
+            - user_notes の backup/restore をスキップ
+            - 指定ドキュメントのみから用語を抽出
+            - 既存用語と重複する用語はスキップ（UNIQUE制約違反を回避）
         """
-        # Enum に正規化（文字列の場合は変換）
         scope_enum = scope if isinstance(scope, PipelineScope) else PipelineScope(scope)
 
-        # ディスパッチテーブルでスコープに対応するハンドラーを取得
-        scope_handlers = {
-            PipelineScope.FULL: self._execute_full,
-            PipelineScope.EXTRACT: self._execute_extract,
-            PipelineScope.GENERATE: self._execute_generate,
-            PipelineScope.REVIEW: self._execute_review,
-            PipelineScope.REFINE: self._execute_refine,
-        }
+        incremental = document_ids is not None and scope_enum == PipelineScope.EXTRACT
 
-        handler = scope_handlers.get(scope_enum)
-        if handler is None:
-            raise ValueError(f"Unknown scope: {scope_enum}")
+        # インクリメンタル時はテーブルクリアとuser_notes backupをスキップ
+        if not incremental:
+            if scope_enum == PipelineScope.EXTRACT:
+                user_notes_backup = backup_user_notes(conn)
+            self._clear_tables_for_scope(conn, scope_enum)
 
-        handler(conn, context, doc_root)
+        # ディスパッチテーブルまたはインクリメンタル実行
+        if incremental:
+            self._execute_extract_incremental(conn, context, document_ids)
+        else:
+            handler = scope_handlers.get(scope_enum)
+            handler(conn, context, doc_root)
 ```
 
 ### 進捗コールバック
@@ -982,7 +997,7 @@ if not issues:
 | Scope | 実行ステップ | 用途 |
 |-------|------------|------|
 | `full` | 1→3→4→5 | generate → review → refine（extractを除く、用語はDB既存前提） |
-| `extract` | 2 | 用語抽出のみ（ファイル追加時に自動実行、または手動実行） |
+| `extract` | 2 | 用語抽出のみ（2モードあり、下記参照） |
 | `generate` | 3 | 用語集生成のみ |
 | `review` | 4 | レビューのみ |
 | `refine` | 5 | 改善のみ |
@@ -995,8 +1010,19 @@ if not issues:
   - ファイル追加時の自動実行（`triggered_by="auto"`）
   - Terms画面からの手動実行（`scope="extract"`）
 
+**extract スコープの2モード:**
+
+| モード | トリガー | `document_ids` | テーブルクリア | user_notes | 対象ドキュメント |
+|--------|---------|----------------|---------------|------------|-----------------|
+| 全体抽出 | 手動実行（Terms画面） | `None` | ✅ クリアする | backup/restore | 全ドキュメント |
+| インクリメンタル抽出 | ファイル追加時の自動実行 | `[1, 2, ...]` | ❌ スキップ | スキップ | 指定IDのみ |
+
+- **全体抽出**: 既存の用語をすべてクリアし、全ドキュメントから再抽出
+- **インクリメンタル抽出**: 既存用語を保持したまま、新規ドキュメントのみから用語を追加抽出。既存用語と重複する用語はスキップ（UNIQUE制約違反を回避）
+
 **重複用語の処理:**
 - 用語抽出ステップ（ステップ2）で LLM が同じ用語を複数回返した場合、重複はスキップされ、ユニークな用語のみが DB に保存されます
+- インクリメンタル抽出時は、既存の `terms_extracted` テーブルの用語も重複チェック対象に含まれます
 
 **issues の処理パターン:**
 - `issues is None`: レビューがキャンセルされた → 後続処理をスキップしてリターン
@@ -1223,7 +1249,7 @@ get_run_manager(db_path) → RunManager
 - 長さ制限（デフォルト1024文字、truncation suffix 境界ケース）
 - 複合シナリオ（パス+制御文字、prefix+パスマスキング）
 
-**tests/runs/test_manager.py (87 tests)**
+**tests/runs/test_manager.py (89 tests)**
 - start_run, cancel_run, スレッド起動、ログキャプチャ
 - start_run synchronization（並行呼び出しの競合状態防止）
 - per-run cancellation（各runに個別のキャンセルイベント）
@@ -1238,8 +1264,9 @@ get_run_manager(db_path) → RunManager
 - cleanup run resources（db_status, status_update_failed パラメータ）
 - subscriber late registration（完了後に登録したsubscriberへの完了シグナル送信）
 - status update return values（_try_status_with_fallback, _finalize_run_status, _update_failed_status）
+- document_ids propagation（executor.executeへのdocument_ids受け渡し）
 
-**tests/runs/test_executor.py (81 tests)**
+**tests/runs/test_executor.py (86 tests)**
 - Full/From-Terms/Provisional-to-Refined scopeの実行
 - キャンセル処理
 - 進捗ログ
@@ -1260,8 +1287,14 @@ get_run_manager(db_path) → RunManager
   - 非キャンセル時の正常実行
   - 位置引数からのcontext検出
 - Extract時のuser_notes保持テスト（backup/restore）
+- インクリメンタル抽出テスト（document_ids指定時）
+  - 指定ドキュメントのみの読み込み
+  - 既存用語の保持
+  - document_ids未指定時のテーブルクリア
+  - 重複用語のスキップ（UNIQUE制約違反回避）
+  - user_notes backup/restoreのスキップ
 
 **tests/api/routers/test_runs.py (10 tests)**
 - API統合テスト（POST/DELETE/GET エンドポイント）
 
-**合計: 293 tests** (Repository 87 + ErrorSanitizer 28 + Manager 87 + Executor 81 + API 10)
+**合計: 300 tests** (Repository 87 + ErrorSanitizer 28 + Manager 89 + Executor 86 + API 10)

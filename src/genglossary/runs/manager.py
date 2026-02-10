@@ -81,12 +81,20 @@ class RunManager:
         # Protected by _subscribers_lock
         self._completed_runs: dict[int, dict] = {}
 
-    def start_run(self, scope: str, triggered_by: str = "api") -> int:
+    def start_run(
+        self,
+        scope: str,
+        triggered_by: str = "api",
+        document_ids: list[int] | None = None,
+    ) -> int:
         """Start a new run in the background.
 
         Args:
             scope: Run scope ('full', 'extract', 'generate', 'review', 'refine').
             triggered_by: Source that triggered the run (default: 'api').
+            document_ids: Optional list of document IDs for incremental extract.
+                When provided, only specified documents are processed and existing
+                terms are preserved.
 
         Returns:
             int: The ID of the newly created run.
@@ -113,7 +121,9 @@ class RunManager:
 
         # Start background thread (outside lock)
         try:
-            self._thread = Thread(target=self._execute_run, args=(run_id, scope))
+            self._thread = Thread(
+                target=self._execute_run, args=(run_id, scope, document_ids)
+            )
             self._thread.daemon = True
             self._thread.start()
         except Exception as e:
@@ -157,12 +167,15 @@ class RunManager:
 
         return run_id
 
-    def _execute_run(self, run_id: int, scope: str) -> None:
+    def _execute_run(
+        self, run_id: int, scope: str, document_ids: list[int] | None = None
+    ) -> None:
         """Execute run in background thread.
 
         Args:
             run_id: Run ID.
             scope: Run scope.
+            document_ids: Optional document IDs for incremental extract.
         """
         conn = None
         final_status: str | None = None
@@ -172,7 +185,7 @@ class RunManager:
             conn, context = self._setup_run(run_id)
 
             pipeline_error, pipeline_traceback = self._run_pipeline(
-                conn, run_id, scope, context
+                conn, run_id, scope, context, document_ids=document_ids
             )
 
             final_status, success = self._finalize_run_status(
@@ -254,6 +267,7 @@ class RunManager:
         run_id: int,
         scope: str,
         context: ExecutionContext,
+        document_ids: list[int] | None = None,
     ) -> tuple[Exception | None, str | None]:
         """Execute the pipeline and manage executor lifecycle.
 
@@ -265,6 +279,7 @@ class RunManager:
             run_id: Run ID.
             scope: Run scope.
             context: Execution context.
+            document_ids: Optional document IDs for incremental extract.
 
         Returns:
             Tuple of (pipeline_error, pipeline_traceback).
@@ -286,7 +301,11 @@ class RunManager:
         pipeline_error: Exception | None = None
         pipeline_traceback: str | None = None
         try:
-            executor.execute(conn, scope, context, doc_root=self.doc_root)
+            executor.execute(
+                conn, scope, context,
+                doc_root=self.doc_root,
+                document_ids=document_ids,
+            )
         except Exception as e:
             pipeline_error = e
             pipeline_traceback = traceback.format_exc()
