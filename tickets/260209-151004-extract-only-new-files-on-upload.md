@@ -4,7 +4,7 @@ tags: [bug, performance, extraction]
 description: "ファイル登録時、新規追加ファイルのみを対象に用語抽出を行うよう改善する"
 created_at: "2026-02-09T15:10:04Z"
 started_at: 2026-02-09T22:52:04Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-02-10T12:01:08Z # Do not modify manually
 ---
 
 # ファイル登録時、新規追加ファイルのみを対象に用語抽出を行う
