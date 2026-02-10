@@ -3,7 +3,7 @@ priority: 2
 tags: [bug, performance, extraction]
 description: "ファイル登録時、新規追加ファイルのみを対象に用語抽出を行うよう改善する"
 created_at: "2026-02-09T15:10:04Z"
-started_at: null  # Do not modify manually
+started_at: 2026-02-09T22:52:04Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
@@ -69,6 +69,21 @@ executor.py:_load_documents()
 - [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
 - [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
+
+## 設計（確定）
+
+`start_run()` にオプショナルな `document_ids` パラメータを追加し、指定時はそのドキュメントのみを対象に抽出する。
+
+### 変更箇所
+
+1. **`document_repository.py`**: `list_documents_by_ids(conn, ids)` を新設
+2. **`manager.py`**: `start_run()` に `document_ids` パラメータ追加、executor まで伝播
+3. **`executor.py`**: `execute()` に `document_ids` パラメータ追加。指定時は `_clear_tables_for_scope()` をスキップし、IDリストでフィルタリングしたドキュメントのみ取得
+4. **`files.py`**: bulk upload で新規ドキュメントIDを収集し `start_run()` に渡す
+
+### 動作パターン
+- **自動トリガー（bulk upload）**: `document_ids` あり → 新規ファイルのみ抽出、既存termsは保持
+- **手動実行（API）**: `document_ids` なし → 従来通り全ファイル対象、termsクリア後に再抽出
 
 ## Notes
 
