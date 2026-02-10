@@ -350,10 +350,10 @@ class PipelineExecutor:
 
         self._check_cancellation(context)  # Raises if cancelled
 
-        # Skip table clearing and user_notes backup for incremental extract
+        # Incremental extract: skip table clearing and user_notes backup
+        incremental = document_ids is not None and scope_enum == PipelineScope.EXTRACT
         user_notes_backup: dict[str, str] = {}
-        if document_ids is None:
-            # Full extract: backup user_notes and clear tables
+        if not incremental:
             if scope_enum == PipelineScope.EXTRACT:
                 user_notes_backup = backup_user_notes(conn)
             self._clear_tables_for_scope(conn, scope_enum)
@@ -372,7 +372,7 @@ class PipelineExecutor:
             self._log(context, "error", f"Unknown scope: {scope_enum}")
             raise ValueError(f"Unknown scope: {scope_enum}")
 
-        if document_ids is not None and scope_enum == PipelineScope.EXTRACT:
+        if incremental:
             self._execute_extract_incremental(conn, context, document_ids)
         else:
             handler(conn, context, doc_root)
@@ -567,7 +567,12 @@ class PipelineExecutor:
             return
         documents = self._documents_from_db_rows(doc_rows)
         self._log(context, "info", f"Loaded {len(documents)} documents (incremental)")
-        self._do_extract(conn, context, documents)
+
+        # Query existing terms directly to exclude from batch insert (avoid UNIQUE violation)
+        cursor = conn.cursor()
+        cursor.execute("SELECT term_text FROM terms_extracted")
+        existing_terms = {row["term_text"] for row in cursor.fetchall()}
+        self._do_extract(conn, context, documents, exclude_terms=existing_terms)
 
     @_cancellable
     def _execute_generate(
@@ -730,6 +735,7 @@ class PipelineExecutor:
         conn: sqlite3.Connection,
         context: ExecutionContext,
         documents: list[Document],
+        exclude_terms: set[str] | None = None,
     ) -> list[ClassifiedTerm]:
         """Execute term extraction and save to DB.
 
@@ -737,6 +743,8 @@ class PipelineExecutor:
             conn: Project database connection.
             context: Execution context for logging and cancellation.
             documents: Documents to extract terms from.
+            exclude_terms: Optional set of existing term texts to skip
+                when saving (for incremental extract).
 
         Returns:
             list[ClassifiedTerm]: Unique extracted terms.
@@ -762,11 +770,12 @@ class PipelineExecutor:
             return_categories=True,
         )
 
-        # Build unique list (skip duplicates)
+        # Build unique list (skip duplicates and existing terms)
+        skip_terms = exclude_terms or set()
         seen_terms: set[str] = set()
         unique_terms: list[ClassifiedTerm] = []
         for classified_term in extracted_terms:
-            if classified_term.term in seen_terms:
+            if classified_term.term in seen_terms or classified_term.term in skip_terms:
                 continue
             seen_terms.add(classified_term.term)
             unique_terms.append(classified_term)
