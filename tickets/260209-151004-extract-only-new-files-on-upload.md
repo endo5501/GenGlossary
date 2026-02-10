@@ -54,21 +54,21 @@ executor.py:_load_documents()
 
 ## Tasks
 
-- [ ] 調査：現在の用語抽出フローの詳細確認
-- [ ] 設計：対象ドキュメント絞り込みの実装方針決定
-- [ ] 実装：ドキュメントIDリストによるフィルタリング機能追加
-- [ ] 実装：bulk upload時に新規ドキュメントIDを抽出対象として渡す
-- [ ] テスト：新規ファイルのみが抽出対象となることを確認
-- [ ] テスト：既存の全ファイル対象の抽出（手動実行）が引き続き動作することを確認
-- [ ] Commit
-- [ ] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
-- [ ] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
-- [ ] Update docs (glob: "*.md" in ./docs/architecture)
-- [ ] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
-- [ ] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] 調査：現在の用語抽出フローの詳細確認
+- [x] 設計：対象ドキュメント絞り込みの実装方針決定
+- [x] 実装：ドキュメントIDリストによるフィルタリング機能追加
+- [x] 実装：bulk upload時に新規ドキュメントIDを抽出対象として渡す
+- [x] テスト：新規ファイルのみが抽出対象となることを確認
+- [x] テスト：既存の全ファイル対象の抽出（手動実行）が引き続き動作することを確認
+- [x] Commit
+- [x] Run static analysis (`pyright`) before reviwing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before reviwing and pass all tests (No exceptions)
+- [x] Code simplification review using code-simplifier agent. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Code review by codex MCP. If the issue is not addressed immediately, create a ticket using "ticket" skill.
+- [x] Update docs (glob: "*.md" in ./docs/architecture)
+- [x] Run static analysis (`pyright`) before closing and pass all tests (No exceptions)
+- [x] Run tests (`uv run pytest` & `pnpm test`) before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## 設計（確定）
 
